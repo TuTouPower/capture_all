@@ -1,6 +1,6 @@
 // background/storage.ts
 import type { Session, RecordEvent, NetworkRequest, ConsoleLog, ErrorLog } from '../shared/types';
-import { DB_NAME, DB_VERSION, STORE_NAMES, MAX_SESSION_SIZE_BYTES, FLUSH_BATCH_SIZE, FLUSH_INTERVAL_MS } from '../shared/constants';
+import { DB_NAME, DB_VERSION, STORE_NAMES, MAX_SESSION_SIZE_BYTES, FLUSH_BATCH_SIZE } from '../shared/constants';
 
 let db: IDBDatabase | null = null;
 
@@ -154,7 +154,6 @@ let network_buffer: NetworkRequest[] = [];
 let console_buffer: ConsoleLog[] = [];
 let error_buffer: ErrorLog[] = [];
 let bytes_written: Map<string, number> = new Map();
-let flush_timer: ReturnType<typeof setTimeout> | null = null;
 
 export async function write_events(batch: RecordEvent[]): Promise<void> {
     event_buffer.push(...batch);

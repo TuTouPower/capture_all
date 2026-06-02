@@ -4,11 +4,17 @@ declare namespace chrome {
         function sendMessage(message: any): Promise<any>;
         const onMessage: {
             addListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;
+            removeListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;
+        };
+        const onInstalled: {
+            addListener(callback: () => void): void;
         };
     }
 
     namespace tabs {
         function create(options: { url: string }): Promise<any>;
+        function query(queryInfo: { active?: boolean; currentWindow?: boolean }): Promise<Array<{ id?: number; url?: string; title?: string }>>;
+        function sendMessage(tabId: number, message: any): Promise<any>;
         const onActivated: {
             addListener(callback: (activeInfo: { tabId: number; windowId: number }) => void): void;
         };
@@ -32,12 +38,15 @@ declare namespace chrome {
     namespace webRequest {
         const onBeforeRequest: {
             addListener(callback: (details: any) => void, filter: { urls: string[] }): void;
+            removeListener(callback: (details: any) => void): void;
         };
         const onCompleted: {
             addListener(callback: (details: any) => void, filter: { urls: string[] }): void;
+            removeListener(callback: (details: any) => void): void;
         };
         const onErrorOccurred: {
             addListener(callback: (details: any) => void, filter: { urls: string[] }): void;
+            removeListener(callback: (details: any) => void): void;
         };
     }
 
@@ -47,6 +56,7 @@ declare namespace chrome {
         function sendCommand(target: { tabId: number }, method: string, params?: any): Promise<any>;
         const onEvent: {
             addListener(callback: (source: any, method: string, params: any) => void): void;
+            removeListener(callback: (source: any, method: string, params: any) => void): void;
         };
     }
 

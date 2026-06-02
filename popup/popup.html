@@ -2,10 +2,98 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Record All</title>
+  <link rel="stylesheet" href="./popup.css">
 </head>
 <body>
-  <h1>Record All Popup</h1>
+  <div class="popup-container">
+    <!-- Status Section -->
+    <div class="status-section">
+      <div class="status-indicator" id="statusIndicator">
+        <span class="dot"></span>
+        <span class="status-text">Ready</span>
+      </div>
+      <div class="session-info" id="sessionInfo" style="display: none;">
+        <span class="session-id"></span>
+        <span class="session-duration"></span>
+      </div>
+    </div>
+
+    <!-- Mode Selection -->
+    <div class="mode-section">
+      <h3>Select Recording Mode</h3>
+      <div class="mode-buttons">
+        <button class="mode-btn" id="basicBtn" data-mode="basic">
+          <span class="mode-title">Basic Recording</span>
+          <span class="mode-desc">Mouse, keyboard, scroll, DOM changes, network metadata</span>
+        </button>
+        <button class="mode-btn" id="advancedBtn" data-mode="advanced">
+          <span class="mode-title">Advanced Recording</span>
+          <span class="mode-desc">+ Console logs, response bodies (requires debugger)</span>
+          <span class="mode-warning">May trigger Chrome debugger warning</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="config-section" id="configSection">
+      <details>
+        <summary>Configuration</summary>
+        <div class="config-options">
+          <div class="config-group">
+            <label>Mouse Precision</label>
+            <select id="mousePrecision">
+              <option value="clicks">Clicks only</option>
+              <option value="clicks_scroll_drag" selected>Clicks + Scroll + Drag</option>
+              <option value="full_trajectory">Full trajectory</option>
+            </select>
+          </div>
+          <div class="config-group">
+            <label>
+              <input type="checkbox" id="captureKeyboard" />
+              Capture Keyboard
+              <span class="warning">Sensitive data</span>
+            </label>
+          </div>
+          <div class="config-group">
+            <label>
+              <input type="checkbox" id="captureInputValues" />
+              Capture Input Values
+              <span class="warning">Sensitive data</span>
+            </label>
+          </div>
+          <div class="config-group">
+            <label>
+              <input type="checkbox" id="captureRequestBody" />
+              Capture Request Body
+            </label>
+          </div>
+          <div class="config-group">
+            <label>
+              <input type="checkbox" id="captureResponseBody" />
+              Capture Response Body
+            </label>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-section">
+      <button class="btn-primary" id="startBtn">Start Recording</button>
+      <button class="btn-danger" id="stopBtn" style="display: none;">Stop Recording</button>
+    </div>
+
+    <!-- History Section -->
+    <div class="history-section">
+      <h3>Recent Sessions</h3>
+      <div class="history-list" id="historyList">
+        <div class="history-empty">No sessions recorded yet</div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="./popup.ts"></script>
 </body>
 </html>

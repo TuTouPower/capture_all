@@ -1,6 +1,7 @@
 // detail/detail.ts
 import type { Session, RecordEvent, NetworkRequest, ConsoleLog } from '../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
+import { init_theme } from '../shared/theme';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     session_id = get_session_id();
     if (is_extension) {
         await init_locale();
+        await init_theme();
     }
     apply_translations();
     setup_tabs();
@@ -77,9 +79,9 @@ function render_overview(): void {
     setText('startTime', new Date(s.start_time).toLocaleString());
     setText('duration', s.end_time ? format_duration(s.end_time - s.start_time) : 'In progress');
     setText('mode', s.config.capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
-    setText('eventCount', String(s.stats.event_count));
-    setText('requestCount', String(s.stats.request_count));
-    setText('logCount', String(s.stats.log_count));
+    setText('eventCount', String(s.stats.event_count || events.length));
+    setText('requestCount', String(s.stats.request_count || network_requests.length));
+    setText('logCount', String(s.stats.log_count || console_logs.length));
 }
 
 function render_timeline(): void {
@@ -241,6 +243,7 @@ function setup_tabs(): void {
 function setup_export(): void {
     document.getElementById('exportJsonBtn')!.addEventListener('click', export_json);
     document.getElementById('exportHtmlBtn')!.addEventListener('click', export_html);
+    document.getElementById('exportHarBtn')!.addEventListener('click', export_har);
 }
 
 async function export_json(): Promise<void> {
@@ -272,6 +275,22 @@ async function export_html(): Promise<void> {
         const blob = new Blob([response.html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.html`;
+        chrome.downloads.download({ url, filename });
+    }
+}
+
+async function export_har(): Promise<void> {
+    if (!is_extension) return;
+
+    const response = await chrome.runtime.sendMessage({
+        action: 'export_har',
+        session_id
+    });
+
+    if (response.success) {
+        const blob = new Blob([response.har], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.har`;
         chrome.downloads.download({ url, filename });
     }
 }

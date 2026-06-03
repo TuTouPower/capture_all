@@ -17,11 +17,6 @@ let logs_page = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
     session_id = get_session_id();
-    if (!session_id) {
-        document.body.innerHTML = '<div class="empty-state">No session ID provided</div>';
-        return;
-    }
-
     setup_tabs();
     setup_export();
     await load_session_data();
@@ -33,15 +28,13 @@ function get_session_id(): string {
 }
 
 async function load_session_data(): Promise<void> {
-    if (!is_extension) {
-        // In standalone mode, just render the UI structure
-        render_overview();
-        render_timeline();
-        render_network();
-        render_console();
-        render_events();
-        return;
-    }
+    // Always render the UI structure first
+    render_timeline();
+    render_network();
+    render_console();
+    render_events();
+
+    if (!is_extension) return;
 
     try {
         const response = await chrome.runtime.sendMessage({
@@ -50,7 +43,8 @@ async function load_session_data(): Promise<void> {
         });
 
         if (!response.success) {
-            document.body.innerHTML = '<div class="empty-state">Session not found</div>';
+            setText('sessionId', session_id);
+            setText('startTime', 'Session not found');
             return;
         }
 
@@ -65,7 +59,8 @@ async function load_session_data(): Promise<void> {
         render_console();
         render_events();
     } catch (error) {
-        document.body.innerHTML = `<div class="empty-state">Error loading session: ${error}</div>`;
+        setText('sessionId', session_id);
+        setText('startTime', `Error: ${error}`);
     }
 }
 

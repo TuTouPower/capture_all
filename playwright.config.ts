@@ -2,15 +2,22 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
     testDir: './tests',
-    testMatch: '**/*.spec.ts',
-    timeout: 30000,
-    use: {
-        headless: true,
-    },
+    timeout: 60000,
     projects: [
         {
             name: 'e2e',
-            use: {},
+            testMatch: 'e2e.spec.ts',
+            use: { headless: true },
+        },
+        {
+            name: 'e2e-real',
+            testMatch: 'e2e-real.spec.ts',
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check'],
+                },
+            },
         }
     ]
 });

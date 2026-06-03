@@ -10,10 +10,10 @@
   <div class="detail-container">
     <!-- Header -->
     <header class="detail-header">
-      <h1>Session Detail</h1>
+      <h1 data-i18n="sessionDetail">Session Detail</h1>
       <div class="header-actions">
-        <button class="btn" id="exportJsonBtn">Export JSON</button>
-        <button class="btn" id="exportHtmlBtn">Export HTML</button>
+        <button class="btn" id="exportJsonBtn" data-i18n="exportJson">Export JSON</button>
+        <button class="btn" id="exportHtmlBtn" data-i18n="exportHtml">Export HTML</button>
       </div>
     </header>
 
@@ -21,31 +21,31 @@
     <div class="overview-section" id="overview">
       <div class="overview-grid">
         <div class="overview-item">
-          <label>Session ID</label>
+          <label data-i18n="sessionId">Session ID</label>
           <span id="sessionId">-</span>
         </div>
         <div class="overview-item">
-          <label>Start Time</label>
+          <label data-i18n="startTime">Start Time</label>
           <span id="startTime">-</span>
         </div>
         <div class="overview-item">
-          <label>Duration</label>
+          <label data-i18n="duration">Duration</label>
           <span id="duration">-</span>
         </div>
         <div class="overview-item">
-          <label>Mode</label>
+          <label data-i18n="mode">Mode</label>
           <span id="mode">-</span>
         </div>
         <div class="overview-item">
-          <label>Events</label>
+          <label data-i18n="events">Events</label>
           <span id="eventCount">0</span>
         </div>
         <div class="overview-item">
-          <label>Network Requests</label>
+          <label data-i18n="networkRequests">Network Requests</label>
           <span id="requestCount">0</span>
         </div>
         <div class="overview-item">
-          <label>Console Logs</label>
+          <label data-i18n="consoleLogs">Console Logs</label>
           <span id="logCount">0</span>
         </div>
       </div>
@@ -53,29 +53,28 @@
 
     <!-- Tabs -->
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="timeline">Timeline</button>
-      <button class="tab-btn" data-tab="network">Network</button>
-      <button class="tab-btn" data-tab="console">Console</button>
-      <button class="tab-btn" data-tab="events">Events</button>
+      <button class="tab-btn active" data-tab="timeline" data-i18n="timeline">Timeline</button>
+      <button class="tab-btn" data-tab="network" data-i18n="network">Network</button>
+      <button class="tab-btn" data-tab="console" data-i18n="console">Console</button>
+      <button class="tab-btn" data-tab="events" data-i18n="events">Events</button>
     </nav>
 
     <!-- Tab Contents -->
     <div class="tab-content active" id="timeline-tab">
       <div class="filter-bar">
         <select id="timelineFilter">
-          <option value="all">All Events</option>
-          <option value="mouse">Mouse</option>
-          <option value="keyboard">Keyboard</option>
-          <option value="scroll">Scroll</option>
-          <option value="dom_change">DOM Changes</option>
-          <option value="navigation">Navigation</option>
-          <option value="page_load">Page Load</option>
-          <option value="tab_switch">Tab Switch</option>
+          <option value="all" data-i18n="allEvents">All Events</option>
+          <option value="mouse" data-i18n="mouse">Mouse</option>
+          <option value="keyboard" data-i18n="keyboard">Keyboard</option>
+          <option value="scroll" data-i18n="scroll">Scroll</option>
+          <option value="dom_change" data-i18n="domChanges">DOM Changes</option>
+          <option value="navigation" data-i18n="navigation">Navigation</option>
+          <option value="page_load" data-i18n="pageLoad">Page Load</option>
+          <option value="tab_switch" data-i18n="tabSwitch">Tab Switch</option>
         </select>
-        <input type="text" id="timelineSearch" placeholder="Search events...">
+        <input type="text" id="timelineSearch" data-i18n-placeholder="searchEvents" placeholder="Search events...">
       </div>
       <div class="timeline-container" id="timelineContainer">
-        <!-- Virtual scrolling will render events here -->
       </div>
       <div class="load-more" id="loadMore" style="display: none;">
         Loading more events...
@@ -85,7 +84,7 @@
     <div class="tab-content" id="network-tab">
       <div class="filter-bar">
         <select id="networkFilter">
-          <option value="all">All Types</option>
+          <option value="all" data-i18n="allTypes">All Types</option>
           <option value="xhr">XHR</option>
           <option value="fetch">Fetch</option>
           <option value="document">Document</option>
@@ -93,17 +92,17 @@
           <option value="script">JS</option>
           <option value="image">Image</option>
         </select>
-        <input type="text" id="networkSearch" placeholder="Search URLs...">
+        <input type="text" id="networkSearch" data-i18n-placeholder="searchUrls" placeholder="Search URLs...">
       </div>
       <div class="network-container" id="networkContainer">
         <table class="network-table">
           <thead>
             <tr>
-              <th>Method</th>
-              <th>URL</th>
-              <th>Status</th>
-              <th>Type</th>
-              <th>Duration</th>
+              <th data-i18n="method">Method</th>
+              <th data-i18n="url">URL</th>
+              <th data-i18n="status">Status</th>
+              <th data-i18n="type">Type</th>
+              <th data-i18n="duration">Duration</th>
             </tr>
           </thead>
           <tbody id="networkBody">
@@ -115,14 +114,14 @@
     <div class="tab-content" id="console-tab">
       <div class="filter-bar">
         <select id="consoleFilter">
-          <option value="all">All Levels</option>
+          <option value="all" data-i18n="allLevels">All Levels</option>
           <option value="error">Error</option>
           <option value="warn">Warning</option>
           <option value="info">Info</option>
           <option value="log">Log</option>
           <option value="debug">Debug</option>
         </select>
-        <input type="text" id="consoleSearch" placeholder="Search logs...">
+        <input type="text" id="consoleSearch" data-i18n-placeholder="searchLogs" placeholder="Search logs...">
       </div>
       <div class="console-container" id="consoleContainer">
       </div>
@@ -131,13 +130,13 @@
     <div class="tab-content" id="events-tab">
       <div class="filter-bar">
         <select id="eventsFilter">
-          <option value="all">All Types</option>
-          <option value="mouse">Mouse</option>
-          <option value="keyboard">Keyboard</option>
-          <option value="scroll">Scroll</option>
-          <option value="dom_change">DOM Changes</option>
+          <option value="all" data-i18n="allTypes">All Types</option>
+          <option value="mouse" data-i18n="mouse">Mouse</option>
+          <option value="keyboard" data-i18n="keyboard">Keyboard</option>
+          <option value="scroll" data-i18n="scroll">Scroll</option>
+          <option value="dom_change" data-i18n="domChanges">DOM Changes</option>
         </select>
-        <input type="text" id="eventsSearch" placeholder="Search events...">
+        <input type="text" id="eventsSearch" data-i18n-placeholder="searchEvents" placeholder="Search events...">
       </div>
       <div class="events-container" id="eventsContainer">
       </div>

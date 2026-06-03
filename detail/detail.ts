@@ -1,5 +1,6 @@
 // detail/detail.ts
 import type { Session, RecordEvent, NetworkRequest, ConsoleLog } from '../shared/types';
+import { init_locale, t, apply_translations } from '../shared/i18n';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -17,6 +18,10 @@ let logs_page = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
     session_id = get_session_id();
+    if (is_extension) {
+        await init_locale();
+    }
+    apply_translations();
     setup_tabs();
     setup_export();
     await load_session_data();
@@ -44,7 +49,7 @@ async function load_session_data(): Promise<void> {
 
         if (!response.success) {
             setText('sessionId', session_id);
-            setText('startTime', 'Session not found');
+            setText('startTime', t('sessionNotFound'));
             return;
         }
 
@@ -60,7 +65,7 @@ async function load_session_data(): Promise<void> {
         render_events();
     } catch (error) {
         setText('sessionId', session_id);
-        setText('startTime', `Error: ${error}`);
+        setText('startTime', `${t('error')}: ${error}`);
     }
 }
 
@@ -71,7 +76,7 @@ function render_overview(): void {
     setText('sessionId', s.id);
     setText('startTime', new Date(s.start_time).toLocaleString());
     setText('duration', s.end_time ? format_duration(s.end_time - s.start_time) : 'In progress');
-    setText('mode', s.config.capture_mode === 'basic' ? 'Basic' : 'Advanced');
+    setText('mode', s.config.capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
     setText('eventCount', String(s.stats.event_count));
     setText('requestCount', String(s.stats.request_count));
     setText('logCount', String(s.stats.log_count));

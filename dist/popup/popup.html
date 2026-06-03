@@ -4,17 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Record All</title>
-  <script type="module" crossorigin src="/assets/popup-ByugEi4P.js"></script>
+  <script type="module" crossorigin src="/assets/popup-BrWz3MUe.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
-  <link rel="stylesheet" crossorigin href="/assets/popup-qH0Jy2hW.css">
+  <link rel="modulepreload" crossorigin href="/assets/i18n-Cu8tMkAL.js">
+  <link rel="stylesheet" crossorigin href="/assets/popup-BXymBPnK.css">
 </head>
 <body>
   <div class="popup-container">
+    <!-- Settings Button -->
+    <div class="settings-bar">
+      <button class="btn-settings" id="settingsBtn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+          <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.421-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.116l.094-.318z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Settings Panel (hidden by default) -->
+    <div class="settings-panel" id="settingsPanel" style="display: none;">
+      <div class="settings-header">
+        <h3 data-i18n="settings">Settings</h3>
+        <button class="btn-close" id="closeSettings">&times;</button>
+      </div>
+      <div class="settings-body">
+        <div class="config-group">
+          <label data-i18n="language">Language</label>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- Status Section -->
     <div class="status-section">
       <div class="status-indicator" id="statusIndicator">
         <span class="dot"></span>
-        <span class="status-text">Ready</span>
+        <span class="status-text" data-i18n="ready">Ready</span>
       </div>
       <div class="session-info" id="sessionInfo" style="display: none;">
         <span class="session-id"></span>
@@ -24,16 +52,16 @@
 
     <!-- Mode Selection -->
     <div class="mode-section">
-      <h3>Select Recording Mode</h3>
+      <h3 data-i18n="selectMode">Select Recording Mode</h3>
       <div class="mode-buttons">
         <button class="mode-btn" id="basicBtn" data-mode="basic">
-          <span class="mode-title">Basic Recording</span>
-          <span class="mode-desc">Mouse, keyboard, scroll, DOM changes, network metadata</span>
+          <span class="mode-title" data-i18n="basicTitle">Basic Recording</span>
+          <span class="mode-desc" data-i18n="basicDesc">Mouse, keyboard, scroll, DOM changes, network metadata</span>
         </button>
         <button class="mode-btn" id="advancedBtn" data-mode="advanced">
-          <span class="mode-title">Advanced Recording</span>
-          <span class="mode-desc">+ Console logs, response bodies (requires debugger)</span>
-          <span class="mode-warning">May trigger Chrome debugger warning</span>
+          <span class="mode-title" data-i18n="advancedTitle">Advanced Recording</span>
+          <span class="mode-desc" data-i18n="advancedDesc">+ Console logs, response bodies (requires debugger)</span>
+          <span class="mode-warning" data-i18n="advancedWarning">May trigger Chrome debugger warning</span>
         </button>
       </div>
     </div>
@@ -41,40 +69,40 @@
     <!-- Configuration -->
     <div class="config-section" id="configSection">
       <details>
-        <summary>Configuration</summary>
+        <summary data-i18n="configuration">Configuration</summary>
         <div class="config-options">
           <div class="config-group">
-            <label>Mouse Precision</label>
+            <label data-i18n="mousePrecision">Mouse Precision</label>
             <select id="mousePrecision">
-              <option value="clicks">Clicks only</option>
-              <option value="clicks_scroll_drag" selected>Clicks + Scroll + Drag</option>
-              <option value="full_trajectory">Full trajectory</option>
+              <option value="clicks" data-i18n="clicksOnly">Clicks only</option>
+              <option value="clicks_scroll_drag" selected data-i18n="clicksScrollDrag">Clicks + Scroll + Drag</option>
+              <option value="full_trajectory" data-i18n="fullTrajectory">Full trajectory</option>
             </select>
           </div>
           <div class="config-group">
             <label>
               <input type="checkbox" id="captureKeyboard" />
-              Capture Keyboard
-              <span class="warning">Sensitive data</span>
+              <span data-i18n="captureKeyboard">Capture Keyboard</span>
+              <span class="warning" data-i18n="sensitiveData">Sensitive data</span>
             </label>
           </div>
           <div class="config-group">
             <label>
               <input type="checkbox" id="captureInputValues" />
-              Capture Input Values
-              <span class="warning">Sensitive data</span>
+              <span data-i18n="captureInputValues">Capture Input Values</span>
+              <span class="warning" data-i18n="sensitiveData">Sensitive data</span>
             </label>
           </div>
           <div class="config-group">
             <label>
               <input type="checkbox" id="captureRequestBody" />
-              Capture Request Body
+              <span data-i18n="captureRequestBody">Capture Request Body</span>
             </label>
           </div>
           <div class="config-group">
             <label>
               <input type="checkbox" id="captureResponseBody" />
-              Capture Response Body
+              <span data-i18n="captureResponseBody">Capture Response Body</span>
             </label>
           </div>
         </div>
@@ -83,15 +111,15 @@
 
     <!-- Action Buttons -->
     <div class="action-section">
-      <button class="btn-primary" id="startBtn">Start Recording</button>
-      <button class="btn-danger" id="stopBtn" style="display: none;">Stop Recording</button>
+      <button class="btn-primary" id="startBtn" data-i18n="startRecording">Start Recording</button>
+      <button class="btn-danger" id="stopBtn" style="display: none;" data-i18n="stopRecording">Stop Recording</button>
     </div>
 
     <!-- History Section -->
     <div class="history-section">
-      <h3>Recent Sessions</h3>
+      <h3 data-i18n="recentSessions">Recent Sessions</h3>
       <div class="history-list" id="historyList">
-        <div class="history-empty">No sessions recorded yet</div>
+        <div class="history-empty" data-i18n="noSessions">No sessions recorded yet</div>
       </div>
     </div>
   </div>

@@ -93,16 +93,24 @@ function save_config(): void {
 
 async function start_recording(): Promise<void> {
     const config = get_config();
+    const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
     try {
         const response = await chrome.runtime.sendMessage({
             action: 'start',
+            session_id,
             config
         });
 
         if (response.success) {
             is_recording = true;
-            current_session = response.session;
+            current_session = {
+                id: session_id,
+                start_time: Date.now(),
+                end_time: null,
+                config,
+                stats: { event_count: 0, request_count: 0, log_count: 0, dom_changes: 0 }
+            };
             chrome.storage.local.set({ is_recording: true, current_session });
             update_recording_state();
             await load_history();

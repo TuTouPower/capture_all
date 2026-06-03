@@ -1,8 +1,9 @@
 // background/service_worker.ts
-import { init_db, flush_all } from './storage';
+import { init_db, flush_all, get_session, list_sessions as storage_list_sessions, delete_session as storage_delete_session, get_events, get_network_requests, get_console_logs } from './storage';
 import { setup_keepalive_listener } from './keepalive';
 import { start_network_capture, stop_network_capture } from './network_capture';
 import { start_console_capture, stop_console_capture } from './console_capture';
+import { export_json, export_html } from './exporter';
 import type { RecordConfig, NetworkRequest, ConsoleLog } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
@@ -38,9 +39,33 @@ async function handle_message(message: any): Promise<any> {
             return handle_event(message.event);
         case 'get_status':
             return { is_capturing, session_id: current_session_id };
+        case 'get_session_data':
+            return get_session_data(message.session_id);
+        case 'list_sessions':
+            return storage_list_sessions();
+        case 'delete_session':
+            await storage_delete_session(message.session_id);
+            return { success: true };
+        case 'export_json':
+            return { success: true, json: await export_json(message.session_id) };
+        case 'export_html':
+            return { success: true, html: await export_html(message.session_id) };
         default:
             return { success: false, error: 'Unknown action' };
     }
+}
+
+async function get_session_data(session_id: string): Promise<any> {
+    const session = await get_session(session_id);
+    if (!session) return { success: false, error: 'Session not found' };
+
+    const [events, network_requests, console_logs] = await Promise.all([
+        get_events(session_id, 0, 100000),
+        get_network_requests(session_id, 0, 100000),
+        get_console_logs(session_id, 0, 100000)
+    ]);
+
+    return { success: true, session, events, network_requests, console_logs };
 }
 
 async function start_recording(session_id: string, config: RecordConfig): Promise<{ success: boolean; error?: string }> {

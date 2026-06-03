@@ -1,6 +1,7 @@
 // shared/chrome.d.ts
 declare namespace chrome {
     namespace runtime {
+        const id: string;
         function sendMessage(message: any): Promise<any>;
         const onMessage: {
             addListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;

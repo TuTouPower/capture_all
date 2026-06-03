@@ -1,6 +1,8 @@
 // detail/detail.ts
 import type { Session, RecordEvent, NetworkRequest, ConsoleLog } from '../shared/types';
 
+const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+
 let session_id: string;
 let session_data: Session | null = null;
 let events: RecordEvent[] = [];
@@ -31,6 +33,16 @@ function get_session_id(): string {
 }
 
 async function load_session_data(): Promise<void> {
+    if (!is_extension) {
+        // In standalone mode, just render the UI structure
+        render_overview();
+        render_timeline();
+        render_network();
+        render_console();
+        render_events();
+        return;
+    }
+
     try {
         const response = await chrome.runtime.sendMessage({
             action: 'get_session_data',
@@ -232,6 +244,8 @@ function setup_export(): void {
 }
 
 async function export_json(): Promise<void> {
+    if (!is_extension) return;
+
     const data = {
         session: session_data,
         events,
@@ -247,6 +261,8 @@ async function export_json(): Promise<void> {
 }
 
 async function export_html(): Promise<void> {
+    if (!is_extension) return;
+
     const response = await chrome.runtime.sendMessage({
         action: 'export_html',
         session_id

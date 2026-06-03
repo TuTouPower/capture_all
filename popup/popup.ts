@@ -7,6 +7,8 @@ let is_recording = false;
 let current_session: Session | null = null;
 let duration_timer: ReturnType<typeof setInterval> | null = null;
 
+const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+
 // DOM Elements
 const statusIndicator = document.getElementById('statusIndicator')!;
 const statusText = statusIndicator.querySelector('.status-text')!;
@@ -25,9 +27,12 @@ const captureResponseBody = document.getElementById('captureResponseBody') as HT
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    await load_state();
+    if (is_extension) {
+        await load_state();
+        await load_history();
+    }
     setup_event_listeners();
-    await load_history();
+    update_mode_selection();
 });
 
 async function load_state(): Promise<void> {
@@ -56,7 +61,7 @@ function setup_event_listeners(): void {
 
 function select_mode(mode: 'basic' | 'advanced'): void {
     selected_mode = mode;
-    chrome.storage.local.set({ selected_mode });
+    if (is_extension) chrome.storage.local.set({ selected_mode });
     update_mode_selection();
 }
 
@@ -87,11 +92,14 @@ function get_config(): RecordConfig {
 }
 
 function save_config(): void {
+    if (!is_extension) return;
     const config = get_config();
     chrome.storage.local.set({ config });
 }
 
 async function start_recording(): Promise<void> {
+    if (!is_extension) return;
+
     const config = get_config();
     const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -123,6 +131,8 @@ async function start_recording(): Promise<void> {
 }
 
 async function stop_recording(): Promise<void> {
+    if (!is_extension) return;
+
     try {
         const response = await chrome.runtime.sendMessage({ action: 'stop' });
 
@@ -186,6 +196,8 @@ function stop_duration_timer(): void {
 }
 
 async function load_history(): Promise<void> {
+    if (!is_extension) return;
+
     try {
         const sessions: Session[] = await chrome.runtime.sendMessage({ action: 'list_sessions' });
 

@@ -53,7 +53,7 @@ function get_target_info(event: MouseEvent): { selector: string; tag: string; te
     return {
         selector: get_selector(target),
         tag: target.tagName.toLowerCase(),
-        text: truncate_target_text(target.textContent || '')
+        text: truncate_target_text(target.textContent || '', config.redact_data)
     };
 }
 

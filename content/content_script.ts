@@ -4,10 +4,12 @@ import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
 import { start_dom_capture, stop_dom_capture } from './dom_capture';
+import { start_storage_capture, stop_storage_capture } from './storage_capture';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
 let is_capturing = false;
 let frame_id = 0;
+let last_url = window.location.href;
 
 // Determine frame ID
 if (window !== window.top) {
@@ -57,9 +59,35 @@ function start_capture(config: RecordConfig): void {
     start_keyboard_capture(config, send_event);
     start_scroll_capture(send_event);
     start_dom_capture(config, send_event);
+    start_storage_capture(send_event);
 
     // Visibility change
     document.addEventListener('visibilitychange', handle_visibility_change);
+
+    // SPA navigation
+    window.addEventListener('popstate', handle_navigation);
+    window.addEventListener('hashchange', handle_navigation);
+
+    // DOMContentLoaded (may have already fired)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handle_dom_ready);
+    } else {
+        handle_dom_ready();
+    }
+}
+
+function handle_navigation(): void {
+    if (!is_capturing) return;
+    const new_url = window.location.href;
+    if (new_url === last_url) return;
+    const from = last_url;
+    last_url = new_url;
+    send_event('navigation', { from, to: new_url });
+}
+
+function handle_dom_ready(): void {
+    if (!is_capturing) return;
+    send_event('dom_ready', { timestamp: Date.now() });
 }
 
 function stop_capture(): void {
@@ -71,8 +99,11 @@ function stop_capture(): void {
     stop_keyboard_capture();
     stop_scroll_capture();
     stop_dom_capture();
+    stop_storage_capture();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);
+    window.removeEventListener('popstate', handle_navigation);
+    window.removeEventListener('hashchange', handle_navigation);
 }
 
 function handle_visibility_change(): void {

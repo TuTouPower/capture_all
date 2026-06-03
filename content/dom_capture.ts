@@ -28,25 +28,62 @@ export function stop_dom_capture(): void {
     document.removeEventListener('focusout', handle_blur, true);
 }
 
-function get_target_info(element: HTMLElement): { selector: string; tag: string } {
-    let selector: string;
-    if (element.id) {
-        selector = `#${element.id}`;
-    } else if (element.className && typeof element.className === 'string') {
-        selector = `.${element.className.split(' ')[0]}`;
-    } else {
-        selector = element.tagName.toLowerCase();
+const MAX_PATH_DEPTH = 5;
+
+function get_first_meaningful_class(element: Element): string | null {
+    if (!element.className || typeof element.className !== 'string') return null;
+    const classes = element.className.trim().split(/\s+/).filter(c => c.length > 0);
+    return classes.length > 0 ? classes[0] : null;
+}
+
+function get_nth_of_type(element: Element): number {
+    const parent = element.parentElement;
+    if (!parent) return 1;
+    let index = 1;
+    const tag = element.tagName;
+    for (const sibling of Array.from(parent.children)) {
+        if (sibling === element) return index;
+        if (sibling.tagName === tag) index++;
+    }
+    return index;
+}
+
+function build_segment(element: Element): string {
+    const tag = element.tagName.toLowerCase();
+    const cls = get_first_meaningful_class(element);
+    const n = get_nth_of_type(element);
+    const class_part = cls ? `.${cls}` : '';
+    return `${tag}${class_part}:nth-child(${n})`;
+}
+
+function build_css_path(element: Element): string {
+    const segments: string[] = [];
+    let current: Element | null = element;
+    let depth = 0;
+
+    while (current && current !== document.body && current.nodeType === 1 && depth < MAX_PATH_DEPTH) {
+        if (current.id) {
+            segments.unshift(`#${current.id}`);
+            return segments.join(' > ');
+        }
+        segments.unshift(build_segment(current));
+        current = current.parentElement;
+        depth++;
     }
 
+    return segments.join(' > ');
+}
+
+function get_target_info(element: HTMLElement): { selector: string; tag: string } {
     return {
-        selector,
+        selector: build_css_path(element),
         tag: element.tagName.toLowerCase()
     };
 }
 
 function get_input_value(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {
-    // Always redact passwords
-    if (element instanceof HTMLInputElement && element.type === 'password') {
+    // Redact passwords only when redact_data enabled
+    if (config.redact_data && element instanceof HTMLInputElement && element.type === 'password') {
         return '[REDACTED]';
     }
 

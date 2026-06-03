@@ -112,6 +112,16 @@
 ### 8.3 Tab 事件 E2E 测试
 - 打开/关闭/切换/URL 变化
 
+## 九、已知 Bug
+
+### 9.1 HTML 导出统计数字始终为 0
+- HTML 报告显示 Events: 0、Network Requests: 0、Console Logs: 0
+- 详情页 overview 同样显示 0
+- 原因 1：Session 创建时 `stats` 全设为 0，之后从未更新
+- 原因 2：`handle_event` / `handle_network_request` / `handle_console_log` 只写数据，不更新 session.stats
+- 原因 3：exporter 和 detail page 用的是 `session.stats.*_count` 而非实际数据长度
+- 修复：要么在每个 handle 函数中更新 session.stats 并 update_session，要么 exporter/detail 改用 `events.length` / `network_requests.length` / `console_logs.length`
+
 ---
 
 ## 优先级排序

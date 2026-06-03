@@ -20,8 +20,14 @@ declare namespace chrome {
         const onActivated: {
             addListener(callback: (activeInfo: { tabId: number; windowId: number }) => void): void;
         };
+        const onCreated: {
+            addListener(callback: (tab: any) => void): void;
+        };
+        const onUpdated: {
+            addListener(callback: (tabId: number, changeInfo: any, tab: any) => void): void;
+        };
         const onRemoved: {
-            addListener(callback: (tabId: number, removeInfo: { windowId: number; isWindowClosing: boolean }) => void): void;
+            addListener(callback: (tabId: number, removeInfo?: { windowId: number; isWindowClosing: boolean }) => void): void;
         };
     }
 
@@ -42,7 +48,15 @@ declare namespace chrome {
 
     namespace webRequest {
         const onBeforeRequest: {
-            addListener(callback: (details: any) => void, filter: { urls: string[] }): void;
+            addListener(callback: (details: any) => void, filter: { urls: string[] }, extraInfoSpec?: string[]): void;
+            removeListener(callback: (details: any) => void): void;
+        };
+        const onBeforeSendHeaders: {
+            addListener(callback: (details: any) => void, filter: { urls: string[] }, extraInfoSpec?: string[]): void;
+            removeListener(callback: (details: any) => void): void;
+        };
+        const onHeadersReceived: {
+            addListener(callback: (details: any) => void, filter: { urls: string[] }, extraInfoSpec?: string[]): void;
             removeListener(callback: (details: any) => void): void;
         };
         const onCompleted: {

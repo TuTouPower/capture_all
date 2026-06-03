@@ -40,7 +40,7 @@ async function handle_message(message: any): Promise<any> {
         case 'event':
             return handle_event(message.event);
         case 'get_status':
-            return { is_capturing, session_id: current_session_id };
+            return { is_capturing, session_id: current_session_id, config: current_config };
         case 'get_session_data':
             return get_session_data(message.session_id);
         case 'list_sessions':
@@ -117,12 +117,14 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Notify all content scripts to start
     const all_tabs = await chrome.tabs.query({});
+    console.log('Record All: Notifying', all_tabs.length, 'tabs to start');
     for (const tab of all_tabs) {
         if (tab.id) {
             try {
                 await chrome.tabs.sendMessage(tab.id, { action: 'start', config });
-            } catch {
-                // Tab might not have content script
+                console.log('Record All: Sent start to tab', tab.id, tab.url);
+            } catch (err) {
+                console.warn('Record All: Failed to send start to tab', tab.id, err);
             }
         }
     }
@@ -210,14 +212,16 @@ function handle_console_log(log: ConsoleLog): void {
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (!is_capturing) return;
 
+    console.log('Record All: Tab activated:', activeInfo.tabId);
     // Send start to the newly activated tab
     try {
         await chrome.tabs.sendMessage(activeInfo.tabId, {
             action: 'start',
             config: current_config
         });
-    } catch {
-        // Tab might not have content script
+        console.log('Record All: Sent start to tab', activeInfo.tabId);
+    } catch (err) {
+        console.warn('Record All: Failed to send start to tab', activeInfo.tabId, err);
     }
 });
 

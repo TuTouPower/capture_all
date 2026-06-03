@@ -18,6 +18,11 @@ export default defineConfig({
                     args: ['--no-first-run', '--no-default-browser-check'],
                 },
             },
+        },
+        {
+            name: 'e2e-9223',
+            testMatch: 'e2e-9223.spec.ts',
+            use: { headless: true },
         }
     ]
 });

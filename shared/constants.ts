@@ -32,5 +32,18 @@ export const DEFAULT_CONFIG: RecordConfig = {
     capture_response_body: false,
     redact_sensitive_headers: true,
     redact_url_query: true,
+    redact_data: true,
     sample_rate_ms: 50
+};
+
+export const DEFAULT_USER_CONFIG = {
+    selected_mode: 'basic' as const,
+    mouse_precision: 'clicks_scroll_drag' as const,
+    keyboard_capture_mode: 'none' as const,
+    capture_input_values: false,
+    capture_request_body: false,
+    capture_response_body: false,
+    redact_data: true,
+    theme: 'follow-system' as const,
+    locale: 'en' as const
 };

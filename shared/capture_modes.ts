@@ -13,6 +13,7 @@ export function get_basic_config(): RecordConfig {
         capture_response_body: false,
         redact_sensitive_headers: true,
         redact_url_query: true,
+        redact_data: true,
         sample_rate_ms: 100
     };
 }
@@ -29,6 +30,7 @@ export function get_advanced_config(): RecordConfig {
         capture_response_body: true,
         redact_sensitive_headers: true,
         redact_url_query: true,
+        redact_data: true,
         sample_rate_ms: 50
     };
 }

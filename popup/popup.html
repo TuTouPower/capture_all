@@ -32,6 +32,21 @@
             <option value="zh">中文</option>
           </select>
         </div>
+        <div class="config-group">
+          <label data-i18n="theme">Theme</label>
+          <select id="themeSelect">
+            <option value="follow-system" data-i18n="themeFollowSystem">Follow System</option>
+            <option value="light" data-i18n="themeLight">Light</option>
+            <option value="dark" data-i18n="themeDark">Dark</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <label class="inline-label">
+            <input type="checkbox" id="redactData" />
+            <span data-i18n="redactData">Redact Sensitive Data</span>
+          </label>
+          <small class="hint" data-i18n="redactDataDesc">Mask passwords, tokens, and truncate long text</small>
+        </div>
       </div>
     </div>
 

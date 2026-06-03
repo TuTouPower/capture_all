@@ -1,9 +1,12 @@
 // popup/popup.ts
-import type { RecordConfig, Session } from '../shared/types';
+import type { RecordConfig, Session, UserConfig, ThemeMode } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
 import { init_locale, t, apply_translations, set_locale, type Locale } from '../shared/i18n';
+import { init_theme, set_theme } from '../shared/theme';
+import { load_user_config, save_user_config } from '../shared/user_config';
+import { DEFAULT_USER_CONFIG } from '../shared/constants';
 
-let selected_mode: 'basic' | 'advanced' = 'basic';
+let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let is_recording = false;
 let current_session: Session | null = null;
 let duration_timer: ReturnType<typeof setInterval> | null = null;
@@ -29,11 +32,15 @@ const settingsBtn = document.getElementById('settingsBtn')!;
 const settingsPanel = document.getElementById('settingsPanel')!;
 const closeSettings = document.getElementById('closeSettings')!;
 const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
+const themeSelect = document.getElementById('themeSelect') as HTMLSelectElement;
+const redactData = document.getElementById('redactData') as HTMLInputElement;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     if (is_extension) {
         await init_locale();
+        await init_theme();
+        await load_user_config_and_apply();
         await load_state();
         await load_history();
     }
@@ -43,9 +50,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     setup_settings();
 });
 
+async function load_user_config_and_apply(): Promise<void> {
+    user_config = await load_user_config();
+
+    // Apply to UI
+    mousePrecision.value = user_config.mouse_precision;
+    captureKeyboard.checked = user_config.keyboard_capture_mode !== 'none';
+    captureInputValues.checked = user_config.capture_input_values;
+    captureRequestBody.checked = user_config.capture_request_body;
+    captureResponseBody.checked = user_config.capture_response_body;
+    redactData.checked = user_config.redact_data;
+    themeSelect.value = user_config.theme;
+    languageSelect.value = user_config.locale;
+}
+
 async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['selected_mode', 'is_recording', 'current_session']);
-    selected_mode = result.selected_mode || 'basic';
+    const result = await chrome.storage.local.get(['is_recording', 'current_session']);
     is_recording = result.is_recording || false;
     current_session = result.current_session || null;
 
@@ -61,14 +81,6 @@ function setup_settings(): void {
     closeSettings.addEventListener('click', () => {
         settingsPanel.style.display = 'none';
     });
-
-    // Set current language in selector
-    const result = chrome.storage.local.get('locale');
-    if (result && typeof result.then === 'function') {
-        result.then((r: Record<string, unknown>) => {
-            languageSelect.value = (r.locale as string) || navigator.language.split('-')[0] || 'en';
-        });
-    }
 }
 
 function setup_event_listeners(): void {
@@ -78,63 +90,76 @@ function setup_event_listeners(): void {
     stopBtn.addEventListener('click', stop_recording);
 
     // Language change
-    languageSelect.addEventListener('change', () => {
+    languageSelect.addEventListener('change', async () => {
         const locale = languageSelect.value as Locale;
         set_locale(locale);
+        await save_user_config({ locale });
         apply_translations();
         update_recording_state();
         load_history();
     });
 
+    // Theme change
+    themeSelect.addEventListener('change', async () => {
+        const theme = themeSelect.value as ThemeMode;
+        await set_theme(theme);
+        await save_user_config({ theme });
+    });
+
+    // Redact toggle
+    redactData.addEventListener('change', async () => {
+        await save_user_config({ redact_data: redactData.checked });
+    });
+
     // Config change listeners
-    mousePrecision.addEventListener('change', save_config);
-    captureKeyboard.addEventListener('change', save_config);
-    captureInputValues.addEventListener('change', save_config);
-    captureRequestBody.addEventListener('change', save_config);
-    captureResponseBody.addEventListener('change', save_config);
+    mousePrecision.addEventListener('change', persist_config);
+    captureKeyboard.addEventListener('change', persist_config);
+    captureInputValues.addEventListener('change', persist_config);
+    captureRequestBody.addEventListener('change', persist_config);
+    captureResponseBody.addEventListener('change', persist_config);
 }
 
 function select_mode(mode: 'basic' | 'advanced'): void {
-    selected_mode = mode;
-    if (is_extension) chrome.storage.local.set({ selected_mode });
+    user_config.selected_mode = mode;
+    if (is_extension) save_user_config({ selected_mode: mode });
     update_mode_selection();
 }
 
 function update_mode_selection(): void {
-    basicBtn.classList.toggle('selected', selected_mode === 'basic');
-    advancedBtn.classList.toggle('selected', selected_mode === 'advanced');
-
-    if (selected_mode === 'basic') {
-        captureKeyboard.checked = false;
-        captureInputValues.checked = false;
-        captureRequestBody.checked = false;
-        captureResponseBody.checked = false;
-    }
+    basicBtn.classList.toggle('selected', user_config.selected_mode === 'basic');
+    advancedBtn.classList.toggle('selected', user_config.selected_mode === 'advanced');
 }
 
-function get_config(): RecordConfig {
-    const base_config = selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
-
-    return {
-        ...base_config,
-        mouse_precision: mousePrecision.value as RecordConfig['mouse_precision'],
+async function persist_config(): Promise<void> {
+    const patch: Partial<UserConfig> = {
+        mouse_precision: mousePrecision.value as UserConfig['mouse_precision'],
         keyboard_capture_mode: captureKeyboard.checked ? 'shortcuts' : 'none',
         capture_input_values: captureInputValues.checked,
         capture_request_body: captureRequestBody.checked,
         capture_response_body: captureResponseBody.checked
     };
+    user_config = { ...user_config, ...patch };
+    await save_user_config(patch);
 }
 
-function save_config(): void {
-    if (!is_extension) return;
-    const config = get_config();
-    chrome.storage.local.set({ config });
+function get_record_config(): RecordConfig {
+    const base_config = user_config.selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
+
+    return {
+        ...base_config,
+        mouse_precision: user_config.mouse_precision,
+        keyboard_capture_mode: user_config.keyboard_capture_mode,
+        capture_input_values: user_config.capture_input_values,
+        capture_request_body: user_config.capture_request_body,
+        capture_response_body: user_config.capture_response_body,
+        redact_data: user_config.redact_data
+    };
 }
 
 async function start_recording(): Promise<void> {
     if (!is_extension) return;
 
-    const config = get_config();
+    const config = get_record_config();
     const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
     try {

@@ -42,6 +42,7 @@ export interface I18nStrings {
     sessionDetail: string;
     exportJson: string;
     exportHtml: string;
+    exportHar: string;
     startTime: string;
     duration: string;
     mode: string;

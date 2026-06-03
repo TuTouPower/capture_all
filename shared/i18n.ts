@@ -41,6 +41,7 @@ export interface I18nStrings {
     // Detail page
     sessionDetail: string;
     exportJson: string;
+    exportJsonl: string;
     exportHtml: string;
     exportHar: string;
     startTime: string;
@@ -119,6 +120,7 @@ const en: I18nStrings = {
 
     sessionDetail: 'Session Detail',
     exportJson: 'Export JSON',
+    exportJsonl: 'Export JSONL',
     exportHtml: 'Export HTML',
     exportHar: 'Export HAR',
     startTime: 'Start Time',
@@ -196,6 +198,7 @@ const zh: I18nStrings = {
 
     sessionDetail: '录制详情',
     exportJson: '导出 JSON',
+    exportJsonl: '导出 JSONL',
     exportHtml: '导出 HTML',
     exportHar: '导出 HAR',
     startTime: '开始时间',

@@ -242,6 +242,7 @@ function setup_tabs(): void {
 // Export
 function setup_export(): void {
     document.getElementById('exportJsonBtn')!.addEventListener('click', export_json);
+    document.getElementById('exportJsonlBtn')!.addEventListener('click', export_jsonl);
     document.getElementById('exportHtmlBtn')!.addEventListener('click', export_html);
     document.getElementById('exportHarBtn')!.addEventListener('click', export_har);
 }
@@ -261,6 +262,22 @@ async function export_json(): Promise<void> {
 
     const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.json`;
     chrome.downloads.download({ url, filename });
+}
+
+async function export_jsonl(): Promise<void> {
+    if (!is_extension) return;
+
+    const response = await chrome.runtime.sendMessage({
+        action: 'export_jsonl',
+        session_id
+    });
+
+    if (response.success) {
+        const blob = new Blob([response.jsonl], { type: 'application/x-ndjson' });
+        const url = URL.createObjectURL(blob);
+        const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.jsonl`;
+        chrome.downloads.download({ url, filename });
+    }
 }
 
 async function export_html(): Promise<void> {

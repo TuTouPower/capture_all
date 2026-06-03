@@ -128,11 +128,33 @@
 
 ## 十、设置完善
 
-### 10.1 脱敏开关
-- 设置面板新增"数据脱敏"开关，默认开启
-- 关闭后，headers / cookie / URL query 不再脱敏，方便调试
-- 影响：`redact_sensitive_headers`、`redact_url_query`、`redact_password`
-- 设置值存 `chrome.storage.local`
+### 10.1 脱敏开关 — 所有需要检查的地方
+
+**目标：用户自已决定是否脱敏，不加 global redact toggle 统一控制。**
+
+当前 `RecordConfig` 里已有 `redact_sensitive_headers: boolean` 和 `redact_url_query: boolean`，
+但这些没有被调用方使用。默认值也是 `true`，用户无法关闭。
+
+需要逐处审查，加入 `if (config.redact_data)` 判断：
+
+| # | 文件:行 | 当前行为 | 问题 |
+|---|---------|---------|------|
+| 1 | `content/dom_capture.ts:48-50` | password 始终 `[REDACTED]` | 硬编码，无开关 |
+| 2 | `content/dom_capture.ts:54` | `capture_input_values=false` 时 value=`[DISABLED]` | 由 capture_input_values 控制，合理 |
+| 3 | `content/keyboard_capture.ts:10` | `keyboard_capture_mode='none'` 不记录 | 由 keyboard_capture_mode 控制，合理 |
+| 4 | `content/mouse_capture.ts:56` | `truncate_target_text` 始终截断 100 字符 | 硬编码截断，没有关的地方 |
+| 5 | `background/network_capture.ts:12` | `_config` 有脱敏参数但**实际没调用 redact 函数** | headers 和 url 都没脱敏也没记录 |
+| 6 | `background/console_capture.ts:59` | `truncate_console_args` 始终截断 1KB | 硬编码截断 |
+| 7 | `shared/redaction.ts:13-20` | `redact_headers` 函数 | 有函数，调用方不传参 |
+| 8 | `shared/redaction.ts:28-37` | `redact_url` 有 `redact_query` 参数 | 调用方不传 |
+| 9 | `shared/redaction.ts:51-52` | `redact_password` 始终脱敏 | 导出/存储时调用，无开关 |
+| 10 | `shared/redaction.ts:56-72` | `truncate_*` 系列函数 | 始终截断，无最大长度设 |
+
+**改造方案：**
+- `RecordConfig` 新增 `redact_data: boolean`，默认 `true`
+- 所有脱敏调用处检查此字段，`false` 时不脱敏不截断
+- 设置面板加开关控制默认值
+- 录制开始前读用户设置填入 config
 
 ### 10.2 主题模式
 - 设置面板新增"主题"下拉：跟随系统 / 浅色 / 深色

@@ -23,15 +23,30 @@ export interface RecordConfig {
     capture_response_body: boolean;
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
+    redact_data: boolean;
     sample_rate_ms: number;
+}
+
+export type ThemeMode = 'follow-system' | 'light' | 'dark';
+
+export interface UserConfig {
+    selected_mode: 'basic' | 'advanced';
+    mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
+    keyboard_capture_mode: 'none' | 'shortcuts' | 'all';
+    capture_input_values: boolean;
+    capture_request_body: boolean;
+    capture_response_body: boolean;
+    redact_data: boolean;
+    theme: ThemeMode;
+    locale: 'en' | 'zh';
 }
 
 export interface RecordEvent {
     session_id: string;
     relative_time: number;       // ms from session start
     absolute_time: number;       // epoch ms
-    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch';
-    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData;
+    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch' | 'tab_created' | 'tab_url_change' | 'dom_ready' | 'storage_change';
+    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData | TabCreatedData | TabUrlChangeData | DomReadyData | StorageChangeData;
     tab_id: number;
     frame_id: number;            // 0 = main frame
     url: string;
@@ -69,6 +84,13 @@ export interface DomChangeData {
     value: string;               // '[DISABLED]' when capture_input_values=false
 }
 
+export interface StorageChangeData {
+    storage_type: 'local' | 'session';
+    action: 'set' | 'remove' | 'clear';
+    key: string | null;          // null for 'clear'
+    value_length: number;        // 0 for 'remove'/'clear'
+}
+
 export interface NavigationData {
     from: string;
     to: string;
@@ -82,6 +104,24 @@ export interface PageLoadData {
 export interface TabSwitchData {
     action: 'activate' | 'deactivate';
     tab_title: string;
+}
+
+export interface TabCreatedData {
+    tab_id: number;
+    url: string;
+    opener_tab_id: number | null;
+    window_id: number;
+    title: string;
+}
+
+export interface TabUrlChangeData {
+    tab_id: number;
+    url: string;
+    title: string;
+}
+
+export interface DomReadyData {
+    timestamp: number;
 }
 
 export type BodyCaptureStatus = 'not_enabled' | 'captured' | 'failed' | 'too_large' | 'unsupported';

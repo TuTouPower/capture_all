@@ -76,6 +76,12 @@ export interface I18nStrings {
     language: string;
     english: string;
     chinese: string;
+    redactData: string;
+    redactDataDesc: string;
+    theme: string;
+    themeFollowSystem: string;
+    themeLight: string;
+    themeDark: string;
 }
 
 const en: I18nStrings = {
@@ -113,6 +119,7 @@ const en: I18nStrings = {
     sessionDetail: 'Session Detail',
     exportJson: 'Export JSON',
     exportHtml: 'Export HTML',
+    exportHar: 'Export HAR',
     startTime: 'Start Time',
     duration: 'Duration',
     mode: 'Mode',
@@ -146,6 +153,12 @@ const en: I18nStrings = {
     language: 'Language',
     english: 'English',
     chinese: '中文',
+    redactData: 'Redact Sensitive Data',
+    redactDataDesc: 'Mask passwords, tokens, and truncate long text',
+    theme: 'Theme',
+    themeFollowSystem: 'Follow System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
 };
 
 const zh: I18nStrings = {
@@ -183,6 +196,7 @@ const zh: I18nStrings = {
     sessionDetail: '录制详情',
     exportJson: '导出 JSON',
     exportHtml: '导出 HTML',
+    exportHar: '导出 HAR',
     startTime: '开始时间',
     duration: '时长',
     mode: '模式',
@@ -216,6 +230,12 @@ const zh: I18nStrings = {
     language: '语言',
     english: 'English',
     chinese: '中文',
+    redactData: '脱敏敏感数据',
+    redactDataDesc: '遮蔽密码、令牌，截断长文本',
+    theme: '主题',
+    themeFollowSystem: '跟随系统',
+    themeLight: '浅色',
+    themeDark: '深色',
 };
 
 const locales: Record<Locale, I18nStrings> = { en, zh };

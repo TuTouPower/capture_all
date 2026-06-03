@@ -1,6 +1,7 @@
 // content/mouse_capture.ts
 import type { RecordConfig, MouseEventData } from '../shared/types';
 import { truncate_target_text } from '../shared/redaction';
+import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: RecordConfig;
@@ -48,10 +49,11 @@ export function stop_mouse_capture(): void {
     }
 }
 
-function get_target_info(event: MouseEvent): { selector: string; tag: string; text: string } {
+function get_target_info(event: MouseEvent): { selector: string; xpath: string; tag: string; text: string } {
     const target = event.target as HTMLElement;
     return {
         selector: get_selector(target),
+        xpath: build_xpath(target),
         tag: target.tagName.toLowerCase(),
         text: truncate_target_text(target.textContent || '', config.redact_data)
     };
@@ -74,6 +76,7 @@ function handle_click(event: MouseEvent): void {
         y: event.clientY,
         button: event.button,
         target_selector: target.selector,
+        target_xpath: target.xpath,
         target_tag: target.tag,
         target_text: target.text
     } as MouseEventData);
@@ -88,6 +91,7 @@ function handle_dblclick(event: MouseEvent): void {
         y: event.clientY,
         button: event.button,
         target_selector: target.selector,
+        target_xpath: target.xpath,
         target_tag: target.tag,
         target_text: target.text
     } as MouseEventData);
@@ -102,6 +106,7 @@ function handle_contextmenu(event: MouseEvent): void {
         y: event.clientY,
         button: event.button,
         target_selector: target.selector,
+        target_xpath: target.xpath,
         target_tag: target.tag,
         target_text: target.text
     } as MouseEventData);
@@ -109,39 +114,45 @@ function handle_contextmenu(event: MouseEvent): void {
 
 function handle_wheel(event: WheelEvent): void {
     if (!is_capturing) return;
+    const el = event.target as HTMLElement;
     send_event('mouse', {
         action: 'wheel',
         x: event.clientX,
         y: event.clientY,
         button: 0,
-        target_selector: get_selector(event.target as HTMLElement),
-        target_tag: (event.target as HTMLElement).tagName.toLowerCase(),
+        target_selector: get_selector(el),
+        target_xpath: build_xpath(el),
+        target_tag: el.tagName.toLowerCase(),
         target_text: ''
     } as MouseEventData);
 }
 
 function handle_dragstart(event: DragEvent): void {
     if (!is_capturing) return;
+    const el = event.target as HTMLElement;
     send_event('mouse', {
         action: 'dragstart',
         x: event.clientX,
         y: event.clientY,
         button: event.button,
-        target_selector: get_selector(event.target as HTMLElement),
-        target_tag: (event.target as HTMLElement).tagName.toLowerCase(),
+        target_selector: get_selector(el),
+        target_xpath: build_xpath(el),
+        target_tag: el.tagName.toLowerCase(),
         target_text: ''
     } as MouseEventData);
 }
 
 function handle_dragend(event: DragEvent): void {
     if (!is_capturing) return;
+    const el = event.target as HTMLElement;
     send_event('mouse', {
         action: 'dragend',
         x: event.clientX,
         y: event.clientY,
         button: event.button,
-        target_selector: get_selector(event.target as HTMLElement),
-        target_tag: (event.target as HTMLElement).tagName.toLowerCase(),
+        target_selector: get_selector(el),
+        target_xpath: build_xpath(el),
+        target_tag: el.tagName.toLowerCase(),
         target_text: ''
     } as MouseEventData);
 }
@@ -155,6 +166,7 @@ function handle_mousemove(event: MouseEvent): void {
 
     if (raf_id) cancelAnimationFrame(raf_id);
 
+    const el = event.target as HTMLElement;
     raf_id = requestAnimationFrame(() => {
         if (!is_capturing) return;
         send_event('mouse', {
@@ -162,8 +174,9 @@ function handle_mousemove(event: MouseEvent): void {
             x: event.clientX,
             y: event.clientY,
             button: 0,
-            target_selector: get_selector(event.target as HTMLElement),
-            target_tag: (event.target as HTMLElement).tagName.toLowerCase(),
+            target_selector: get_selector(el),
+            target_xpath: build_xpath(el),
+            target_tag: el.tagName.toLowerCase(),
             target_text: ''
         } as MouseEventData);
     });

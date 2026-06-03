@@ -1,5 +1,6 @@
 // content/keyboard_capture.ts
 import type { RecordConfig, KeyboardEventData } from '../shared/types';
+import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: RecordConfig;
@@ -25,13 +26,17 @@ export function stop_keyboard_capture(): void {
     document.removeEventListener('keyup', handle_keyup);
 }
 
-function get_target_info(event: KeyboardEvent): string {
+function get_target_info(event: KeyboardEvent): { selector: string; xpath: string } {
     const target = event.target as HTMLElement;
-    if (target.id) return `#${target.id}`;
-    if (target.className && typeof target.className === 'string') {
-        return `.${target.className.split(' ')[0]}`;
+    let selector: string;
+    if (target.id) {
+        selector = `#${target.id}`;
+    } else if (target.className && typeof target.className === 'string') {
+        selector = `.${target.className.split(' ')[0]}`;
+    } else {
+        selector = target.tagName.toLowerCase();
     }
-    return target.tagName.toLowerCase();
+    return { selector, xpath: build_xpath(target) };
 }
 
 function has_modifier(event: KeyboardEvent): boolean {
@@ -46,11 +51,13 @@ function handle_keydown(event: KeyboardEvent): void {
         return;
     }
 
+    const target = get_target_info(event);
     send_event('keyboard', {
         action: 'keydown',
         key: event.key,
         code: event.code,
-        target_selector: get_target_info(event),
+        target_selector: target.selector,
+        target_xpath: target.xpath,
         modifiers: {
             ctrl: event.ctrlKey,
             shift: event.shiftKey,
@@ -68,11 +75,13 @@ function handle_keyup(event: KeyboardEvent): void {
         return;
     }
 
+    const target = get_target_info(event);
     send_event('keyboard', {
         action: 'keyup',
         key: event.key,
         code: event.code,
-        target_selector: get_target_info(event),
+        target_selector: target.selector,
+        target_xpath: target.xpath,
         modifiers: {
             ctrl: event.ctrlKey,
             shift: event.shiftKey,

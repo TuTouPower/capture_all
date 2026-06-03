@@ -6,11 +6,13 @@
 - 当前 `request_headers: {}` 空的
 - 需要：`chrome.webRequest.onBeforeSendHeaders` 监听
 - 脱敏：authorization、cookie、set-cookie、x-api-key 等替换为 `[REDACTED]`
+- **Cookie 来源**：请求带的 cookie 在 `cookie` header 中，记录 cookie 名（脱敏值）
 
 ### 1.2 Response Headers 捕获
 - 当前 `response_headers: {}` 空的
 - 需要：`chrome.webRequest.onHeadersReceived` 监听
 - 脱敏：set-cookie、www-authenticate 等
+- **Cookie 来源**：服务器设置的 cookie 在 `set-cookie` header 中，记录 cookie 名（脱敏值）
 
 ### 1.3 Request Body 捕获
 - 当前没抓
@@ -124,12 +126,46 @@
 
 ---
 
+## 十、设置完善
+
+### 10.1 脱敏开关
+- 设置面板新增"数据脱敏"开关，默认开启
+- 关闭后，headers / cookie / URL query 不再脱敏，方便调试
+- 影响：`redact_sensitive_headers`、`redact_url_query`、`redact_password`
+- 设置值存 `chrome.storage.local`
+
+### 10.2 主题模式
+- 设置面板新增"主题"下拉：跟随系统 / 浅色 / 深色
+- 默认"跟随系统"（`matchMedia('prefers-color-scheme: dark')`）
+- 影响：popup.css、detail.css 双主题
+- 设置值存 `chrome.storage.local`
+
+### 10.3 持久化所有用户设置
+- 当前问题：鼠标精度、捕获开关等只在 popup 会话内存中，关闭 popup 后丢失
+- 需要：打开 popup 时从 `chrome.storage.local` 恢复所有设置
+- 覆盖范围：
+  - 录制模式（basic/advanced）
+  - 鼠标精度
+  - 键盘捕获模式
+  - 输入值捕获开关
+  - 请求体捕获开关
+  - 响应体捕获开关
+  - 脱敏开关（新增）
+  - 主题模式（新增）
+  - 语言选择（已有）
+- 存储结构存 `chrome.storage.local.user_config`
+
+---
+
 ## 优先级排序
 
 | 优先级 | 任务 | 原因 |
 |--------|------|------|
 | P0 | 1.1-1.4 Headers + Body | 核心功能，用户明确要求 |
 | P0 | 4.1 完整 CSS 路径 | 用户明确要求 |
+| P0 | 10.3 持久化所有用户设置 | 用户明确要求，数据丢失 |
+| P1 | 10.1 脱敏开关 | 用户明确要求 |
+| P1 | 10.2 主题模式 | 用户明确要求 |
 | P1 | 2.1-2.2 Tab 打开/URL 变化 | 用户明确要求 |
 | P1 | 1.5 Cookie 变化 | 用户明确要求 |
 | P1 | 7.1 HAR 导出 | 实用价值高 |

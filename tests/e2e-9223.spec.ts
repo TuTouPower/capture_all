@@ -105,7 +105,7 @@ test.describe('Record All on 9223 Chrome', () => {
         await page.close();
     });
 
-    test('full flow: record -> navigate -> stop -> check history', async () => {
+    test('full flow: record -> stop -> click View -> detail opens', async () => {
         const popup = await browser.newPage();
         await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
@@ -114,36 +114,51 @@ test.describe('Record All on 9223 Chrome', () => {
         await popup.locator('#startBtn').click();
         await popup.waitForTimeout(1000);
 
-        // Navigate
+        // Navigate to create activity
         const testPage = await browser.newPage();
         await testPage.goto('https://example.com');
         await testPage.waitForLoadState('domcontentloaded');
         await testPage.mouse.click(100, 100);
         await testPage.waitForTimeout(2000);
 
-        // Stop
+        // Stop recording
         await popup.locator('#stopBtn').click();
-        await popup.waitForTimeout(3000); // Wait for flush
+        await popup.waitForTimeout(3000);
 
-        // Check history
+        // Verify history has items
         const items = popup.locator('.history-item');
         const count = await items.count();
         expect(count).toBeGreaterThanOrEqual(1);
 
-        // Get session ID and open detail
-        const sessionId = await items.first().getAttribute('data-id');
-        const detail = await browser.newPage();
-        await detail.goto(`chrome-extension://${extension_id}/detail/detail.html?session=${sessionId}`);
-        await detail.waitForLoadState('domcontentloaded');
-        await detail.waitForTimeout(3000); // Wait for data load
+        // Click the View button - this opens a new tab via chrome.tabs.create
+        await items.first().locator('.btn-sm.primary').click();
+        await popup.waitForTimeout(3000);
 
-        // Check timeline has events
-        const events = detail.locator('.timeline-item');
-        const eventCount = await events.count();
-        expect(eventCount).toBeGreaterThan(0);
+        // Find the newly opened detail page
+        const allPages = browser.pages();
+        const newPage = allPages.find(p => p.url().includes('detail/detail.html'));
+        expect(newPage).toBeTruthy();
+
+        if (newPage) {
+            await newPage.waitForLoadState('domcontentloaded');
+            await newPage.waitForTimeout(2000);
+
+            // Verify detail page loaded
+            const title = await newPage.title();
+            expect(title).toContain('Record All');
+
+            // Verify tabs are visible
+            await expect(newPage.locator('.tab-btn[data-tab="timeline"]')).toBeVisible();
+
+            // Verify timeline has events
+            const events = newPage.locator('.timeline-item');
+            const eventCount = await events.count();
+            expect(eventCount).toBeGreaterThan(0);
+
+            await newPage.close();
+        }
 
         await testPage.close();
-        await detail.close();
         await popup.close();
     });
 });

@@ -247,11 +247,32 @@ async function load_history(): Promise<void> {
                     <span class="history-duration">${format_duration(session)}</span>
                 </div>
                 <div class="history-actions">
-                    <button class="btn-sm primary" onclick="view_session('${session.id}')">${t('view')}</button>
-                    <button class="btn-sm" onclick="delete_session('${session.id}')">${t('delete')}</button>
+                    <button class="btn-sm primary" data-action="view" data-session="${session.id}">${t('view')}</button>
+                    <button class="btn-sm" data-action="delete" data-session="${session.id}">${t('delete')}</button>
                 </div>
             </div>
         `).join('');
+
+        // Event delegation for history buttons
+        historyList.onclick = async (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const btn = target.closest('[data-action]') as HTMLElement;
+            if (!btn) return;
+
+            const action = btn.dataset.action;
+            const sessionId = btn.dataset.session;
+            if (!action || !sessionId) return;
+
+            if (action === 'view') {
+                const url = chrome.runtime.getURL(`detail/detail.html?session=${sessionId}`);
+                chrome.tabs.create({ url });
+            } else if (action === 'delete') {
+                if (confirm(t('deleteConfirm'))) {
+                    await chrome.runtime.sendMessage({ action: 'delete_session', session_id: sessionId });
+                    await load_history();
+                }
+            }
+        };
     } catch {
         historyList.innerHTML = `<div class="history-empty">${t('error')}</div>`;
     }
@@ -264,15 +285,3 @@ function format_duration(session: Session): string {
     const seconds = Math.floor((duration % 60000) / 1000);
     return `${minutes}m ${seconds}s`;
 }
-
-// Global functions for onclick handlers
-(window as unknown as Record<string, (id: string) => void>).view_session = (id: string) => {
-    chrome.tabs.create({ url: `detail/detail.html?session=${id}` });
-};
-
-(window as unknown as Record<string, (id: string) => Promise<void>>).delete_session = async (id: string) => {
-    if (confirm(t('deleteConfirm'))) {
-        await chrome.runtime.sendMessage({ action: 'delete_session', session_id: id });
-        await load_history();
-    }
-};

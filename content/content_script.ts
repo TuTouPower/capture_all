@@ -14,7 +14,10 @@ if (window !== window.top) {
     frame_id = Math.floor(Math.random() * 1000000);
 }
 
+console.log('Record All: Content Script loaded at', window.location.href);
+
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
+    console.log('Record All: Content received message:', message.action);
     if (message.action === 'start') {
         start_capture(message.config || DEFAULT_CONFIG);
         sendResponse({ success: true });
@@ -27,10 +30,21 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
     return true;
 });
 
+// Check if recording is already active when content script loads
+chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
+    if (response?.is_capturing && !is_capturing) {
+        console.log('Record All: Recording already active, starting capture');
+        start_capture(response.config || DEFAULT_CONFIG);
+    }
+}).catch((_err: unknown) => {
+    // Extension context might not be ready
+});
+
 function start_capture(config: RecordConfig): void {
     if (is_capturing) return;
 
     is_capturing = true;
+    console.log('Record All: Content capture started');
 
     // Send page load event
     send_event('page_load', {
@@ -87,5 +101,7 @@ function send_event(type: string, data: any): void {
     chrome.runtime.sendMessage({
         action: 'event',
         event
+    }).catch((_err: unknown) => {
+        // Ignore errors (e.g., extension context invalidated)
     });
 }

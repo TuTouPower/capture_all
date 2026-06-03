@@ -1,9 +1,10 @@
 // background/service_worker.ts
 import { init_db, flush_all, get_session, list_sessions as storage_list_sessions, delete_session as storage_delete_session, get_events, get_network_requests, get_console_logs, create_session, update_session, write_events, write_requests, write_logs } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
-import { start_network_capture, stop_network_capture } from './network_capture';
+import { start_network_capture, stop_network_capture, enable_response_body_capture } from './network_capture';
 import { start_console_capture, stop_console_capture } from './console_capture';
-import { export_json, export_html } from './exporter';
+import { start_exception_capture, stop_exception_capture } from './exception_capture';
+import { export_json, export_html, export_har } from './exporter';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
@@ -52,6 +53,8 @@ async function handle_message(message: any): Promise<any> {
             return { success: true, json: await export_json(message.session_id) };
         case 'export_html':
             return { success: true, html: await export_html(message.session_id) };
+        case 'export_har':
+            return { success: true, har: await export_har(message.session_id) };
         default:
             return { success: false, error: 'Unknown action' };
     }
@@ -105,12 +108,39 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     }
 
     // Start console capture if enabled (advanced mode)
+    let debugger_attached_tab_id: number | null = null;
     if (config.capture_console && config.capture_mode === 'advanced') {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs[0]?.id) {
-            const result = await start_console_capture(session_id, start_time, tabs[0].id, handle_console_log);
+            const result = await start_console_capture(session_id, start_time, tabs[0].id, config.redact_data, handle_console_log);
             if (!result.success) {
                 console.warn('Record All: Console capture failed:', result.error);
+            } else {
+                debugger_attached_tab_id = tabs[0].id;
+            }
+            const ex_result = await start_exception_capture(session_id, start_time, tabs[0].id, handle_console_log);
+            if (!ex_result.success) {
+                console.warn('Record All: Exception capture failed:', ex_result.error);
+            } else {
+                debugger_attached_tab_id = tabs[0].id;
+            }
+        }
+    }
+
+    // Enable response body capture (advanced mode). Reuses an already-attached
+    // debugger when present so we don't conflict with console/exception capture.
+    if (config.capture_network && config.capture_response_body && config.capture_mode === 'advanced') {
+        let target_tab_id = debugger_attached_tab_id;
+        let already_attached = target_tab_id !== null;
+        if (target_tab_id === null) {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            target_tab_id = tabs[0]?.id ?? null;
+            already_attached = false;
+        }
+        if (target_tab_id !== null) {
+            const result = await enable_response_body_capture(target_tab_id, already_attached);
+            if (!result.success) {
+                console.warn('Record All: Response body capture failed:', result.error);
             }
         }
     }
@@ -158,6 +188,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     // Stop console capture
     await stop_console_capture();
+    await stop_exception_capture();
 
     // Notify all content scripts to stop
     const all_tabs = await chrome.tabs.query({});
@@ -179,33 +210,56 @@ async function stop_recording(): Promise<{ success: boolean }> {
     return { success: true };
 }
 
-function handle_event(event: RecordEvent): { success: boolean } {
-    if (!is_capturing || !current_session_id) return { success: true };
+async function persist_stats(): Promise<void> {
+    if (!current_session) return;
+    try {
+        await update_session(current_session);
+    } catch (err) {
+        console.error('Record All: Failed to persist session stats:', err);
+    }
+}
+
+async function handle_event(event: RecordEvent): Promise<{ success: boolean }> {
+    if (!is_capturing || !current_session_id || !current_session) return { success: true };
 
     // Set session_id and tab_id from context
     event.session_id = current_session_id;
     event.relative_time = event.absolute_time - start_time;
 
-    // Store event
-    write_events([event]).catch((err: unknown) => {
+    try {
+        await write_events([event]);
+        current_session.stats.event_count++;
+        if (event.type === 'dom_change') {
+            current_session.stats.dom_changes++;
+        }
+        await persist_stats();
+    } catch (err) {
         console.error('Record All: Failed to write event:', err);
-    });
+    }
 
     return { success: true };
 }
 
-function handle_network_request(request: NetworkRequest): void {
-    if (!is_capturing) return;
-    write_requests([request]).catch((err: unknown) => {
+async function handle_network_request(request: NetworkRequest): Promise<void> {
+    if (!is_capturing || !current_session) return;
+    try {
+        await write_requests([request]);
+        current_session.stats.request_count++;
+        await persist_stats();
+    } catch (err) {
         console.error('Record All: Failed to write network request:', err);
-    });
+    }
 }
 
-function handle_console_log(log: ConsoleLog): void {
-    if (!is_capturing) return;
-    write_logs([log]).catch((err: unknown) => {
+async function handle_console_log(log: ConsoleLog): Promise<void> {
+    if (!is_capturing || !current_session) return;
+    try {
+        await write_logs([log]);
+        current_session.stats.log_count++;
+        await persist_stats();
+    } catch (err) {
         console.error('Record All: Failed to write console log:', err);
-    });
+    }
 }
 
 // Tab activation listener - send start to new tab's content script
@@ -229,6 +283,59 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.tabs.onRemoved.addListener((_tabId: number) => {
     if (!is_capturing) return;
     // Tab closed during recording - data already captured, session continues
+});
+
+// Tab created listener
+chrome.tabs.onCreated.addListener((tab) => {
+    if (!is_capturing) return;
+    const now = Date.now();
+    handle_event({
+        session_id: '',
+        relative_time: 0,
+        absolute_time: now,
+        type: 'tab_created',
+        data: {
+            tab_id: tab.id ?? -1,
+            url: tab.url || tab.pendingUrl || '',
+            opener_tab_id: tab.openerTabId ?? null,
+            window_id: tab.windowId,
+            title: tab.title || ''
+        },
+        tab_id: tab.id ?? -1,
+        frame_id: 0,
+        url: tab.url || tab.pendingUrl || ''
+    } as any);
+});
+
+// Tab URL change listener
+const last_tab_urls = new Map<number, string>();
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!is_capturing) return;
+    if (changeInfo.status !== 'loading') return;
+    const new_url = changeInfo.url || tab.url || '';
+    if (!new_url) return;
+    const prev_url = last_tab_urls.get(tabId);
+    if (prev_url === new_url) return;
+    last_tab_urls.set(tabId, new_url);
+    const now = Date.now();
+    handle_event({
+        session_id: '',
+        relative_time: 0,
+        absolute_time: now,
+        type: 'tab_url_change',
+        data: {
+            tab_id: tabId,
+            url: new_url,
+            title: tab.title || ''
+        },
+        tab_id: tabId,
+        frame_id: 0,
+        url: new_url
+    } as any);
+});
+
+chrome.tabs.onRemoved.addListener((tabId: number) => {
+    last_tab_urls.delete(tabId);
 });
 
 // Global error handler

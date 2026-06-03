@@ -4,6 +4,7 @@ import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './kee
 import { start_network_capture, stop_network_capture, enable_response_body_capture } from './network_capture';
 import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
+import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import { export_json, export_jsonl, export_html, export_har } from './exporter';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
@@ -147,6 +148,9 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         }
     }
 
+    // Start cookie change capture (always, regardless of capture_network)
+    start_cookie_capture(session_id, start_time, handle_cookie_change);
+
     // Notify all content scripts to start
     const all_tabs = await chrome.tabs.query({});
     console.log('Record All: Notifying', all_tabs.length, 'tabs to start');
@@ -187,6 +191,9 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     // Stop network capture
     stop_network_capture();
+
+    // Stop cookie capture
+    stop_cookie_capture();
 
     // Stop console capture
     await stop_console_capture();
@@ -240,6 +247,11 @@ async function handle_event(event: RecordEvent): Promise<{ success: boolean }> {
     }
 
     return { success: true };
+}
+
+async function handle_cookie_change(event: RecordEvent): Promise<void> {
+    if (!is_capturing) return;
+    await handle_event(event);
 }
 
 async function handle_network_request(request: NetworkRequest): Promise<void> {

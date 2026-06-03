@@ -1,5 +1,6 @@
 // content/dom_capture.ts
 import type { RecordConfig, DomChangeData } from '../shared/types';
+import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: RecordConfig;
@@ -74,9 +75,10 @@ function build_css_path(element: Element): string {
     return segments.join(' > ');
 }
 
-function get_target_info(element: HTMLElement): { selector: string; tag: string } {
+function get_target_info(element: HTMLElement): { selector: string; xpath: string; tag: string } {
     return {
         selector: build_css_path(element),
+        xpath: build_xpath(element),
         tag: element.tagName.toLowerCase()
     };
 }
@@ -106,6 +108,7 @@ function handle_input(event: Event): void {
     send_event('dom_change', {
         action: 'input',
         target_selector: info.selector,
+        target_xpath: info.xpath,
         target_tag: info.tag,
         value
     } as DomChangeData);
@@ -122,6 +125,7 @@ function handle_change(event: Event): void {
     send_event('dom_change', {
         action: 'change',
         target_selector: info.selector,
+        target_xpath: info.xpath,
         target_tag: info.tag,
         value
     } as DomChangeData);
@@ -137,6 +141,7 @@ function handle_focus(event: FocusEvent): void {
     send_event('dom_change', {
         action: 'focus',
         target_selector: info.selector,
+        target_xpath: info.xpath,
         target_tag: info.tag,
         value: ''
     } as DomChangeData);
@@ -152,6 +157,7 @@ function handle_blur(event: FocusEvent): void {
     send_event('dom_change', {
         action: 'blur',
         target_selector: info.selector,
+        target_xpath: info.xpath,
         target_tag: info.tag,
         value: ''
     } as DomChangeData);

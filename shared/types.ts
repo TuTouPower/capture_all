@@ -58,6 +58,7 @@ export interface MouseEventData {
     y: number;
     button: number;
     target_selector: string;
+    target_xpath: string;
     target_tag: string;
     target_text: string;          // truncated to 100 chars
 }
@@ -67,6 +68,7 @@ export interface KeyboardEventData {
     key: string;
     code: string;
     target_selector: string;
+    target_xpath: string;
     modifiers: { ctrl: boolean; shift: boolean; alt: boolean; meta: boolean };
 }
 
@@ -80,6 +82,7 @@ export interface ScrollEventData {
 export interface DomChangeData {
     action: 'input' | 'change' | 'focus' | 'blur';
     target_selector: string;
+    target_xpath: string;
     target_tag: string;
     value: string;               // '[DISABLED]' when capture_input_values=false
 }

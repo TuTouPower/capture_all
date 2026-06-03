@@ -1,6 +1,7 @@
 // background/exporter.ts
 import { escape_for_html_embed } from '../shared/escape';
 import { get_session, get_events, get_network_requests, get_console_logs } from './storage';
+import type { NetworkRequest, Session } from '../shared/types';
 
 export async function export_json(session_id: string): Promise<string> {
     const session = await get_session(session_id);
@@ -34,8 +35,12 @@ export async function export_html(session_id: string): Promise<string> {
     const duration_ms = session.end_time ? session.end_time - session.start_time : 0;
     const duration_str = format_duration(duration_ms);
 
+    const event_count = session.stats.event_count || events.length;
+    const request_count = session.stats.request_count || network_requests.length;
+    const log_count = session.stats.log_count || console_logs.length;
+
     const total_size_kb = Math.round(
-        (session.stats.event_count + session.stats.request_count + session.stats.log_count) * 0.5
+        (event_count + request_count + log_count) * 0.5
     );
 
     return `<!DOCTYPE html>
@@ -66,9 +71,9 @@ pre { background: #f8f8f8; padding: 12px; border-radius: 4px; overflow-x: auto; 
     <div class="summary-item"><label>Start Time</label><span>${start_date}</span></div>
     <div class="summary-item"><label>Duration</label><span>${duration_str}</span></div>
     <div class="summary-item"><label>Mode</label><span>${session.config.capture_mode}</span></div>
-    <div class="summary-item"><label>Events</label><span>${session.stats.event_count}</span></div>
-    <div class="summary-item"><label>Network Requests</label><span>${session.stats.request_count}</span></div>
-    <div class="summary-item"><label>Console Logs</label><span>${session.stats.log_count}</span></div>
+    <div class="summary-item"><label>Events</label><span>${event_count}</span></div>
+    <div class="summary-item"><label>Network Requests</label><span>${request_count}</span></div>
+    <div class="summary-item"><label>Console Logs</label><span>${log_count}</span></div>
     <div class="summary-item"><label>Est. Size</label><span>${total_size_kb} KB</span></div>
   </div>
 </div>
@@ -86,6 +91,161 @@ document.getElementById('jsonData').textContent = JSON.stringify(data, null, 2);
 </script>
 </body>
 </html>`;
+}
+
+export async function export_har(session_id: string): Promise<string> {
+    const session = await get_session(session_id);
+    if (!session) throw new Error('Session not found');
+
+    const network_requests = await get_network_requests(session_id, 0, 100000);
+    const har = build_har(session, network_requests);
+    return JSON.stringify(har, null, 2);
+}
+
+interface HarNameValue { name: string; value: string; }
+
+interface HarEntry {
+    startedDateTime: string;
+    time: number;
+    request: {
+        method: string;
+        url: string;
+        httpVersion: string;
+        headers: HarNameValue[];
+        queryString: HarNameValue[];
+        postData?: { mimeType: string; text: string };
+        headersSize: number;
+        bodySize: number;
+    };
+    response: {
+        status: number;
+        statusText: string;
+        httpVersion: string;
+        headers: HarNameValue[];
+        cookies: HarNameValue[];
+        content: { size: number; mimeType: string; text?: string };
+        redirectURL: string;
+        headersSize: number;
+        bodySize: number;
+    };
+    cache: Record<string, never>;
+    timings: { send: number; wait: number; receive: number };
+    _resourceType?: string;
+}
+
+function build_har(session: Session, requests: NetworkRequest[]): unknown {
+    const entries = requests.map(r => build_har_entry(r));
+    return {
+        log: {
+            version: '1.2',
+            creator: { name: 'record_all', version: '1.0' },
+            browser: { name: 'Chrome', version: 'unknown' },
+            pages: [{
+                startedDateTime: new Date(session.start_time).toISOString(),
+                id: session.id,
+                title: `Session ${session.id}`,
+                pageTimings: {
+                    onContentLoad: -1,
+                    onLoad: session.end_time ? session.end_time - session.start_time : -1
+                }
+            }],
+            entries
+        }
+    };
+}
+
+function build_har_entry(r: NetworkRequest): HarEntry {
+    const req_headers = headers_to_array(r.request_headers);
+    const res_headers = headers_to_array(r.response_headers);
+    const query_string = parse_query_string(r.url);
+    const req_mime = get_header(r.request_headers, 'content-type') || 'application/octet-stream';
+    const res_mime = get_header(r.response_headers, 'content-type') || 'application/octet-stream';
+    const duration = Math.max(0, r.duration_ms || 0);
+
+    const entry: HarEntry = {
+        startedDateTime: new Date(r.absolute_time).toISOString(),
+        time: duration,
+        request: {
+            method: (r.method || 'GET').toUpperCase(),
+            url: r.url || '',
+            httpVersion: 'HTTP/1.1',
+            headers: req_headers,
+            queryString: query_string,
+            headersSize: -1,
+            bodySize: r.request_body ? r.request_body.length : (has_body_method(r.method) ? 0 : -1)
+        },
+        response: {
+            status: r.status_code || 0,
+            statusText: status_text(r.status_code),
+            httpVersion: 'HTTP/1.1',
+            headers: res_headers,
+            cookies: [],
+            content: {
+                size: r.response_body ? r.response_body.length : 0,
+                mimeType: res_mime,
+                ...(r.response_body ? { text: r.response_body } : {})
+            },
+            redirectURL: get_header(r.response_headers, 'location') || '',
+            headersSize: -1,
+            bodySize: r.response_body ? r.response_body.length : -1
+        },
+        cache: {},
+        timings: { send: 0, wait: duration, receive: 0 },
+        _resourceType: r.resource_type
+    };
+
+    if (r.request_body) {
+        entry.request.postData = { mimeType: req_mime, text: r.request_body };
+    }
+
+    return entry;
+}
+
+function headers_to_array(h: Record<string, string> | null | undefined): HarNameValue[] {
+    if (!h) return [];
+    return Object.entries(h).map(([name, value]) => ({ name, value: String(value ?? '') }));
+}
+
+function get_header(h: Record<string, string> | null | undefined, name: string): string | null {
+    if (!h) return null;
+    const lower = name.toLowerCase();
+    for (const k of Object.keys(h)) {
+        if (k.toLowerCase() === lower) return h[k];
+    }
+    return null;
+}
+
+function parse_query_string(url: string): HarNameValue[] {
+    if (!url) return [];
+    const q_idx = url.indexOf('?');
+    if (q_idx < 0) return [];
+    const qs = url.slice(q_idx + 1).split('#')[0];
+    if (!qs) return [];
+    return qs.split('&').filter(Boolean).map(pair => {
+        const eq = pair.indexOf('=');
+        const name = eq < 0 ? pair : pair.slice(0, eq);
+        const value = eq < 0 ? '' : pair.slice(eq + 1);
+        return { name: safe_decode(name), value: safe_decode(value) };
+    });
+}
+
+function safe_decode(s: string): string {
+    try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch { return s; }
+}
+
+function has_body_method(method: string): boolean {
+    const m = (method || '').toUpperCase();
+    return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
+function status_text(code: number): string {
+    const map: Record<number, string> = {
+        200: 'OK', 201: 'Created', 204: 'No Content',
+        301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+        400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found',
+        500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable'
+    };
+    return map[code] || '';
 }
 
 function format_duration(ms: number): string {

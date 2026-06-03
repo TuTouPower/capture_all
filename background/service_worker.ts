@@ -4,7 +4,7 @@ import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './kee
 import { start_network_capture, stop_network_capture, enable_response_body_capture } from './network_capture';
 import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
-import { export_json, export_html, export_har } from './exporter';
+import { export_json, export_jsonl, export_html, export_har } from './exporter';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
@@ -51,6 +51,8 @@ async function handle_message(message: any): Promise<any> {
             return { success: true };
         case 'export_json':
             return { success: true, json: await export_json(message.session_id) };
+        case 'export_jsonl':
+            return { success: true, jsonl: await export_jsonl(message.session_id) };
         case 'export_html':
             return { success: true, html: await export_html(message.session_id) };
         case 'export_har':

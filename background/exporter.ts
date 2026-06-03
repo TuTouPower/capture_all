@@ -17,6 +17,32 @@ export async function export_json(session_id: string): Promise<string> {
     return JSON.stringify(data, null, 2);
 }
 
+export async function export_jsonl(session_id: string): Promise<string> {
+    const session = await get_session(session_id);
+    if (!session) throw new Error('Session not found');
+
+    const [events, network_requests, console_logs] = await Promise.all([
+        get_events(session_id, 0, 100000),
+        get_network_requests(session_id, 0, 100000),
+        get_console_logs(session_id, 0, 100000)
+    ]);
+
+    const lines: string[] = [];
+    lines.push(JSON.stringify({ ...session, type: 'session' }));
+
+    for (const event of events) {
+        lines.push(JSON.stringify({ ...event, type: 'event' }));
+    }
+    for (const req of network_requests) {
+        lines.push(JSON.stringify({ ...req, type: 'network_request' }));
+    }
+    for (const log of console_logs) {
+        lines.push(JSON.stringify({ ...log, type: 'console_log' }));
+    }
+
+    return lines.join('\n');
+}
+
 export async function export_html(session_id: string): Promise<string> {
     const session = await get_session(session_id);
     if (!session) throw new Error('Session not found');

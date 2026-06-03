@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --project=e2e",
+    "test:e2e:all": "playwright test"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.25",

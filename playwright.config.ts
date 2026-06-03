@@ -22,7 +22,12 @@ export default defineConfig({
         {
             name: 'e2e-9223',
             testMatch: 'e2e-9223.spec.ts',
-            use: { headless: true },
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check'],
+                },
+            },
         }
     ]
 });

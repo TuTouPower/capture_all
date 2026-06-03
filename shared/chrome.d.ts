@@ -19,6 +19,9 @@ declare namespace chrome {
         const onActivated: {
             addListener(callback: (activeInfo: { tabId: number; windowId: number }) => void): void;
         };
+        const onRemoved: {
+            addListener(callback: (tabId: number, removeInfo: { windowId: number; isWindowClosing: boolean }) => void): void;
+        };
     }
 
     namespace alarms {

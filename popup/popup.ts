@@ -1,6 +1,7 @@
 // popup/popup.ts
 import type { RecordConfig, Session } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
+import { init_locale, t, apply_translations, set_locale, type Locale } from '../shared/i18n';
 
 let selected_mode: 'basic' | 'advanced' = 'basic';
 let is_recording = false;
@@ -24,15 +25,22 @@ const captureKeyboard = document.getElementById('captureKeyboard') as HTMLInputE
 const captureInputValues = document.getElementById('captureInputValues') as HTMLInputElement;
 const captureRequestBody = document.getElementById('captureRequestBody') as HTMLInputElement;
 const captureResponseBody = document.getElementById('captureResponseBody') as HTMLInputElement;
+const settingsBtn = document.getElementById('settingsBtn')!;
+const settingsPanel = document.getElementById('settingsPanel')!;
+const closeSettings = document.getElementById('closeSettings')!;
+const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     if (is_extension) {
+        await init_locale();
         await load_state();
         await load_history();
     }
+    apply_translations();
     setup_event_listeners();
     update_mode_selection();
+    setup_settings();
 });
 
 async function load_state(): Promise<void> {
@@ -45,11 +53,38 @@ async function load_state(): Promise<void> {
     update_recording_state();
 }
 
+function setup_settings(): void {
+    settingsBtn.addEventListener('click', () => {
+        settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    closeSettings.addEventListener('click', () => {
+        settingsPanel.style.display = 'none';
+    });
+
+    // Set current language in selector
+    const result = chrome.storage.local.get('locale');
+    if (result && typeof result.then === 'function') {
+        result.then((r: Record<string, unknown>) => {
+            languageSelect.value = (r.locale as string) || navigator.language.split('-')[0] || 'en';
+        });
+    }
+}
+
 function setup_event_listeners(): void {
     basicBtn.addEventListener('click', () => select_mode('basic'));
     advancedBtn.addEventListener('click', () => select_mode('advanced'));
     startBtn.addEventListener('click', start_recording);
     stopBtn.addEventListener('click', stop_recording);
+
+    // Language change
+    languageSelect.addEventListener('change', () => {
+        const locale = languageSelect.value as Locale;
+        set_locale(locale);
+        apply_translations();
+        update_recording_state();
+        load_history();
+    });
 
     // Config change listeners
     mousePrecision.addEventListener('change', save_config);
@@ -69,7 +104,6 @@ function update_mode_selection(): void {
     basicBtn.classList.toggle('selected', selected_mode === 'basic');
     advancedBtn.classList.toggle('selected', selected_mode === 'advanced');
 
-    // Update config based on mode
     if (selected_mode === 'basic') {
         captureKeyboard.checked = false;
         captureInputValues.checked = false;
@@ -83,7 +117,7 @@ function get_config(): RecordConfig {
 
     return {
         ...base_config,
-        mouse_precision: mousePrecision.value as any,
+        mouse_precision: mousePrecision.value as RecordConfig['mouse_precision'],
         keyboard_capture_mode: captureKeyboard.checked ? 'shortcuts' : 'none',
         capture_input_values: captureInputValues.checked,
         capture_request_body: captureRequestBody.checked,
@@ -123,10 +157,10 @@ async function start_recording(): Promise<void> {
             update_recording_state();
             await load_history();
         } else {
-            alert(`Failed to start recording: ${response.error}`);
+            alert(`${t('error')}: ${response.error}`);
         }
     } catch (error) {
-        alert(`Error: ${error}`);
+        alert(`${t('error')}: ${error}`);
     }
 }
 
@@ -144,7 +178,7 @@ async function stop_recording(): Promise<void> {
             await load_history();
         }
     } catch (error) {
-        alert(`Error: ${error}`);
+        alert(`${t('error')}: ${error}`);
     }
 }
 
@@ -152,19 +186,19 @@ function update_recording_state(): void {
     if (is_recording) {
         dot.classList.add('recording');
         dot.classList.remove('ready');
-        statusText.textContent = 'Recording';
+        statusText.textContent = t('recording');
         startBtn.style.display = 'none';
         stopBtn.style.display = 'block';
         sessionInfo.style.display = 'block';
 
         if (current_session) {
-            sessionInfo.querySelector('.session-id')!.textContent = `ID: ${current_session.id}`;
+            sessionInfo.querySelector('.session-id')!.textContent = `${t('sessionId')}: ${current_session.id}`;
             start_duration_timer();
         }
     } else {
         dot.classList.remove('recording');
         dot.classList.add('ready');
-        statusText.textContent = 'Ready';
+        statusText.textContent = t('ready');
         startBtn.style.display = 'block';
         stopBtn.style.display = 'none';
         sessionInfo.style.display = 'none';
@@ -202,7 +236,7 @@ async function load_history(): Promise<void> {
         const sessions: Session[] = await chrome.runtime.sendMessage({ action: 'list_sessions' });
 
         if (sessions.length === 0) {
-            historyList.innerHTML = '<div class="history-empty">No sessions recorded yet</div>';
+            historyList.innerHTML = `<div class="history-empty">${t('noSessions')}</div>`;
             return;
         }
 
@@ -213,18 +247,18 @@ async function load_history(): Promise<void> {
                     <span class="history-duration">${format_duration(session)}</span>
                 </div>
                 <div class="history-actions">
-                    <button class="btn-sm primary" onclick="view_session('${session.id}')">View</button>
-                    <button class="btn-sm" onclick="delete_session('${session.id}')">Delete</button>
+                    <button class="btn-sm primary" onclick="view_session('${session.id}')">${t('view')}</button>
+                    <button class="btn-sm" onclick="delete_session('${session.id}')">${t('delete')}</button>
                 </div>
             </div>
         `).join('');
     } catch {
-        historyList.innerHTML = '<div class="history-empty">Failed to load history</div>';
+        historyList.innerHTML = `<div class="history-empty">${t('error')}</div>`;
     }
 }
 
 function format_duration(session: Session): string {
-    if (!session.end_time) return 'In progress';
+    if (!session.end_time) return t('recording');
     const duration = session.end_time - session.start_time;
     const minutes = Math.floor(duration / 60000);
     const seconds = Math.floor((duration % 60000) / 1000);
@@ -232,12 +266,12 @@ function format_duration(session: Session): string {
 }
 
 // Global functions for onclick handlers
-(window as any).view_session = (id: string) => {
+(window as unknown as Record<string, (id: string) => void>).view_session = (id: string) => {
     chrome.tabs.create({ url: `detail/detail.html?session=${id}` });
 };
 
-(window as any).delete_session = async (id: string) => {
-    if (confirm('Delete this session?')) {
+(window as unknown as Record<string, (id: string) => Promise<void>>).delete_session = async (id: string) => {
+    if (confirm(t('deleteConfirm'))) {
         await chrome.runtime.sendMessage({ action: 'delete_session', session_id: id });
         await load_history();
     }

@@ -45,8 +45,8 @@ export interface RecordEvent {
     session_id: string;
     relative_time: number;       // ms from session start
     absolute_time: number;       // epoch ms
-    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch' | 'tab_created' | 'tab_url_change' | 'dom_ready' | 'storage_change';
-    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData | TabCreatedData | TabUrlChangeData | DomReadyData | StorageChangeData;
+    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch' | 'tab_created' | 'tab_url_change' | 'dom_ready' | 'storage_change' | 'cookie_change' | 'fetch_request' | 'xhr_request';
+    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData | TabCreatedData | TabUrlChangeData | DomReadyData | StorageChangeData | CookieChangeData | FetchRequestData | XhrRequestData;
     tab_id: number;
     frame_id: number;            // 0 = main frame
     url: string;
@@ -125,6 +125,28 @@ export interface TabUrlChangeData {
 
 export interface DomReadyData {
     timestamp: number;
+}
+
+export interface CookieChangeData {
+    name: string;
+    domain: string;
+    path: string;
+    cause: 'explicit' | 'expired_overwrite' | 'evicted' | 'expired' | 'overwrite' | 'unknown';
+    removed: boolean;
+}
+
+export interface FetchRequestData {
+    method: string;
+    url: string;
+    status: number;               // 0 if request failed
+    duration_ms: number;
+}
+
+export interface XhrRequestData {
+    method: string;
+    url: string;
+    status: number;               // 0 if request failed
+    duration_ms: number;
 }
 
 export type BodyCaptureStatus = 'not_enabled' | 'captured' | 'failed' | 'too_large' | 'unsupported';

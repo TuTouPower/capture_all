@@ -5,6 +5,7 @@ import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_captur
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
 import { start_dom_capture, stop_dom_capture } from './dom_capture';
 import { start_storage_capture, stop_storage_capture } from './storage_capture';
+import { start_xhr_fetch_capture, stop_xhr_fetch_capture } from './xhr_fetch_capture';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
 let is_capturing = false;
@@ -60,6 +61,7 @@ function start_capture(config: RecordConfig): void {
     start_scroll_capture(send_event);
     start_dom_capture(config, send_event);
     start_storage_capture(send_event);
+    start_xhr_fetch_capture(send_event);
 
     // Visibility change
     document.addEventListener('visibilitychange', handle_visibility_change);
@@ -100,6 +102,7 @@ function stop_capture(): void {
     stop_scroll_capture();
     stop_dom_capture();
     stop_storage_capture();
+    stop_xhr_fetch_capture();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);
     window.removeEventListener('popstate', handle_navigation);

@@ -1,3 +1,45 @@
+:root {
+    --color-bg: #f5f5f5;
+    --color-surface: #ffffff;
+    --color-surface-alt: #f8f9fa;
+    --color-text: #333333;
+    --color-text-muted: #666666;
+    --color-text-faint: #999999;
+    --color-border: #dee2e6;
+    --color-border-soft: #eeeeee;
+    --color-accent: #007bff;
+    --color-accent-hover: #0056b3;
+    --color-accent-soft: #e7f1ff;
+    --color-accent-text-on: #ffffff;
+    --color-danger: #e74c3c;
+    --color-danger-hover: #c0392b;
+    --color-success: #2ecc71;
+    --color-warning-text: #ffd6d6;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.1);
+    --hover-bg: #f0f0f0;
+}
+
+[data-theme="dark"] {
+    --color-bg: #1a1a1a;
+    --color-surface: #242424;
+    --color-surface-alt: #2d2d2d;
+    --color-text: #e6e6e6;
+    --color-text-muted: #a0a0a0;
+    --color-text-faint: #707070;
+    --color-border: #3a3a3a;
+    --color-border-soft: #303030;
+    --color-accent: #3b9eff;
+    --color-accent-hover: #5cb0ff;
+    --color-accent-soft: #1f3550;
+    --color-accent-text-on: #ffffff;
+    --color-danger: #ff6b5a;
+    --color-danger-hover: #ff8676;
+    --color-success: #4ddb8a;
+    --color-warning-text: #5a2424;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.4);
+    --hover-bg: #2f2f2f;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -8,8 +50,8 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 13px;
     line-height: 1.4;
-    color: #333;
-    background: #f5f5f5;
+    color: var(--color-text);
+    background: var(--color-bg);
     width: 350px;
     min-height: 400px;
 }
@@ -20,11 +62,11 @@ body {
 
 /* Status Section */
 .status-section {
-    background: white;
+    background: var(--color-surface);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-card);
 }
 
 .status-indicator {
@@ -37,16 +79,16 @@ body {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #ccc;
+    background: var(--color-text-faint);
 }
 
 .dot.recording {
-    background: #e74c3c;
+    background: var(--color-danger);
     animation: pulse 1.5s infinite;
 }
 
 .dot.ready {
-    background: #2ecc71;
+    background: var(--color-success);
 }
 
 @keyframes pulse {
@@ -61,7 +103,7 @@ body {
 .session-info {
     margin-top: 8px;
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-muted);
 }
 
 .session-id {
@@ -72,17 +114,17 @@ body {
 
 /* Mode Section */
 .mode-section {
-    background: white;
+    background: var(--color-surface);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-card);
 }
 
 .mode-section h3 {
     font-size: 14px;
     margin-bottom: 12px;
-    color: #333;
+    color: var(--color-text);
 }
 
 .mode-buttons {
@@ -92,24 +134,25 @@ body {
 
 .mode-btn {
     flex: 1;
-    background: #f8f9fa;
-    border: 2px solid #dee2e6;
+    background: var(--color-surface-alt);
+    border: 2px solid var(--color-border);
     border-radius: 6px;
     padding: 12px 8px;
     cursor: pointer;
     text-align: left;
     transition: all 0.2s;
+    color: var(--color-text);
 }
 
 .mode-btn:hover {
-    border-color: #007bff;
-    background: #e7f1ff;
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
 }
 
 .mode-btn.selected {
-    border-color: #007bff;
-    background: #007bff;
-    color: white;
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-text-on);
 }
 
 .mode-title {
@@ -122,38 +165,38 @@ body {
 .mode-desc {
     display: block;
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-muted);
     line-height: 1.3;
 }
 
 .mode-btn.selected .mode-desc {
-    color: #cce5ff;
+    color: var(--color-accent-soft);
 }
 
 .mode-warning {
     display: block;
     font-size: 10px;
-    color: #e74c3c;
+    color: var(--color-danger);
     margin-top: 4px;
 }
 
 .mode-btn.selected .mode-warning {
-    color: #ffd6d6;
+    color: var(--color-warning-text);
 }
 
 /* Config Section */
 .config-section {
-    background: white;
+    background: var(--color-surface);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-card);
 }
 
 .config-section summary {
     cursor: pointer;
     font-weight: 500;
-    color: #007bff;
+    color: var(--color-accent);
 }
 
 .config-options {
@@ -175,13 +218,31 @@ body {
 .config-group select {
     width: 100%;
     padding: 4px 8px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--color-border);
     border-radius: 4px;
+    font-size: 12px;
+    background: var(--color-surface);
+    color: var(--color-text);
+}
+
+.inline-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
     font-size: 12px;
 }
 
+.hint {
+    display: block;
+    font-size: 10px;
+    color: var(--color-text-faint);
+    margin-top: 2px;
+    margin-left: 22px;
+}
+
 .warning {
-    color: #e74c3c;
+    color: var(--color-danger);
     font-size: 10px;
 }
 
@@ -202,35 +263,35 @@ body {
 }
 
 .btn-primary {
-    background: #007bff;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-accent-text-on);
 }
 
 .btn-primary:hover {
-    background: #0056b3;
+    background: var(--color-accent-hover);
 }
 
 .btn-danger {
-    background: #e74c3c;
-    color: white;
+    background: var(--color-danger);
+    color: #ffffff;
 }
 
 .btn-danger:hover {
-    background: #c0392b;
+    background: var(--color-danger-hover);
 }
 
 /* History Section */
 .history-section {
-    background: white;
+    background: var(--color-surface);
     border-radius: 8px;
     padding: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-card);
 }
 
 .history-section h3 {
     font-size: 14px;
     margin-bottom: 12px;
-    color: #333;
+    color: var(--color-text);
 }
 
 .history-list {
@@ -240,7 +301,7 @@ body {
 
 .history-empty {
     text-align: center;
-    color: #999;
+    color: var(--color-text-faint);
     font-size: 12px;
     padding: 20px;
 }
@@ -250,12 +311,12 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 8px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-border-soft);
     cursor: pointer;
 }
 
 .history-item:hover {
-    background: #f8f9fa;
+    background: var(--color-surface-alt);
 }
 
 .history-item:last-child {
@@ -270,12 +331,12 @@ body {
 
 .history-time {
     font-size: 11px;
-    color: #666;
+    color: var(--color-text-muted);
 }
 
 .history-duration {
     font-size: 11px;
-    color: #999;
+    color: var(--color-text-faint);
 }
 
 .history-actions {
@@ -286,20 +347,21 @@ body {
 .btn-sm {
     padding: 4px 8px;
     font-size: 11px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: white;
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
 }
 
 .btn-sm:hover {
-    background: #f8f9fa;
+    background: var(--color-surface-alt);
 }
 
 .btn-sm.primary {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
+    background: var(--color-accent);
+    color: var(--color-accent-text-on);
+    border-color: var(--color-accent);
 }
 
 /* Settings Bar */
@@ -313,7 +375,7 @@ body {
     background: none;
     border: none;
     cursor: pointer;
-    color: #666;
+    color: var(--color-text-muted);
     padding: 4px;
     border-radius: 4px;
     display: flex;
@@ -321,17 +383,17 @@ body {
 }
 
 .btn-settings:hover {
-    background: #f0f0f0;
-    color: #333;
+    background: var(--hover-bg);
+    color: var(--color-text);
 }
 
 /* Settings Panel */
 .settings-panel {
-    background: white;
+    background: var(--color-surface);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-card);
 }
 
 .settings-header {
@@ -343,7 +405,7 @@ body {
 
 .settings-header h3 {
     font-size: 14px;
-    color: #333;
+    color: var(--color-text);
 }
 
 .btn-close {
@@ -351,29 +413,37 @@ body {
     border: none;
     font-size: 18px;
     cursor: pointer;
-    color: #666;
+    color: var(--color-text-muted);
     padding: 0 4px;
 }
 
 .btn-close:hover {
-    color: #333;
+    color: var(--color-text);
 }
 
 .settings-body .config-group {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 
-.settings-body .config-group label {
+.settings-body .config-group > label {
     display: block;
     margin-bottom: 4px;
     font-size: 12px;
-    color: #666;
+    color: var(--color-text-muted);
+}
+
+.settings-body .config-group .inline-label {
+    display: flex;
+    margin-bottom: 0;
+    color: var(--color-text);
 }
 
 .settings-body .config-group select {
     width: 100%;
     padding: 6px 8px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--color-border);
     border-radius: 4px;
     font-size: 13px;
+    background: var(--color-surface);
+    color: var(--color-text);
 }

@@ -2,10 +2,148 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Record All - Detail</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Record All - Session Detail</title>
+  <link rel="stylesheet" href="./detail.css">
 </head>
 <body>
-  <h1>Session Detail</h1>
+  <div class="detail-container">
+    <!-- Header -->
+    <header class="detail-header">
+      <h1>Session Detail</h1>
+      <div class="header-actions">
+        <button class="btn" id="exportJsonBtn">Export JSON</button>
+        <button class="btn" id="exportHtmlBtn">Export HTML</button>
+      </div>
+    </header>
+
+    <!-- Session Overview -->
+    <div class="overview-section" id="overview">
+      <div class="overview-grid">
+        <div class="overview-item">
+          <label>Session ID</label>
+          <span id="sessionId">-</span>
+        </div>
+        <div class="overview-item">
+          <label>Start Time</label>
+          <span id="startTime">-</span>
+        </div>
+        <div class="overview-item">
+          <label>Duration</label>
+          <span id="duration">-</span>
+        </div>
+        <div class="overview-item">
+          <label>Mode</label>
+          <span id="mode">-</span>
+        </div>
+        <div class="overview-item">
+          <label>Events</label>
+          <span id="eventCount">0</span>
+        </div>
+        <div class="overview-item">
+          <label>Network Requests</label>
+          <span id="requestCount">0</span>
+        </div>
+        <div class="overview-item">
+          <label>Console Logs</label>
+          <span id="logCount">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="timeline">Timeline</button>
+      <button class="tab-btn" data-tab="network">Network</button>
+      <button class="tab-btn" data-tab="console">Console</button>
+      <button class="tab-btn" data-tab="events">Events</button>
+    </nav>
+
+    <!-- Tab Contents -->
+    <div class="tab-content active" id="timeline-tab">
+      <div class="filter-bar">
+        <select id="timelineFilter">
+          <option value="all">All Events</option>
+          <option value="mouse">Mouse</option>
+          <option value="keyboard">Keyboard</option>
+          <option value="scroll">Scroll</option>
+          <option value="dom_change">DOM Changes</option>
+          <option value="navigation">Navigation</option>
+          <option value="page_load">Page Load</option>
+          <option value="tab_switch">Tab Switch</option>
+        </select>
+        <input type="text" id="timelineSearch" placeholder="Search events...">
+      </div>
+      <div class="timeline-container" id="timelineContainer">
+        <!-- Virtual scrolling will render events here -->
+      </div>
+      <div class="load-more" id="loadMore" style="display: none;">
+        Loading more events...
+      </div>
+    </div>
+
+    <div class="tab-content" id="network-tab">
+      <div class="filter-bar">
+        <select id="networkFilter">
+          <option value="all">All Types</option>
+          <option value="xhr">XHR</option>
+          <option value="fetch">Fetch</option>
+          <option value="document">Document</option>
+          <option value="stylesheet">CSS</option>
+          <option value="script">JS</option>
+          <option value="image">Image</option>
+        </select>
+        <input type="text" id="networkSearch" placeholder="Search URLs...">
+      </div>
+      <div class="network-container" id="networkContainer">
+        <table class="network-table">
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>URL</th>
+              <th>Status</th>
+              <th>Type</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody id="networkBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="console-tab">
+      <div class="filter-bar">
+        <select id="consoleFilter">
+          <option value="all">All Levels</option>
+          <option value="error">Error</option>
+          <option value="warn">Warning</option>
+          <option value="info">Info</option>
+          <option value="log">Log</option>
+          <option value="debug">Debug</option>
+        </select>
+        <input type="text" id="consoleSearch" placeholder="Search logs...">
+      </div>
+      <div class="console-container" id="consoleContainer">
+      </div>
+    </div>
+
+    <div class="tab-content" id="events-tab">
+      <div class="filter-bar">
+        <select id="eventsFilter">
+          <option value="all">All Types</option>
+          <option value="mouse">Mouse</option>
+          <option value="keyboard">Keyboard</option>
+          <option value="scroll">Scroll</option>
+          <option value="dom_change">DOM Changes</option>
+        </select>
+        <input type="text" id="eventsSearch" placeholder="Search events...">
+      </div>
+      <div class="events-container" id="eventsContainer">
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="./detail.ts"></script>
 </body>
 </html>

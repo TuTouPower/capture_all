@@ -1,6 +1,6 @@
 // tests/escape.test.ts
 import { describe, it, expect } from 'vitest';
-import { escape_for_html_embed } from '../shared/escape';
+import { escape_for_html_embed } from '../src/shared/escape';
 
 describe('escape_for_html_embed', () => {
     it('escapes script tags', () => {

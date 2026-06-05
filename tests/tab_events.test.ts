@@ -4,7 +4,7 @@ import type {
     TabCreatedData,
     TabUrlChangeData,
     NavigationData
-} from '../shared/types';
+} from '../src/shared/types';
 
 // ─── helpers ported from background/service_worker.ts and content/content_script.ts ───
 // These replicate the pure logic so we can unit-test in isolation.

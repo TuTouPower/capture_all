@@ -1,6 +1,6 @@
 // tests/capture_modes.test.ts
 import { describe, it, expect } from 'vitest';
-import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
+import { get_basic_config, get_advanced_config } from '../src/shared/capture_modes';
 
 describe('capture_modes', () => {
     it('basic config has safe defaults', () => {

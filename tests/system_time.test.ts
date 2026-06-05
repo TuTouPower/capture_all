@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { add_system_times_to_session_data, format_system_time } from '../shared/system_time';
-import type { ConsoleLog, NetworkRequest, RecordEvent, Session } from '../shared/types';
+import { add_system_times_to_session_data, format_system_time } from '../src/shared/system_time';
+import type { ConsoleLog, NetworkRequest, RecordEvent, Session } from '../src/shared/types';
 
 const config = { system_time_timezone: 'Asia/Shanghai' as const };
 

@@ -8,15 +8,23 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bridge": "tsx agent/bridge/main.ts",
+    "mcp": "tsx agent/mcp/main.ts",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:all": "playwright test"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.25",
     "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
     "playwright": "^1.60.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   }
 }

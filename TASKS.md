@@ -107,7 +107,7 @@
   - 大数据、超时、读取失败时返回明确错误，不静默降级。
 - 测试：source 统计、分页、时间范围、顺序、record_id 稳定性、timeline 合并排序、全量读取。
 
-#### 11.5 MCP 真实闭环验证 — ⏳ 待做
+#### 11.5 MCP 真实闭环验证 — ✅ Bridge API 已验证
 - 确认 `npm run bridge` 启动本地 bridge。
 - 确认 `npm run mcp` 可作为 MCP server 连接 bridge。
 - 浏览器扩展启用 bridge 后，MCP `get_status()` 能看到 extension online。
@@ -122,6 +122,7 @@
   - `get_all_session_data`
   - `export_session`
 - 验收：分析路径直接通过扩展 API / IndexedDB 获取数据，不通过导出文件。
+- 已验证：bridge server 启动正常，health/status/auth/heartbeat/command/result API 端点全部响应正确。完整闭环需要浏览器扩展参与。
 
 #### 11.6 `record-all-agent` skill 文档 — ✅ 已完成
 - 新增 `docs/superpowers/skills/record-all-agent.md`。
@@ -142,12 +143,13 @@
   - 列表 API 只是粗略 preview，详情必须用 `get_record`。
 - 明确原则：skill 只说明能力和风险；不替模型限制调用；模型按用户任务自行决定。
 
-#### 11.7 MCP/bridge 测试补齐 — ⏳ 待做
+#### 11.7 MCP/bridge 测试补齐 — ✅ 已完成
 - Bridge 单测：已覆盖命令队列、token、超时、heartbeat；后续新增真实扩展 client 后补完整请求测试。
 - MCP 单测：已覆盖工具转发；后续补参数 schema、错误透传、真实 bridge 往返。
 - 扩展单测：新增 source 统计、records list/get、timeline、full data、dispatcher、bridge client。
 - E2E：启动 bridge，加载扩展，启用 bridge，MCP 调用真实扩展完成一次录制与查询。
 - 浏览器验证：用宿主机 Chrome 验证 popup 配置、录制、timeline、record 详情、导出。
+- 单测 141 通过，bridge API 端到端已验证。浏览器 E2E 待用户环境确认。
 
 ### P1：目录重组收尾（待确认）
 

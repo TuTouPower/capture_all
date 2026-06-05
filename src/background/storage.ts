@@ -362,3 +362,32 @@ export async function get_console_logs(session_id: string, offset: number = 0, l
         request.onerror = () => reject(request.error);
     });
 }
+
+export async function get_error_logs(session_id: string, offset: number = 0, limit: number = 100): Promise<ErrorLog[]> {
+    const database = await init_db();
+    return new Promise((resolve, reject) => {
+        const tx = database.transaction(STORE_NAMES.ERROR_LOG, 'readonly');
+        const store = tx.objectStore(STORE_NAMES.ERROR_LOG);
+        const index = store.index('session_id');
+        const request = index.openCursor(IDBKeyRange.only(session_id));
+        const errors: ErrorLog[] = [];
+        let skipped = 0;
+
+        request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor || errors.length >= limit) {
+                resolve(errors);
+                return;
+            }
+
+            if (skipped < offset) {
+                skipped++;
+                cursor.continue();
+            } else {
+                errors.push(cursor.value);
+                cursor.continue();
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
+}

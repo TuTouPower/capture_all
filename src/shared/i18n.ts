@@ -94,6 +94,12 @@ export interface I18nStrings {
     exportFilenameTemplate: string;
     exportFilenameTemplateDesc: string;
     exportSaveAs: string;
+    agentBridge: string;
+    agentBridgeEnabled: string;
+    agentBridgeUrl: string;
+    agentBridgeToken: string;
+    agentBridgePollInterval: string;
+    agentBridgeDesc: string;
 }
 
 const en: I18nStrings = {
@@ -182,6 +188,12 @@ const en: I18nStrings = {
     exportFilenameTemplate: 'Export Filename',
     exportFilenameTemplateDesc: 'Tokens: {session_id}, {date}, {ext}',
     exportSaveAs: 'Ask where to save each export',
+    agentBridge: 'MCP Bridge',
+    agentBridgeEnabled: 'Enable MCP bridge',
+    agentBridgeUrl: 'Bridge URL',
+    agentBridgeToken: 'Bridge Token',
+    agentBridgePollInterval: 'Poll Interval (ms)',
+    agentBridgeDesc: 'Local bridge only; token is required before connecting',
 };
 
 const zh: I18nStrings = {
@@ -270,6 +282,12 @@ const zh: I18nStrings = {
     exportFilenameTemplate: '导出文件名',
     exportFilenameTemplateDesc: '可用占位符：{session_id}、{date}、{ext}',
     exportSaveAs: '每次导出时选择保存位置',
+    agentBridge: 'MCP Bridge',
+    agentBridgeEnabled: '启用 MCP bridge',
+    agentBridgeUrl: 'Bridge URL',
+    agentBridgeToken: 'Bridge Token',
+    agentBridgePollInterval: '轮询间隔（毫秒）',
+    agentBridgeDesc: '仅连接本地 bridge；必须填写 token 才会连接',
 };
 
 const locales: Record<Locale, I18nStrings> = { en, zh };

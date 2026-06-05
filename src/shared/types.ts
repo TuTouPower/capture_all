@@ -46,6 +46,10 @@ export interface UserConfig {
     export_directory: string;
     export_filename_template: string;
     export_save_as: boolean;
+    agent_bridge_enabled: boolean;
+    agent_bridge_url: string;
+    agent_bridge_token: string;
+    agent_bridge_poll_interval_ms: number;
 }
 
 export interface RecordEvent {

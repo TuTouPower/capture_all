@@ -50,5 +50,9 @@ export const DEFAULT_USER_CONFIG = {
     detail_time_display_mode: 'system' as const,
     export_directory: '',
     export_filename_template: 'record_all_{session_id}_{date}.{ext}',
-    export_save_as: true
+    export_save_as: true,
+    agent_bridge_enabled: false,
+    agent_bridge_url: 'http://127.0.0.1:17831',
+    agent_bridge_token: '',
+    agent_bridge_poll_interval_ms: 1000
 };

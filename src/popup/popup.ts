@@ -6,6 +6,7 @@ import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
+import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let is_recording = false;
@@ -39,6 +40,11 @@ const detailTimeDisplayMode = document.getElementById('detailTimeDisplayMode') a
 const exportDirectory = document.getElementById('exportDirectory') as HTMLInputElement;
 const exportFilenameTemplate = document.getElementById('exportFilenameTemplate') as HTMLInputElement;
 const exportSaveAs = document.getElementById('exportSaveAs') as HTMLInputElement;
+const agentBridgeEnabled = document.getElementById('agentBridgeEnabled') as HTMLInputElement;
+const agentBridgeUrl = document.getElementById('agentBridgeUrl') as HTMLInputElement;
+const agentBridgeToken = document.getElementById('agentBridgeToken') as HTMLInputElement;
+const agentBridgePollInterval = document.getElementById('agentBridgePollInterval') as HTMLInputElement;
+const agentBridgeError = document.getElementById('agentBridgeError') as HTMLElement;
 const redactData = document.getElementById('redactData') as HTMLInputElement;
 
 // Initialize
@@ -73,6 +79,10 @@ async function load_user_config_and_apply(): Promise<void> {
     exportDirectory.value = user_config.export_directory;
     exportFilenameTemplate.value = user_config.export_filename_template;
     exportSaveAs.checked = user_config.export_save_as;
+    agentBridgeEnabled.checked = user_config.agent_bridge_enabled;
+    agentBridgeUrl.value = user_config.agent_bridge_url;
+    agentBridgeToken.value = user_config.agent_bridge_token;
+    agentBridgePollInterval.value = String(user_config.agent_bridge_poll_interval_ms);
 }
 
 async function load_state(): Promise<void> {
@@ -154,6 +164,11 @@ function setup_event_listeners(): void {
         await save_user_config({ export_save_as });
     });
 
+    agentBridgeEnabled.addEventListener('change', persist_agent_bridge_config);
+    agentBridgeUrl.addEventListener('change', persist_agent_bridge_config);
+    agentBridgeToken.addEventListener('change', persist_agent_bridge_config);
+    agentBridgePollInterval.addEventListener('change', persist_agent_bridge_config);
+
     // Config change listeners
     mousePrecision.addEventListener('change', persist_config);
     captureKeyboard.addEventListener('change', persist_config);
@@ -183,6 +198,32 @@ async function persist_config(): Promise<void> {
     };
     user_config = { ...user_config, ...patch };
     await save_user_config(patch);
+}
+
+async function persist_agent_bridge_config(): Promise<void> {
+    try {
+        const patch = normalize_agent_bridge_config({
+            agent_bridge_enabled: agentBridgeEnabled.checked,
+            agent_bridge_url: agentBridgeUrl.value,
+            agent_bridge_token: agentBridgeToken.value,
+            agent_bridge_poll_interval_ms: Number(agentBridgePollInterval.value)
+        });
+        user_config = { ...user_config, ...patch };
+        agentBridgeEnabled.checked = patch.agent_bridge_enabled;
+        agentBridgeUrl.value = patch.agent_bridge_url;
+        agentBridgeToken.value = patch.agent_bridge_token;
+        agentBridgePollInterval.value = String(patch.agent_bridge_poll_interval_ms);
+        agentBridgeError.style.display = 'none';
+        agentBridgeError.textContent = '';
+        await save_user_config(patch);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        user_config = { ...user_config, agent_bridge_enabled: false };
+        agentBridgeEnabled.checked = false;
+        agentBridgeError.textContent = message;
+        agentBridgeError.style.display = 'block';
+        await save_user_config({ agent_bridge_enabled: false });
+    }
 }
 
 function get_record_config(): RecordConfig {

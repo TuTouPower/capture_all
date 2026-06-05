@@ -72,6 +72,27 @@
           </label>
         </div>
         <div class="config-group">
+          <label data-i18n="agentBridge">MCP Bridge</label>
+          <label class="inline-label">
+            <input type="checkbox" id="agentBridgeEnabled" />
+            <span data-i18n="agentBridgeEnabled">Enable MCP bridge</span>
+          </label>
+          <small class="hint" data-i18n="agentBridgeDesc">Local bridge only; token is required before connecting</small>
+          <small class="hint error-text" id="agentBridgeError" style="display: none;"></small>
+        </div>
+        <div class="config-group">
+          <label data-i18n="agentBridgeUrl">Bridge URL</label>
+          <input type="text" id="agentBridgeUrl" placeholder="http://127.0.0.1:17831" />
+        </div>
+        <div class="config-group">
+          <label data-i18n="agentBridgeToken">Bridge Token</label>
+          <input type="password" id="agentBridgeToken" />
+        </div>
+        <div class="config-group">
+          <label data-i18n="agentBridgePollInterval">Poll Interval (ms)</label>
+          <input type="number" id="agentBridgePollInterval" min="250" max="300000" step="250" />
+        </div>
+        <div class="config-group">
           <label class="inline-label">
             <input type="checkbox" id="redactData" />
             <span data-i18n="redactData">Redact Sensitive Data</span>

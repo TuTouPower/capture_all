@@ -15,6 +15,20 @@ vi.mock('../src/background/exporter', () => ({
     export_har: vi.fn(async () => '{}')
 }));
 
+const mock_session_data = {
+    session: { id: 's1', start_time: 1000, end_time: 2000, config: {}, stats: { event_count: 0, request_count: 0, log_count: 0, dom_changes: 0 } },
+    sources: { record_events: [], network_requests: [], console_logs: [], error_logs: [] }
+};
+
+vi.mock('../src/background/agent_data_queries', () => ({
+    load_agent_session_data: vi.fn(async () => mock_session_data),
+    list_data_sources_from_session_data: vi.fn(() => []),
+    list_records_from_session_data: vi.fn(() => ({ total: 0, records: [] })),
+    get_record_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'record_events', data: {} })),
+    get_timeline_from_session_data: vi.fn(() => ({ total: 0, records: [] })),
+    get_timeline_item_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'record_events', data: {} }))
+}));
+
 const config: RecordConfig = {
     capture_mode: 'basic',
     mouse_precision: 'clicks',
@@ -93,5 +107,93 @@ describe('agent command dispatcher', () => {
         expect(result.ok).toBe(true);
         expect(result.data).toHaveProperty('session_id');
         expect(typeof (result.data as { session_id: string }).session_id).toBe('string');
+    });
+
+    test('lists sessions', async () => {
+        const result = await dispatch_agent_command(command('sessions.list', { limit: 10 }), handlers);
+        expect(result.ok).toBe(true);
+        expect((result.data as { total: number }).total).toBe(0);
+    });
+
+    test('lists data sources', async () => {
+        const result = await dispatch_agent_command(command('sources.list', { session_id: 's1' }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('lists records with query params', async () => {
+        const result = await dispatch_agent_command(command('records.list', {
+            session_id: 's1',
+            source: 'record_events',
+            offset: 0,
+            limit: 10,
+            order: 'asc'
+        }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('gets record by id', async () => {
+        const result = await dispatch_agent_command(command('records.get', {
+            session_id: 's1',
+            source: 'record_events',
+            record_id: 'record_events:10:1010'
+        }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('gets timeline', async () => {
+        const result = await dispatch_agent_command(command('timeline.list', {
+            session_id: 's1',
+            limit: 5
+        }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('gets timeline item', async () => {
+        const result = await dispatch_agent_command(command('timeline.get', {
+            session_id: 's1',
+            item_id: 'record_events:10:1010'
+        }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('exports session as json', async () => {
+        const result = await dispatch_agent_command(command('session.export', {
+            session_id: 's1',
+            format: 'json'
+        }), handlers);
+        expect(result.ok).toBe(true);
+        expect((result.data as { format: string }).format).toBe('json');
+    });
+
+    test('gets all session data', async () => {
+        const result = await dispatch_agent_command(command('session.get_all_data', {
+            session_id: 's1'
+        }), handlers);
+        expect(result.ok).toBe(true);
+    });
+
+    test('rejects invalid query params', async () => {
+        const result = await dispatch_agent_command(command('records.list', {
+            session_id: 's1',
+            source: 'record_events',
+            offset: 'not_a_number'
+        }), handlers);
+        expect(result.ok).toBe(false);
+        expect((result as { error?: { code?: string } }).error?.code).toBe('INVALID_QUERY');
+    });
+
+    test('rejects unsupported export format', async () => {
+        const result = await dispatch_agent_command(command('session.export', {
+            session_id: 's1',
+            format: 'csv'
+        }), handlers);
+        expect(result.ok).toBe(false);
+        expect((result as { error?: { code?: string } }).error?.code).toBe('INVALID_QUERY');
+    });
+
+    test('rejects missing required session_id', async () => {
+        const result = await dispatch_agent_command(command('sessions.get', {}), handlers);
+        expect(result.ok).toBe(false);
+        expect((result as { error?: { code?: string } }).error?.code).toBe('INVALID_QUERY');
     });
 });

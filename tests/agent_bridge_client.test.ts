@@ -88,4 +88,63 @@ describe('agent bridge client', () => {
 
         fetch_spy.mockRestore();
     });
+
+    test('fetches command, dispatches, and posts result', async () => {
+        const fetch_spy = vi.spyOn(global, 'fetch').mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === 'string' ? input : input.toString();
+
+            if (url.endsWith('/extension/heartbeat')) {
+                return new Response('{}', { status: 200 });
+            }
+
+            if (url.endsWith('/extension/command')) {
+                return new Response(JSON.stringify({
+                    command_id: 'cmd_1',
+                    type: 'sessions.list',
+                    payload: {},
+                    created_at: 1
+                }), { status: 200 });
+            }
+
+            if (url.endsWith('/extension/result')) {
+                const body = init?.body ? JSON.parse(init.body as string) : {};
+                return new Response(JSON.stringify({ ok: true }), { status: 200 });
+            }
+
+            return new Response('{}', { status: 200 });
+        });
+
+        start_bridge_client(deps);
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        stop_bridge_client();
+
+        const result_calls = fetch_spy.mock.calls.filter(c => c[0].toString().endsWith('/extension/result'));
+        expect(result_calls.length).toBeGreaterThanOrEqual(1);
+
+        const result_body = JSON.parse(result_calls[0][1]?.body as string);
+        expect(result_body.command_id).toBe('cmd_1');
+
+        fetch_spy.mockRestore();
+    });
+
+    test('recovers from network error', async () => {
+        let call_count = 0;
+        const fetch_spy = vi.spyOn(global, 'fetch').mockImplementation(async () => {
+            call_count++;
+            if (call_count <= 1) throw new Error('network error');
+            return new Response('{}', { status: 200 });
+        });
+
+        start_bridge_client(deps);
+
+        await new Promise(resolve => setTimeout(resolve, 2500));
+
+        stop_bridge_client();
+
+        expect(fetch_spy.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+        fetch_spy.mockRestore();
+    });
 });

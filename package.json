@@ -8,8 +8,8 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bridge": "tsx agent/bridge/main.ts",
-    "mcp": "tsx agent/mcp/main.ts",
+    "bridge": "tsx src/agent/bridge/main.ts",
+    "mcp": "tsx src/agent/mcp/main.ts",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:all": "playwright test"
   },

@@ -6,6 +6,8 @@ import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import { export_json, export_jsonl, export_html, export_har } from './exporter';
+import { start_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
+import type { UserConfig } from '../shared/types';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
@@ -19,6 +21,7 @@ let current_config: RecordConfig = DEFAULT_CONFIG;
 chrome.runtime.onInstalled.addListener(async () => {
     await init_db();
     console.log('Record All: Extension installed');
+    start_agent_bridge();
 });
 
 // Setup keepalive listener
@@ -351,6 +354,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId: number) => {
     last_tab_urls.delete(tabId);
 });
+
+// Agent bridge client
+async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token' | 'agent_bridge_poll_interval_ms'>> {
+    const result = await chrome.storage.local.get('user_config');
+    return result.user_config ?? {};
+}
+
+function start_agent_bridge(): void {
+    const bridge_deps: AgentBridgeClientDeps = {
+        get_user_config: get_user_config_for_bridge,
+        start_recording: (session_id, config) => start_recording(session_id, config),
+        stop_recording: () => stop_recording(),
+        get_status: () => ({ active_session_id: current_session_id })
+    };
+    start_bridge_client(bridge_deps);
+}
 
 // Global error handler
 self.addEventListener('error', (event) => {

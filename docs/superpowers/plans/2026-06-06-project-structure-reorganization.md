@@ -23,7 +23,6 @@ record_all/
 │  ├─ popup/
 │  └─ shared/
 ├─ assets/
-│  ├─ export_templates/
 │  └─ icons/
 ├─ docs/
 │  ├─ archive/
@@ -57,7 +56,7 @@ record_all/
 | `shared/` | `src/shared/` | Shared source code belongs under `src/` |
 | `agent/` | `src/agent/` | MCP/bridge source code belongs under `src/` |
 | `icons/` | `assets/icons/` | Static resources belong under `assets/` |
-| `export_templates/` | `assets/export_templates/` | Static export templates belong under `assets/` |
+| empty `export_templates/` | remove | Empty unused directory is not tracked and should not be recreated |
 | `docs/design_ai_brief.md` | `docs/design/design_ai_brief.md` | Design-facing docs belong under `docs/design/` |
 | `record-all.zip` | remove from git | Build artifact should not be tracked |
 | `test-results/` | remove from git if tracked; ignore always | Test report artifact should not be tracked |

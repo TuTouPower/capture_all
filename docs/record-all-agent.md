@@ -24,31 +24,31 @@ npm run mcp
 ## Available Tools
 
 ### Recording Control
-- `recording_start` — Start a new recording session
-- `recording_stop` — Stop the active recording
+- `start_recording` — Start a new recording session
+- `stop_recording` — Stop the active recording
 
 ### Session Discovery
-- `sessions_list` — List all sessions (paginated)
-- `sessions_get` — Get session metadata
+- `list_sessions` — List all sessions (paginated)
+- `get_session` — Get session metadata
 
 ### Data Exploration
-- `sources_list` — List available data sources for a session (events, network, console, errors)
-- `records_list` — List records from a source (paginated, time-filtered, sorted)
-- `records_get` — Get full record details by ID
-- `timeline_list` — Merged timeline across all sources (paginated, time-filtered)
-- `timeline_get` — Get a specific timeline item by ID
-- `session_get_all_data` — Get complete session data (all sources)
+- `list_data_sources` — List available data sources for a session (events, network, console, errors)
+- `list_records` — List records from a source (paginated, time-filtered, sorted)
+- `get_record` — Get full record details by ID
+- `get_timeline` — Merged timeline across all sources (paginated, time-filtered)
+- `get_timeline_item` — Get a specific timeline item by ID
+- `get_all_session_data` — Get complete session data (all sources)
 
 ### Export
-- `session_export` — Export session as JSON, JSONL, HTML, or HAR
+- `export_session` — Export session as JSON, JSONL, HTML, or HAR
 
 ## Typical Workflow
 
-1. `sessions_list` → find session of interest
-2. `sources_list(session_id)` → see what data is available
-3. `timeline_list(session_id, limit=20)` → get an overview
-4. `records_get(session_id, source, record_id)` → drill into specific records
-5. `session_export(session_id, format)` → export if needed
+1. `list_sessions` → find session of interest
+2. `list_data_sources(session_id)` → see what data is available
+3. `get_timeline(session_id, limit=20)` → get an overview
+4. `get_record(session_id, source, record_id)` → drill into specific records
+5. `export_session(session_id, format)` → export if needed
 
 ## Data Sources
 

@@ -87,9 +87,9 @@ Record All 更像“浏览器调试黑匣子”，不是普通录屏工具。
 
 文件：
 
-- `popup/popup.html`
-- `popup/popup.ts`
-- `popup/popup.css`
+- `src/popup/popup.html`
+- `src/popup/popup.ts`
+- `src/popup/popup.css`
 
 当前职责：
 
@@ -116,9 +116,9 @@ Record All 更像“浏览器调试黑匣子”，不是普通录屏工具。
 
 文件：
 
-- `detail/detail.html`
-- `detail/detail.ts`
-- `detail/detail.css`
+- `src/detail/detail.html`
+- `src/detail/detail.ts`
+- `src/detail/detail.css`
 
 当前职责：
 
@@ -145,10 +145,10 @@ Record All 更像“浏览器调试黑匣子”，不是普通录屏工具。
 
 文件：
 
-- `devtools/devtools.html`
-- `devtools/devtools_panel.html`
-- `devtools/devtools.ts`
-- `devtools/devtools_panel.ts`
+- `src/devtools/devtools.html`
+- `src/devtools/devtools_panel.html`
+- `src/devtools/devtools.ts`
+- `src/devtools/devtools_panel.ts`
 
 当前较轻，主要是扩展和 DevTools 集成入口。设计优先级低于 Popup 和 Detail。
 
@@ -370,9 +370,9 @@ Detail 页会有很多记录。设计应支持：
 - Chrome MV3 扩展
 - 前端是原生 HTML/CSS/TypeScript，不是 React
 - 构建工具：Vite
-- 样式文件：`popup/popup.css`、`detail/detail.css`
-- i18n 使用 `data-i18n` 和 `shared/i18n.ts`
-- 主题使用 `shared/theme.ts`
+- 样式文件：`src/popup/popup.css`、`src/detail/detail.css`
+- i18n 使用 `data-i18n` 和 `src/shared/i18n.ts`
+- 主题使用 `src/shared/theme.ts`
 - 用户设置存在 `chrome.storage.local.user_config`
 - 浏览器扩展 CSP 限制强，避免 inline script 和不安全动态 HTML
 - 需要支持中英文
@@ -421,14 +421,14 @@ Detail 页会有很多记录。设计应支持：
 
 设计时优先看：
 
-- `popup/popup.html`
-- `popup/popup.css`
-- `popup/popup.ts`
-- `detail/detail.html`
-- `detail/detail.css`
-- `detail/detail.ts`
-- `shared/i18n.ts`
-- `shared/types.ts`
+- `src/popup/popup.html`
+- `src/popup/popup.css`
+- `src/popup/popup.ts`
+- `src/detail/detail.html`
+- `src/detail/detail.css`
+- `src/detail/detail.ts`
+- `src/shared/i18n.ts`
+- `src/shared/types.ts`
 - `manifest.json`
 
 ## 成功标准

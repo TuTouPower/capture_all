@@ -28,6 +28,16 @@ export default defineConfig({
                     args: ['--no-first-run', '--no-default-browser-check'],
                 },
             },
+        },
+        {
+            name: 'e2e-mcp',
+            testMatch: 'e2e-mcp.spec.ts',
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check'],
+                },
+            },
         }
     ]
 });

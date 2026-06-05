@@ -7,6 +7,7 @@ export interface AgentBridgeClientDeps {
     start_recording: (session_id: string, config: RecordConfig) => Promise<{ success: boolean; error?: string }>;
     stop_recording: () => Promise<{ success: boolean }>;
     get_status: () => { active_session_id: string | null };
+    extension_version: string;
 }
 
 interface PendingCommand {
@@ -67,7 +68,7 @@ async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
     };
 
     try {
-        await send_heartbeat(agent_bridge_url, agent_bridge_token);
+        await send_heartbeat(agent_bridge_url, agent_bridge_token, deps);
 
         const command = await fetch_command(agent_bridge_url, agent_bridge_token);
         if (!command) return;
@@ -92,11 +93,15 @@ async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
     }
 }
 
-async function send_heartbeat(url: string, token: string): Promise<void> {
+async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps): Promise<void> {
+    const status = deps.get_status();
     const response = await fetch(`${url}/extension/heartbeat`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+            extension_version: deps.extension_version,
+            active_session_id: status.active_session_id
+        })
     });
 
     if (!response.ok) throw new Error(`heartbeat ${response.status}`);

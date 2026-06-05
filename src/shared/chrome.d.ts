@@ -4,6 +4,7 @@ declare namespace chrome {
         const id: string;
         function sendMessage(message: any): Promise<any>;
         function getURL(path: string): string;
+        function getManifest(): { version: string; [key: string]: unknown };
         const onMessage: {
             addListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;
             removeListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;

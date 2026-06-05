@@ -7,12 +7,12 @@ export default defineConfig({
     build: {
         rollupOptions: {
             input: {
-                background: 'background/service_worker.ts',
-                content: 'content/content_script.ts',
-                popup: 'popup/popup.html',
-                detail: 'detail/detail.html',
-                devtools: 'devtools/devtools.html',
-                devtools_panel: 'devtools/devtools_panel.html'
+                background: 'src/background/service_worker.ts',
+                content: 'src/content/content_script.ts',
+                popup: 'src/popup/popup.html',
+                detail: 'src/detail/detail.html',
+                devtools: 'src/devtools/devtools.html',
+                devtools_panel: 'src/devtools/devtools_panel.html'
             }
         }
     }

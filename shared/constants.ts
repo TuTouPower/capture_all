@@ -45,5 +45,10 @@ export const DEFAULT_USER_CONFIG = {
     capture_response_body: false,
     redact_data: true,
     theme: 'follow-system' as const,
-    locale: 'en' as const
+    locale: 'en' as const,
+    system_time_timezone: 'browser' as const,
+    detail_time_display_mode: 'system' as const,
+    export_directory: '',
+    export_filename_template: 'record_all_{session_id}_{date}.{ext}',
+    export_save_as: true
 };

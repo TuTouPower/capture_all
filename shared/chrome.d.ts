@@ -80,7 +80,7 @@ declare namespace chrome {
     }
 
     namespace downloads {
-        function download(options: { url: string; filename: string }): Promise<number>;
+        function download(options: { url: string; filename: string; saveAs?: boolean }): Promise<number>;
     }
 
     namespace scripting {

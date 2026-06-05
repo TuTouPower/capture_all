@@ -1,7 +1,9 @@
 // background/exporter.ts
 import { escape_for_html_embed } from '../shared/escape';
 import { get_session, get_events, get_network_requests, get_console_logs } from './storage';
-import type { NetworkRequest, Session } from '../shared/types';
+import { load_user_config } from '../shared/user_config';
+import { add_absolute_system_time, add_session_system_times, add_system_times_to_session_data, format_system_time } from '../shared/system_time';
+import type { NetworkRequest, Session, UserConfig } from '../shared/types';
 
 export async function export_json(session_id: string): Promise<string> {
     const session = await get_session(session_id);
@@ -13,7 +15,8 @@ export async function export_json(session_id: string): Promise<string> {
         get_console_logs(session_id, 0, 100000)
     ]);
 
-    const data = { session, events, network_requests, console_logs };
+    const user_config = await load_user_config();
+    const data = add_system_times_to_session_data({ session, events, network_requests, console_logs }, user_config);
     return JSON.stringify(data, null, 2);
 }
 
@@ -27,17 +30,18 @@ export async function export_jsonl(session_id: string): Promise<string> {
         get_console_logs(session_id, 0, 100000)
     ]);
 
+    const user_config = await load_user_config();
     const lines: string[] = [];
-    lines.push(JSON.stringify({ ...session, type: 'session' }));
+    lines.push(JSON.stringify({ ...add_session_system_times(session, user_config), type: 'session' }));
 
     for (const event of events) {
-        lines.push(JSON.stringify({ ...event, type: 'event' }));
+        lines.push(JSON.stringify({ ...add_absolute_system_time(event, user_config), type: 'event' }));
     }
     for (const req of network_requests) {
-        lines.push(JSON.stringify({ ...req, type: 'network_request' }));
+        lines.push(JSON.stringify({ ...add_absolute_system_time(req, user_config), type: 'network_request' }));
     }
     for (const log of console_logs) {
-        lines.push(JSON.stringify({ ...log, type: 'console_log' }));
+        lines.push(JSON.stringify({ ...add_absolute_system_time(log, user_config), type: 'console_log' }));
     }
 
     return lines.join('\n');
@@ -53,11 +57,12 @@ export async function export_html(session_id: string): Promise<string> {
         get_console_logs(session_id, 0, 100000)
     ]);
 
-    const data = { session, events, network_requests, console_logs };
+    const user_config = await load_user_config();
+    const data = add_system_times_to_session_data({ session, events, network_requests, console_logs }, user_config);
     const json_str = JSON.stringify(data);
     const safe_json = escape_for_html_embed(json_str);
 
-    const start_date = new Date(session.start_time).toISOString();
+    const start_date = format_system_time(session.start_time, user_config);
     const duration_ms = session.end_time ? session.end_time - session.start_time : 0;
     const duration_str = format_duration(duration_ms);
 
@@ -124,7 +129,8 @@ export async function export_har(session_id: string): Promise<string> {
     if (!session) throw new Error('Session not found');
 
     const network_requests = await get_network_requests(session_id, 0, 100000);
-    const har = build_har(session, network_requests);
+    const user_config = await load_user_config();
+    const har = build_har(session, network_requests, user_config);
     return JSON.stringify(har, null, 2);
 }
 
@@ -157,10 +163,32 @@ interface HarEntry {
     cache: Record<string, never>;
     timings: { send: number; wait: number; receive: number };
     _resourceType?: string;
+    _startedDateTimeSystemTime: string;
 }
 
-function build_har(session: Session, requests: NetworkRequest[]): unknown {
-    const entries = requests.map(r => build_har_entry(r));
+interface HarPage {
+    startedDateTime: string;
+    _startedDateTimeSystemTime: string;
+    id: string;
+    title: string;
+    pageTimings: {
+        onContentLoad: number;
+        onLoad: number;
+    };
+}
+
+interface HarLog {
+    log: {
+        version: string;
+        creator: { name: string; version: string };
+        browser: { name: string; version: string };
+        pages: HarPage[];
+        entries: HarEntry[];
+    };
+}
+
+function build_har(session: Session, requests: NetworkRequest[], user_config: Pick<UserConfig, 'system_time_timezone'>): HarLog {
+    const entries = requests.map(r => build_har_entry(r, user_config));
     return {
         log: {
             version: '1.2',
@@ -168,6 +196,7 @@ function build_har(session: Session, requests: NetworkRequest[]): unknown {
             browser: { name: 'Chrome', version: 'unknown' },
             pages: [{
                 startedDateTime: new Date(session.start_time).toISOString(),
+                _startedDateTimeSystemTime: format_system_time(session.start_time, user_config),
                 id: session.id,
                 title: `Session ${session.id}`,
                 pageTimings: {
@@ -180,7 +209,7 @@ function build_har(session: Session, requests: NetworkRequest[]): unknown {
     };
 }
 
-function build_har_entry(r: NetworkRequest): HarEntry {
+function build_har_entry(r: NetworkRequest, user_config: Pick<UserConfig, 'system_time_timezone'>): HarEntry {
     const req_headers = headers_to_array(r.request_headers);
     const res_headers = headers_to_array(r.response_headers);
     const query_string = parse_query_string(r.url);
@@ -190,6 +219,7 @@ function build_har_entry(r: NetworkRequest): HarEntry {
 
     const entry: HarEntry = {
         startedDateTime: new Date(r.absolute_time).toISOString(),
+        _startedDateTimeSystemTime: format_system_time(r.absolute_time, user_config),
         time: duration,
         request: {
             method: (r.method || 'GET').toUpperCase(),

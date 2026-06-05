@@ -20,7 +20,8 @@ const deps: AgentBridgeClientDeps = {
     get_user_config: vi.fn(async () => enabled_config),
     start_recording: vi.fn(async () => ({ success: true })),
     stop_recording: vi.fn(async () => ({ success: true })),
-    get_status: vi.fn(() => ({ active_session_id: null }))
+    get_status: vi.fn(() => ({ active_session_id: null })),
+    extension_version: '0.1.0'
 };
 
 beforeEach(() => {

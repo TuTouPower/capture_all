@@ -24,6 +24,17 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     let heartbeat: ExtensionHeartbeat | null = null;
 
     const server = http.createServer(async (request, response) => {
+        // CORS for extension bridge access
+        response.setHeader('Access-Control-Allow-Origin', '*');
+        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+        if (request.method === 'OPTIONS') {
+            response.writeHead(204);
+            response.end();
+            return;
+        }
+
         try {
             if (request.method === 'GET' && request.url === '/health') {
                 return send_json(response, 200, { ok: true });

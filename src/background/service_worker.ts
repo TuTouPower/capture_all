@@ -6,7 +6,7 @@ import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import { export_json, export_jsonl, export_html, export_har } from './exporter';
-import { start_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
+import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
 import type { UserConfig } from '../shared/types';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
@@ -61,6 +61,20 @@ async function handle_message(message: any): Promise<any> {
             return { success: true, html: await export_html(message.session_id) };
         case 'export_har':
             return { success: true, har: await export_har(message.session_id) };
+        case 'restart_bridge':
+            stop_bridge_client();
+            start_agent_bridge();
+            return { success: true };
+        case 'test_bridge_fetch':
+            try {
+                const cfg = await get_user_config_for_bridge();
+                const bridge_url = cfg.agent_bridge_url || '';
+                const res = await fetch(`${bridge_url}/health`);
+                const data = await res.json();
+                return { success: true, bridge_url, health: data };
+            } catch (e: unknown) {
+                return { success: false, error: e instanceof Error ? e.message : String(e) };
+            }
         default:
             return { success: false, error: 'Unknown action' };
     }
@@ -366,7 +380,8 @@ function start_agent_bridge(): void {
         get_user_config: get_user_config_for_bridge,
         start_recording: (session_id, config) => start_recording(session_id, config),
         stop_recording: () => stop_recording(),
-        get_status: () => ({ active_session_id: current_session_id })
+        get_status: () => ({ active_session_id: current_session_id }),
+        extension_version: chrome.runtime.getManifest().version
     };
     start_bridge_client(bridge_deps);
 }

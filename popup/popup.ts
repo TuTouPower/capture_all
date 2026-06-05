@@ -1,10 +1,11 @@
 // popup/popup.ts
-import type { RecordConfig, Session, UserConfig, ThemeMode } from '../shared/types';
+import type { RecordConfig, Session, UserConfig, ThemeMode, SystemTimeTimezone, DetailTimeDisplayMode } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
 import { init_locale, t, apply_translations, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
+import { format_system_time } from '../shared/system_time';
 
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let is_recording = false;
@@ -33,6 +34,11 @@ const settingsPanel = document.getElementById('settingsPanel')!;
 const closeSettings = document.getElementById('closeSettings')!;
 const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
 const themeSelect = document.getElementById('themeSelect') as HTMLSelectElement;
+const systemTimeTimezone = document.getElementById('systemTimeTimezone') as HTMLSelectElement;
+const detailTimeDisplayMode = document.getElementById('detailTimeDisplayMode') as HTMLSelectElement;
+const exportDirectory = document.getElementById('exportDirectory') as HTMLInputElement;
+const exportFilenameTemplate = document.getElementById('exportFilenameTemplate') as HTMLInputElement;
+const exportSaveAs = document.getElementById('exportSaveAs') as HTMLInputElement;
 const redactData = document.getElementById('redactData') as HTMLInputElement;
 
 // Initialize
@@ -62,6 +68,11 @@ async function load_user_config_and_apply(): Promise<void> {
     redactData.checked = user_config.redact_data;
     themeSelect.value = user_config.theme;
     languageSelect.value = user_config.locale;
+    systemTimeTimezone.value = user_config.system_time_timezone;
+    detailTimeDisplayMode.value = user_config.detail_time_display_mode;
+    exportDirectory.value = user_config.export_directory;
+    exportFilenameTemplate.value = user_config.export_filename_template;
+    exportSaveAs.checked = user_config.export_save_as;
 }
 
 async function load_state(): Promise<void> {
@@ -109,6 +120,38 @@ function setup_event_listeners(): void {
     // Redact toggle
     redactData.addEventListener('change', async () => {
         await save_user_config({ redact_data: redactData.checked });
+    });
+
+    systemTimeTimezone.addEventListener('change', async () => {
+        const system_time_timezone = systemTimeTimezone.value as SystemTimeTimezone;
+        user_config = { ...user_config, system_time_timezone };
+        await save_user_config({ system_time_timezone });
+        await load_history();
+    });
+
+    detailTimeDisplayMode.addEventListener('change', async () => {
+        const detail_time_display_mode = detailTimeDisplayMode.value as DetailTimeDisplayMode;
+        user_config = { ...user_config, detail_time_display_mode };
+        await save_user_config({ detail_time_display_mode });
+    });
+
+    exportDirectory.addEventListener('change', async () => {
+        const export_directory = exportDirectory.value;
+        user_config = { ...user_config, export_directory };
+        await save_user_config({ export_directory });
+    });
+
+    exportFilenameTemplate.addEventListener('change', async () => {
+        const export_filename_template = exportFilenameTemplate.value || DEFAULT_USER_CONFIG.export_filename_template;
+        exportFilenameTemplate.value = export_filename_template;
+        user_config = { ...user_config, export_filename_template };
+        await save_user_config({ export_filename_template });
+    });
+
+    exportSaveAs.addEventListener('change', async () => {
+        const export_save_as = exportSaveAs.checked;
+        user_config = { ...user_config, export_save_as };
+        await save_user_config({ export_save_as });
     });
 
     // Config change listeners
@@ -268,7 +311,7 @@ async function load_history(): Promise<void> {
         historyList.innerHTML = sessions.slice(0, 20).map(session => `
             <div class="history-item" data-id="${session.id}">
                 <div class="history-meta">
-                    <span class="history-time">${new Date(session.start_time).toLocaleString()}</span>
+                    <span class="history-time">${format_system_time(session.start_time, user_config)}</span>
                     <span class="history-duration">${format_duration(session)}</span>
                 </div>
                 <div class="history-actions">

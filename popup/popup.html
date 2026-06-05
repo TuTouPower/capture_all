@@ -41,6 +41,37 @@
           </select>
         </div>
         <div class="config-group">
+          <label data-i18n="systemTimeTimezone">System Time Timezone</label>
+          <select id="systemTimeTimezone">
+            <option value="browser" data-i18n="timezoneBrowser">Follow Browser / System</option>
+            <option value="UTC">UTC</option>
+            <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <label data-i18n="detailTimeDisplayMode">Detail Time Display</label>
+          <select id="detailTimeDisplayMode">
+            <option value="system" data-i18n="detailTimeSystem">System Time</option>
+            <option value="relative" data-i18n="detailTimeRelative">Relative Time</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <label data-i18n="exportDirectory">Export Directory</label>
+          <input type="text" id="exportDirectory" placeholder="record-all/exports" />
+          <small class="hint" data-i18n="exportDirectoryDesc">Relative to Chrome Downloads; leave empty for default</small>
+        </div>
+        <div class="config-group">
+          <label data-i18n="exportFilenameTemplate">Export Filename</label>
+          <input type="text" id="exportFilenameTemplate" />
+          <small class="hint" data-i18n="exportFilenameTemplateDesc">Tokens: {session_id}, {date}, {ext}</small>
+        </div>
+        <div class="config-group">
+          <label class="inline-label">
+            <input type="checkbox" id="exportSaveAs" />
+            <span data-i18n="exportSaveAs">Ask where to save each export</span>
+          </label>
+        </div>
+        <div class="config-group">
           <label class="inline-label">
             <input type="checkbox" id="redactData" />
             <span data-i18n="redactData">Redact Sensitive Data</span>

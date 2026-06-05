@@ -84,6 +84,16 @@ export interface I18nStrings {
     themeFollowSystem: string;
     themeLight: string;
     themeDark: string;
+    systemTimeTimezone: string;
+    timezoneBrowser: string;
+    detailTimeDisplayMode: string;
+    detailTimeSystem: string;
+    detailTimeRelative: string;
+    exportDirectory: string;
+    exportDirectoryDesc: string;
+    exportFilenameTemplate: string;
+    exportFilenameTemplateDesc: string;
+    exportSaveAs: string;
 }
 
 const en: I18nStrings = {
@@ -162,6 +172,16 @@ const en: I18nStrings = {
     themeFollowSystem: 'Follow System',
     themeLight: 'Light',
     themeDark: 'Dark',
+    systemTimeTimezone: 'System Time Timezone',
+    timezoneBrowser: 'Follow Browser / System',
+    detailTimeDisplayMode: 'Detail Time Display',
+    detailTimeSystem: 'System Time',
+    detailTimeRelative: 'Relative Time',
+    exportDirectory: 'Export Directory',
+    exportDirectoryDesc: 'Relative to Chrome Downloads; leave empty for default',
+    exportFilenameTemplate: 'Export Filename',
+    exportFilenameTemplateDesc: 'Tokens: {session_id}, {date}, {ext}',
+    exportSaveAs: 'Ask where to save each export',
 };
 
 const zh: I18nStrings = {
@@ -240,6 +260,16 @@ const zh: I18nStrings = {
     themeFollowSystem: '跟随系统',
     themeLight: '浅色',
     themeDark: '深色',
+    systemTimeTimezone: '系统时间时区',
+    timezoneBrowser: '跟随浏览器 / 系统',
+    detailTimeDisplayMode: '详情页时间显示',
+    detailTimeSystem: '系统时间',
+    detailTimeRelative: '相对时间',
+    exportDirectory: '导出目录',
+    exportDirectoryDesc: '相对于 Chrome 下载目录；留空使用默认位置',
+    exportFilenameTemplate: '导出文件名',
+    exportFilenameTemplateDesc: '可用占位符：{session_id}、{date}、{ext}',
+    exportSaveAs: '每次导出时选择保存位置',
 };
 
 const locales: Record<Locale, I18nStrings> = { en, zh };

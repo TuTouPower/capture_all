@@ -36,7 +36,7 @@
 
 目标：完成 `docs/superpowers/specs/2026-06-05-record-all-mcp-agent-design.md` 的 MVP，让 AI Agent 真的能通过 MCP 连接浏览器扩展，直接查询扩展 IndexedDB 数据，不依赖导出文件。
 
-#### 11.1 扩展 bridge 配置 — ⏳ 待做
+#### 11.1 扩展 bridge 配置 — ✅ 已完成
 - 在 `UserConfig` 增加：
   - `agent_bridge_enabled: boolean`
   - `agent_bridge_url: string`
@@ -51,7 +51,7 @@
 - 保存配置到 `chrome.storage.local.user_config`。
 - 测试：配置默认值、保存/读取、非法 URL 拒绝或不连接。
 
-#### 11.2 扩展 bridge client — ⏳ 待做
+#### 11.2 扩展 bridge client — ✅ 已完成
 - 新增 `src/background/agent_bridge_client.ts`。
 - 后台 service worker 根据用户配置启动/停止 bridge polling。
 - 定时 POST `/extension/heartbeat`，上报：
@@ -64,7 +64,7 @@
 - 网络失败、401、超时要返回明确状态，不静默吞掉。
 - 测试：heartbeat、poll command、result 回传、bridge 关闭时不请求、token 缺失时不请求。
 
-#### 11.3 扩展命令 dispatcher — ⏳ 待做
+#### 11.3 扩展命令 dispatcher — ✅ 已完成
 - 新增 `src/background/agent_command_dispatcher.ts`。
 - 支持设计文档中的全部命令：
   - `recording.start`
@@ -82,7 +82,7 @@
 - 错误必须用明确错误码：`SESSION_NOT_FOUND`、`SOURCE_NOT_FOUND`、`RECORD_NOT_FOUND`、`INVALID_QUERY`、`EXPORT_FAILED`、`STORAGE_READ_FAILED` 等。
 - 测试：每个命令至少覆盖成功路径和一个错误路径。
 
-#### 11.4 扩展数据查询 API — ⏳ 待做
+#### 11.4 扩展数据查询 API — ✅ 已完成
 - 新增 `src/background/agent_data_queries.ts`。
 - 实现 `list_data_sources(session_id)`：
   - 返回 `record_events`、`network_requests`、`console_logs`、`error_logs` 等实际存在 source。
@@ -123,7 +123,7 @@
   - `export_session`
 - 验收：分析路径直接通过扩展 API / IndexedDB 获取数据，不通过导出文件。
 
-#### 11.6 `record-all-agent` skill 文档 — ⏳ 待做
+#### 11.6 `record-all-agent` skill 文档 — ✅ 已完成
 - 新增 `docs/superpowers/skills/record-all-agent.md`。
 - 写明推荐调用顺序：
   1. `get_status()`

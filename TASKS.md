@@ -32,4 +32,129 @@
 
 ## 剩余优先级排序
 
-当前 `/goal` 三项已完成。新的剩余优先级待下一轮整理。
+### P0：MCP 扩展闭环（未完成）
+
+目标：完成 `docs/superpowers/specs/2026-06-05-record-all-mcp-agent-design.md` 的 MVP，让 AI Agent 真的能通过 MCP 连接浏览器扩展，直接查询扩展 IndexedDB 数据，不依赖导出文件。
+
+#### 11.1 扩展 bridge 配置 — ⏳ 待做
+- 在 `UserConfig` 增加：
+  - `agent_bridge_enabled: boolean`
+  - `agent_bridge_url: string`
+  - `agent_bridge_token: string`
+  - `agent_bridge_poll_interval_ms: number`
+- 在默认配置中提供安全默认值：默认关闭 bridge；URL 只允许本地 `127.0.0.1` / `localhost`；token 默认为空，必须用户填写或显式生成。
+- 在 popup 设置区增加配置项：
+  - 是否启用 MCP bridge
+  - bridge URL
+  - bridge token
+  - poll interval
+- 保存配置到 `chrome.storage.local.user_config`。
+- 测试：配置默认值、保存/读取、非法 URL 拒绝或不连接。
+
+#### 11.2 扩展 bridge client — ⏳ 待做
+- 新增 `src/background/agent_bridge_client.ts`。
+- 后台 service worker 根据用户配置启动/停止 bridge polling。
+- 定时 POST `/extension/heartbeat`，上报：
+  - extension version
+  - active session
+  - enabled 状态
+- 定时 GET `/extension/command` 获取命令。
+- 执行命令后 POST `/extension/result` 回传结果。
+- 所有请求带 `Authorization: Bearer <token>`。
+- 网络失败、401、超时要返回明确状态，不静默吞掉。
+- 测试：heartbeat、poll command、result 回传、bridge 关闭时不请求、token 缺失时不请求。
+
+#### 11.3 扩展命令 dispatcher — ⏳ 待做
+- 新增 `src/background/agent_command_dispatcher.ts`。
+- 支持设计文档中的全部命令：
+  - `recording.start`
+  - `recording.stop`
+  - `sessions.list`
+  - `sessions.get`
+  - `sources.list`
+  - `records.list`
+  - `records.get`
+  - `timeline.list`
+  - `timeline.get`
+  - `session.get_all_data`
+  - `session.export`
+- dispatcher 只调用现有录制、存储、导出能力，不在工具层默认脱敏、过滤、摘要或删除字段。
+- 错误必须用明确错误码：`SESSION_NOT_FOUND`、`SOURCE_NOT_FOUND`、`RECORD_NOT_FOUND`、`INVALID_QUERY`、`EXPORT_FAILED`、`STORAGE_READ_FAILED` 等。
+- 测试：每个命令至少覆盖成功路径和一个错误路径。
+
+#### 11.4 扩展数据查询 API — ⏳ 待做
+- 新增 `src/background/agent_data_queries.ts`。
+- 实现 `list_data_sources(session_id)`：
+  - 返回 `record_events`、`network_requests`、`console_logs`、`error_logs` 等实际存在 source。
+  - 返回每个 source 的 count、time_range、types。
+- 实现 `list_records(session_id, source, offset?, limit?, start_time?, end_time?, order?)`：
+  - offset 从 0 开始。
+  - index 从 1 开始。
+  - 支持 asc / desc。
+  - 返回粗略列表：record_id、source、index、time、absolute_time、type、summary、preview。
+- 实现 `get_record(session_id, source, record_id)`：
+  - 返回完整原始记录。
+  - 不截断、不脱敏、不删除字段。
+- 实现 `get_timeline(session_id, sources?, offset?, limit?, start_time?, end_time?, order?)`：
+  - 合并多个 source。
+  - 按时间排序。
+  - 返回可继续深挖的 record_id / item_id。
+- 实现 `get_timeline_item(session_id, item_id)`：
+  - 等价于按 source + record_id 获取详情。
+- 实现 `get_all_session_data(session_id)`：
+  - 返回完整 session 和所有 source 数据。
+  - 不强制分页、不自动摘要、不自动脱敏。
+  - 大数据、超时、读取失败时返回明确错误，不静默降级。
+- 测试：source 统计、分页、时间范围、顺序、record_id 稳定性、timeline 合并排序、全量读取。
+
+#### 11.5 MCP 真实闭环验证 — ⏳ 待做
+- 确认 `npm run bridge` 启动本地 bridge。
+- 确认 `npm run mcp` 可作为 MCP server 连接 bridge。
+- 浏览器扩展启用 bridge 后，MCP `get_status()` 能看到 extension online。
+- 通过 MCP 验证：
+  - `start_recording`
+  - `stop_recording`
+  - `list_sessions`
+  - `list_data_sources`
+  - `get_timeline`
+  - `list_records`
+  - `get_record`
+  - `get_all_session_data`
+  - `export_session`
+- 验收：分析路径直接通过扩展 API / IndexedDB 获取数据，不通过导出文件。
+
+#### 11.6 `record-all-agent` skill 文档 — ⏳ 待做
+- 新增 `docs/superpowers/skills/record-all-agent.md`。
+- 写明推荐调用顺序：
+  1. `get_status()`
+  2. `list_sessions()`
+  3. `list_data_sources(session_id)`
+  4. `get_timeline(session_id, limit=20)`
+  5. `list_records(session_id, source, offset, limit)`
+  6. `get_record(session_id, source, record_id)`
+  7. 必要时 `get_all_session_data(session_id)`
+  8. 用户需要文件时 `export_session(session_id, format)`
+- 写明风险：
+  - `start_recording` / `stop_recording` 会改变录制状态。
+  - `get_all_session_data` 可能返回大量数据，可能超时或爆上下文。
+  - headers、cookies、body、storage 可能包含敏感信息。
+  - `export_session` 会生成文件。
+  - 列表 API 只是粗略 preview，详情必须用 `get_record`。
+- 明确原则：skill 只说明能力和风险；不替模型限制调用；模型按用户任务自行决定。
+
+#### 11.7 MCP/bridge 测试补齐 — ⏳ 待做
+- Bridge 单测：已覆盖命令队列、token、超时、heartbeat；后续新增真实扩展 client 后补完整请求测试。
+- MCP 单测：已覆盖工具转发；后续补参数 schema、错误透传、真实 bridge 往返。
+- 扩展单测：新增 source 统计、records list/get、timeline、full data、dispatcher、bridge client。
+- E2E：启动 bridge，加载扩展，启用 bridge，MCP 调用真实扩展完成一次录制与查询。
+- 浏览器验证：用宿主机 Chrome 验证 popup 配置、录制、timeline、record 详情、导出。
+
+### P1：目录重组收尾（待确认）
+
+#### 12.1 docs archive 移动状态收尾 — ⏳ 待做
+- 当前工作区存在文档移动残留，需要确认后单独提交或恢复：
+  - `D docs/errors.md`
+  - `D docs/review_gpt.md`
+  - `D docs/review_mimo.md`
+  - `?? docs/archive/errors.md`
+- 目标：不要把无关文档移动混进 MCP 实现提交。

@@ -142,10 +142,9 @@
 
 ### P1：目录重组收尾（待确认）
 
-#### 12.1 docs archive 移动状态收尾 — ⏳ 待做
-- 当前工作区存在文档移动残留，需要确认后单独提交或恢复：
-  - `D docs/errors.md`
-  - `D docs/review_gpt.md`
-  - `D docs/review_mimo.md`
-  - `?? docs/archive/errors.md`
-- 目标：不要把无关文档移动混进 MCP 实现提交。
+#### 12.1 docs archive 移动状态收尾 — ✅ 已完成
+- `docs/errors.md` → `docs/archive/errors.md`
+- `docs/review_gpt.md` → `docs/archive/review_gpt.md`
+- `docs/review_mimo.md` → `docs/archive/review_mimo.md`
+- `docs/superpowers/skills/record-all-agent.md`：修正 MCP 工具名（`recording_start` → `start_recording` 等），与 `src/agent/mcp/tools.ts` 对齐
+- `docs/design/design_ai_brief.md`：更新所有文件路径引用从旧目录结构到 `src/` 目录

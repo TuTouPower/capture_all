@@ -28,6 +28,8 @@ export interface RecordConfig {
 }
 
 export type ThemeMode = 'follow-system' | 'light' | 'dark';
+export type SystemTimeTimezone = 'browser' | 'UTC' | 'Asia/Shanghai';
+export type DetailTimeDisplayMode = 'relative' | 'system';
 
 export interface UserConfig {
     selected_mode: 'basic' | 'advanced';
@@ -39,6 +41,11 @@ export interface UserConfig {
     redact_data: boolean;
     theme: ThemeMode;
     locale: 'en' | 'zh';
+    system_time_timezone: SystemTimeTimezone;
+    detail_time_display_mode: DetailTimeDisplayMode;
+    export_directory: string;
+    export_filename_template: string;
+    export_save_as: boolean;
 }
 
 export interface RecordEvent {

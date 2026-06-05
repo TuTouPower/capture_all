@@ -1,12 +1,17 @@
 // detail/detail.ts
-import type { Session, RecordEvent, NetworkRequest, ConsoleLog } from '../shared/types';
+import type { Session, RecordEvent, NetworkRequest, ConsoleLog, UserConfig } from '../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
+import { load_user_config } from '../shared/user_config';
+import { DEFAULT_USER_CONFIG } from '../shared/constants';
+import { build_export_filename } from '../shared/export_settings';
+import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
 let session_id: string;
 let session_data: Session | null = null;
+let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let events: RecordEvent[] = [];
 let network_requests: NetworkRequest[] = [];
 let console_logs: ConsoleLog[] = [];
@@ -22,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (is_extension) {
         await init_locale();
         await init_theme();
+        user_config = await load_user_config();
     }
     apply_translations();
     setup_tabs();
@@ -76,7 +82,7 @@ function render_overview(): void {
 
     const s = session_data;
     setText('sessionId', s.id);
-    setText('startTime', new Date(s.start_time).toLocaleString());
+    setText('startTime', format_system_time(s.start_time, user_config));
     setText('duration', s.end_time ? format_duration(s.end_time - s.start_time) : 'In progress');
     setText('mode', s.config.capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
     setText('eventCount', String(s.stats.event_count || events.length));
@@ -109,7 +115,7 @@ function render_timeline(): void {
 }
 
 function render_timeline_item(event: RecordEvent): string {
-    const time = format_relative_time(event.relative_time);
+    const time = format_detail_time(event.relative_time, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="timeline-item">
         <span class="timeline-time">${time}</span>
@@ -198,7 +204,7 @@ function render_events(): void {
 }
 
 function render_event_item(event: RecordEvent): string {
-    const time = format_relative_time(event.relative_time);
+    const time = format_detail_time(event.relative_time, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="event-item">
         <span class="event-time">${time}</span>
@@ -250,18 +256,14 @@ function setup_export(): void {
 async function export_json(): Promise<void> {
     if (!is_extension) return;
 
-    const data = {
-        session: session_data,
-        events,
-        network_requests,
-        console_logs
-    };
+    const response = await chrome.runtime.sendMessage({
+        action: 'export_json',
+        session_id
+    });
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.json`;
-    chrome.downloads.download({ url, filename });
+    if (response.success) {
+        download_export(response.json, 'application/json', 'json');
+    }
 }
 
 async function export_jsonl(): Promise<void> {
@@ -273,10 +275,7 @@ async function export_jsonl(): Promise<void> {
     });
 
     if (response.success) {
-        const blob = new Blob([response.jsonl], { type: 'application/x-ndjson' });
-        const url = URL.createObjectURL(blob);
-        const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.jsonl`;
-        chrome.downloads.download({ url, filename });
+        download_export(response.jsonl, 'application/x-ndjson', 'jsonl');
     }
 }
 
@@ -289,10 +288,7 @@ async function export_html(): Promise<void> {
     });
 
     if (response.success) {
-        const blob = new Blob([response.html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.html`;
-        chrome.downloads.download({ url, filename });
+        download_export(response.html, 'text/html', 'html');
     }
 }
 
@@ -305,11 +301,15 @@ async function export_har(): Promise<void> {
     });
 
     if (response.success) {
-        const blob = new Blob([response.har], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const filename = `record_all_${session_id}_${new Date().toISOString().slice(0, 10)}.har`;
-        chrome.downloads.download({ url, filename });
+        download_export(response.har, 'application/json', 'har');
     }
+}
+
+function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): void {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const filename = build_export_filename(user_config, session_id, extension);
+    chrome.downloads.download({ url, filename, saveAs: user_config.export_save_as });
 }
 
 // Helpers
@@ -350,6 +350,13 @@ function get_event_detail(event: RecordEvent): string {
         default:
             return JSON.stringify(data);
     }
+}
+
+function format_detail_time(relative_time: number, absolute_time: number): string {
+    if (user_config.detail_time_display_mode === 'relative') {
+        return format_relative_time(relative_time);
+    }
+    return format_system_time(absolute_time, user_config);
 }
 
 function format_relative_time(ms: number): string {

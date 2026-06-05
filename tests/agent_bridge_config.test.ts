@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse_bridge_config } from '../agent/bridge/config';
+import { parse_bridge_config } from '../src/agent/bridge/config';
 
 describe('parse_bridge_config', () => {
     it('parses valid user config', () => {

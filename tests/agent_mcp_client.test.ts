@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { create_bridge_server } from '../agent/bridge/server';
-import { BridgeMcpClient } from '../agent/mcp/client';
-import { execute_mcp_tool, MCP_TOOL_NAMES } from '../agent/mcp/tools';
+import { create_bridge_server } from '../src/agent/bridge/server';
+import { BridgeMcpClient } from '../src/agent/mcp/client';
+import { execute_mcp_tool, MCP_TOOL_NAMES } from '../src/agent/mcp/tools';
 
 const token = 'test-token-123';
 let cleanup: (() => Promise<void>) | null = null;

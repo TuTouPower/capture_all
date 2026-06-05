@@ -9,7 +9,7 @@ import {
     truncate_response_body,
     truncate_console_args,
     truncate_target_text
-} from '../shared/redaction';
+} from '../src/shared/redaction';
 
 describe('redact_headers', () => {
     it('redacts authorization header', () => {

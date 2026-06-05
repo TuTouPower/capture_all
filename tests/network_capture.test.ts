@@ -5,8 +5,8 @@ import {
     truncate_request_body,
     truncate,
     redact_url
-} from '../shared/redaction';
-import { MAX_REQUEST_BODY_BYTES } from '../shared/constants';
+} from '../src/shared/redaction';
+import { MAX_REQUEST_BODY_BYTES } from '../src/shared/constants';
 
 // ─── helpers ported from background/network_capture.ts ───
 // These are pure logic functions that live inside the module.

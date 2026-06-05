@@ -4,7 +4,7 @@ import {
     build_record_id,
     parse_record_id,
     type AgentCommandType,
-} from '../agent/shared/protocol';
+} from '../src/agent/shared/protocol';
 
 describe('agent protocol', () => {
     it('lists every MVP command type', () => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { create_bridge_server } from '../agent/bridge/server';
+import { create_bridge_server } from '../src/agent/bridge/server';
 
 const token = 'test-token-123';
 let cleanup: (() => Promise<void>) | null = null;

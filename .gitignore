@@ -1,6 +1,5 @@
 node_modules/
-dist/
-test-results/
+artifacts/
 *.log
 *.zip
 .DS_Store

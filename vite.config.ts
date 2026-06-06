@@ -5,7 +5,8 @@ import manifest from './manifest.json';
 export default defineConfig({
     plugins: [crx({ manifest })],
     build: {
-        rollupOptions: {
+        outDir: 'artifacts/dist',
+    rollupOptions: {
             input: {
                 background: 'src/background/service_worker.ts',
                 content: 'src/content/content_script.ts',

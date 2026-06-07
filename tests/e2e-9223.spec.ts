@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EXTENSION_PATH = path.resolve(__dirname, '../dist');
+const EXTENSION_PATH = path.resolve(__dirname, '../artifacts/dist');
 
 let browser: Awaited<ReturnType<typeof chromium.launchPersistentContext>>;
 let extension_id: string;
@@ -39,7 +39,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('popup renders with mode buttons', async () => {
         const page = await browser.newPage();
-        await page.goto(`chrome-extension://${extension_id}/popup/popup.html`);
+        await page.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#basicBtn')).toBeVisible();
@@ -50,7 +50,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('mode selection toggles', async () => {
         const page = await browser.newPage();
-        await page.goto(`chrome-extension://${extension_id}/popup/popup.html`);
+        await page.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#basicBtn')).toHaveClass(/selected/);
@@ -63,7 +63,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('start and stop recording', async () => {
         const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
+        await popup.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
         // Start
@@ -82,7 +82,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('detail page has all tabs', async () => {
         const page = await browser.newPage();
-        await page.goto(`chrome-extension://${extension_id}/detail/detail.html?session=test`);
+        await page.goto(`chrome-extension://${extension_id}/src/detail/detail.html?session=test`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('.tab-btn[data-tab="timeline"]')).toBeVisible();
@@ -94,7 +94,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('detail page tab switching', async () => {
         const page = await browser.newPage();
-        await page.goto(`chrome-extension://${extension_id}/detail/detail.html?session=test`);
+        await page.goto(`chrome-extension://${extension_id}/src/detail/detail.html?session=test`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#timeline-tab')).toHaveClass(/active/);
@@ -107,7 +107,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
     test('full flow: record -> stop -> click View -> detail opens', async () => {
         const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
+        await popup.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
         // Start recording
@@ -116,6 +116,12 @@ test.describe('Record All on 9223 Chrome', () => {
 
         // Navigate to create activity
         const testPage = await browser.newPage();
+        await testPage.route('https://example.com/', async route => {
+            await route.fulfill({
+                contentType: 'text/html',
+                body: '<html><body><button id="target">target</button></body></html>',
+            });
+        });
         await testPage.goto('https://example.com');
         await testPage.waitForLoadState('domcontentloaded');
         await testPage.mouse.click(100, 100);
@@ -136,7 +142,7 @@ test.describe('Record All on 9223 Chrome', () => {
 
         // Find the newly opened detail page
         const allPages = browser.pages();
-        const newPage = allPages.find(p => p.url().includes('detail/detail.html'));
+        const newPage = allPages.find(p => p.url().includes('src/detail/detail.html'));
         expect(newPage).toBeTruthy();
 
         if (newPage) {

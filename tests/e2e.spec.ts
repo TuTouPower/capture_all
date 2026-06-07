@@ -18,7 +18,7 @@ test.afterAll(async () => {
 test.describe('Record All UI', () => {
     test('popup loads with mode buttons', async () => {
         const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/popup/popup.html`);
+        await page.goto(`${SERVE_URL}/src/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#basicBtn')).toBeVisible();
@@ -31,7 +31,7 @@ test.describe('Record All UI', () => {
 
     test('detail page loads with tabs', async () => {
         const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/detail/detail.html?session=test123`);
+        await page.goto(`${SERVE_URL}/src/detail/detail.html?session=test123`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('.tab-btn[data-tab="timeline"]')).toBeVisible();
@@ -47,7 +47,7 @@ test.describe('Record All UI', () => {
 
     test('detail page tab switching works', async () => {
         const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/detail/detail.html?session=test123`);
+        await page.goto(`${SERVE_URL}/src/detail/detail.html?session=test123`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#timeline-tab')).toHaveClass(/active/);
@@ -67,7 +67,7 @@ test.describe('Record All UI', () => {
 
     test('popup mode selection toggles correctly', async () => {
         const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/popup/popup.html`);
+        await page.goto(`${SERVE_URL}/src/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         const basicBtn = page.locator('#basicBtn');

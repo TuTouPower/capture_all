@@ -373,7 +373,7 @@ async function load_history(): Promise<void> {
             if (!action || !sessionId) return;
 
             if (action === 'view') {
-                const url = chrome.runtime.getURL(`detail/detail.html?session=${sessionId}`);
+                const url = chrome.runtime.getURL(`src/detail/detail.html?session=${sessionId}`);
                 chrome.tabs.create({ url });
             } else if (action === 'delete') {
                 if (confirm(t('deleteConfirm'))) {

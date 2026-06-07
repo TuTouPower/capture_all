@@ -6,6 +6,7 @@ import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
 import { start_dom_capture, stop_dom_capture } from './dom_capture';
 import { start_storage_capture, stop_storage_capture } from './storage_capture';
 import { start_xhr_fetch_capture, stop_xhr_fetch_capture } from './xhr_fetch_capture';
+import { start_network_hook, stop_network_hook } from './network_hook';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
 let is_capturing = false;
@@ -62,6 +63,7 @@ function start_capture(config: RecordConfig): void {
     start_dom_capture(config, send_event);
     start_storage_capture(send_event);
     start_xhr_fetch_capture(send_event);
+    start_network_hook(send_event);
 
     // Visibility change
     document.addEventListener('visibilitychange', handle_visibility_change);
@@ -103,6 +105,7 @@ function stop_capture(): void {
     stop_dom_capture();
     stop_storage_capture();
     stop_xhr_fetch_capture();
+    stop_network_hook();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);
     window.removeEventListener('popstate', handle_navigation);

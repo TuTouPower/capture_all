@@ -447,3 +447,37 @@ body {
     background: var(--color-surface);
     color: var(--color-text);
 }
+
+/* Body Capture Status */
+.body-capture-status {
+    text-align: center;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+}
+
+.body-capture-status.active {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+}
+
+.body-capture-status.partial {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.body-capture-status.failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+[data-theme="dark"] .body-capture-status.partial {
+    background: #3d3200;
+    color: #ffc107;
+}
+
+[data-theme="dark"] .body-capture-status.failed {
+    background: #3d1f1f;
+    color: #ff6b5a;
+}

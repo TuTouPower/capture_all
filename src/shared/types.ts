@@ -10,6 +10,10 @@ export interface Session {
         log_count: number;
         dom_changes: number;
     };
+    body_capture_mode?: BodyCaptureMode;
+    body_capture_status?: BodyCaptureRuntimeStatus;
+    body_capture_failure_reason?: BodyCaptureFailureReason;
+    body_capture_message?: string;
 }
 
 export interface RecordConfig {
@@ -56,8 +60,8 @@ export interface RecordEvent {
     session_id: string;
     relative_time: number;       // ms from session start
     absolute_time: number;       // epoch ms
-    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch' | 'tab_created' | 'tab_url_change' | 'dom_ready' | 'storage_change' | 'cookie_change' | 'fetch_request' | 'xhr_request';
-    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData | TabCreatedData | TabUrlChangeData | DomReadyData | StorageChangeData | CookieChangeData | FetchRequestData | XhrRequestData;
+    type: 'mouse' | 'keyboard' | 'scroll' | 'dom_change' | 'navigation' | 'page_load' | 'tab_switch' | 'tab_created' | 'tab_url_change' | 'dom_ready' | 'storage_change' | 'cookie_change' | 'fetch_request' | 'xhr_request' | 'network_body_hook';
+    data: MouseEventData | KeyboardEventData | ScrollEventData | DomChangeData | NavigationData | PageLoadData | TabSwitchData | TabCreatedData | TabUrlChangeData | DomReadyData | StorageChangeData | CookieChangeData | FetchRequestData | XhrRequestData | Record<string, unknown>;
     tab_id: number;
     frame_id: number;            // 0 = main frame
     url: string;
@@ -160,7 +164,42 @@ export interface XhrRequestData {
     duration_ms: number;
 }
 
-export type BodyCaptureStatus = 'not_enabled' | 'captured' | 'failed' | 'too_large' | 'unsupported';
+export type BodyCaptureStatus =
+    | 'not_enabled'
+    | 'captured'
+    | 'failed'
+    | 'too_large'
+    | 'unsupported'
+    | 'unsupported_binary'
+    | 'opaque_response'
+    | 'cdp_failed'
+    | 'fallback_unavailable'
+    | 'target_not_matched'
+    | 'permission_denied';
+
+export type BodyCaptureMode = 'none' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
+
+export type BodyCaptureRuntimeStatus = 'not_enabled' | 'active' | 'partial' | 'failed';
+
+export type BodyCaptureFailureReason =
+    | 'another_debugger_attached'
+    | 'bridge_unavailable'
+    | 'cdp_port_not_found'
+    | 'cdp_target_not_found'
+    | 'cdp_attach_failed'
+    | 'cdp_body_failed'
+    | 'permission_denied'
+    | 'restricted_url'
+    | 'unknown';
+
+export type NetworkCorrelationStatus = 'matched' | 'ambiguous' | 'cdp_only' | 'web_request_only' | 'fallback_hook';
+
+export interface BodyCaptureStartResult {
+    mode: BodyCaptureMode;
+    status: BodyCaptureRuntimeStatus;
+    failure_reason?: BodyCaptureFailureReason;
+    message?: string;
+}
 
 export interface NetworkRequest {
     session_id: string;
@@ -178,6 +217,8 @@ export interface NetworkRequest {
     response_body_status: BodyCaptureStatus;
     duration_ms: number;
     resource_type: string;
+    correlation_status?: NetworkCorrelationStatus;
+    cdp_request_id?: string;
 }
 
 export interface ConsoleLog {

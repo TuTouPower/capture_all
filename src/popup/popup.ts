@@ -195,7 +195,8 @@ async function persist_config(): Promise<void> {
         keyboard_capture_mode: captureKeyboard.checked ? 'shortcuts' : 'none',
         capture_input_values: captureInputValues.checked,
         capture_request_body: captureRequestBody.checked,
-        capture_response_body: captureResponseBody.checked
+        capture_response_body: captureResponseBody.checked,
+        redact_data: redactData.checked
     };
     user_config = { ...user_config, ...patch };
     await save_user_config(patch);
@@ -304,6 +305,7 @@ function update_recording_state(): void {
         if (current_session) {
             sessionInfo.querySelector('.session-id')!.textContent = `${t('sessionId')}: ${current_session.id}`;
             start_duration_timer();
+            update_body_capture_status();
         }
     } else {
         dot.classList.remove('recording');
@@ -313,6 +315,47 @@ function update_recording_state(): void {
         stopBtn.style.display = 'none';
         sessionInfo.style.display = 'none';
         stop_duration_timer();
+        update_body_capture_status();
+    }
+}
+
+async function update_body_capture_status(): Promise<void> {
+    const el = document.getElementById('bodyCaptureStatus');
+    if (!el) return;
+
+    if (!is_recording || !current_session) {
+        el.style.display = 'none';
+        return;
+    }
+
+    try {
+        const status = await chrome.runtime.sendMessage({ action: 'get_status' });
+        const bc = status?.body_capture;
+        if (!bc || bc.mode === 'none') {
+            el.style.display = 'none';
+            return;
+        }
+
+        el.style.display = 'block';
+        const mode_labels: Record<string, string> = {
+            'extension_cdp': 'Extension CDP',
+            'external_cdp_bridge': 'External CDP Bridge',
+            'fallback_hook': 'Fallback Hook'
+        };
+        const status_labels: Record<string, string> = {
+            'active': 'Active',
+            'partial': 'Partial',
+            'failed': 'Failed',
+            'not_enabled': 'Not Enabled'
+        };
+
+        el.textContent = `${status_labels[bc.status] || bc.status} · ${mode_labels[bc.mode] || bc.mode}`;
+        if (bc.message) {
+            el.title = bc.message;
+        }
+        el.className = 'body-capture-status ' + bc.status;
+    } catch {
+        el.style.display = 'none';
     }
 }
 

@@ -6,14 +6,13 @@ let is_capturing = false;
 let session_id: string;
 let start_time: number;
 let tab_id: number;
-let redact_data = true;
 let send_to_background: (log: ConsoleLog) => void;
 
 export async function start_console_capture(
     sid: string,
     startTime: number,
     targetTabId: number,
-    redactData: boolean,
+    _redactData: boolean,
     sender: (log: ConsoleLog) => void
 ): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) return { success: true };
@@ -21,7 +20,6 @@ export async function start_console_capture(
     session_id = sid;
     start_time = startTime;
     tab_id = targetTabId;
-    redact_data = redactData;
     send_to_background = sender;
 
     try {
@@ -59,7 +57,7 @@ function handle_debugger_event(_source: any, method: string, params: any): void 
 
     if (method === 'Runtime.consoleAPICalled') {
         const args = params.args.map((arg: any) => arg.value || arg.description || '');
-        const truncated_args = truncate_console_args(args, redact_data);
+        const truncated_args = truncate_console_args(args);
 
         const log: ConsoleLog = {
             session_id,

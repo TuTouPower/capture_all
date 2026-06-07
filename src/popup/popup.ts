@@ -129,6 +129,7 @@ function setup_event_listeners(): void {
 
     // Redact toggle
     redactData.addEventListener('change', async () => {
+        user_config = { ...user_config, redact_data: redactData.checked };
         await save_user_config({ redact_data: redactData.checked });
     });
 

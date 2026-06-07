@@ -1,12 +1,15 @@
 // background/service_worker.ts
 import { init_db, flush_all, get_session, list_sessions as storage_list_sessions, delete_session as storage_delete_session, get_events, get_network_requests, get_console_logs, create_session, update_session, write_events, write_requests, write_logs } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
-import { start_network_capture, stop_network_capture, enable_response_body_capture } from './network_capture';
+import { start_network_capture, stop_network_capture, set_cdp_body_event_handler } from './network_capture';
 import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import { export_json, export_jsonl, export_html, export_har } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
+import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
+import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
+import { redact_url } from '../shared/redaction';
 import type { UserConfig } from '../shared/types';
 import type { RecordConfig, RecordEvent, NetworkRequest, ConsoleLog, Session } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
@@ -45,7 +48,12 @@ async function handle_message(message: any): Promise<any> {
         case 'event':
             return handle_event(message.event);
         case 'get_status':
-            return { is_capturing, session_id: current_session_id, config: current_config };
+            return {
+                is_capturing,
+                session_id: current_session_id,
+                config: current_config,
+                body_capture: get_body_capture_result()
+            };
         case 'get_session_data':
             return get_session_data(message.session_id);
         case 'list_sessions':
@@ -147,21 +155,59 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         }
     }
 
-    // Enable response body capture (advanced mode). Reuses an already-attached
-    // debugger when present so we don't conflict with console/exception capture.
+    // Enable response body capture via coordinator (advanced mode)
     if (config.capture_network && config.capture_response_body && config.capture_mode === 'advanced') {
-        let target_tab_id = debugger_attached_tab_id;
-        let already_attached = target_tab_id !== null;
+        let target_tab_id: number | null = null;
+        if (config.capture_console) {
+            target_tab_id = debugger_attached_tab_id;
+        }
         if (target_tab_id === null) {
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             target_tab_id = tabs[0]?.id ?? null;
-            already_attached = false;
         }
-        if (target_tab_id !== null) {
-            const result = await enable_response_body_capture(target_tab_id, already_attached);
-            if (!result.success) {
-                console.warn('Record All: Response body capture failed:', result.error);
+
+        const get_active_tab_url = async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            return tabs[0]?.url || null;
+        };
+
+        const get_bridge_config = async () => {
+            const cfg = await get_user_config_for_bridge();
+            return {
+                bridge_url: cfg.agent_bridge_url || '',
+                bridge_token: cfg.agent_bridge_token || '',
+                cdp_ports: [] // Use defaults in detect_external_cdp
+            };
+        };
+
+        // Set up CDP body event handler for correlator-based dispatch
+        set_cdp_body_event_handler((cdp_event: CdpBodyEvent) => {
+            handle_cdp_body_event(cdp_event);
+        });
+
+        const result = await start_body_capture(
+            session_id, start_time, config, target_tab_id,
+            {
+                get_active_tab_url,
+                get_bridge_config,
+                on_network_request: handle_network_request
             }
+        );
+
+        if (current_session) {
+            current_session.body_capture_mode = result.mode;
+            current_session.body_capture_status = result.status;
+            current_session.body_capture_failure_reason = result.failure_reason;
+            current_session.body_capture_message = result.message;
+            await update_session(current_session);
+        }
+    } else {
+        // Record body capture as not enabled
+        if (current_session) {
+            current_session.body_capture_mode = 'none';
+            current_session.body_capture_status = 'not_enabled';
+            current_session.body_capture_message = 'Response body capture not enabled';
+            await update_session(current_session);
         }
     }
 
@@ -208,6 +254,18 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     // Stop network capture
     stop_network_capture();
+    set_cdp_body_event_handler(null);
+
+    // Stop body capture coordinator (cleanup bridge/external CDP)
+    const get_bridge_config_for_cleanup = async () => {
+        const cfg = await get_user_config_for_bridge();
+        return {
+            bridge_url: cfg.agent_bridge_url || '',
+            bridge_token: cfg.agent_bridge_token || '',
+            cdp_ports: []
+        };
+    };
+    await stop_body_capture_with_cleanup({ get_bridge_config: get_bridge_config_for_cleanup });
 
     // Stop cookie capture
     stop_cookie_capture();
@@ -248,6 +306,12 @@ async function persist_stats(): Promise<void> {
 async function handle_event(event: RecordEvent): Promise<{ success: boolean }> {
     if (!is_capturing || !current_session_id || !current_session) return { success: true };
 
+    // Route fallback body hook events separately
+    if (event.type === 'network_body_hook') {
+        await handle_fallback_body_event(event.data);
+        return { success: true };
+    }
+
     // Set session_id and tab_id from context
     event.session_id = current_session_id;
     event.relative_time = event.absolute_time - start_time;
@@ -269,6 +333,49 @@ async function handle_event(event: RecordEvent): Promise<{ success: boolean }> {
 async function handle_cookie_change(event: RecordEvent): Promise<void> {
     if (!is_capturing) return;
     await handle_event(event);
+}
+
+// CDP body event handler — dispatched via network_capture's set_cdp_body_event_handler
+function handle_cdp_body_event(cdp_event: CdpBodyEvent): void {
+    if (!is_capturing || !current_session) return;
+
+    // Build request directly from CDP body event
+    const request = build_cdp_only_request(
+        cdp_event,
+        current_session.id,
+        start_time
+    );
+    handle_network_request(request);
+}
+
+// Fallback network body hook events from content script
+async function handle_fallback_body_event(data: any): Promise<void> {
+    if (!is_capturing || !current_session) return;
+
+    const url = current_config.redact_data && current_config.redact_url_query
+        ? redact_url(data.url || '', true)
+        : data.url || '';
+
+    const request: NetworkRequest = {
+        session_id: current_session.id,
+        relative_time: data.timestamp ? data.timestamp - start_time : 0,
+        absolute_time: data.timestamp || Date.now(),
+        tab_id: 0,
+        method: data.method || 'GET',
+        url,
+        status_code: data.status || 0,
+        request_headers: {},
+        response_headers: {},
+        request_body: data.request_body ?? null,
+        request_body_status: data.request_body_status || 'not_enabled',
+        response_body: data.response_body ?? null,
+        response_body_status: data.response_body_status || 'failed',
+        duration_ms: data.duration_ms || 0,
+        resource_type: data.resource_type || 'xhr',
+        correlation_status: 'fallback_hook'
+    };
+
+    await handle_network_request(request);
 }
 
 async function handle_network_request(request: NetworkRequest): Promise<void> {

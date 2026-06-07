@@ -74,6 +74,10 @@ export async function export_html(session_id: string): Promise<string> {
         (event_count + request_count + log_count) * 0.5
     );
 
+    const body_capture_info = session.body_capture_mode
+        ? `<div class="summary-item"><label>Body Capture</label><span>${session.body_capture_mode} · ${session.body_capture_status || 'unknown'}</span></div>`
+        : '';
+
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -106,6 +110,7 @@ pre { background: #f8f8f8; padding: 12px; border-radius: 4px; overflow-x: auto; 
     <div class="summary-item"><label>Network Requests</label><span>${request_count}</span></div>
     <div class="summary-item"><label>Console Logs</label><span>${log_count}</span></div>
     <div class="summary-item"><label>Est. Size</label><span>${total_size_kb} KB</span></div>
+${body_capture_info}
   </div>
 </div>
 

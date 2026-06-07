@@ -1,5 +1,7 @@
 node_modules/
 artifacts/
+.worktrees/
+.claude/worktrees/
 *.log
 *.zip
 .DS_Store

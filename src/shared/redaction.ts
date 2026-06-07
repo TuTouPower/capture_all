@@ -56,18 +56,18 @@ export function redact_password(value: string, input_type?: string, enabled: boo
     return value;
 }
 
-export function truncate_request_body(body: string | null, enabled: boolean = true): string | null {
+export function truncate_request_body(body: string | null): string | null {
     if (!body) return null;
-    return truncate(body, MAX_REQUEST_BODY_BYTES, enabled);
+    return truncate(body, MAX_REQUEST_BODY_BYTES, true);
 }
 
-export function truncate_response_body(body: string | null, enabled: boolean = true): string | null {
+export function truncate_response_body(body: string | null): string | null {
     if (!body) return null;
-    return truncate(body, MAX_RESPONSE_BODY_BYTES, enabled);
+    return truncate(body, MAX_RESPONSE_BODY_BYTES, true);
 }
 
-export function truncate_console_args(args: string[], enabled: boolean = true): string[] {
-    return args.map(arg => truncate(arg, MAX_CONSOLE_ARG_BYTES, enabled));
+export function truncate_console_args(args: string[]): string[] {
+    return args.map(arg => truncate(arg, MAX_CONSOLE_ARG_BYTES, true));
 }
 
 export function truncate_target_text(text: string, enabled: boolean = true): string {

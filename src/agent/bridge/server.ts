@@ -2,6 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
+import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
 
 interface ExtensionHeartbeat {
     extension_version: string;
@@ -85,6 +86,31 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || config.command_timeout_ms);
                 const result = await pending.result;
                 return send_json(response, 200, result);
+            }
+
+            // CDP bridge routes
+            if (request.method === 'POST' && request.url === '/cdp/detect') {
+                const body = await read_json(request) as Record<string, unknown>;
+                const result = await handle_cdp_detect(request, body);
+                return send_json(response, result.status, result.body);
+            }
+
+            if (request.method === 'POST' && request.url === '/cdp/start') {
+                const body = await read_json(request) as Record<string, unknown>;
+                const result = await handle_cdp_start(request, body);
+                return send_json(response, result.status, result.body);
+            }
+
+            if (request.method === 'GET' && request.url?.startsWith('/cdp/events')) {
+                const url = new URL(request.url, `http://${config.host}:${actual_port(server)}`);
+                const result = await handle_cdp_events(request, url);
+                return send_json(response, result.status, result.body);
+            }
+
+            if (request.method === 'POST' && request.url === '/cdp/stop') {
+                const body = await read_json(request) as Record<string, unknown>;
+                const result = await handle_cdp_stop(body);
+                return send_json(response, result.status, result.body);
             }
 
             return send_json(response, 404, { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } });

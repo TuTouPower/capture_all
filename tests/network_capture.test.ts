@@ -86,7 +86,7 @@ function extract_request_body(
 
     const byte_len = new TextEncoder().encode(body).length;
     if (byte_len > MAX_REQUEST_BODY_BYTES) {
-        return { body: truncate_request_body(body, true), status: 'too_large' };
+        return { body: truncate_request_body(body), status: 'too_large' };
     }
     return { body, status: 'captured' };
 }

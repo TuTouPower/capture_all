@@ -10,6 +10,7 @@ import {
     truncate_console_args,
     truncate_target_text
 } from '../src/shared/redaction';
+import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES } from '../src/shared/constants';
 
 describe('redact_headers', () => {
     it('redacts authorization header', () => {
@@ -86,20 +87,61 @@ describe('truncate_request_body', () => {
     it('returns original if under limit', () => {
         expect(truncate_request_body('small body')).toBe('small body');
     });
+
+    it('truncates body even when redact_data would be false', () => {
+        const big_body = 'x'.repeat(MAX_REQUEST_BODY_BYTES + 1000);
+        const result = truncate_request_body(big_body);
+        expect(result).not.toBeNull();
+        expect(result!.length).toBeLessThan(big_body.length);
+        expect(result).toContain('[TRUNCATED]');
+    });
 });
 
 describe('truncate_response_body', () => {
     it('returns null for null input', () => {
         expect(truncate_response_body(null)).toBeNull();
     });
+
+    it('truncates large body unconditionally', () => {
+        const big_body = 'y'.repeat(MAX_RESPONSE_BODY_BYTES + 500);
+        const result = truncate_response_body(big_body);
+        expect(result).not.toBeNull();
+        expect(result!.length).toBeLessThan(big_body.length);
+        expect(result).toContain('[TRUNCATED]');
+    });
 });
 
 describe('truncate_console_args', () => {
-    it('truncates each arg', () => {
+    it('truncates each arg regardless of redact_data', () => {
         const args = ['short', 'a'.repeat(2000)];
         const result = truncate_console_args(args);
         expect(result[0]).toBe('short');
         expect(result[1]).toContain('[TRUNCATED]');
+    });
+});
+
+// redaction split: redact_data=false means no redaction but truncation still applies
+describe('redaction_and_truncation_split', () => {
+    it('redact_headers skips redaction when disabled', () => {
+        const headers = { 'Authorization': 'Bearer token123', 'Cookie': 'session=abc' };
+        const result = redact_headers(headers, false);
+        expect(result['Authorization']).toBe('Bearer token123');
+        expect(result['Cookie']).toBe('session=abc');
+    });
+
+    it('truncate_request_body always truncates by size', () => {
+        const big_body = 'a'.repeat(MAX_REQUEST_BODY_BYTES + 100);
+        const result = truncate_request_body(big_body);
+        expect(result).not.toBeNull();
+        expect(result!.length).toBeLessThanOrEqual(MAX_REQUEST_BODY_BYTES + 20); // +20 for truncation marker
+    });
+
+    it('redact_password keeps value when disabled', () => {
+        expect(redact_password('secret', 'password', false)).toBe('secret');
+    });
+
+    it('redact_password hides value when enabled', () => {
+        expect(redact_password('secret', 'password', true)).toBe('[REDACTED]');
     });
 });
 

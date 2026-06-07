@@ -88,6 +88,19 @@ function render_overview(): void {
     setText('eventCount', String(s.stats.event_count || events.length));
     setText('requestCount', String(s.stats.request_count || network_requests.length));
     setText('logCount', String(s.stats.log_count || console_logs.length));
+
+    // Body capture status
+    const bc_mode_el = document.getElementById('bodyCaptureMode');
+    const bc_status_el = document.getElementById('bodyCaptureStatus');
+    if (bc_mode_el && bc_status_el) {
+        if (s.body_capture_mode && s.body_capture_mode !== 'none') {
+            bc_mode_el.textContent = s.body_capture_mode;
+            bc_status_el.textContent = s.body_capture_status || 'unknown';
+        } else {
+            bc_mode_el.textContent = 'Not enabled';
+            bc_status_el.textContent = '-';
+        }
+    }
 }
 
 function render_timeline(): void {
@@ -141,18 +154,21 @@ function render_network(): void {
     const page_items = filtered.slice(0, (network_page + 1) * PAGE_SIZE);
 
     tbody.innerHTML = page_items.length === 0
-        ? '<tr><td colspan="5" class="empty-state">No network requests</td></tr>'
+        ? '<tr><td colspan="6" class="empty-state">No network requests</td></tr>'
         : page_items.map(render_network_row).join('');
 }
 
 function render_network_row(req: NetworkRequest): string {
     const method_class = req.method.toUpperCase();
     const status_class = `s${String(req.status_code)[0]}xx`;
+    const body_status = req.response_body_status || '-';
+    const corr = req.correlation_status ? ` · ${req.correlation_status}` : '';
     return `<tr>
         <td><span class="method-badge ${method_class}">${req.method}</span></td>
         <td class="url-cell" title="${escape_html(req.url)}">${escape_html(req.url)}</td>
         <td><span class="status-badge ${status_class}">${req.status_code}</span></td>
         <td>${req.resource_type}</td>
+        <td title="${body_status}${corr}">${body_status}${corr}</td>
         <td>${req.duration_ms.toFixed(0)}ms</td>
     </tr>`;
 }

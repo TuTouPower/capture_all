@@ -1,0 +1,37 @@
+// dashboard/icons.ts — inline SVG glyphs (HTML strings) ported from the design demo.
+const s = (path: string, w = 15, h = 15, fill = false): string =>
+    `<svg viewBox="0 0 24 24" width="${w}" height="${h}" fill="${fill ? 'currentColor' : 'none'}"${fill ? '' : ' stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'}>${path}</svg>`;
+
+export const I: Record<string, string> = {
+    search: s('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
+    filter: s('<path d="M3 5h18l-7 8v6l-4-2v-4z"/>'),
+    export: s('<path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>'),
+    download: s('<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/>', 14, 14),
+    refresh: s('<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>', 14, 14),
+    reset: s('<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>', 14, 14),
+    trash: s('<path d="M4 7h16M9 7V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v2M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/>', 14, 14),
+    chevD: s('<path d="M6 9l6 6 6-6"/>', 14, 14),
+    chevR: s('<path d="M9 6l6 6-6 6"/>', 13, 13),
+    chevL: s('<path d="M15 6l-6 6 6 6"/>', 14, 14),
+    close: s('<path d="M6 6l12 12M18 6L6 18"/>', 16, 16),
+    cal: s('<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>', 14, 14),
+    ext: s('<path d="M8 5H5v14h14v-3M14 5h5v5M19 5l-8 8"/>', 13, 13),
+    list: s('<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>', 14, 14),
+    trace: s('<path d="M3 6h10M3 12h16M3 18h7M15 6h6M12 12h0"/>', 14, 14),
+    agent: s('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 14, 14),
+    clock: s('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 16, 16),
+    net: s('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>'),
+    ui: s('<path d="M5 3l14 9-6 1.5L10 20z"/>'),
+    console: s('<rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M6 8l3 3-3 3M11 14h5"/>'),
+    dom: s('<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/>'),
+    storage: s('<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>'),
+    nav: s('<path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>'),
+    cookie: s('<path d="M12 3a9 9 0 1 0 9 9 3.5 3.5 0 0 1-4-4 3.5 3.5 0 0 1-5-5z"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="14" cy="14" r="1" fill="currentColor" stroke="none"/>'),
+    err: s('<path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'),
+    navCaptures: s('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 14h8M8 17h5"/>', 17, 17),
+    navCurrent: s('<path d="M3 12h4l2.5 7 5-14L17 12h4"/>', 17, 17),
+    navExport: s('<path d="M12 15V3m0 0L8 7m4-4l4 4M4 14v4a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4"/>', 17, 17),
+    navSettings: s('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 13a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 6.2 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3.6 13H3.5a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 5 6.2l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 3.6V3.5a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9z"/>', 17, 17),
+    navMcp: s('<path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0zM12 16v6"/>', 17, 17),
+    check2: '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M3 8.2l3 3 7-8" fill="none" stroke="var(--green-ink)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};

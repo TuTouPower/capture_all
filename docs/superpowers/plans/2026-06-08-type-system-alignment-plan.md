@@ -337,7 +337,7 @@ export interface NetworkRequestData {
 // ============================================================
 
 export interface ConsoleEventData {
-    level: 'log' | 'warn' | 'info' | 'debug';
+    level: 'log' | 'warn' | 'info' | 'debug' | 'error';
     args_preview: string[];
     args_status: 'captured' | 'redacted';
     stack_trace: string | null;
@@ -424,11 +424,11 @@ export interface CookieChangeData {
     name: string;
     domain: string;
     path: string;
-    cause: 'explicit' | 'expired' | 'evicted' | 'overwrite' | 'unknown';
+    cause: 'explicit' | 'expired' | 'evicted' | 'expired_overwrite' | 'overwrite' | 'unknown';
     removed: boolean;
     secure: boolean | null;
     http_only: boolean | null;
-    same_site: 'no_restriction' | 'lax' | 'strict' | null;
+    same_site: 'unspecified' | 'no_restriction' | 'lax' | 'strict' | null;
     expiration_date: number | null;
     store_id: string | null;
     value_status: 'not_captured' | 'captured';
@@ -530,7 +530,7 @@ export interface BodyCaptureStartResult {
 // ============================================================
 
 export interface RecordConfig {
-    capture_mode: 'standard' | 'deep';
+    capture_mode: 'basic' | 'advanced';
     mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
     capture_console: boolean;
     capture_network: boolean;
@@ -624,6 +624,10 @@ export function reset_event_counter(): void {
     event_counter = 0;
 }
 
+export function get_relative_time(capture_start_epoch_ms: number): number {
+    return Date.now() - capture_start_epoch_ms;
+}
+
 export function create_base_event(params: {
     capture_id: string;
     category: CategoryKey;
@@ -692,8 +696,8 @@ export const STORE_NAMES = {
 } as const;
 ```
 
-- `DEFAULT_CONFIG` 中 `capture_mode` 的值从 `'basic'` 改为 `'standard'`，从 `'advanced'` 改为 `'deep'`
-- `DEFAULT_USER_CONFIG` 中 `selected_mode` 同理
+- `DEFAULT_CONFIG.capture_mode` 保持 `'basic'` 不变（UI/设置层值域不变，映射关系在 service_worker.ts 中处理：`'basic'` → `CaptureRecord.mode = 'standard'`，`'advanced'` → `'deep'`）
+- `DEFAULT_USER_CONFIG.selected_mode` 保持 `'basic'` 不变
 - `export_filename_template` 中 `{session_id}` 改为 `{capture_id}`
 
 - [ ] **Step 2: 提交**
@@ -720,14 +724,16 @@ git commit -m "refactor: update DB version, store names, capture mode naming"
 
 创建 9 个新 store：
 - `captures` — keyPath: `capture_id`，index: `started_at`
-- `user_action_events` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `type`, `relative_time_ms`
-- `navigation_events` — 同上结构
-- `network_requests` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `url`, `relative_time_ms`
-- `console_events` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `level`, `relative_time_ms`
-- `error_events` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `relative_time_ms`
-- `storage_changes` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `relative_time_ms`
-- `cookie_changes` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `relative_time_ms`
-- `capture_lifecycle_events` — keyPath: `['capture_id', 'relative_time_ms']`，index: `capture_id`, `relative_time_ms`
+- `user_action_events` — keyPath: `event_id`，index: `capture_id`, `type`, `relative_time_ms`
+- `navigation_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `network_requests` — keyPath: `event_id`，index: `capture_id`, `url`, `relative_time_ms`
+- `console_events` — keyPath: `event_id`，index: `capture_id`, `level`, `relative_time_ms`
+- `error_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `storage_changes` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `cookie_changes` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `capture_lifecycle_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+
+所有事件 store 统一用 `event_id`（全局唯一）作 keyPath，避免复合主键 `[capture_id, relative_time_ms]` 在高频场景下的碰撞覆盖。`capture_id` 作为索引支持按录制查询。
 
 对于 DB_VERSION 从 1 升到 2 的迁移：保留旧 store 不删（只增不减），新 store 只在新版本创建。
 
@@ -909,6 +915,7 @@ git commit -m "refactor: cookie_capture → extended CookieChangeData fields"
 
 category: `'console'`，type: `'console_event'`。
 只监听 `Runtime.consoleAPICalled`，不再处理异常。
+`console.error()` 输出（CDP type=`error`）仍归入 `console_event`，level 保留 `'error'`。与 `Runtime.exceptionThrown`（运行时异常）彻底分离。
 输出类型从 `ConsoleLog` 改为 `CaptureEvent` + `ConsoleEventData`。
 
 字段映射：
@@ -1002,9 +1009,11 @@ git commit -m "refactor: unify network capture → single network_request type"
 
 - `session_id` → `capture_id` 全局替换
 - `Session` → `CaptureRecord`
+- 创建 `CaptureRecord` 时，`mode` 从 `RecordConfig.capture_mode` 映射：`'basic'` → `'standard'`，`'advanced'` → `'deep'`
 - 启动录制时写入 `capture_lifecycle.capture_started` 事件
 - 停止录制时写入 `capture_lifecycle.capture_stopped` 事件
 - body capture 状态变化时写入 `capture_lifecycle.body_capture_status_changed` 事件
+- `tab_switch` 事件：新增模块级变量 `last_active_tab: Map<windowId, {tab_id, url}>` 跟踪上一个活跃 tab，以填充 `TabSwitchData.from_tab_id` 和 `from_url`
 - 导航事件（`page_navigation`, `page_load`, `tab_switch`, `tab_created`, `tab_url_change`）使用新的数据类型
 - storage/cookie 事件写入新 store
 - console/error 事件分别写入 `console_events` 和 `error_events`
@@ -1147,6 +1156,22 @@ Run: `cd /home/karon/karson_ubuntu/record_all && npm run build`
 - [ ] **Step 2: 运行单元测试**
 
 Run: `cd /home/karon/karson_ubuntu/record_all && npm test`
+
+需要检查和修复的测试文件（引用了旧类型 `Session`, `RecordEvent`, `ConsoleLog`, `NetworkRequest`, `session_id` 等）：
+- `tests/storage.test.ts` — 存储层测试，引用 `Session`, `session_id`, 旧 store 名
+- `tests/network_capture.test.ts` — 引用 `NetworkRequest`, `session_id`
+- `tests/redaction.test.ts` — 引用 `ConsoleLog` 等
+- `tests/export_settings.test.ts` — 可能引用 `session_id`
+- `tests/agent_bridge_client.test.ts` — 可能引用 `session_id`
+- `tests/agent_protocol.test.ts` — 可能引用旧类型
+- `tests/agent_mcp_client.test.ts` — 可能引用旧类型
+- `tests/network_correlator.test.ts` — 引用 `NetworkRequest` 等
+- `tests/agent_bridge_queue.test.ts` — 可能引用 `session_id`
+- `tests/external_cdp_bridge_client.test.ts` — 可能引用旧类型
+- `tests/popup_detail_url.test.ts` — 可能引用 `session_id`
+- `tests/popup_config_sync.test.ts` — 可能引用 `session_id`
+- `tests/system_time.test.ts` — 可能引用时间字段
+- E2E 测试（`tests/e2e*.spec.ts`）— 可能引用 `session_id`，按需修复
 
 修复所有因类型变更导致的测试失败。
 

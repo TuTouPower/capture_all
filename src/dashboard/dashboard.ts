@@ -946,10 +946,22 @@ async function init(): Promise<void> {
     const p = params.get('page');
     if (sid && (p === 'detail' || !p)) {
         await open_detail(sid);
-        return;
+    } else {
+        if (p) page = p;
+        render_shell();
     }
-    if (p) page = p;
-    render_shell();
+    // Auto-refresh: poll for capture state changes every 2s
+    setInterval(async () => {
+        if (!is_extension) return;
+        const prev_state = sessions.map(s => `${s.capture_id}:${s.status}`);
+        await load_sessions();
+        const cur_state = sessions.map(s => `${s.capture_id}:${s.status}`);
+        if (prev_state.join(',') !== cur_state.join(',')) {
+            if (page === 'captures' || page === 'current' || page === 'exports') {
+                render_content();
+            }
+        }
+    }, 2000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

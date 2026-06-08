@@ -75,56 +75,87 @@
 .seg button[data-on="1"] { background: var(--surface); color: var(--blue-ink); box-shadow: var(--shadow-sm); }
 .seg[data-deep="1"] button[data-on="1"] { color: var(--purple-ink); }
 
-/* ── action buttons ─────────────────────────────────────────────────── */
-.cta {
+/* ── action zone — FIXED HEIGHT across all 3 states ─────────────────── */
+/* 1 button (开始采集) → 2 (采集中) → 3 (采集完成); the row height never changes. */
+.action { display: flex; gap: 10px; height: 108px; }
+[data-density="compact"] .action { height: 96px; }
+
+/* shared button shell */
+.actbtn {
   appearance: none; border: 0; cursor: pointer; text-decoration: none;
-  font-family: var(--font-sans); font-size: 14px; font-weight: 600;
-  height: 52px; padding: 0 14px; border-radius: 14px; color: #fff;
-  display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
-  transition: filter .14s, transform .06s; box-shadow: var(--shadow-sm);
+  font-family: var(--font-sans); font-weight: 600; color: #fff;
+  border-radius: 16px; box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  white-space: nowrap; transition: filter .14s, transform .06s, background .14s, border-color .14s;
 }
-.cta:active { transform: translateY(1px); }
-.cta:hover { filter: brightness(1.05); }
-.cta[data-tone="blue"] { background: var(--blue); }
-.cta[data-tone="red"]  { background: var(--red); }
-.cta.ghost {
-  background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong);
-  box-shadow: none; flex: 1;
-}
-.cta.ghost:hover { background: var(--surface-2); filter: none; border-color: var(--ink-4); }
-.cta.ghost svg { color: var(--ink-2); }
+.actbtn:active { transform: translateY(1px); }
+.actbtn:hover { filter: brightness(1.04); }
 
-/* big primary 开始采集 — blue-purple gradient, 64px / 16px */
-.cta-main {
-  height: 64px; border-radius: 16px; font-size: 15.5px;
-  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 64%, var(--blue)));
-  box-shadow: 0 1px 2px rgba(28,28,24,.12), 0 10px 24px color-mix(in srgb, var(--purple) 34%, transparent);
+/* ghost (实时详情 / 查看详情 / 开始新采集) */
+.act-ghost {
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border-strong); box-shadow: none; filter: none;
+  font-size: 14.5px; gap: 8px;
 }
-.rec-glyph { width: 15px; height: 15px; border-radius: 50%; background: rgba(255,255,255,.28); display: grid; place-items: center; flex: none; }
-.rec-glyph::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #fff; }
+.act-ghost:hover { background: var(--surface-2); filter: none; border-color: var(--ink-4); }
+.act-ghost svg { color: var(--ink-2); flex: none; }
 
-.row2 { display: flex; gap: 10px; }
-.row3btns .cta { font-size: 13px; padding: 0 8px; }
-.row3btns .cta.ghost { flex: 1; gap: 6px; }
+/* STATE A — single full-width primary */
+.act-start {
+  flex: 1; gap: 16px;
+  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 60%, var(--blue)));
+  box-shadow: 0 1px 2px rgba(28,28,24,.12), 0 12px 28px color-mix(in srgb, var(--purple) 36%, transparent);
+}
+.start-glyph { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.9); display: grid; place-items: center; flex: none; }
+.start-glyph::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.start-txt { font-size: 21px; font-weight: 700; letter-spacing: .04em; }
+
+/* STATE B — red timer button (acts as 结束) + ghost */
+.act-stop {
+  flex: 1.7; gap: 12px;
+  background: var(--red);
+  box-shadow: 0 1px 2px rgba(28,28,24,.12), 0 12px 28px color-mix(in srgb, var(--red) 32%, transparent);
+}
+.act-stop .act-ghost, .action .act-ghost { flex: 1; }
+.stop-glyph { width: 38px; height: 38px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.85); display: grid; place-items: center; flex: none; }
+.stop-glyph svg { width: 16px; height: 16px; color: #fff; }
+.stop-time { font-size: 26px; font-weight: 700; letter-spacing: .01em; }
+.stop-hint { font-size: 15px; font-weight: 600; color: rgba(255,255,255,.82); }
+
+/* STATE C — green “done” display + stacked ghost column */
+.act-done {
+  flex: 1.6; position: relative; overflow: hidden;
+  border-radius: 16px; padding: 0 22px;
+  display: flex; align-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--green) 80%, #fff 0%), var(--green-ink));
+  box-shadow: 0 1px 2px rgba(28,28,24,.1), 0 12px 28px color-mix(in srgb, var(--green) 30%, transparent);
+}
+.done-time { font-size: 34px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+.done-check { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; opacity: .42; }
+.done-check svg { width: 52px; height: 52px; color: #fff; stroke-width: 1.6; }
+.act-col { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.act-col .act-ghost { flex: 1; font-size: 13.5px; gap: 7px; }
+.act-col .act-ghost svg { width: 16px; height: 16px; }
 
 /* ── unified capture-data cards (MetricCard) ────────────────────────── */
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
 .mcard {
-  display: flex; align-items: center; gap: 5px;
-  min-height: 64px; padding: 0 10px;
+  display: flex; flex-direction: column; justify-content: center; gap: 9px;
+  min-height: 92px; padding: 12px;
   border-radius: 14px; border: 1px solid; background: var(--surface);
-  font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden;
 }
+.mcard-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mcard-ic { display: grid; place-items: center; flex: none; }
-.mcard-ic svg { width: 14px; height: 14px; }
-.mcard-lbl { flex: 1; min-width: 0; overflow: hidden; }
-.mcard-n {
-  margin-left: auto; padding-left: 7px; flex: none;
-  font-size: 12.5px; font-weight: 600; letter-spacing: .01em;
-  border-left: 1px solid color-mix(in srgb, currentColor 26%, transparent);
-}
-.mcard[data-count="0"] .mcard-lbl { flex: none; }
-[data-density="compact"] .mcard { min-height: 56px; padding: 0 9px; }
+.mcard-ic svg { width: 16px; height: 16px; }
+.mcard-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* with a count → taller card: label on top, divider, big number below */
+.mcard[data-count="1"] { justify-content: flex-start; gap: 0; }
+.mcard[data-count="1"] .mcard-row { padding-bottom: 9px; border-bottom: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+.mcard-n { padding-top: 9px; font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+[data-density="compact"] .mcard { min-height: 84px; padding: 10px; }
+[data-density="compact"] .mcard[data-count="1"] { min-height: 84px; }
 
 /* per-source color tints */
 .mcard[data-tone="blue"]   { background: var(--blue-bg);   color: var(--blue-ink);   border-color: color-mix(in srgb, var(--blue) 22%, transparent); }

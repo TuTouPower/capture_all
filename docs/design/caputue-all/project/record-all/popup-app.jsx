@@ -39,7 +39,7 @@ const CAPTURE = [
 ];
 
 /* mock collected counts (采集中 / 采集完成) */
-const COUNTS = { user: "248", nav: "12", net: "356", console: "24", err: "0", storage: "18", cookie: "6", mask: "18" };
+const COUNTS = { user: "248", nav: "12", net: "356", console: "24", err: "2", storage: "18", cookie: "6", mask: "18" };
 
 /* recent recordings — no error counts shown */
 const RECENT = [
@@ -52,14 +52,17 @@ const ModeBadge = ({ mode }) => (
   <span className="badge" data-mode={mode}>{mode === "deep" ? "深度采集" : "标准采集"}</span>
 );
 
-/* ── unified capture-data card — icon + name (+ count when recording) ── */
+/* ── unified capture-data card — icon + name (+ count below when recording) ── */
 function MetricCard({ item, count }) {
   const Icon = I[item.icon];
+  const has = count != null;
   return (
-    <div className="mcard" data-tone={item.tone} data-count={count != null ? 1 : 0}>
-      <span className="mcard-ic"><Icon/></span>
-      <span className="mcard-lbl">{item.label}</span>
-      {count != null && <span className="mcard-n mono">{count}</span>}
+    <div className="mcard" data-tone={item.tone} data-count={has ? 1 : 0}>
+      <div className="mcard-row">
+        <span className="mcard-ic"><Icon/></span>
+        <span className="mcard-lbl">{item.label}</span>
+      </div>
+      {has && <span className="mcard-n mono">{count}</span>}
     </div>
   );
 }
@@ -103,25 +106,16 @@ function RecentList() {
   );
 }
 
-/* ── STATE A · 就绪 ─────────────────────────────────────────────────── */
-function ReadyView({ mode, setMode, onStart }) {
-  const deep = mode === "deep";
+/* ── STATE A · 开始采集 ─────────────────────────────────────────────── */
+function ReadyView({ onStart }) {
   return (
     <div className="body">
-      <div className="unirow">
-        <div className="status">
-          <span className="dot" data-tone="green"/>
-          <b>就绪</b>
-        </div>
-        <div className="seg" data-deep={deep ? 1 : 0}>
-          <button data-on={!deep ? 1 : 0} onClick={() => setMode("standard")}>标准采集</button>
-          <button data-on={deep ? 1 : 0} onClick={() => setMode("deep")}>深度采集</button>
-        </div>
+      <div className="action">
+        <button className="actbtn act-start" onClick={onStart}>
+          <span className="start-glyph"/>
+          <span className="start-txt">开始采集</span>
+        </button>
       </div>
-
-      <button className="cta cta-main" onClick={onStart}>
-        <span className="rec-glyph"/>开始采集
-      </button>
 
       <MetricGrid counts={null}/>
       <RecentList/>
@@ -129,25 +123,18 @@ function ReadyView({ mode, setMode, onStart }) {
   );
 }
 
-/* ── STATE B · 采集中 ───────────────────────────────────────────────── */
-function RecordingView({ mode, elapsed, onStop }) {
+/* ── STATE B · 采集中 — red timer doubles as the “点击结束” button ────── */
+function RecordingView({ elapsed, onStop }) {
   return (
     <div className="body">
-      <div className="unirow">
-        <div className="status">
-          <span className="dot pulse" data-tone="red"/>
-          <b className="rec-label">采集中</b>
-          <span className="timer mono">{elapsed}</span>
-        </div>
-        <ModeBadge mode={mode}/>
-      </div>
-
-      <div className="row2">
-        <button className="cta" data-tone="red" style={{ flex: 1.6 }} onClick={onStop}>
-          <I.stop/>停止采集
+      <div className="action">
+        <button className="actbtn act-stop" onClick={onStop} title="点击结束采集">
+          <span className="stop-glyph"><I.stop/></span>
+          <span className="stop-time mono">{elapsed}</span>
+          <span className="stop-hint">点击结束</span>
         </button>
-        <button className="cta ghost" onClick={() => console.log("打开实时详情")}>
-          <I.ext/>实时详情
+        <button className="actbtn act-ghost" onClick={() => console.log("打开实时详情")}>
+          <I.ext/><span>实时详情</span>
         </button>
       </div>
 
@@ -158,29 +145,23 @@ function RecordingView({ mode, elapsed, onStop }) {
 }
 
 /* ── STATE C · 采集完成 ─────────────────────────────────────────────── */
-function SavedView({ mode, onNew }) {
+function SavedView({ onNew }) {
   return (
     <div className="body">
-      <div className="unirow">
-        <div className="status">
-          <span className="ck" data-tone="green"><I.check/></span>
-          <b style={{ color: "var(--green-ink)" }}>采集完成</b>
-          <span className="timer mono done">12m 42s</span>
+      <div className="action">
+        <div className="act-done">
+          <span className="done-time mono">12m 42s</span>
+          <span className="done-check"><I.check/></span>
         </div>
-        <ModeBadge mode={mode}/>
-      </div>
-
-      <div className="row2 row3btns">
-        <a href="detail.html" className="cta" data-tone="blue" style={{ flex: 1.5 }}
-           onClick={(e) => { e.preventDefault(); console.log("打开详情"); }}>
-          <I.doc/>打开详情
-        </a>
-        <button className="cta ghost" onClick={() => console.log("导出 · JSON / JSONL / HAR")}>
-          <I.download/>导出
-        </button>
-        <button className="cta ghost" onClick={onNew}>
-          <I.refresh/>开始新采集
-        </button>
+        <div className="act-col">
+          <a href="detail.html" className="actbtn act-ghost"
+             onClick={(e) => { e.preventDefault(); console.log("打开详情"); }}>
+            <I.ext/><span>查看详情</span>
+          </a>
+          <button className="actbtn act-ghost" onClick={onNew}>
+            <I.refresh/><span>开始新采集</span>
+          </button>
+        </div>
       </div>
 
       <MetricGrid counts={COUNTS}/>
@@ -198,7 +179,7 @@ const fmt = (s) => {
 };
 
 const SCENARIOS = [
-  ["ready",     "就绪"],
+  ["ready",     "开始采集"],
   ["recording", "采集中"],
   ["saved",     "采集完成"],
 ];
@@ -213,8 +194,6 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [scenario, setScenario] = useState(SCENARIOS.some(([k]) => k === t.scenario) ? t.scenario : "ready");
-  const [mode, setMode] = useState("deep");          // 就绪默认选中深度采集
-  const [savedMode, setSavedMode] = useState("deep"); // mode captured at stop time
   const [seconds, setSeconds] = useState(208);        // 00:03:28
   const timer = useRef(null);
 
@@ -236,16 +215,16 @@ function App() {
 
   const go = (sc) => { setScenario(sc); setTweak("scenario", sc); };
   const start = () => { setSeconds(208); go("recording"); };
-  const stop  = () => { setSavedMode(mode); go("saved"); };
+  const stop  = () => { go("saved"); };
   const reset = () => { setSeconds(208); go("ready"); };
 
   let view;
   if (scenario === "recording")
-    view = <RecordingView mode={mode} elapsed={fmt(seconds)} onStop={stop}/>;
+    view = <RecordingView elapsed={fmt(seconds)} onStop={stop}/>;
   else if (scenario === "saved")
-    view = <SavedView mode={savedMode} onNew={reset}/>;
+    view = <SavedView onNew={reset}/>;
   else
-    view = <ReadyView mode={mode} setMode={setMode} onStart={start}/>;
+    view = <ReadyView onStart={start}/>;
 
   return (
     <div className="stage">

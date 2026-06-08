@@ -13,6 +13,9 @@
 - session_id → capture_id：直接改名，不做兼容层
 - RecordEvent.type 扁平分类 → category + type 两级分类：完全重构
 - 全量对齐所有字段，包括当前为 null 的扩展字段
+- `RecordConfig.capture_mode`（用户配置）值域 `'basic' | 'advanced'` 保持不变（UI/设置层不变）。`CaptureRecord.mode`（记录元数据）值域 `'standard' | 'deep' | 'custom'`，在录制启动时由 `capture_mode` 映射：`'basic'` → `'standard'`，`'advanced'` → `'deep'`，`'custom'` 为未来预留
+- `console.error()` 调用通过 CDP `Runtime.consoleAPICalled` 采集时，`level=error` 的归入 `console_event`（保留 error 级别）。运行时异常（`Runtime.exceptionThrown`）独立走 `error/runtime_exception`
+- IndexedDB 各事件 store 使用 `event_id` 作为 keyPath（唯一 ID），`capture_id` 作为索引。避免复合主键 `[capture_id, relative_time_ms]` 的高频碰撞风险
 
 ## 一、类型系统
 
@@ -380,12 +383,12 @@ interface CaptureRecord {
 | name | string | 保留 |
 | domain | string | 保留 |
 | path | string | 保留 |
-| cause | explicit/expired/evicted/overwrite/unknown | 保留 |
+| cause | explicit/expired/evicted/expired_overwrite/overwrite/unknown | 保留，对齐 Chrome cookies.onChanged API |
 | removed | boolean | 保留 |
 | secure | boolean \| null | 新增 |
 | http_only | boolean \| null | 新增 |
-| same_site | no_restriction/lax/strict | 新增 |
-| expiration_date | number \| null | 新增 |
+| same_site | unspecified/no_restriction/lax/strict | 新增，对齐 Chrome Cookie.sameSite 枚举 |
+| expiration_date | number \| null | 新增，epoch seconds |
 | store_id | string \| null | 新增 |
 | value_status | not_captured/captured | 新增 |
 | value_length | number \| null | 新增 |
@@ -457,19 +460,21 @@ interface CaptureRecord {
 
 现有 3 个 store（sessions, record_events, network_requests, console_logs）→ 按分类拆为：
 
-- `captures`（原 sessions）
-- `user_action_events`
-- `navigation_events`
-- `network_requests`
-- `console_events`
-- `error_events`
-- `storage_changes`
-- `cookie_changes`
-- `capture_lifecycle_events`
+- `captures`（原 sessions）— keyPath: `capture_id`
+- `user_action_events` — keyPath: `event_id`，index: `capture_id`, `type`, `relative_time_ms`
+- `navigation_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `network_requests` — keyPath: `event_id`，index: `capture_id`, `url`, `relative_time_ms`
+- `console_events` — keyPath: `event_id`，index: `capture_id`, `level`, `relative_time_ms`
+- `error_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `storage_changes` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `cookie_changes` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+- `capture_lifecycle_events` — keyPath: `event_id`，index: `capture_id`, `relative_time_ms`
+
+所有事件 store 统一用 `event_id`（UUID）作 keyPath，避免复合主键 `[capture_id, relative_time_ms]` 在高频场景下的碰撞覆盖。`capture_id` 作为索引支持按录制查询。
 
 console_logs 和 error_logs 彻底分开。
 
-DB version 升级，写 migration 处理旧数据。
+DB version 升级（1→2），写 migration 处理旧数据。旧 store 保留不删，新 store 在 version 2 创建。
 
 ## 四、受影响文件清单
 

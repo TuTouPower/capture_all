@@ -4,6 +4,12 @@ export default defineConfig({
     testDir: './tests',
     outputDir: 'artifacts/test-results',
     timeout: 60000,
+    webServer: {
+        command: 'npm run serve:e2e',
+        url: 'http://127.0.0.1:4174/src/popup/popup.html',
+        reuseExistingServer: true,
+        timeout: 120000,
+    },
     projects: [
         {
             name: 'e2e',

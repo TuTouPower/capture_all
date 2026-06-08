@@ -108,6 +108,7 @@ export interface I18nStrings {
     stopCapture: string;
     liveDetail: string;
     openDetail: string;
+    clickToEnd: string;
     exportLabel: string;
     newCapture: string;
     modeStandard: string;
@@ -222,7 +223,8 @@ const en: I18nStrings = {
     startCapture: 'Start Capture',
     stopCapture: 'Stop Capture',
     liveDetail: 'Live Detail',
-    openDetail: 'Open Detail',
+    openDetail: 'View Detail',
+    clickToEnd: 'Click to End',
     exportLabel: 'Export',
     newCapture: 'New Capture',
     modeStandard: 'Standard',
@@ -337,7 +339,8 @@ const zh: I18nStrings = {
     startCapture: '开始采集',
     stopCapture: '停止采集',
     liveDetail: '实时详情',
-    openDetail: '打开详情',
+    openDetail: '查看详情',
+    clickToEnd: '点击结束',
     exportLabel: '导出',
     newCapture: '开始新采集',
     modeStandard: '标准采集',

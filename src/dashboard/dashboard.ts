@@ -223,7 +223,7 @@ function render_content(): void {
 function render_captures(): string {
     const total = sessions.length;
     const withErr = sessions.filter((s) => (s.stats?.error_count || 0) > 0).length;
-    const unexp = sessions.filter((s) => s.export_status !== 'exported').length;
+    const completed = sessions.filter((s) => s.status === 'completed').length;
     const totalBytes = sessions.reduce((a, s) => a + est_bytes(s), 0);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const yest = new Date(today.getTime() - 86400000);
@@ -237,7 +237,7 @@ function render_captures(): string {
     const stats = [
         { icon: 'navCaptures', lbl: '全部采集', val: num(total), tint: 'blue', sub: dDay ? `较昨日 ${dDay}` : '较昨日 +0%', subTone: 'green' },
         { icon: 'err', lbl: '有错误', val: num(withErr), tint: 'red', sub: pct(withErr, total) },
-        { icon: 'navExport', lbl: '未导出', val: num(unexp), tint: 'amber', sub: pct(unexp, total) },
+        { icon: 'navExport', lbl: '已完成', val: num(completed), tint: 'green', sub: pct(completed, total) },
         { icon: 'storage', lbl: '占用空间', val: fmt_size(totalBytes), tint: 'green', sub: '估算大小' },
     ];
     const rows = sessions.map((s) => {
@@ -252,7 +252,6 @@ function render_captures(): string {
             <td class="col-num mono">${num(s.stats?.request_count || 0)}</td>
             <td class="col-num"><span class="cap-errs mono" data-bad="${(s.stats?.error_count || 0) > 0 ? 1 : 0}">${num(s.stats?.error_count || 0)}</span></td>
             <td class="col-num mono">${fmt_size(est_bytes(s))}</td>
-            <td><span class="exp"><span class="exp-pill" data-on="${s.export_status === 'exported' ? 1 : 0}">${s.export_status === 'exported' ? '已导出' : '未导出'}</span></span></td>
             <td>${(s.tags && s.tags[0]) ? `<span class="chip-tag">${esc(s.tags[0])}</span>` : '<span class="cap-time">—</span>'}</td>
             <td class="col-act" data-stop="1"><span class="rowact">
                 <button class="ibtn" title="导出" data-export="${id}">${I.download}</button>
@@ -901,16 +900,13 @@ function wire_simple_open(): void {
 }
 
 function render_exports(): string {
-    const exported = sessions.filter((s) => s.export_status === 'exported');
     const rows = sessions.map((s) => `<div class="exp-task">
         <span class="et-ic">${I.navExport}</span>
         <div class="et-main"><b>${esc(session_name(s))}</b><div class="et-sub">${num(s.stats?.event_count || 0)} 事件 · ${session_dur(s)}</div></div>
-        ${s.export_status === 'exported'
-            ? `<span class="exp-done">${I.check2} 已导出</span>`
-            : `<button class="btn sm" data-export="${esc(s.capture_id)}"><span>${I.export}</span>导出</button>`}
+        <button class="btn sm" data-export="${esc(s.capture_id)}"><span>${I.export}</span>导出</button>
     </div>`).join('');
     return `<div class="page">
-        <div class="pg-head"><div class="pg-title"><h1>导出任务</h1><p>查看导出状态、下载已完成的文件。已导出 ${num(exported.length)} 条。</p></div></div>
+        <div class="pg-head"><div class="pg-title"><h1>导出任务</h1><p>选择采集记录导出。已就绪 ${num(sessions.length)} 条。</p></div></div>
         <div class="simple-pad scroll">${sessions.length ? rows : '<div style="text-align:center;color:var(--ink-4);padding:48px">暂无采集记录</div>'}</div>
     </div>`;
 }

@@ -38,7 +38,7 @@ const last_active_tab = new Map<number, { tab_id: number; url: string }>();
 // Initialize
 chrome.runtime.onInstalled.addListener(async () => {
     await init_db();
-    console.log('Record All: Extension installed');
+    console.log('Capture All: Extension installed');
     start_agent_bridge();
 });
 
@@ -48,7 +48,7 @@ setup_keepalive_listener();
 // Message handler
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
     handle_message(message).then(sendResponse).catch(error => {
-        console.error('Record All: Message handler error:', error);
+        console.error('Capture All: Message handler error:', error);
         sendResponse({ success: false, error: error.message });
     });
     return true; // Keep channel open for async response
@@ -66,6 +66,7 @@ async function handle_message(message: any): Promise<any> {
             return {
                 is_capturing,
                 capture_id: current_capture_id,
+                current_capture,
                 config: current_config,
                 body_capture: get_body_capture_result()
             };
@@ -209,13 +210,13 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         if (tabs[0]?.id) {
             const result = await start_console_capture(session_id, start_time, tabs[0].id, config.redact_data, handle_console_log);
             if (!result.success) {
-                console.warn('Record All: Console capture failed:', result.error);
+                console.warn('Capture All: Console capture failed:', result.error);
             } else {
                 debugger_attached_tab_id = tabs[0].id;
             }
             const ex_result = await start_exception_capture(session_id, start_time, tabs[0].id, handle_console_log);
             if (!ex_result.success) {
-                console.warn('Record All: Exception capture failed:', ex_result.error);
+                console.warn('Capture All: Exception capture failed:', ex_result.error);
             } else {
                 debugger_attached_tab_id = tabs[0].id;
             }
@@ -282,7 +283,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
-    console.log('Record All: Notifying', all_tabs.length, 'tabs to start');
+    console.log('Capture All: Notifying', all_tabs.length, 'tabs to start');
     for (const tab of all_tabs) {
         if (tab.id) {
             try {
@@ -293,9 +294,9 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
                     capture_start_epoch_ms: start_time,
                     tab_id: tab.id,
                 });
-                console.log('Record All: Sent start to tab', tab.id, tab.url);
+                console.log('Capture All: Sent start to tab', tab.id, tab.url);
             } catch (err) {
-                console.warn('Record All: Failed to send start to tab', tab.id, err);
+                console.warn('Capture All: Failed to send start to tab', tab.id, err);
             }
         }
     }
@@ -305,7 +306,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         last_active_tab.set((active_tab as { windowId?: number }).windowId ?? 0, { tab_id: active_tab.id, url: active_tab.url || '' });
     }
 
-    console.log('Record All: Recording started');
+    console.log('Capture All: Recording started');
     return { success: true };
 }
 
@@ -347,7 +348,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
         try {
             await update_capture(current_capture);
         } catch (err) {
-            console.error('Record All: Failed to update capture:', err);
+            console.error('Capture All: Failed to update capture:', err);
         }
     }
 
@@ -393,7 +394,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     current_capture = null;
     last_active_tab.clear();
-    console.log('Record All: Recording stopped');
+    console.log('Capture All: Recording stopped');
     return { success: true };
 }
 
@@ -403,7 +404,7 @@ async function persist_stats(): Promise<void> {
         current_capture.updated_at = new Date().toISOString();
         await update_capture(current_capture);
     } catch (err) {
-        console.error('Record All: Failed to persist capture stats:', err);
+        console.error('Capture All: Failed to persist capture stats:', err);
     }
 }
 
@@ -430,7 +431,7 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
         }
         await persist_stats();
     } catch (err) {
-        console.error('Record All: Failed to write event:', err);
+        console.error('Capture All: Failed to write event:', err);
     }
 
     return { success: true };
@@ -505,7 +506,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
         current_capture.stats.request_count++;
         await persist_stats();
     } catch (err) {
-        console.error('Record All: Failed to write network request:', err);
+        console.error('Capture All: Failed to write network request:', err);
     }
 }
 
@@ -516,7 +517,7 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
         current_capture.stats.log_count++;
         await persist_stats();
     } catch (err) {
-        console.error('Record All: Failed to write console log:', err);
+        console.error('Capture All: Failed to write console log:', err);
     }
 }
 
@@ -559,9 +560,9 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             capture_start_epoch_ms: start_time,
             tab_id: activeInfo.tabId,
         });
-        console.log('Record All: Sent start to tab', activeInfo.tabId);
+        console.log('Capture All: Sent start to tab', activeInfo.tabId);
     } catch (err) {
-        console.warn('Record All: Failed to send start to tab', activeInfo.tabId, err);
+        console.warn('Capture All: Failed to send start to tab', activeInfo.tabId, err);
     }
 });
 
@@ -645,9 +646,9 @@ function start_agent_bridge(): void {
 
 // Global error handler
 self.addEventListener('error', (event) => {
-    console.error('Record All: SW error:', event.error);
+    console.error('Capture All: SW error:', event.error);
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-    console.error('Record All: SW unhandled rejection:', event.reason);
+    console.error('Capture All: SW unhandled rejection:', event.reason);
 });

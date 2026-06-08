@@ -797,7 +797,7 @@ function render_settings(): string {
                     <h2>导出</h2>
                     <div class="set-card"><div class="set-grid">
                         <div class="field span2"><span class="field-lbl">文件名模板</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
-                        <div class="field span2"><span class="field-lbl">导出目录</span><input class="input mono" data-cfg="export_directory" value="${esc(cfg.export_directory)}" placeholder="record-all/exports"></div>
+                        <div class="field span2"><span class="field-lbl">导出目录</span><input class="input mono" data-cfg="export_directory" value="${esc(cfg.export_directory)}" placeholder="capture-all/exports"></div>
                         <div class="field"><span class="field-lbl">每次询问保存位置</span>${sw('export_save_as', cfg.export_save_as)}</div>
                     </div></div>
                 </section>

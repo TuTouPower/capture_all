@@ -8,11 +8,11 @@ let capture_start_epoch_ms = 0;
 let send_event: (event: CaptureEvent) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
-const SIGNAL = '__record_all_storage__';
+const SIGNAL = '__capture_all_storage__';
 
 const PAGE_SCRIPT = `(function() {
-    if (window.__record_all_storage_installed__) return;
-    window.__record_all_storage_installed__ = true;
+    if (window.__capture_all_storage_installed__) return;
+    window.__capture_all_storage_installed__ = true;
     var SIGNAL = '${SIGNAL}';
 
     function post(storage_type, action, key, value_length) {

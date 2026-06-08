@@ -6,11 +6,11 @@
 //
 // Phase 2: unified network_request type with NetworkRequestData
 
-const SIGNAL = '__record_all_xhr_fetch__';
+const SIGNAL = '__capture_all_xhr_fetch__';
 
 const PAGE_SCRIPT = `(function() {
-    if (window.__record_all_xhr_fetch_installed__) return;
-    window.__record_all_xhr_fetch_installed__ = true;
+    if (window.__capture_all_xhr_fetch_installed__) return;
+    window.__capture_all_xhr_fetch_installed__ = true;
     var SIGNAL = '${SIGNAL}';
 
     function post(type, method, url, status, duration) {
@@ -46,13 +46,13 @@ const PAGE_SCRIPT = `(function() {
     var orig_send = XMLHttpRequest.prototype.send;
 
     XMLHttpRequest.prototype.open = function(method, url) {
-        this.__record_all = { method: method, url: url, start: 0 };
+        this.__capture_all = { method: method, url: url, start: 0 };
         return orig_open.apply(this, arguments);
     };
 
     XMLHttpRequest.prototype.send = function() {
         var self = this;
-        var meta = this.__record_all;
+        var meta = this.__capture_all;
         if (!meta) return orig_send.apply(this, arguments);
         meta.start = performance.now();
 

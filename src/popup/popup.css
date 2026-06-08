@@ -5,13 +5,13 @@ body {
     font-family: var(--font-sans);
     color: var(--ink);
     background: var(--canvas);
-    width: 432px;
+    width: 400px;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
 }
 
 .popup {
-    width: 432px;
+    width: 400px;
     background: var(--surface);
     overflow: hidden;
     position: relative;

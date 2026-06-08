@@ -49,7 +49,7 @@ export async function start_session(config: RecordConfig = DEFAULT_CONFIG): Prom
     // Start storage monitoring
     start_storage_monitoring(session.capture_id);
 
-    console.log('Record All: Session started:', session.capture_id);
+    console.log('Capture All: Session started:', session.capture_id);
     return session;
 }
 
@@ -76,7 +76,7 @@ export async function stop_session(): Promise<Session | null> {
     // Stop keepalive
     stop_keepalive();
 
-    console.log('Record All: Session stopped:', session.capture_id);
+    console.log('Capture All: Session stopped:', session.capture_id);
     current_session = null;
 
     return session;
@@ -117,7 +117,7 @@ function start_storage_monitoring(session_id: string): void {
     monitoring_interval = setInterval(async () => {
         const is_over_limit = await check_storage_limit(session_id);
         if (is_over_limit) {
-            console.warn('Record All: Storage limit reached, stopping session');
+            console.warn('Capture All: Storage limit reached, stopping session');
             await stop_session();
             // TODO: Notify popup
         }

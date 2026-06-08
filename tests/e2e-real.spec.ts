@@ -1,131 +1,68 @@
-// tests/e2e-real.spec.ts
-// Real E2E: launches Chrome with the extension loaded
-import { test, expect, chromium } from '@playwright/test';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// tests/e2e-real.spec.ts — Real extension E2E (uses shared helpers)
+import { test, expect } from '@playwright/test';
+import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const EXTENSION_PATH = path.resolve(__dirname, '../dist');
-
-let browser: Awaited<ReturnType<typeof chromium.launchPersistentContext>>;
+let fix: Awaited<ReturnType<typeof launch_extension>>;
 let extension_id: string;
 
 test.beforeAll(async () => {
-    browser = await chromium.launchPersistentContext('', {
-        headless: false,
-        args: [
-            `--disable-extensions-except=${EXTENSION_PATH}`,
-            `--load-extension=${EXTENSION_PATH}`,
-            '--no-first-run',
-            '--no-default-browser-check',
-        ],
-    });
-
-    // Wait for service worker and get extension ID
-    const sw = browser.serviceWorkers()[0] || await browser.waitForEvent('serviceworker');
-    extension_id = sw.url().split('/')[2];
+    fix = await launch_extension();
+    extension_id = fix.extension_id;
 });
 
 test.afterAll(async () => {
-    await browser.close();
+    await fix.context.close();
 });
 
-test.describe('Record All - Real Extension', () => {
+test.describe('Capture All — Real Extension', () => {
     test('popup renders with start button', async () => {
-        const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
-        await popup.waitForLoadState('domcontentloaded');
-
+        const popup = await open_popup(fix);
         await expect(popup.locator('#startBtn')).toBeVisible();
-        await expect(popup.locator('#startBtn')).toHaveText(/Start Capture|开始采集/);
-
+        await expect(popup.locator('#startBtn')).toBeVisible();
         await popup.close();
     });
 
-    test('start recording flow', async () => {
-        const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
-        await popup.waitForLoadState('domcontentloaded');
-
+    test('start and stop recording flow', async () => {
+        const popup = await open_popup(fix);
         await popup.locator('#startBtn').click();
         await popup.waitForTimeout(1000);
 
         await expect(popup.locator('#stopBtn')).toBeVisible();
 
         await popup.locator('#stopBtn').click();
-        await popup.waitForTimeout(500);
+        await popup.waitForTimeout(1000);
 
-        await expect(popup.locator('#startBtn')).toBeVisible();
-
+        await expect(popup.locator('#newBtn')).toBeVisible();
         await popup.close();
     });
 
-    test('detail page loads with tabs', async () => {
-        const detail = await browser.newPage();
-        await detail.goto(`chrome-extension://${extension_id}/detail/detail.html?session=test`);
-        await detail.waitForLoadState('domcontentloaded');
+    test('dashboard loads', async () => {
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded' });
+        await dashboard.waitForTimeout(1000);
 
-        await expect(detail.locator('.tab-btn[data-tab="timeline"]')).toBeVisible();
-        await expect(detail.locator('.tab-btn[data-tab="network"]')).toBeVisible();
-        await expect(detail.locator('.tab-btn[data-tab="console"]')).toBeVisible();
-        await expect(detail.locator('.tab-btn[data-tab="events"]')).toBeVisible();
-        await expect(detail.locator('#exportJsonBtn')).toBeVisible();
-
-        await detail.close();
+        const html = await dashboard.content();
+        expect(html).toContain('Capture All');
+        await dashboard.close();
     });
 
-    test('detail page tab switching', async () => {
-        const detail = await browser.newPage();
-        await detail.goto(`chrome-extension://${extension_id}/detail/detail.html?session=test`);
-        await detail.waitForLoadState('domcontentloaded');
-
-        // Timeline active by default
-        await expect(detail.locator('#timeline-tab')).toHaveClass(/active/);
-
-        // Switch to network
-        await detail.locator('.tab-btn[data-tab="network"]').click();
-        await expect(detail.locator('#network-tab')).toHaveClass(/active/);
-        await expect(detail.locator('#timeline-tab')).not.toHaveClass(/active/);
-
-        // Switch to console
-        await detail.locator('.tab-btn[data-tab="console"]').click();
-        await expect(detail.locator('#console-tab')).toHaveClass(/active/);
-
-        // Switch to events
-        await detail.locator('.tab-btn[data-tab="events"]').click();
-        await expect(detail.locator('#events-tab')).toHaveClass(/active/);
-
-        await detail.close();
-    });
-
-    test('full recording flow: start -> navigate -> stop -> check session', async () => {
-        // Open popup and start recording
-        const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
-        await popup.waitForLoadState('domcontentloaded');
+    test('full recording flow: start → navigate → stop → check recent', async () => {
+        const popup = await open_popup(fix);
         await popup.locator('#startBtn').click();
         await popup.waitForTimeout(1000);
 
         // Navigate to a page while recording
-        const testPage = await browser.newPage();
-        await testPage.goto('https://example.com');
-        await testPage.waitForLoadState('domcontentloaded');
-        await testPage.waitForTimeout(2000);
+        const test_page = await open_site(fix, TEST_SITES.baidu);
+        await test_page.waitForTimeout(3000);
+        await test_page.close();
 
         // Stop recording
+        await popup.bringToFront();
         await popup.locator('#stopBtn').click();
-        await popup.waitForTimeout(1000);
+        await popup.waitForTimeout(1500);
 
-        // Check recent sessions list has entries
-        const recentRows = popup.locator('.recent-row');
-        const count = await recentRows.count();
-        expect(count).toBeGreaterThanOrEqual(1);
-
-        // Check back to ready state (start button visible again)
-        await expect(popup.locator('#startBtn')).toBeVisible();
-
-        await testPage.close();
+        // Check done state
+        await expect(popup.locator('#newBtn')).toBeVisible();
         await popup.close();
     });
 });

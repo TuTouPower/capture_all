@@ -22,10 +22,10 @@ if (window !== window.top) {
     frame_id = Math.floor(Math.random() * 1000000);
 }
 
-console.log('Record All: Content Script loaded at', window.location.href);
+console.log('Capture All: Content Script loaded at', window.location.href);
 
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
-    console.log('Record All: Content received message:', message.action);
+    console.log('Capture All: Content received message:', message.action);
     if (message.action === 'start') {
         capture_id = message.capture_id ?? '';
         capture_start_epoch_ms = message.capture_start_epoch_ms ?? Date.now();
@@ -44,7 +44,7 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
 // Check if recording is already active when content script loads
 chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
     if (response?.is_capturing && !is_capturing) {
-        console.log('Record All: Recording already active, starting capture');
+        console.log('Capture All: Recording already active, starting capture');
         start_capture(response.config || DEFAULT_CONFIG);
     }
 }).catch((_err: unknown) => {
@@ -55,7 +55,7 @@ function start_capture(config: RecordConfig): void {
     if (is_capturing) return;
 
     is_capturing = true;
-    console.log('Record All: Content capture started');
+    console.log('Capture All: Content capture started');
 
     // Send page load event
     const page_load_data: PageLoadData = {

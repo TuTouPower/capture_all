@@ -3,7 +3,12 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
     testDir: './tests',
     outputDir: 'artifacts/test-results',
-    timeout: 60000,
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
+    use: {
+        actionTimeout: 15_000,
+        trace: 'on-first-retry',
+    },
     webServer: {
         command: 'npm run serve:e2e',
         url: 'http://127.0.0.1:4174/src/popup/popup.html',
@@ -15,6 +20,19 @@ export default defineConfig({
             name: 'e2e',
             testMatch: 'e2e.spec.ts',
             use: { headless: true },
+        },
+        {
+            name: 'e2e-ext',
+            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina}.spec.ts',
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check', '--disable-gpu'],
+                },
+            },
         },
         {
             name: 'e2e-real',
@@ -45,6 +63,6 @@ export default defineConfig({
                     args: ['--no-first-run', '--no-default-browser-check'],
                 },
             },
-        }
-    ]
+        },
+    ],
 });

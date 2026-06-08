@@ -62,10 +62,6 @@ function SettingsPage() {
             <h2>采集默认值</h2>
             <div className="set-card">
               <div className="field" style={{marginBottom:18}}>
-                <span className="field-lbl">默认模式 <Q/></span>
-                <Seg options={["标准采集","深度采集","上次使用"]} value="标准采集"/>
-              </div>
-              <div className="field" style={{marginBottom:18}}>
                 <span className="field-lbl">默认采集模块 <Q/></span>
                 <div className="modules">
                   {[["用户操作","ui"],["页面导航","nav"],["网络请求","net"],["响应体","storage"],["输入值","ui"],["Console","console"],["DOM 变化","dom"],["Storage","storage"],["脱敏","err"]].map(([l,ic],i)=>(

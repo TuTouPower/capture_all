@@ -1,5 +1,5 @@
 /* Capture All — Main panel (workbench): extra icons + mock data.
-   Extends the DI icon set from detail-data.jsx (loaded first). */
+   Extends the DI icon set from shared-data.jsx (loaded first). */
 
 Object.assign(DI, {
   navCaptures: (p) => <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 14h8M8 17h5"/></svg>,
@@ -34,10 +34,8 @@ Object.assign(DI, {
 const CAP_STATS = [
   { key:"all",     icon:"navCaptures", lbl:"全部采集",  val:"1,248", sub:"较昨日 +68",  subTone:"green", tint:"blue" },
   { key:"err",     icon:"err",         lbl:"有错误",    val:"24",    sub:"占比 1.92%",  tint:"red" },
-  { key:"deep",    icon:"storage",     lbl:"深度采集",  val:"532",   sub:"占比 42.63%", tint:"purple" },
   { key:"unexp",   icon:"navExport",   lbl:"未导出",    val:"218",   sub:"占比 17.47%", tint:"amber" },
   { key:"size",    icon:"storage",     lbl:"占用空间",  val:"18.7 GB", sub:"较昨日 +1.2 GB", subTone:"green", tint:"green" },
-  { key:"active",  icon:"navCurrent",  lbl:"当前采集中", val:"2",     sub:"进行中",       tint:"blue", live:true },
 ];
 
 const CAP_ROWS = [
@@ -55,13 +53,13 @@ const CAP_ROWS = [
 
 /* ════════ capture detail (采集详情) ════════ */
 const DT_METRICS = [
-  { key:"events",  icon:"clock",   lbl:"事件",     val:"1,284", delta:"+12%", tone:"green", color:"var(--src-user)" },
-  { key:"reqs",    icon:"storage", lbl:"请求",     val:"356",   delta:"+8%",  tone:"green", color:"var(--src-network)", filter:"network" },
-  { key:"failed",  icon:"err",     lbl:"失败",     val:"7",     delta:"+133%",tone:"red",   color:"var(--src-error)",   filter:"errors", danger:true },
-  { key:"console", icon:"console", lbl:"控制台错误", val:"12",   delta:"+50%", tone:"red",   color:"var(--src-console)", filter:"console" },
-  { key:"storage", icon:"storage", lbl:"存储变化", val:"18",    delta:"+20%", tone:"green", color:"var(--src-storage)", filter:"storage" },
-  { key:"dom",     icon:"dom",     lbl:"DOM 变化", val:"604",   delta:"+15%", tone:"green", color:"var(--src-dom)" },
-  { key:"nav",     icon:"nav",     lbl:"导航",     val:"12",    delta:"+9%",  tone:"green", color:"var(--src-nav)" },
+  { key:"user",    icon:"ui",      lbl:"用户行为", val:"128", delta:"+12%", tone:"green", color:"var(--src-user)",    filter:"user" },
+  { key:"nav",     icon:"nav",     lbl:"页面导航", val:"12",  delta:"+9%",  tone:"green", color:"var(--src-nav)",     filter:"nav" },
+  { key:"net",     icon:"net",     lbl:"网络请求", val:"356", delta:"+8%",  tone:"green", color:"var(--src-network)", filter:"network" },
+  { key:"console", icon:"console", lbl:"控制台",   val:"24",  delta:"+50%", tone:"red",   color:"var(--src-console)", filter:"console" },
+  { key:"err",     icon:"err",     lbl:"错误异常", val:"19",  delta:"+133%",tone:"red",   color:"var(--src-error)",   filter:"errors", danger:true },
+  { key:"storage", icon:"storage", lbl:"Storage",  val:"18",  delta:"+20%", tone:"green", color:"var(--src-storage)", filter:"storage" },
+  { key:"cookie",  icon:"cookie",  lbl:"Cookie",   val:"36",  delta:"+6%",  tone:"green", color:"var(--src-cookie)",  filter:"cookie" },
 ];
 
 const DT_TABS = [

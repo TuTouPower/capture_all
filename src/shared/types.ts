@@ -18,7 +18,6 @@ export interface CaptureRecord {
     window_id: number | null;
     config_snapshot: object;
     stats: CaptureStats;
-    export_status: 'not_exported' | 'exported';
     tags: string[];
     created_at: string;
     updated_at: string;

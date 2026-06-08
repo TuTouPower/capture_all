@@ -159,7 +159,6 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
             storage_change_count: 0,
             cookie_change_count: 0,
         },
-        export_status: 'not_exported',
         tags: [],
         created_at: now_iso,
         updated_at: now_iso,

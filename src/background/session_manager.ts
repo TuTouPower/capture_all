@@ -12,17 +12,32 @@ export async function start_session(config: RecordConfig = DEFAULT_CONFIG): Prom
         throw new Error('Session already active');
     }
 
+    const now_iso = new Date().toISOString();
     const session: Session = {
-        id: generate_session_id(),
-        start_time: Date.now(),
-        end_time: null,
-        config,
+        capture_id: generate_session_id(),
+        name: 'Session ' + new Date().toLocaleString(),
+        status: 'capturing',
+        mode: 'standard',
+        started_at: now_iso,
+        ended_at: null,
+        duration_ms: 0,
+        start_url: '',
+        end_url: null,
+        tab_id: 0,
+        window_id: null,
+        config_snapshot: config,
         stats: {
             event_count: 0,
             request_count: 0,
             log_count: 0,
-            dom_changes: 0
-        }
+            error_count: 0,
+            storage_change_count: 0,
+            cookie_change_count: 0
+        },
+        export_status: 'not_exported',
+        tags: [],
+        created_at: now_iso,
+        updated_at: now_iso,
     };
 
     await create_session(session);
@@ -32,9 +47,9 @@ export async function start_session(config: RecordConfig = DEFAULT_CONFIG): Prom
     start_keepalive();
 
     // Start storage monitoring
-    start_storage_monitoring(session.id);
+    start_storage_monitoring(session.capture_id);
 
-    console.log('Record All: Session started:', session.id);
+    console.log('Record All: Session started:', session.capture_id);
     return session;
 }
 
@@ -44,7 +59,10 @@ export async function stop_session(): Promise<Session | null> {
     }
 
     const session = current_session;
-    session.end_time = Date.now();
+    session.ended_at = new Date().toISOString();
+    session.status = 'completed';
+    session.duration_ms = new Date(session.ended_at).getTime() - new Date(session.started_at).getTime();
+    session.updated_at = new Date().toISOString();
 
     // Stop storage monitoring
     stop_storage_monitoring();
@@ -58,7 +76,7 @@ export async function stop_session(): Promise<Session | null> {
     // Stop keepalive
     stop_keepalive();
 
-    console.log('Record All: Session stopped:', session.id);
+    console.log('Record All: Session stopped:', session.capture_id);
     current_session = null;
 
     return session;
@@ -73,7 +91,7 @@ export async function list_all_sessions(): Promise<Session[]> {
 }
 
 export async function delete_session_by_id(id: string): Promise<void> {
-    if (current_session?.id === id) {
+    if (current_session?.capture_id === id) {
         await stop_session();
     }
     await delete_session(id);

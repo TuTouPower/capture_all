@@ -1,32 +1,33 @@
 // shared/system_time.ts
-import type { ConsoleLog, NetworkRequest, RecordEvent, Session, UserConfig } from './types';
+import type { CaptureEvent, CaptureRecord, ConsoleEventData, NetworkRequestData, UserConfig } from './types';
 
-export interface ExportableSessionData {
-    session: Session;
-    events: RecordEvent[];
-    network_requests: NetworkRequest[];
-    console_logs: ConsoleLog[];
+export interface ExportableCaptureData {
+    capture: CaptureRecord;
+    events: CaptureEvent[];
+    network_requests: NetworkRequestData[];
+    console_events: ConsoleEventData[];
 }
 
-export type SessionWithSystemTimes = Session & {
+export type CaptureWithSystemTimes = CaptureRecord & {
     start_time_system_time: string;
     end_time_system_time: string | null;
 };
 
-export type RecordWithSystemTime<T extends { absolute_time: number }> = T & {
+export type RecordWithSystemTime<T> = T & {
     absolute_time_system_time: string;
 };
 
-export interface ExportableSessionDataWithSystemTimes {
-    session: SessionWithSystemTimes;
-    events: Array<RecordWithSystemTime<RecordEvent>>;
-    network_requests: Array<RecordWithSystemTime<NetworkRequest>>;
-    console_logs: Array<RecordWithSystemTime<ConsoleLog>>;
+export interface ExportableCaptureDataWithSystemTimes {
+    capture: CaptureWithSystemTimes;
+    events: Array<RecordWithSystemTime<CaptureEvent>>;
+    network_requests: Array<RecordWithSystemTime<NetworkRequestData>>;
+    console_events: Array<RecordWithSystemTime<ConsoleEventData>>;
 }
 
 type SystemTimeConfig = Pick<UserConfig, 'system_time_timezone'>;
 
-export function format_system_time(timestamp_ms: number, config: SystemTimeConfig): string {
+export function format_system_time(ts: string | number, config: SystemTimeConfig): string {
+    const ms = typeof ts === 'string' ? new Date(ts).getTime() : ts;
     const options: Intl.DateTimeFormatOptions = {
         year: 'numeric',
         month: '2-digit',
@@ -41,29 +42,40 @@ export function format_system_time(timestamp_ms: number, config: SystemTimeConfi
         options.timeZone = config.system_time_timezone;
     }
 
-    return new Intl.DateTimeFormat('sv-SE', options).format(new Date(timestamp_ms));
+    return new Intl.DateTimeFormat('sv-SE', options).format(new Date(ms));
 }
 
-export function add_system_times_to_session_data(data: ExportableSessionData, config: SystemTimeConfig): ExportableSessionDataWithSystemTimes {
+export function add_system_times_to_capture_data(data: ExportableCaptureData, config: SystemTimeConfig): ExportableCaptureDataWithSystemTimes {
     return {
-        session: add_session_system_times(data.session, config),
+        capture: add_capture_system_times(data.capture, config),
         events: data.events.map(event => add_absolute_system_time(event, config)),
         network_requests: data.network_requests.map(request => add_absolute_system_time(request, config)),
-        console_logs: data.console_logs.map(log => add_absolute_system_time(log, config))
+        console_events: data.console_events.map(log => add_absolute_system_time(log, config))
     };
 }
 
-export function add_session_system_times(session: Session, config: SystemTimeConfig): SessionWithSystemTimes {
+export function add_capture_system_times(capture: CaptureRecord, config: SystemTimeConfig): CaptureWithSystemTimes {
     return {
-        ...session,
-        start_time_system_time: format_system_time(session.start_time, config),
-        end_time_system_time: session.end_time === null ? null : format_system_time(session.end_time, config)
+        ...capture,
+        start_time_system_time: format_system_time(capture.started_at, config),
+        end_time_system_time: capture.ended_at === null ? null : format_system_time(capture.ended_at, config)
     };
 }
 
-export function add_absolute_system_time<T extends { absolute_time: number }>(record: T, config: SystemTimeConfig): RecordWithSystemTime<T> {
+export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig): RecordWithSystemTime<T> {
+    const absolute_time = (record as Record<string, unknown>).absolute_time;
+    let absolute_time_system_time = '';
+    if (typeof absolute_time === 'string' || typeof absolute_time === 'number') {
+        absolute_time_system_time = format_system_time(absolute_time, config);
+    }
     return {
         ...record,
-        absolute_time_system_time: format_system_time(record.absolute_time, config)
+        absolute_time_system_time
     };
 }
+
+export const add_system_times_to_session_data = add_system_times_to_capture_data;
+export const add_session_system_times = add_capture_system_times;
+export type ExportableSessionData = ExportableCaptureData;
+export type ExportableSessionDataWithSystemTimes = ExportableCaptureDataWithSystemTimes;
+export type SessionWithSystemTimes = CaptureWithSystemTimes;

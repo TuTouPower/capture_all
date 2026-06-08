@@ -352,7 +352,7 @@ async function flush_store(store_name: string): Promise<void> {
 
         for (const item of batch) {
             store.put(item);
-            const capture_id = (item as Record<string, unknown>).capture_id as string;
+            const capture_id = (item as unknown as Record<string, unknown>).capture_id as string;
             if (capture_id) {
                 update_bytes_written(capture_id, JSON.stringify(item).length);
             }

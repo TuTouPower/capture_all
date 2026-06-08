@@ -1,19 +1,29 @@
 import { build_record_id, parse_record_id, type AgentDataSourceSummary, type AgentRecordDetail, type AgentRecordPreview, type AgentQueryRange } from '../agent/shared/protocol';
-import type { ConsoleLog, ErrorLog, NetworkRequest, RecordEvent, Session } from '../shared/types';
-import { get_console_logs, get_error_logs, get_events, get_network_requests, get_session } from './storage';
+import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../shared/types';
+import {
+    get_console_events,
+    get_cookie_changes,
+    get_error_events,
+    get_events_by_category,
+    get_network_requests,
+    get_storage_changes,
+    get_capture
+} from './storage';
 
-export type AgentDataSource = 'record_events' | 'network_requests' | 'console_logs' | 'error_logs';
+export type AgentDataSource =
+    | 'user_action_events'
+    | 'navigation_events'
+    | 'network_requests'
+    | 'console_events'
+    | 'error_events'
+    | 'storage_changes'
+    | 'cookie_changes';
 
-type AgentRecord = RecordEvent | NetworkRequest | ConsoleLog | ErrorLog;
+type AgentRecord = CaptureEvent | NetworkRequestData | ConsoleEventData | RuntimeExceptionData | StorageChangeData | CookieChangeData;
 
 export interface AgentSessionData {
-    session: Session;
-    sources: {
-        record_events: RecordEvent[];
-        network_requests: NetworkRequest[];
-        console_logs: ConsoleLog[];
-        error_logs: ErrorLog[];
-    };
+    capture: CaptureRecord;
+    sources: Record<AgentDataSource, AgentRecord[]>;
 }
 
 interface ListRecordsQuery extends AgentQueryRange {
@@ -29,39 +39,43 @@ interface AgentRecordListResult {
     records: AgentRecordPreview[];
 }
 
-const ALL_SOURCES: AgentDataSource[] = ['record_events', 'network_requests', 'console_logs', 'error_logs'];
+const ALL_SOURCES: AgentDataSource[] = [
+    'user_action_events',
+    'navigation_events',
+    'network_requests',
+    'console_events',
+    'error_events',
+    'storage_changes',
+    'cookie_changes'
+];
 const FULL_DATA_LIMIT = 100000;
 
-export async function load_agent_session_data(session_id: string): Promise<AgentSessionData> {
-    const session = await get_session(session_id);
-    if (!session) {
+export async function load_agent_session_data(capture_id: string): Promise<AgentSessionData> {
+    const capture = await get_capture(capture_id);
+    if (!capture) {
         throw new Error('SESSION_NOT_FOUND');
     }
 
-    const [events, network_requests, console_logs, error_logs] = await Promise.all([
-        get_events(session_id, 0, FULL_DATA_LIMIT),
-        get_network_requests(session_id, 0, FULL_DATA_LIMIT),
-        get_console_logs(session_id, 0, FULL_DATA_LIMIT),
-        get_error_logs(session_id, 0, FULL_DATA_LIMIT)
+    const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
+        get_events_by_category(capture_id, 'user_action', 0, FULL_DATA_LIMIT),
+        get_events_by_category(capture_id, 'navigation', 0, FULL_DATA_LIMIT),
+        get_network_requests(capture_id, 0, FULL_DATA_LIMIT),
+        get_console_events(capture_id, 0, FULL_DATA_LIMIT),
+        get_error_events(capture_id, 0, FULL_DATA_LIMIT),
+        get_storage_changes(capture_id, 0, FULL_DATA_LIMIT),
+        get_cookie_changes(capture_id, 0, FULL_DATA_LIMIT)
     ]);
 
-    return to_agent_session_data(session, events, network_requests, console_logs, error_logs);
-}
-
-export function to_agent_session_data(
-    session: Session,
-    record_events: RecordEvent[],
-    network_requests: NetworkRequest[],
-    console_logs: ConsoleLog[],
-    error_logs: ErrorLog[]
-): AgentSessionData {
     return {
-        session,
+        capture,
         sources: {
-            record_events,
+            user_action_events,
+            navigation_events,
             network_requests,
-            console_logs,
-            error_logs
+            console_events,
+            error_events,
+            storage_changes,
+            cookie_changes
         }
     };
 }
@@ -122,16 +136,23 @@ export function get_timeline_item_from_session_data(data: AgentSessionData, item
     return get_record_from_session_data(data, parsed.source as AgentDataSource, item_id);
 }
 
+function get_record_sort_key(record: AgentRecord): number {
+    if ('relative_time_ms' in record) return record.relative_time_ms;
+    if ('relative_time' in record && typeof record.relative_time === 'number') return record.relative_time;
+    if ('start_time_ms' in record && typeof record.start_time_ms === 'number') return record.start_time_ms;
+    return 0;
+}
+
 function summarize_source(source: AgentDataSource, records: AgentRecord[]): AgentDataSourceSummary {
-    const sorted = [...records].sort((a, b) => a.relative_time - b.relative_time);
+    const sorted = [...records].sort((a, b) => get_record_sort_key(a) - get_record_sort_key(b));
     const types = Array.from(new Set(sorted.map(record => get_record_type(source, record)))).sort();
 
     return {
         source,
         count: sorted.length,
         time_range: {
-            start: sorted[0]?.relative_time ?? null,
-            end: sorted[sorted.length - 1]?.relative_time ?? null
+            start: sorted.length > 0 ? get_record_sort_key(sorted[0]) : null,
+            end: sorted.length > 0 ? get_record_sort_key(sorted[sorted.length - 1]) : null
         },
         types
     };
@@ -152,10 +173,11 @@ function filter_and_sort_records<T extends AgentRecord>(records: T[], query: Age
 }
 
 function is_in_time_range(record: AgentRecord, query: AgentQueryRange): boolean {
-    if (query.start_time !== undefined && record.relative_time < query.start_time) {
+    const sort_key = get_record_sort_key(record);
+    if (query.start_time !== undefined && sort_key < query.start_time) {
         return false;
     }
-    if (query.end_time !== undefined && record.relative_time > query.end_time) {
+    if (query.end_time !== undefined && sort_key > query.end_time) {
         return false;
     }
     return true;
@@ -163,7 +185,7 @@ function is_in_time_range(record: AgentRecord, query: AgentQueryRange): boolean 
 
 function sort_records(a: AgentRecord, b: AgentRecord, order: AgentQueryRange['order']): number {
     const direction = order === 'desc' ? -1 : 1;
-    return (a.relative_time - b.relative_time) * direction;
+    return (get_record_sort_key(a) - get_record_sort_key(b)) * direction;
 }
 
 function to_record_preview(source: AgentDataSource, record: AgentRecord, index: number): AgentRecordPreview {
@@ -171,69 +193,105 @@ function to_record_preview(source: AgentDataSource, record: AgentRecord, index: 
         record_id: build_record_id(source, get_native_record_id(record)),
         source,
         index,
-        time: record.relative_time,
-        absolute_time: record.absolute_time,
+        time: get_record_sort_key(record),
+        absolute_time: get_record_absolute_time(record),
         type: get_record_type(source, record),
         summary: get_record_summary(source, record),
         preview: get_record_preview(source, record)
     };
 }
 
+function get_record_absolute_time(record: AgentRecord): number | null {
+    if ('absolute_time' in record) {
+        const value = record.absolute_time;
+        if (typeof value === 'number') return value;
+        if (typeof value !== 'string') return null;
+        const timestamp = new Date(value).getTime();
+        return Number.isNaN(timestamp) ? null : timestamp;
+    }
+    return null;
+}
+
 function get_native_record_id(record: AgentRecord): string {
-    return `${record.relative_time}:${record.absolute_time}`;
+    if ('event_id' in record) return record.event_id;
+    if ('request_id' in record) return record.request_id;
+    return `${get_record_sort_key(record)}:${get_record_absolute_time(record) ?? ''}`;
 }
 
 function get_record_type(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
-        case 'record_events':
-            return (record as RecordEvent).type;
+        case 'user_action_events':
+        case 'navigation_events':
+            return (record as CaptureEvent).type;
         case 'network_requests':
-            return (record as NetworkRequest).method;
-        case 'console_logs':
-            return (record as ConsoleLog).level;
-        case 'error_logs':
-            return (record as ErrorLog).source;
+            return (record as NetworkRequestData).resource_type;
+        case 'console_events':
+            return (record as ConsoleEventData).level;
+        case 'error_events':
+            return (record as RuntimeExceptionData).error_name ?? 'error';
+        case 'storage_changes':
+            return (record as StorageChangeData).action;
+        case 'cookie_changes':
+            return (record as CookieChangeData).cause;
     }
 }
 
 function get_record_summary(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
-        case 'record_events': {
-            const event = record as RecordEvent;
+        case 'user_action_events':
+        case 'navigation_events': {
+            const event = record as CaptureEvent;
             return `${event.type} ${event.url}`;
         }
         case 'network_requests': {
-            const request = record as NetworkRequest;
-            return `${request.method} ${request.url} → ${request.status_code}`;
+            const request = record as NetworkRequestData;
+            return `${request.method} ${request.url} → ${request.status_code ?? 'pending'}`;
         }
-        case 'console_logs': {
-            const log = record as ConsoleLog;
-            return `${log.level} ${log.args.join(' ')}`;
+        case 'console_events': {
+            const log = record as ConsoleEventData;
+            return `${log.level} ${log.args_preview.join(' ')}`;
         }
-        case 'error_logs': {
-            const error = record as ErrorLog;
-            return `${error.source} ${error.message}`;
+        case 'error_events': {
+            const error = record as RuntimeExceptionData;
+            return `${error.error_name ?? 'error'} ${error.message}`;
+        }
+        case 'storage_changes': {
+            const storage_change = record as StorageChangeData;
+            return `${storage_change.storage_type}.${storage_change.action} ${storage_change.key ?? '*'}`;
+        }
+        case 'cookie_changes': {
+            const cookie_change = record as CookieChangeData;
+            return `${cookie_change.cause} ${cookie_change.domain}${cookie_change.path}`;
         }
     }
 }
 
 function get_record_preview(source: AgentDataSource, record: AgentRecord): Record<string, unknown> {
     switch (source) {
-        case 'record_events': {
-            const event = record as RecordEvent;
+        case 'user_action_events':
+        case 'navigation_events': {
+            const event = record as CaptureEvent;
             return { url: event.url, tab_id: event.tab_id, frame_id: event.frame_id };
         }
         case 'network_requests': {
-            const request = record as NetworkRequest;
+            const request = record as NetworkRequestData;
             return { url: request.url, status: request.status_code, duration: request.duration_ms };
         }
-        case 'console_logs': {
-            const log = record as ConsoleLog;
-            return { url: log.url, line: log.line, args: log.args };
+        case 'console_events': {
+            const log = record as ConsoleEventData;
+            return { source_url: log.source_url, line: log.line, args_preview: log.args_preview };
         }
-        case 'error_logs': {
-            const error = record as ErrorLog;
-            return { message: error.message, source: error.source };
+        case 'error_events': {
+            const error = record as RuntimeExceptionData;
+            return { message: error.message, error_name: error.error_name };
+        }
+        case 'storage_changes': {
+            const storage_change = record as StorageChangeData;
+            return { key: storage_change.key, origin: storage_change.origin, value_status: storage_change.value_status };
+        }
+        case 'cookie_changes': {
+            const cookie_change = record as CookieChangeData;
+            return { name: cookie_change.name, domain: cookie_change.domain, removed: cookie_change.removed };
         }
     }
 }

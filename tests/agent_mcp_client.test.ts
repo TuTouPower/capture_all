@@ -103,6 +103,8 @@ describe('execute_mcp_tool', () => {
             'get_status',
             'start_recording',
             'stop_recording',
+            'list_captures',
+            'get_capture',
             'list_sessions',
             'get_session',
             'list_data_sources',
@@ -110,7 +112,9 @@ describe('execute_mcp_tool', () => {
             'get_record',
             'get_timeline',
             'get_timeline_item',
+            'get_all_capture_data',
             'get_all_session_data',
+            'export_capture',
             'export_session',
         ]);
     });

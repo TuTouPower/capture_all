@@ -4,8 +4,8 @@ import type { AgentCommand } from '../src/agent/shared/protocol';
 import type { RecordConfig } from '../src/shared/types';
 
 vi.mock('../src/background/storage', () => ({
-    list_sessions: vi.fn(async () => []),
-    get_session: vi.fn(async () => null)
+    list_captures: vi.fn(async () => []),
+    get_capture: vi.fn(async () => null)
 }));
 
 vi.mock('../src/background/exporter', () => ({
@@ -16,17 +16,17 @@ vi.mock('../src/background/exporter', () => ({
 }));
 
 const mock_session_data = {
-    session: { id: 's1', start_time: 1000, end_time: 2000, config: {}, stats: { event_count: 0, request_count: 0, log_count: 0, dom_changes: 0 } },
-    sources: { record_events: [], network_requests: [], console_logs: [], error_logs: [] }
+    capture: { capture_id: 'c1', started_at: '2024-01-01T00:00:00.000Z', ended_at: null, config_snapshot: {}, stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0 } },
+    sources: { user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [], storage_changes: [], cookie_changes: [] }
 };
 
 vi.mock('../src/background/agent_data_queries', () => ({
     load_agent_session_data: vi.fn(async () => mock_session_data),
     list_data_sources_from_session_data: vi.fn(() => []),
     list_records_from_session_data: vi.fn(() => ({ total: 0, records: [] })),
-    get_record_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'record_events', data: {} })),
+    get_record_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'user_action_events', data: {} })),
     get_timeline_from_session_data: vi.fn(() => ({ total: 0, records: [] })),
-    get_timeline_item_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'record_events', data: {} }))
+    get_timeline_item_from_session_data: vi.fn(() => ({ record_id: 'r1', source: 'user_action_events', data: {} }))
 }));
 
 const config: RecordConfig = {
@@ -101,12 +101,12 @@ describe('agent command dispatcher', () => {
         });
     });
 
-    test('generates session id when not supplied', async () => {
+    test('generates capture id when not supplied', async () => {
         const result = await dispatch_agent_command(command('recording.start', { config }), handlers);
 
         expect(result.ok).toBe(true);
-        expect(result.data).toHaveProperty('session_id');
-        expect(typeof (result.data as { session_id: string }).session_id).toBe('string');
+        expect(result.data).toHaveProperty('capture_id');
+        expect(typeof (result.data as { capture_id: string }).capture_id).toBe('string');
     });
 
     test('lists sessions', async () => {
@@ -123,7 +123,7 @@ describe('agent command dispatcher', () => {
     test('lists records with query params', async () => {
         const result = await dispatch_agent_command(command('records.list', {
             session_id: 's1',
-            source: 'record_events',
+            source: 'user_action_events',
             offset: 0,
             limit: 10,
             order: 'asc'
@@ -134,8 +134,8 @@ describe('agent command dispatcher', () => {
     test('gets record by id', async () => {
         const result = await dispatch_agent_command(command('records.get', {
             session_id: 's1',
-            source: 'record_events',
-            record_id: 'record_events:10:1010'
+            source: 'user_action_events',
+            record_id: 'user_action_events:10:1010'
         }), handlers);
         expect(result.ok).toBe(true);
     });
@@ -151,7 +151,7 @@ describe('agent command dispatcher', () => {
     test('gets timeline item', async () => {
         const result = await dispatch_agent_command(command('timeline.get', {
             session_id: 's1',
-            item_id: 'record_events:10:1010'
+            item_id: 'user_action_events:10:1010'
         }), handlers);
         expect(result.ok).toBe(true);
     });
@@ -175,7 +175,7 @@ describe('agent command dispatcher', () => {
     test('rejects invalid query params', async () => {
         const result = await dispatch_agent_command(command('records.list', {
             session_id: 's1',
-            source: 'record_events',
+            source: 'user_action_events',
             offset: 'not_a_number'
         }), handlers);
         expect(result.ok).toBe(false);

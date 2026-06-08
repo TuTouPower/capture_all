@@ -9,6 +9,8 @@ export interface McpToolCall {
 const TOOL_COMMANDS: Record<string, AgentCommandType> = {
     start_recording: 'recording.start',
     stop_recording: 'recording.stop',
+    list_captures: 'sessions.list',
+    get_capture: 'sessions.get',
     list_sessions: 'sessions.list',
     get_session: 'sessions.get',
     list_data_sources: 'sources.list',
@@ -16,7 +18,9 @@ const TOOL_COMMANDS: Record<string, AgentCommandType> = {
     get_record: 'records.get',
     get_timeline: 'timeline.list',
     get_timeline_item: 'timeline.get',
+    get_all_capture_data: 'session.get_all_data',
     get_all_session_data: 'session.get_all_data',
+    export_capture: 'session.export',
     export_session: 'session.export',
 };
 

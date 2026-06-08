@@ -202,7 +202,7 @@ body {
 .timeline-badge.mouse { background: #e3f2fd; color: #1565c0; }
 .timeline-badge.keyboard { background: #f3e5f5; color: #7b1fa2; }
 .timeline-badge.scroll { background: #e8f5e9; color: #2e7d32; }
-.timeline-badge.dom_change { background: #fff3e0; color: #e65100; }
+.timeline-badge.input_event { background: #fff3e0; color: #e65100; }
 .timeline-badge.navigation { background: #fce4ec; color: #c62828; }
 .timeline-badge.page_load { background: #e0f7fa; color: #00695c; }
 .timeline-badge.tab_switch { background: #f5f5f5; color: #616161; }

@@ -81,10 +81,11 @@ function render_overview(): void {
     if (!session_data) return;
 
     const s = session_data;
-    setText('sessionId', s.id);
-    setText('startTime', format_system_time(s.start_time, user_config));
-    setText('duration', s.end_time ? format_duration(s.end_time - s.start_time) : 'In progress');
-    setText('mode', s.config.capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
+    setText('sessionId', s.capture_id);
+    setText('startTime', format_system_time(s.started_at, user_config));
+    setText('duration', s.ended_at ? format_duration(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) : 'In progress');
+    const capture_mode = (s.config_snapshot as Record<string, unknown>)?.capture_mode as string || 'basic';
+    setText('mode', capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
     setText('eventCount', String(s.stats.event_count || events.length));
     setText('requestCount', String(s.stats.request_count || network_requests.length));
     setText('logCount', String(s.stats.log_count || console_logs.length));
@@ -128,7 +129,7 @@ function render_timeline(): void {
 }
 
 function render_timeline_item(event: RecordEvent): string {
-    const time = format_detail_time(event.relative_time, event.absolute_time);
+    const time = format_detail_time(event.relative_time_ms, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="timeline-item">
         <span class="timeline-time">${time}</span>
@@ -162,14 +163,14 @@ function render_network_row(req: NetworkRequest): string {
     const method_class = req.method.toUpperCase();
     const status_class = `s${String(req.status_code)[0]}xx`;
     const body_status = req.response_body_status || '-';
-    const corr = req.correlation_status ? ` · ${req.correlation_status}` : '';
+    const corr = ((req as unknown) as Record<string, unknown>).correlation_status ? ` · ${((req as unknown) as Record<string, unknown>).correlation_status}` : '';
     return `<tr>
         <td><span class="method-badge ${method_class}">${req.method}</span></td>
         <td class="url-cell" title="${escape_html(req.url)}">${escape_html(req.url)}</td>
         <td><span class="status-badge ${status_class}">${req.status_code}</span></td>
         <td>${req.resource_type}</td>
         <td title="${body_status}${corr}">${body_status}${corr}</td>
-        <td>${req.duration_ms.toFixed(0)}ms</td>
+        <td>${req.duration_ms?.toFixed(0) ?? '-'}ms</td>
     </tr>`;
 }
 
@@ -184,7 +185,7 @@ function render_console(): void {
     }
     if (search.value) {
         const q = search.value.toLowerCase();
-        filtered = filtered.filter(l => l.args.some(a => a.toLowerCase().includes(q)));
+        filtered = filtered.filter(l => l.args_preview.some((a: string) => a.toLowerCase().includes(q)));
     }
 
     const page_items = filtered.slice(0, (logs_page + 1) * PAGE_SIZE);
@@ -200,8 +201,8 @@ function render_console_item(log: ConsoleLog): string {
         : '';
     return `<div class="console-item ${log.level}">
         <span class="console-level ${log.level}">${log.level}</span>
-        <span class="console-args">${log.args.map(a => escape_html(a)).join(' ')}</span>
-        <span class="console-source">${log.url}:${log.line}:${log.column}</span>
+        <span class="console-args">${log.args_preview.map(a => escape_html(a)).join(' ')}</span>
+        <span class="console-source">${log.source_url}:${log.line}:${log.column}</span>
         ${stack_html}
     </div>`;
 }
@@ -212,7 +213,7 @@ function render_events(): void {
     const search = document.getElementById('eventsSearch') as HTMLInputElement;
 
     const filtered = filter_events(events, filter.value, search.value)
-        .filter(e => ['mouse', 'keyboard', 'scroll', 'dom_change'].includes(e.type));
+        .filter(e => ['mouse_event', 'keyboard_event', 'scroll_event', 'dom_mutation'].includes(e.type));
 
     container.innerHTML = filtered.length === 0
         ? '<div class="empty-state">No events</div>'
@@ -220,7 +221,7 @@ function render_events(): void {
 }
 
 function render_event_item(event: RecordEvent): string {
-    const time = format_detail_time(event.relative_time, event.absolute_time);
+    const time = format_detail_time(event.relative_time_ms, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="event-item">
         <span class="event-time">${time}</span>
@@ -345,19 +346,19 @@ function filter_events(evts: RecordEvent[], type_filter: string, search: string)
 }
 
 function get_event_detail(event: RecordEvent): string {
-    const data = event.data as unknown as Record<string, unknown>;
+    const data = event.data as Record<string, unknown> | undefined;
     if (!data) return '';
 
     switch (event.type) {
-        case 'mouse':
+        case 'mouse_event':
             return `${data.action} (${data.x}, ${data.y}) ${data.target_tag || ''}`;
-        case 'keyboard':
+        case 'keyboard_event':
             return `${data.action} ${data.key} ${data.code || ''}`;
-        case 'scroll':
+        case 'scroll_event':
             return `scroll (${data.scroll_x}, ${data.scroll_y})`;
-        case 'dom_change':
+        case 'dom_mutation':
             return `${data.action} ${data.target_tag || ''} ${data.target_selector || ''}`;
-        case 'navigation':
+        case 'page_navigation':
             return `${data.from} → ${data.to}`;
         case 'page_load':
             return `loaded in ${data.load_time_ms}ms`;
@@ -368,7 +369,7 @@ function get_event_detail(event: RecordEvent): string {
     }
 }
 
-function format_detail_time(relative_time: number, absolute_time: number): string {
+function format_detail_time(relative_time: number, absolute_time: string): string {
     if (user_config.detail_time_display_mode === 'relative') {
         return format_relative_time(relative_time);
     }

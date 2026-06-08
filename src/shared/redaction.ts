@@ -10,34 +10,56 @@ const SENSITIVE_HEADER_PATTERNS = ['token', 'key', 'secret', 'bearer'];
 
 const SENSITIVE_URL_PARAMS = ['token', 'key', 'secret', 'password', 'auth'];
 
-export function redact_headers(headers: Record<string, string>, enabled: boolean = true): Record<string, string> {
-    if (!enabled) return { ...headers };
+const RESPONSE_PREVIEW_LENGTH = 200;
+
+export interface RedactUrlResult {
+    url: string;
+    url_status: 'captured' | 'redacted';
+}
+
+export interface RedactHeadersResult {
+    headers: Record<string, string>;
+    headers_status: 'captured' | 'redacted';
+}
+
+export interface TruncateBodyResult {
+    body: string | null;
+    response_preview: string | null;
+}
+
+export function redact_headers(headers: Record<string, string>, enabled: boolean = true): RedactHeadersResult {
+    if (!enabled) return { headers: { ...headers }, headers_status: 'captured' };
     const result: Record<string, string> = {};
+    let redacted = false;
     for (const [key, value] of Object.entries(headers)) {
-        const lowerKey = key.toLowerCase();
-        if (SENSITIVE_HEADER_KEYS.includes(lowerKey)) {
+        const lower_key = key.toLowerCase();
+        if (SENSITIVE_HEADER_KEYS.includes(lower_key)) {
             result[key] = '[REDACTED]';
-        } else if (SENSITIVE_HEADER_PATTERNS.some(pattern => lowerKey.includes(pattern))) {
+            redacted = true;
+        } else if (SENSITIVE_HEADER_PATTERNS.some(pattern => lower_key.includes(pattern))) {
             result[key] = '[REDACTED]';
+            redacted = true;
         } else {
             result[key] = value;
         }
     }
-    return result;
+    return { headers: result, headers_status: redacted ? 'redacted' : 'captured' };
 }
 
-export function redact_url(url: string, redact_query: boolean): string {
-    if (!redact_query) return url;
+export function redact_url(url: string, redact_query: boolean): RedactUrlResult {
+    if (!redact_query) return { url, url_status: 'captured' };
     try {
         const parsed = new URL(url);
+        let redacted = false;
         for (const param of SENSITIVE_URL_PARAMS) {
             if (parsed.searchParams.has(param)) {
                 parsed.searchParams.set(param, '[REDACTED]');
+                redacted = true;
             }
         }
-        return parsed.toString();
+        return { url: parsed.toString(), url_status: redacted ? 'redacted' : 'captured' };
     } catch {
-        return url;
+        return { url, url_status: 'captured' };
     }
 }
 
@@ -61,13 +83,17 @@ export function truncate_request_body(body: string | null): string | null {
     return truncate(body, MAX_REQUEST_BODY_BYTES, true);
 }
 
-export function truncate_response_body(body: string | null): string | null {
-    if (!body) return null;
-    return truncate(body, MAX_RESPONSE_BODY_BYTES, true);
+export function truncate_response_body(body: string | null): TruncateBodyResult {
+    if (!body) return { body: null, response_preview: null };
+    const preview = body.slice(0, RESPONSE_PREVIEW_LENGTH);
+    return {
+        body: truncate(body, MAX_RESPONSE_BODY_BYTES, true),
+        response_preview: preview,
+    };
 }
 
-export function truncate_console_args(args: string[]): string[] {
-    return args.map(arg => truncate(arg, MAX_CONSOLE_ARG_BYTES, true));
+export function truncate_console_args(args: string[], enabled: boolean = true): string[] {
+    return args.map(arg => truncate(arg, MAX_CONSOLE_ARG_BYTES, enabled));
 }
 
 export function truncate_target_text(text: string, enabled: boolean = true): string {

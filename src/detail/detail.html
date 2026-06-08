@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Record All - Session Detail</title>
+  <title>Record All - Capture Detail</title>
   <link rel="stylesheet" href="./detail.css">
 </head>
 <body>
   <div class="detail-container">
     <!-- Header -->
     <header class="detail-header">
-      <h1 data-i18n="sessionDetail">Session Detail</h1>
+      <h1 data-i18n="sessionDetail">Capture Detail</h1>
       <div class="header-actions">
         <button class="btn" id="exportJsonBtn" data-i18n="exportJson">Export JSON</button>
         <button class="btn" id="exportJsonlBtn" data-i18n="exportJsonl">Export JSONL</button>
@@ -23,7 +23,7 @@
     <div class="overview-section" id="overview">
       <div class="overview-grid">
         <div class="overview-item">
-          <label data-i18n="sessionId">Session ID</label>
+          <label data-i18n="sessionId">Capture ID</label>
           <span id="sessionId">-</span>
         </div>
         <div class="overview-item">
@@ -77,7 +77,7 @@
           <option value="mouse" data-i18n="mouse">Mouse</option>
           <option value="keyboard" data-i18n="keyboard">Keyboard</option>
           <option value="scroll" data-i18n="scroll">Scroll</option>
-          <option value="dom_change" data-i18n="domChanges">DOM Changes</option>
+          <option value="input_event" data-i18n="domChanges">Input Events</option>
           <option value="navigation" data-i18n="navigation">Navigation</option>
           <option value="page_load" data-i18n="pageLoad">Page Load</option>
           <option value="tab_switch" data-i18n="tabSwitch">Tab Switch</option>
@@ -145,7 +145,7 @@
           <option value="mouse" data-i18n="mouse">Mouse</option>
           <option value="keyboard" data-i18n="keyboard">Keyboard</option>
           <option value="scroll" data-i18n="scroll">Scroll</option>
-          <option value="dom_change" data-i18n="domChanges">DOM Changes</option>
+          <option value="input_event" data-i18n="domChanges">Input Events</option>
         </select>
         <input type="text" id="eventsSearch" data-i18n-placeholder="searchEvents" placeholder="Search events...">
       </div>

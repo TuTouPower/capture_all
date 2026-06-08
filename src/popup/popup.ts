@@ -20,6 +20,18 @@ let finished_capture: CaptureRecord | null = null;
 let live_counts: CaptureStats | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 
+// Data label toggles — all ON by default, clickable only in 'ready' state
+const toggles: Record<string, boolean> = {
+    event_count: true,          // 用户行为
+    nav: true,                  // 页面导航
+    request_count: true,        // 网络请求
+    log_count: true,            // 控制台
+    error_count: true,          // 错误异常
+    storage_change_count: true, // Storage
+    cookie_change_count: true,  // Cookie
+    mask: true,                 // 脱敏
+};
+
 const view = document.getElementById('view')!;
 const panelBtn = document.getElementById('panelBtn')!;
 
@@ -85,11 +97,12 @@ function fmt_dur_ms(ms: number): string {
     return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
-function metric_grid(stats: CaptureStats | null): string {
+function metric_grid(stats: CaptureStats | null, can_toggle: boolean): string {
     const cards = CAPTURE.map((src) => {
         const has = stats != null && src.stat != null;
         const n = has ? fmt_num(stats![src.stat!]) : '';
-        return `<div class="mcard" data-tone="${src.tone}" data-count="${has ? 1 : 0}">
+        const on = toggles[src.key] !== false;
+        return `<div class="mcard ${can_toggle ? 'mcard-toggle' : ''} ${on ? '' : 'mcard-off'}" data-key="${src.key}" data-tone="${src.tone}" data-count="${has ? 1 : 0}">
             <div class="mcard-row">
                 <span class="mcard-ic">${ICON[src.icon]}</span>
                 <span class="mcard-lbl">${t(src.i18n as never)}</span>
@@ -136,7 +149,7 @@ function render_ready(): string {
                 <span class="start-txt">${t('startCapture')}</span>
             </button>
         </div>
-        ${metric_grid(null)}
+        ${metric_grid(null, true)}
         ${recent_list()}
     </div>`;
 }
@@ -156,7 +169,7 @@ function render_recording(): string {
                 ${ICON.ext}<span>${t('liveDetail')}</span>
             </button>
         </div>
-        ${metric_grid(live_counts ?? current_capture?.stats ?? null)}
+        ${metric_grid(live_counts ?? current_capture?.stats ?? null, false)}
         ${recent_list()}
     </div>`;
 }
@@ -181,7 +194,7 @@ function render_saved(): string {
                 </button>
             </div>
         </div>
-        ${metric_grid(cap?.stats ?? null)}
+        ${metric_grid(cap?.stats ?? null, false)}
         ${recent_list()}
     </div>`;
 }
@@ -219,18 +232,32 @@ function wire_view(): void {
             if (id) open_dashboard(`?session=${id}&page=detail`);
         });
     });
+    // Toggle switches — only active in 'ready' state
+    view.querySelectorAll('.mcard-toggle').forEach((card) => {
+        card.addEventListener('click', () => {
+            if (state !== 'ready') return;
+            const key = (card as HTMLElement).dataset.key;
+            if (key) {
+                toggles[key] = !toggles[key];
+                render();
+            }
+        });
+    });
 }
 
 function get_record_config(): RecordConfig {
     const base = user_config.selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
+    chrome.storage.local.set({ capture_toggles: toggles });
     return {
         ...base,
+        capture_network: toggles.request_count !== false,
+        capture_console: toggles.log_count !== false,
         mouse_precision: user_config.mouse_precision,
         keyboard_capture_mode: user_config.keyboard_capture_mode,
         capture_input_values: user_config.capture_input_values,
         capture_request_body: user_config.capture_request_body,
         capture_response_body: user_config.capture_response_body,
-        redact_data: user_config.redact_data,
+        redact_data: toggles.mask !== false,
     };
 }
 

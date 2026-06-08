@@ -319,7 +319,7 @@ async function handle_event(event: RecordEvent): Promise<{ success: boolean }> {
     try {
         await write_events([event]);
         current_session.stats.event_count++;
-        if (event.type === 'dom_change') {
+        if (event.type === 'input_event') {
             current_session.stats.dom_changes++;
         }
         await persist_stats();

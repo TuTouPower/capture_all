@@ -12,6 +12,9 @@ import { DEFAULT_CONFIG } from '../shared/constants';
 let is_capturing = false;
 let frame_id = 0;
 let last_url = window.location.href;
+let capture_id = '';
+let capture_start_epoch_ms = 0;
+let tab_id = 0;
 
 // Determine frame ID
 if (window !== window.top) {
@@ -23,6 +26,9 @@ console.log('Record All: Content Script loaded at', window.location.href);
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
     console.log('Record All: Content received message:', message.action);
     if (message.action === 'start') {
+        capture_id = message.capture_id ?? '';
+        capture_start_epoch_ms = message.capture_start_epoch_ms ?? Date.now();
+        tab_id = message.tab_id ?? 0;
         start_capture(message.config || DEFAULT_CONFIG);
         sendResponse({ success: true });
     } else if (message.action === 'stop') {
@@ -57,11 +63,15 @@ function start_capture(config: RecordConfig): void {
     });
 
     // Start capture modules based on config
-    start_mouse_capture(config, send_event);
-    start_keyboard_capture(config, send_event);
-    start_scroll_capture(send_event);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, send_event as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, send_event as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_scroll_capture(send_event as any, { capture_id, capture_start_epoch_ms, tab_id });
     start_dom_capture(config, send_event);
-    start_storage_capture(send_event);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_storage_capture(send_event as any, capture_id, capture_start_epoch_ms);
     start_xhr_fetch_capture(send_event);
     start_network_hook(send_event);
 
@@ -121,19 +131,23 @@ function handle_visibility_change(): void {
     });
 }
 
-function send_event(type: string, data: any): void {
+function send_event(type_or_event: string | Record<string, unknown>, data?: unknown): void {
     if (!is_capturing) return;
 
-    const event = {
-        session_id: '',  // Will be set by background
-        relative_time: performance.now(),
-        absolute_time: Date.now(),
-        type,
-        data,
-        tab_id: 0,  // Will be set by background
-        frame_id,
-        url: window.location.href
-    };
+    // New format: called with (CaptureEvent, data) from migrated modules
+    // Old format: called with (type: string, data) from un-migrated modules
+    const event = typeof type_or_event === 'string'
+        ? {
+            session_id: '',
+            relative_time: performance.now(),
+            absolute_time: Date.now(),
+            type: type_or_event,
+            data,
+            tab_id: 0,
+            frame_id,
+            url: window.location.href
+        }
+        : type_or_event;
 
     chrome.runtime.sendMessage({
         action: 'event',

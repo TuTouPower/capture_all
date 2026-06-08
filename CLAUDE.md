@@ -1,4 +1,4 @@
-# Record All 项目指令
+# Capture All 全采
 
 ## 构建
 

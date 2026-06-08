@@ -1,14 +1,24 @@
 // content/scroll_capture.ts
-import type { ScrollEventData } from '../shared/types';
+import type { CaptureEvent, ScrollEventData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 
 let is_capturing = false;
-let send_event: (type: string, data: any) => void;
+let capture_id = '';
+let capture_start_epoch_ms = 0;
+let tab_id = 0;
+let send_event: (event: CaptureEvent, data: ScrollEventData) => void;
 let scroll_timer: ReturnType<typeof setTimeout> | null = null;
 
-export function start_scroll_capture(sender: (type: string, data: any) => void): void {
+export function start_scroll_capture(
+    sender: (event: CaptureEvent, data: ScrollEventData) => void,
+    params: { capture_id: string; capture_start_epoch_ms: number; tab_id: number },
+): void {
     if (is_capturing) return;
 
     send_event = sender;
+    capture_id = params.capture_id;
+    capture_start_epoch_ms = params.capture_start_epoch_ms;
+    tab_id = params.tab_id;
     is_capturing = true;
 
     document.addEventListener('scroll', handle_scroll, { passive: true });
@@ -34,11 +44,27 @@ function handle_scroll(): void {
     scroll_timer = setTimeout(() => {
         if (!is_capturing) return;
 
-        send_event('scroll', {
+        const event = create_base_event({
+            capture_id,
+            category: 'user_action',
+            type: 'scroll_event',
+            relative_time_ms: get_relative_time(capture_start_epoch_ms),
+            tab_id,
+            source: 'content_script',
+        });
+
+        const data: ScrollEventData = {
             scroll_x: window.scrollX,
             scroll_y: window.scrollY,
             scroll_height: document.documentElement.scrollHeight,
-            scroll_width: document.documentElement.scrollWidth
-        } as ScrollEventData);
+            scroll_width: document.documentElement.scrollWidth,
+            viewport_height: window.innerHeight,
+            viewport_width: window.innerWidth,
+            target_selector: null,
+            target_xpath: null,
+            is_document_scroll: true,
+        };
+
+        send_event(event, data);
     }, 200);
 }

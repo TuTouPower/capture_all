@@ -3,8 +3,11 @@
 // webRequest records headers/status/timing/request body.
 // CDP (chrome.debugger) captures response bodies via Network.getResponseBody
 // triggered on Network.loadingFinished.
+//
+// Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
-import type { NetworkRequest, BodyCaptureStatus } from '../shared/types';
+import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus } from '../shared/types';
+import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
 import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
 import type { CdpBodyEvent } from './network_correlator';
@@ -17,10 +20,16 @@ interface NetworkCaptureConfig {
     capture_response_body: boolean;
 }
 
+interface NetworkEventPayload {
+    event: CaptureEvent;
+    data: NetworkRequestData;
+}
+
 let is_capturing = false;
-let session_id: string;
+let capture_id: string;
 let start_time: number;
-let send_to_background: (request: NetworkRequest) => void;
+let current_tab_id: number;
+let send_to_background: (payload: NetworkEventPayload) => void;
 let config: NetworkCaptureConfig;
 
 // Debuggee state for response body capture
@@ -28,7 +37,19 @@ let dbg_tab_id: number | null = null;
 let dbg_attached_externally = false;
 
 // webRequest.requestId -> pending request metadata
-const pending_requests: Map<string, Partial<NetworkRequest>> = new Map();
+interface PendingRequest {
+    cdp_request_id: string;
+    tab_id: number;
+    method: string;
+    url: string;
+    timestamp: number;
+    request_headers: Record<string, string>;
+    response_headers: Record<string, string>;
+    request_body: string | null;
+    request_body_status: BodyCaptureStatus;
+    resource_type: string;
+}
+const pending_requests: Map<string, PendingRequest> = new Map();
 
 // CDP requestId -> metadata collected before loadingFinished
 interface CdpRequestMeta {
@@ -63,15 +84,17 @@ export function set_cdp_body_event_handler(handler: ((event: CdpBodyEvent) => vo
 }
 
 export function start_network_capture(
-    sid: string,
+    cid: string,
     startTime: number,
     cfg: NetworkCaptureConfig,
-    sender: (request: NetworkRequest) => void
+    tabId: number,
+    sender: (payload: NetworkEventPayload) => void
 ): void {
     if (is_capturing) return;
 
-    session_id = sid;
+    capture_id = cid;
     start_time = startTime;
+    current_tab_id = tabId;
     send_to_background = sender;
     config = cfg;
     is_capturing = true;
@@ -277,7 +300,7 @@ function headers_map_from_cdp(headers: Record<string, string>): Record<string, s
     return { ...headers };
 }
 
-// ─── webRequest handlers (unchanged logic, preserved for headers/status/timing) ───
+// ─── webRequest handlers ───
 
 function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
     const decoder = new TextDecoder('utf-8', { fatal: false });
@@ -346,18 +369,28 @@ function headers_array_to_map(arr: Array<{ name: string; value?: string }> | und
     return out;
 }
 
+function resolve_resource_type(raw: string): NetworkRequestData['resource_type'] {
+    const valid: NetworkRequestData['resource_type'][] = [
+        'fetch', 'xhr', 'document', 'script', 'stylesheet',
+        'image', 'font', 'media', 'websocket', 'other'
+    ];
+    if (valid.includes(raw as NetworkRequestData['resource_type'])) {
+        return raw as NetworkRequestData['resource_type'];
+    }
+    return 'other';
+}
+
 function handle_before_request(details: any): void {
     if (!is_capturing) return;
 
     const { body, status } = extract_request_body(details);
 
-    const request: Partial<NetworkRequest> = {
-        session_id,
-        relative_time: details.timeStamp - start_time,
-        absolute_time: details.timeStamp,
+    const pending: PendingRequest = {
+        cdp_request_id: details.requestId,
         tab_id: details.tabId,
         method: details.method,
         url: redact_url(details.url, Boolean(config.redact_data) && config.redact_url_query),
+        timestamp: details.timeStamp,
         request_headers: {},
         response_headers: {},
         request_body: body,
@@ -365,7 +398,7 @@ function handle_before_request(details: any): void {
         resource_type: details.type || 'other'
     };
 
-    pending_requests.set(details.requestId, request);
+    pending_requests.set(details.requestId, pending);
 }
 
 function handle_before_send_headers(details: any): void {
@@ -388,29 +421,62 @@ function handle_headers_received(details: any): void {
         ? redact_headers(headers, true) : headers;
 }
 
-function build_final_request(
-    pending: Partial<NetworkRequest>,
+function build_network_event(
+    pending: PendingRequest,
     details: any,
     response_body: string | null,
     response_body_status: BodyCaptureStatus
-): NetworkRequest {
-    return {
-        session_id: pending.session_id || '',
-        relative_time: pending.relative_time || 0,
-        absolute_time: pending.absolute_time || Date.now(),
-        tab_id: pending.tab_id || 0,
+): NetworkEventPayload {
+    const relative_time_ms = pending.timestamp - start_time;
+
+    const event = create_base_event({
+        capture_id,
+        category: 'network',
+        type: 'network_request',
+        relative_time_ms,
+        tab_id: pending.tab_id || current_tab_id,
+        url: pending.url,
+        source: 'background',
+        severity: 'info',
+    });
+
+    const redacted_headers = config.redact_data && config.redact_sensitive_headers;
+
+    const data: NetworkRequestData = {
+        request_id: pending.cdp_request_id || crypto.randomUUID(),
         method: pending.method || 'GET',
         url: pending.url || '',
-        status_code: details.statusCode,
+        url_status: config.redact_data && config.redact_url_query ? 'redacted' : 'captured',
+        status_code: details.statusCode ?? null,
+        status_text: null,
+        protocol: null,
+        resource_type: resolve_resource_type(pending.resource_type),
+        initiator: null,
+        duration_ms: details.timeStamp != null && pending.timestamp != null
+            ? details.timeStamp - pending.timestamp
+            : null,
+        start_time_ms: null,
+        end_time_ms: null,
         request_headers: pending.request_headers || {},
         response_headers: pending.response_headers || {},
+        headers_status: redacted_headers ? 'redacted' : 'captured',
         request_body: pending.request_body ?? null,
         request_body_status: pending.request_body_status || 'not_enabled',
         response_body,
+        response_preview: null,
         response_body_status,
-        duration_ms: details.timeStamp - (pending.absolute_time || Date.now()),
-        resource_type: pending.resource_type || 'other'
+        mime_type: null,
+        request_size_bytes: null,
+        response_size_bytes: null,
+        transfer_size_bytes: null,
+        from_cache: null,
+        cache_status: null,
+        error_text: null,
+        capture_method: 'web_request',
+        body_capture_mode: config.capture_response_body ? 'extension_cdp' : 'none',
     };
+
+    return { event, data };
 }
 
 function handle_completed(details: any): void {
@@ -422,7 +488,7 @@ function handle_completed(details: any): void {
 
     // If CDP body capture is not active, emit webRequest-only
     if (!config.capture_response_body || dbg_tab_id === null) {
-        send_to_background(build_final_request(pending, details, null, 'not_enabled'));
+        send_to_background(build_network_event(pending, details, null, 'not_enabled'));
         return;
     }
 
@@ -439,7 +505,7 @@ function handle_completed(details: any): void {
         cdp_body_results.delete(matched_cdp_id);
         cdp_request_meta.delete(matched_cdp_id);
         if (body_result) {
-            send_to_background(build_final_request(
+            send_to_background(build_network_event(
                 pending, details, body_result.body, body_result.status
             ));
             return;
@@ -447,7 +513,7 @@ function handle_completed(details: any): void {
     }
 
     // No CDP match found — emit with not_enabled (CDP body may arrive later via event path)
-    send_to_background(build_final_request(pending, details, null, 'not_enabled'));
+    send_to_background(build_network_event(pending, details, null, 'not_enabled'));
 }
 
 function find_matching_cdp_request(

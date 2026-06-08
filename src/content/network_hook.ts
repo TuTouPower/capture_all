@@ -1,6 +1,8 @@
 // content/network_hook.ts
 // Fallback response body capture via fetch/XHR hooks.
 // Activated when extension CDP and external bridge are both unavailable.
+//
+// Phase 2: unified network_request type with NetworkRequestData
 
 import { MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
 
@@ -262,17 +264,36 @@ export function start_network_hook(
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
 
-        send_event('network_body_hook', {
+        send_event('network_request', {
+            category: 'network',
             method: d.method || 'GET',
             url: d.url || '',
-            status: typeof d.status === 'number' ? d.status : 0,
-            response_body: d.response_body ?? null,
-            response_body_status: d.response_body_status || 'failed',
+            url_status: 'captured',
+            status_code: typeof d.status === 'number' ? d.status : 0,
+            status_text: null,
+            protocol: null,
+            resource_type: 'fetch',
+            initiator: null,
             duration_ms: typeof d.duration_ms === 'number' ? Math.round(d.duration_ms * 100) / 100 : 0,
-            resource_type: d.resource_type || 'xhr',
+            start_time_ms: null,
+            end_time_ms: null,
+            request_headers: null,
+            response_headers: null,
+            headers_status: 'captured',
             request_body: d.request_body ?? null,
             request_body_status: d.request_body_status || 'not_enabled',
-            timestamp: d.timestamp || Date.now()
+            response_body: d.response_body ?? null,
+            response_preview: null,
+            response_body_status: d.response_body_status || 'failed',
+            mime_type: null,
+            request_size_bytes: null,
+            response_size_bytes: null,
+            transfer_size_bytes: null,
+            from_cache: null,
+            cache_status: null,
+            error_text: null,
+            capture_method: 'fallback_hook',
+            body_capture_mode: 'fallback_hook',
         });
     };
     window.addEventListener('message', message_listener, true);

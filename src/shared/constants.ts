@@ -2,14 +2,18 @@
 import type { RecordConfig } from './types';
 
 export const DB_NAME = 'record_all_db';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORE_NAMES = {
-    SESSIONS: 'sessions',
-    EVENTS: 'events',
+    CAPTURES: 'captures',
+    USER_ACTION_EVENTS: 'user_action_events',
+    NAVIGATION_EVENTS: 'navigation_events',
     NETWORK_REQUESTS: 'network_requests',
-    CONSOLE_LOGS: 'console_logs',
-    ERROR_LOG: 'error_log'
+    CONSOLE_EVENTS: 'console_events',
+    ERROR_EVENTS: 'error_events',
+    STORAGE_CHANGES: 'storage_changes',
+    COOKIE_CHANGES: 'cookie_changes',
+    CAPTURE_LIFECYCLE_EVENTS: 'capture_lifecycle_events',
 } as const;
 
 export const MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
@@ -49,7 +53,7 @@ export const DEFAULT_USER_CONFIG = {
     system_time_timezone: 'browser' as const,
     detail_time_display_mode: 'system' as const,
     export_directory: '',
-    export_filename_template: 'record_all_{session_id}_{date}.{ext}',
+    export_filename_template: 'record_all_{capture_id}_{date}.{ext}',
     export_save_as: true,
     agent_bridge_enabled: false,
     agent_bridge_url: 'http://127.0.0.1:17831',

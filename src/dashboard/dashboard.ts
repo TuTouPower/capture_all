@@ -341,9 +341,22 @@ function wire_captures(): void {
     });
 }
 
-async function export_session(id: string): Promise<void> {
+async function export_session(id: string, format: string = 'json'): Promise<void> {
     if (!is_extension) return;
-    try { await chrome.runtime.sendMessage({ action: 'export_json', session_id: id }); } catch { /* */ }
+    try {
+        const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
+        const r = await chrome.runtime.sendMessage({ action, session_id: id });
+        if (!r?.success) { alert('导出失败'); return; }
+        const ext = format === 'html' ? 'html' : format === 'har' ? 'har' : format === 'jsonl' ? 'jsonl' : 'json';
+        const mime = format === 'html' ? 'text/html' : 'application/json';
+        const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
+        const blob = new Blob([content], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `capture_all_${id}.${ext}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) { console.error('Export error:', err); }
 }
 async function del_session(id: string): Promise<void> {
     if (!is_extension || !confirm('确定删除此采集记录？')) return;
@@ -418,6 +431,9 @@ function render_detail(): string {
                 </div>
             </div>
             <div class="dt-head-r">
+                <select id="dtExportFmt" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);margin-right:6px">
+                    <option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
+                </select>
                 <button class="btn" data-dexport="1"><span>${I.export}</span>导出</button>
                 <button class="btn" data-open-url="1"><span>${I.ext}</span>打开原页面</button>
             </div>
@@ -709,7 +725,10 @@ function wire_detail(): void {
     c.querySelectorAll('tr[data-ev]').forEach((tr) => tr.addEventListener('click', () => { dt_sel = Number((tr as HTMLElement).dataset.ev); dt_insp_open = true; render_content(); }));
     c.querySelector('[data-insp-close]')?.addEventListener('click', () => { dt_insp_open = false; render_content(); });
     c.querySelector('#dtSearch')?.addEventListener('input', () => render_content());
-    c.querySelector('[data-dexport]')?.addEventListener('click', () => detail_session && export_session(detail_session.capture_id));
+    c.querySelector('[data-dexport]')?.addEventListener('click', () => {
+        const fmt = (c.querySelector('#dtExportFmt') as HTMLSelectElement)?.value || 'json';
+        detail_session && export_session(detail_session.capture_id, fmt);
+    });
     c.querySelector('[data-open-url]')?.addEventListener('click', () => { const u = detail_session?.start_url; if (u) chrome.tabs.create({ url: u }); });
     c.querySelector('[data-nav-settings]')?.addEventListener('click', () => go('settings'));
     wire_trace();

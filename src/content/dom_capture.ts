@@ -1,5 +1,5 @@
 // content/dom_capture.ts
-import type { RecordConfig, DomChangeData } from '../shared/types';
+import type { RecordConfig, InputEventData } from '../shared/types';
 import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
@@ -83,82 +83,89 @@ function get_target_info(element: HTMLElement): { selector: string; xpath: strin
     };
 }
 
-function get_input_value(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {
-    // Redact passwords only when redact_data enabled
-    if (config.redact_data && element instanceof HTMLInputElement && element.type === 'password') {
-        return '[REDACTED]';
+function compute_value_fields(target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): {
+    value_status: InputEventData['value_status'];
+    value_preview: string | null;
+    value_length: number | null;
+} {
+    const is_password = target instanceof HTMLInputElement && target.type === 'password';
+
+    if (is_password) {
+        return { value_status: 'not_captured', value_preview: null, value_length: null };
     }
 
-    // If capture disabled, return placeholder
     if (!config.capture_input_values) {
-        return '[DISABLED]';
+        return { value_status: 'not_captured', value_preview: null, value_length: null };
     }
 
-    return element.value;
+    const value = target.value;
+
+    if (config.redact_data) {
+        return {
+            value_status: 'redacted',
+            value_preview: value || null,
+            value_length: value ? value.length : null,
+        };
+    }
+
+    return {
+        value_status: 'captured',
+        value_preview: value || null,
+        value_length: value ? value.length : null,
+    };
+}
+
+function emit_input_event(action: InputEventData['action'], target: HTMLElement): void {
+    const info = get_target_info(target);
+    const input_target = target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+    const { value_status, value_preview, value_length } = compute_value_fields(input_target);
+
+    const is_checkable = target instanceof HTMLInputElement
+        && (target.type === 'checkbox' || target.type === 'radio');
+
+    const data: InputEventData = {
+        action,
+        target_selector: info.selector,
+        target_xpath: info.xpath,
+        target_tag: info.tag,
+        target_input_type: (target as HTMLInputElement).type ?? null,
+        field_name: (target as HTMLInputElement).name ?? null,
+        field_label: null,
+        value_status,
+        value_preview,
+        value_length,
+        checked: is_checkable ? (target as HTMLInputElement).checked : null,
+        selected_count: null,
+    };
+
+    send_event('input_event', data);
 }
 
 function handle_input(event: Event): void {
     if (!is_capturing) return;
-    const target = event.target as HTMLInputElement | HTMLTextAreaElement;
+    const target = event.target as HTMLElement;
     if (!target) return;
-
-    const info = get_target_info(target);
-    const value = get_input_value(target);
-
-    send_event('dom_change', {
-        action: 'input',
-        target_selector: info.selector,
-        target_xpath: info.xpath,
-        target_tag: info.tag,
-        value
-    } as DomChangeData);
+    emit_input_event('input', target);
 }
 
 function handle_change(event: Event): void {
     if (!is_capturing) return;
-    const target = event.target as HTMLSelectElement | HTMLInputElement;
+    const target = event.target as HTMLElement;
     if (!target) return;
-
-    const info = get_target_info(target);
-    const value = get_input_value(target);
-
-    send_event('dom_change', {
-        action: 'change',
-        target_selector: info.selector,
-        target_xpath: info.xpath,
-        target_tag: info.tag,
-        value
-    } as DomChangeData);
+    emit_input_event('change', target);
 }
 
 function handle_focus(event: FocusEvent): void {
     if (!is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
-
-    const info = get_target_info(target);
-
-    send_event('dom_change', {
-        action: 'focus',
-        target_selector: info.selector,
-        target_xpath: info.xpath,
-        target_tag: info.tag,
-        value: ''
-    } as DomChangeData);
+    emit_input_event('focus', target);
 }
 
 function handle_blur(event: FocusEvent): void {
     if (!is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
-
-    const info = get_target_info(target);
-
-    send_event('dom_change', {
-        action: 'blur',
-        target_selector: info.selector,
-        target_xpath: info.xpath,
-        target_tag: info.tag,
-        value: ''
-    } as DomChangeData);
+    emit_input_event('blur', target);
 }

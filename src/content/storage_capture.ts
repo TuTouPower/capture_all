@@ -1,8 +1,11 @@
 // content/storage_capture.ts
-import type { StorageChangeData } from '../shared/types';
+import type { CaptureEvent, StorageChangeData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 
 let is_capturing = false;
-let send_event: (type: string, data: any) => void;
+let capture_id = '';
+let capture_start_epoch_ms = 0;
+let send_event: (event: CaptureEvent) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__record_all_storage__';
@@ -58,9 +61,15 @@ function inject_page_script(): void {
     }
 }
 
-export function start_storage_capture(sender: (type: string, data: any) => void): void {
+export function start_storage_capture(
+    sender: (event: CaptureEvent) => void,
+    new_capture_id: string,
+    new_capture_start_epoch_ms: number,
+): void {
     if (is_capturing) return;
     send_event = sender;
+    capture_id = new_capture_id;
+    capture_start_epoch_ms = new_capture_start_epoch_ms;
     is_capturing = true;
 
     inject_page_script();
@@ -71,13 +80,31 @@ export function start_storage_capture(sender: (type: string, data: any) => void)
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
 
+        const value_length = typeof d.value_length === 'number' ? d.value_length : 0;
+        const action: StorageChangeData['action'] = d.action;
+
         const data: StorageChangeData = {
             storage_type: d.storage_type,
-            action: d.action,
-            key: d.key,
-            value_length: typeof d.value_length === 'number' ? d.value_length : 0
+            action,
+            key: d.key ?? null,
+            old_value_length: null,
+            new_value_length: action === 'set' ? value_length : 0,
+            value_status: 'not_captured',
+            value_preview: null,
+            origin: window.location.origin,
+            source_stack: null,
         };
-        send_event('storage_change', data);
+
+        const base = create_base_event({
+            capture_id,
+            category: 'storage',
+            type: 'storage_change',
+            relative_time_ms: get_relative_time(capture_start_epoch_ms),
+            tab_id: 0,
+            source: 'content_script',
+        });
+
+        send_event({ ...base, ...data } as CaptureEvent & StorageChangeData);
     };
     window.addEventListener('message', message_listener, true);
 }

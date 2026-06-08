@@ -1,29 +1,29 @@
 // background/console_capture.ts
-import type { ConsoleLog } from '../shared/types';
+import type { CaptureEvent, ConsoleEventData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { truncate_console_args } from '../shared/redaction';
 
 let is_capturing = false;
-let session_id: string;
+let capture_id: string;
 let start_time: number;
 let tab_id: number;
-let send_to_background: (log: ConsoleLog) => void;
+let send_to_background: (event: CaptureEvent) => void;
 
 export async function start_console_capture(
-    sid: string,
+    cid: string,
     startTime: number,
     targetTabId: number,
     _redactData: boolean,
-    sender: (log: ConsoleLog) => void
+    sender: (event: CaptureEvent) => void
 ): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) return { success: true };
 
-    session_id = sid;
+    capture_id = cid;
     start_time = startTime;
     tab_id = targetTabId;
     send_to_background = sender;
 
     try {
-        // Try to attach debugger
         await chrome.dbg.attach({ tabId: tab_id }, '1.3');
         await chrome.dbg.sendCommand({ tabId: tab_id }, 'Runtime.enable');
 
@@ -52,26 +52,51 @@ export async function stop_console_capture(): Promise<void> {
     }
 }
 
+function map_console_level(level: string): 'log' | 'warn' | 'info' | 'debug' | 'error' {
+    if (level === 'warning') return 'warn';
+    if (['log', 'warn', 'info', 'debug', 'error'].includes(level)) {
+        return level as 'log' | 'warn' | 'info' | 'debug' | 'error';
+    }
+    return 'log';
+}
+
+function map_severity(level: string): 'info' | 'warning' | 'error' {
+    if (level === 'error') return 'error';
+    if (level === 'warn' || level === 'warning') return 'warning';
+    return 'info';
+}
+
 function handle_debugger_event(_source: any, method: string, params: any): void {
     if (!is_capturing) return;
+    if (method !== 'Runtime.consoleAPICalled') return;
 
-    if (method === 'Runtime.consoleAPICalled') {
-        const args = params.args.map((arg: any) => arg.value || arg.description || '');
-        const truncated_args = truncate_console_args(args);
+    const args = params.args.map((arg: any) => arg.value || arg.description || '');
+    const truncated_args = truncate_console_args(args);
+    const level = map_console_level(params.type);
+    const frame = params.stackTrace?.callFrames?.[0];
 
-        const log: ConsoleLog = {
-            session_id,
-            relative_time: params.timestamp - start_time,
-            absolute_time: params.timestamp,
-            tab_id,
-            level: params.type,
-            args: truncated_args,
-            stack_trace: params.stackTrace?.description || null,
-            url: params.stackTrace?.callFrames?.[0]?.url || '',
-            line: params.stackTrace?.callFrames?.[0]?.lineNumber || 0,
-            column: params.stackTrace?.callFrames?.[0]?.columnNumber || 0
-        };
+    const base = create_base_event({
+        capture_id,
+        category: 'console',
+        type: 'console_event',
+        relative_time_ms: get_relative_time(start_time),
+        tab_id,
+        url: frame?.url || '',
+        source: 'background',
+        severity: map_severity(level),
+    });
 
-        send_to_background(log);
-    }
+    const data: ConsoleEventData = {
+        level,
+        args_preview: truncated_args,
+        args_status: 'captured',
+        stack_trace: params.stackTrace?.description || null,
+        source_url: frame?.url || null,
+        line: frame?.lineNumber ?? null,
+        column: frame?.columnNumber ?? null,
+        repeat_count: null,
+        related_network_request_id: null,
+    };
+
+    send_to_background({ ...base, data });
 }

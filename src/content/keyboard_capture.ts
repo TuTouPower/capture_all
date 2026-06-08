@@ -1,16 +1,29 @@
 // content/keyboard_capture.ts
-import type { RecordConfig, KeyboardEventData } from '../shared/types';
+import type { RecordConfig, CaptureEvent, KeyboardEventData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: RecordConfig;
-let send_event: (type: string, data: any) => void;
+let capture_id: string;
+let capture_start_epoch_ms: number;
+let tab_id: number;
+let send_event: (event: CaptureEvent, data: KeyboardEventData) => void;
 
-export function start_keyboard_capture(cfg: RecordConfig, sender: (type: string, data: any) => void): void {
+export function start_keyboard_capture(
+    cfg: RecordConfig,
+    cid: string,
+    start_ms: number,
+    tid: number,
+    sender: (event: CaptureEvent, data: KeyboardEventData) => void
+): void {
     if (is_capturing) return;
     if (cfg.keyboard_capture_mode === 'none') return;
 
     config = cfg;
+    capture_id = cid;
+    capture_start_epoch_ms = start_ms;
+    tab_id = tid;
     send_event = sender;
     is_capturing = true;
 
@@ -26,8 +39,9 @@ export function stop_keyboard_capture(): void {
     document.removeEventListener('keyup', handle_keyup);
 }
 
-function get_target_info(event: KeyboardEvent): { selector: string; xpath: string } {
-    const target = event.target as HTMLElement;
+function get_target_info(event: KeyboardEvent): { selector: string | null; xpath: string | null } {
+    const target = event.target as HTMLElement | null;
+    if (!target) return { selector: null, xpath: null };
     let selector: string;
     if (target.id) {
         selector = `#${target.id}`;
@@ -43,50 +57,59 @@ function has_modifier(event: KeyboardEvent): boolean {
     return event.ctrlKey || event.altKey || event.metaKey || event.shiftKey;
 }
 
-function handle_keydown(event: KeyboardEvent): void {
+function is_shortcut_mode(): boolean {
+    return config.keyboard_capture_mode === 'shortcuts';
+}
+
+function build_key_event(
+    event: KeyboardEvent,
+    action: 'keydown' | 'keyup'
+): void {
     if (!is_capturing) return;
 
     // In shortcuts mode, only capture modifier combinations
-    if (config.keyboard_capture_mode === 'shortcuts' && !has_modifier(event)) {
+    if (is_shortcut_mode() && !has_modifier(event)) {
         return;
     }
 
     const target = get_target_info(event);
-    send_event('keyboard', {
-        action: 'keydown',
-        key: event.key,
-        code: event.code,
-        target_selector: target.selector,
-        target_xpath: target.xpath,
+
+    const masked = config.redact_data && !is_shortcut_mode();
+
+    const base_event = create_base_event({
+        capture_id,
+        category: 'user_action',
+        type: 'keyboard_event',
+        relative_time_ms: get_relative_time(capture_start_epoch_ms),
+        tab_id,
+        url: location.href,
+        source: 'content_script',
+    });
+
+    const key_data: KeyboardEventData = {
+        action,
+        key: masked ? null : event.key,
+        code: masked ? null : event.code,
+        key_status: masked ? 'masked' : 'captured',
         modifiers: {
             ctrl: event.ctrlKey,
             shift: event.shiftKey,
             alt: event.altKey,
-            meta: event.metaKey
-        }
-    } as KeyboardEventData);
+            meta: event.metaKey,
+        },
+        target_selector: target.selector,
+        target_xpath: target.xpath,
+        target_tag: (event.target as HTMLElement)?.tagName?.toLowerCase() ?? null,
+        target_input_type: null,
+    };
+
+    send_event(base_event, key_data);
+}
+
+function handle_keydown(event: KeyboardEvent): void {
+    build_key_event(event, 'keydown');
 }
 
 function handle_keyup(event: KeyboardEvent): void {
-    if (!is_capturing) return;
-
-    // In shortcuts mode, only capture modifier combinations
-    if (config.keyboard_capture_mode === 'shortcuts' && !has_modifier(event)) {
-        return;
-    }
-
-    const target = get_target_info(event);
-    send_event('keyboard', {
-        action: 'keyup',
-        key: event.key,
-        code: event.code,
-        target_selector: target.selector,
-        target_xpath: target.xpath,
-        modifiers: {
-            ctrl: event.ctrlKey,
-            shift: event.shiftKey,
-            alt: event.altKey,
-            meta: event.metaKey
-        }
-    } as KeyboardEventData);
+    build_key_event(event, 'keyup');
 }

@@ -2,12 +2,15 @@
 // Records cookie name, domain, path, cause — never the cookie value (privacy).
 // Uses chrome.cookies.onChanged (service-worker context).
 
-import type { CookieChangeData, RecordEvent } from '../shared/types';
+import type { CaptureEvent, CookieChangeData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
+
+type CookieCaptureEvent = CaptureEvent & { data: CookieChangeData };
 
 let is_capturing = false;
-let session_id: string;
-let start_time: number;
-let send_to_background: (event: RecordEvent) => void;
+let capture_id: string;
+let capture_start_epoch_ms: number;
+let send_to_background: (event: CookieCaptureEvent) => void;
 
 // chrome.cookies types are not in the ambient namespace for this project,
 // so we use `any` for callback params (same pattern as network_capture.ts).
@@ -33,30 +36,40 @@ function handle_cookie_changed(info: any): void {
         domain: info.cookie.domain,
         path: info.cookie.path,
         cause: map_cause(info),
-        removed: info.removed
+        removed: info.removed,
+        secure: info.cookie.secure ?? null,
+        http_only: info.cookie.httpOnly ?? null,
+        same_site: info.cookie.sameSite ?? null,
+        expiration_date: info.cookie.expirationDate ?? null,
+        store_id: info.cookie.storeId ?? null,
+        value_status: 'not_captured',
+        value_length: null,
+        value_preview: null,
     };
 
-    const now = Date.now();
-    send_to_background({
-        session_id,
-        relative_time: now - start_time,
-        absolute_time: now,
+    const base = create_base_event({
+        capture_id,
+        category: 'cookie',
         type: 'cookie_change',
+        relative_time_ms: get_relative_time(capture_start_epoch_ms),
+        tab_id: 0,
+        source: 'background',
+    });
+
+    send_to_background({
+        ...base,
         data,
-        tab_id: 0,       // cookie changes are not tab-specific
-        frame_id: 0,
-        url: ''
     });
 }
 
 export function start_cookie_capture(
-    sid: string,
+    cid: string,
     startTime: number,
-    sender: (event: RecordEvent) => void
+    sender: (event: CookieCaptureEvent) => void
 ): void {
     if (is_capturing) return;
-    session_id = sid;
-    start_time = startTime;
+    capture_id = cid;
+    capture_start_epoch_ms = startTime;
     send_to_background = sender;
     is_capturing = true;
 

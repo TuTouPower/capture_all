@@ -1,25 +1,26 @@
 // background/exception_capture.ts
-import type { ConsoleLog } from '../shared/types';
+import type { CaptureEvent, RuntimeExceptionData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 
 let is_capturing = false;
-let session_id: string;
+let capture_id: string;
 let start_time: number;
 let tab_id: number;
-let send_to_background: (log: ConsoleLog) => void;
+let send_event: (event: CaptureEvent) => void;
 let attached_by_us = false;
 
 export async function start_exception_capture(
-    sid: string,
-    startTime: number,
-    targetTabId: number,
-    sender: (log: ConsoleLog) => void
+    cid: string,
+    start_time_ms: number,
+    target_tab_id: number,
+    sender: (event: CaptureEvent) => void
 ): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) return { success: true };
 
-    session_id = sid;
-    start_time = startTime;
-    tab_id = targetTabId;
-    send_to_background = sender;
+    capture_id = cid;
+    start_time = start_time_ms;
+    tab_id = target_tab_id;
+    send_event = sender;
 
     try {
         // Try attach (may already be attached by console_capture; that's fine)
@@ -72,25 +73,44 @@ function handle_debugger_event(_source: any, method: string, params: any): void 
         'Unknown exception';
 
     const first_frame = details.stackTrace?.callFrames?.[0];
-    const url: string = first_frame?.url || details.url || '';
+    const source_url: string = first_frame?.url || details.url || '';
     const line: number = first_frame?.lineNumber ?? details.lineNumber ?? 0;
     const column: number = first_frame?.columnNumber ?? details.columnNumber ?? 0;
-    const stack_trace: string | null = exception.description || details.stackTrace?.description || null;
+    const stack_trace: string | null =
+        exception.description ||
+        details.stackTrace?.description ||
+        null;
 
-    const ts: number = params.timestamp || Date.now();
+    const error_name: string | null =
+        exception.className ?? extract_error_name(message) ?? null;
 
-    const log: ConsoleLog = {
-        session_id,
-        relative_time: ts - start_time,
-        absolute_time: ts,
-        tab_id,
-        level: 'error',
-        args: [message],
+    const event_data: RuntimeExceptionData = {
+        message,
+        error_name,
         stack_trace,
-        url,
+        source_url,
         line,
-        column
+        column,
+        exception_id: exception.objectId ?? null,
+        severity: 'error',
+        related_event_ids: [],
     };
 
-    send_to_background(log);
+    const event = create_base_event({
+        capture_id,
+        category: 'error',
+        type: 'runtime_exception',
+        relative_time_ms: get_relative_time(start_time),
+        tab_id,
+        url: source_url,
+        source: 'background',
+        severity: 'error',
+    });
+
+    send_event({ ...event, ...event_data } as CaptureEvent & RuntimeExceptionData);
+}
+
+function extract_error_name(msg: string): string | null {
+    const match = /^(\w+Error|Error):/.exec(msg);
+    return match ? match[1] : null;
 }

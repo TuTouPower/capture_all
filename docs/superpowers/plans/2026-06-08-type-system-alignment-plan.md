@@ -530,7 +530,7 @@ export interface BodyCaptureStartResult {
 // ============================================================
 
 export interface RecordConfig {
-    capture_mode: 'basic' | 'advanced';
+    capture_mode: 'standard' | 'deep';
     mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
     capture_console: boolean;
     capture_network: boolean;

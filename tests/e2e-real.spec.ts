@@ -32,62 +32,30 @@ test.afterAll(async () => {
 });
 
 test.describe('Record All - Real Extension', () => {
-    test('popup renders with mode buttons and start button', async () => {
+    test('popup renders with start button', async () => {
         const popup = await browser.newPage();
         await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
-        await expect(popup.locator('#basicBtn')).toBeVisible();
-        await expect(popup.locator('#advancedBtn')).toBeVisible();
         await expect(popup.locator('#startBtn')).toBeVisible();
-        await expect(popup.locator('#startBtn')).toHaveText('Start Recording');
-
-        // Default mode is basic
-        await expect(popup.locator('#basicBtn')).toHaveClass(/selected/);
-        await expect(popup.locator('#advancedBtn')).not.toHaveClass(/selected/);
+        await expect(popup.locator('#startBtn')).toHaveText(/Start Capture|开始采集/);
 
         await popup.close();
     });
 
-    test('mode selection toggles', async () => {
+    test('start recording flow', async () => {
         const popup = await browser.newPage();
         await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
-        await popup.locator('#advancedBtn').click();
-        await expect(popup.locator('#advancedBtn')).toHaveClass(/selected/);
-        await expect(popup.locator('#basicBtn')).not.toHaveClass(/selected/);
-
-        await popup.locator('#basicBtn').click();
-        await expect(popup.locator('#basicBtn')).toHaveClass(/selected/);
-
-        await popup.close();
-    });
-
-    test('start recording in basic mode', async () => {
-        const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/popup/popup.html`);
-        await popup.waitForLoadState('domcontentloaded');
-
-        // Click start
         await popup.locator('#startBtn').click();
-
-        // Wait for recording state
         await popup.waitForTimeout(1000);
 
-        // Stop button should be visible
         await expect(popup.locator('#stopBtn')).toBeVisible();
-        await expect(popup.locator('#startBtn')).not.toBeVisible();
 
-        // Status should show recording
-        const statusText = await popup.locator('.status-text').textContent();
-        expect(statusText).toBe('Recording');
-
-        // Stop
         await popup.locator('#stopBtn').click();
         await popup.waitForTimeout(500);
 
-        // Back to ready state
         await expect(popup.locator('#startBtn')).toBeVisible();
 
         await popup.close();
@@ -149,14 +117,13 @@ test.describe('Record All - Real Extension', () => {
         await popup.locator('#stopBtn').click();
         await popup.waitForTimeout(1000);
 
-        // Check history list has at least one session
-        const historyItems = popup.locator('.history-item');
-        const count = await historyItems.count();
+        // Check recent sessions list has entries
+        const recentRows = popup.locator('.recent-row');
+        const count = await recentRows.count();
         expect(count).toBeGreaterThanOrEqual(1);
 
-        // Check status is back to ready
-        const statusText = await popup.locator('.status-text').textContent();
-        expect(statusText).toBe('Ready');
+        // Check back to ready state (start button visible again)
+        await expect(popup.locator('#startBtn')).toBeVisible();
 
         await testPage.close();
         await popup.close();

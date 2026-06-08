@@ -16,15 +16,13 @@ test.afterAll(async () => {
 });
 
 test.describe('Record All UI', () => {
-    test('popup loads with mode buttons', async () => {
+    test('popup loads with start button', async () => {
         const page = await context.newPage();
         await page.goto(`${SERVE_URL}/src/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
-        await expect(page.locator('#basicBtn')).toBeVisible();
-        await expect(page.locator('#advancedBtn')).toBeVisible();
         await expect(page.locator('#startBtn')).toBeVisible();
-        await expect(page.locator('#startBtn')).toHaveText('Start Recording');
+        await expect(page.locator('#startBtn')).toHaveText(/Start Capture|开始采集/);
 
         await page.close();
     });
@@ -61,28 +59,6 @@ test.describe('Record All UI', () => {
 
         await page.locator('.tab-btn[data-tab="events"]').click();
         await expect(page.locator('#events-tab')).toHaveClass(/active/);
-
-        await page.close();
-    });
-
-    test('popup mode selection toggles correctly', async () => {
-        const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/src/popup/popup.html`);
-        await page.waitForLoadState('domcontentloaded');
-
-        const basicBtn = page.locator('#basicBtn');
-        const advancedBtn = page.locator('#advancedBtn');
-
-        await expect(basicBtn).toHaveClass(/selected/);
-        await expect(advancedBtn).not.toHaveClass(/selected/);
-
-        await advancedBtn.click();
-        await expect(advancedBtn).toHaveClass(/selected/);
-        await expect(basicBtn).not.toHaveClass(/selected/);
-
-        await basicBtn.click();
-        await expect(basicBtn).toHaveClass(/selected/);
-        await expect(advancedBtn).not.toHaveClass(/selected/);
 
         await page.close();
     });

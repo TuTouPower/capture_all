@@ -1,2 +1,2 @@
 // devtools/devtools_panel.ts
-console.log('Record All: DevTools Panel loaded');
+console.log('Capture All: DevTools Panel loaded');

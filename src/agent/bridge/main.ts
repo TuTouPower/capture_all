@@ -6,7 +6,7 @@ async function main(): Promise<void> {
     const config = parse_bridge_config(raw_config);
     const server = await create_bridge_server(config);
 
-    process.stdout.write(`record-all bridge listening at ${server.url}\n`);
+    process.stdout.write(`capture-all bridge listening at ${server.url}\n`);
 }
 
 main().catch((error) => {

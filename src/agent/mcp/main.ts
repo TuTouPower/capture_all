@@ -12,7 +12,7 @@ if (!bridge_url || !bridge_token) {
 }
 
 const client = new BridgeMcpClient(bridge_url, bridge_token);
-const server = new McpServer({ name: 'record-all', version: '0.1.0' });
+const server = new McpServer({ name: 'capture-all', version: '0.1.0' });
 const input_schema = z.object({}).passthrough();
 
 function register_tool(name: string): void {

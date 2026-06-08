@@ -6,11 +6,11 @@
 
 import { MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
 
-const SIGNAL = '__record_all_network_hook__';
+const SIGNAL = '__capture_all_network_hook__';
 
 const PAGE_SCRIPT = `(function() {
-    if (window.__record_all_network_hook_installed__) return;
-    window.__record_all_network_hook_installed__ = true;
+    if (window.__capture_all_network_hook_installed__) return;
+    window.__capture_all_network_hook_installed__ = true;
     var SIGNAL = '${SIGNAL}';
 
     function post(data) {
@@ -166,7 +166,7 @@ const PAGE_SCRIPT = `(function() {
     var orig_send = XMLHttpRequest.prototype.send;
 
     XMLHttpRequest.prototype.open = function(method, url) {
-        this.__record_all_hook = { method: method, url: url };
+        this.__capture_all_hook = { method: method, url: url };
 
         // Preserve original fetch wrapper (may already be patched by xhr_fetch_capture)
         // by wrapping the readystatechange handler
@@ -175,7 +175,7 @@ const PAGE_SCRIPT = `(function() {
 
     XMLHttpRequest.prototype.send = function() {
         var self = this;
-        var meta = this.__record_all_hook;
+        var meta = this.__capture_all_hook;
         if (!meta) return orig_send.apply(this, arguments);
         meta.start = performance.now();
 

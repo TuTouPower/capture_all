@@ -271,7 +271,9 @@ async function stop_capture(): Promise<void> {
     if (!is_extension) { state = 'saved'; render(); return; }
     try {
         const response = await chrome.runtime.sendMessage({ action: 'stop' });
-        if (!response?.success) return;
+        if (!response?.success) {
+            console.warn('Capture All: stop returned success=false, forcing state transition');
+        }
         stop_timer();
         if (current_capture) {
             finished_capture = {

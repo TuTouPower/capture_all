@@ -84,24 +84,9 @@ function render_overview(): void {
     setText('sessionId', s.capture_id);
     setText('startTime', format_system_time(s.started_at, user_config));
     setText('duration', s.ended_at ? format_duration(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) : 'In progress');
-    const capture_mode = (s.config_snapshot as Record<string, unknown>)?.capture_mode as string || 'basic';
-    setText('mode', capture_mode === 'basic' ? t('basicTitle') : t('advancedTitle'));
     setText('eventCount', String(s.stats.event_count || events.length));
     setText('requestCount', String(s.stats.request_count || network_requests.length));
     setText('logCount', String(s.stats.log_count || console_logs.length));
-
-    // Body capture status
-    const bc_mode_el = document.getElementById('bodyCaptureMode');
-    const bc_status_el = document.getElementById('bodyCaptureStatus');
-    if (bc_mode_el && bc_status_el) {
-        if (s.body_capture_mode && s.body_capture_mode !== 'none') {
-            bc_mode_el.textContent = s.body_capture_mode;
-            bc_status_el.textContent = s.body_capture_status || 'unknown';
-        } else {
-            bc_mode_el.textContent = 'Not enabled';
-            bc_status_el.textContent = '-';
-        }
-    }
 }
 
 function render_timeline(): void {

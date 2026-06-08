@@ -7,14 +7,6 @@ export interface I18nStrings {
     recording: string;
     sessionId: string;
 
-    // Mode selection
-    selectMode: string;
-    basicTitle: string;
-    basicDesc: string;
-    advancedTitle: string;
-    advancedDesc: string;
-    advancedWarning: string;
-
     // Config
     configuration: string;
     mousePrecision: string;
@@ -111,8 +103,6 @@ export interface I18nStrings {
     clickToEnd: string;
     exportLabel: string;
     newCapture: string;
-    modeStandard: string;
-    modeDeep: string;
     viewAll: string;
     viewDetail: string;
     capUser: string;
@@ -129,13 +119,6 @@ const en: I18nStrings = {
     ready: 'Ready',
     recording: 'Recording',
     sessionId: 'ID',
-
-    selectMode: 'Select Recording Mode',
-    basicTitle: 'Basic Recording',
-    basicDesc: 'Mouse, keyboard, scroll, input events, network metadata',
-    advancedTitle: 'Advanced Recording',
-    advancedDesc: '+ Console logs, response bodies (requires debugger)',
-    advancedWarning: 'May trigger Chrome debugger warning',
 
     configuration: 'Configuration',
     mousePrecision: 'Mouse Precision',
@@ -227,8 +210,6 @@ const en: I18nStrings = {
     clickToEnd: 'Click to End',
     exportLabel: 'Export',
     newCapture: 'New Capture',
-    modeStandard: 'Standard',
-    modeDeep: 'Deep',
     viewAll: 'View All',
     viewDetail: 'View Detail',
     capUser: 'User Actions',
@@ -246,13 +227,6 @@ const zh: I18nStrings = {
     recording: '采集中',
     sessionId: 'ID',
 
-    selectMode: '选择录制模式',
-    basicTitle: '基础录制',
-    basicDesc: '鼠标、键盘、滚动、输入事件、网络请求元数据',
-    advancedTitle: '深度录制',
-    advancedDesc: '+ 控制台日志、响应体（需要调试器）',
-    advancedWarning: '可能触发 Chrome 调试警告条',
-
     configuration: '配置',
     mousePrecision: '鼠标精度',
     clicksOnly: '仅点击',
@@ -264,16 +238,16 @@ const zh: I18nStrings = {
     captureResponseBody: '捕获响应体',
     sensitiveData: '敏感数据',
 
-    startRecording: '开始录制',
-    stopRecording: '停止录制',
+    startRecording: '开始采集',
+    stopRecording: '停止采集',
 
     recentSessions: '最近采集',
     noSessions: '暂无采集记录',
     view: '查看',
     delete: '删除',
-    deleteConfirm: '确定删除此录制？',
+    deleteConfirm: '确定删除此采集？',
 
-    sessionDetail: '录制详情',
+    sessionDetail: '采集详情',
     exportJson: '导出 JSON',
     exportJsonl: '导出 JSONL',
     exportHtml: '导出 HTML',
@@ -287,7 +261,7 @@ const zh: I18nStrings = {
     timeline: '时间线',
     network: '网络',
     console: '控制台',
-    sessionNotFound: '录制未找到',
+    sessionNotFound: '采集未找到',
     error: '错误',
     allEvents: '所有事件',
     mouse: '鼠标',
@@ -343,8 +317,6 @@ const zh: I18nStrings = {
     clickToEnd: '点击结束',
     exportLabel: '导出',
     newCapture: '开始新采集',
-    modeStandard: '标准采集',
-    modeDeep: '深度采集',
     viewAll: '查看全部',
     viewDetail: '查看详情',
     capUser: '用户行为',

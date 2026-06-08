@@ -34,7 +34,7 @@ body {
 .brand-cn { font-weight: 600; color: var(--ink-2); margin-left: 1px; }
 .logo {
     width: 27px; height: 27px; border-radius: 8px; flex: none;
-    background: linear-gradient(150deg, var(--purple), color-mix(in srgb, var(--purple) 62%, var(--blue)));
+    background: linear-gradient(150deg, var(--blue), color-mix(in srgb, var(--blue) 62%, var(--indigo)));
     display: grid; place-items: center; box-shadow: var(--shadow-sm);
 }
 .logo-ring { width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid #fff; position: relative; }
@@ -45,13 +45,13 @@ body {
     appearance: none; cursor: pointer; flex: none; white-space: nowrap;
     display: inline-flex; align-items: center; gap: 6px;
     font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--ink-2);
-    background: var(--surface-2); border: 1px solid var(--border-strong);
+    background: var(--surface); border: 1px solid var(--border-strong);
     padding: 7px 12px; border-radius: 10px;
     transition: background .14s, color .14s, border-color .14s;
 }
-.panelbtn:hover { background: var(--surface-3); color: var(--ink); border-color: var(--ink-4); }
+.panelbtn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--ink-4); }
 .panelbtn span { white-space: nowrap; }
-.panelbtn svg { color: var(--purple); flex: none; }
+.panelbtn svg { color: var(--blue); flex: none; }
 
 /* ── body ───────────────────────────────────────────────────────────── */
 .body { padding: 16px; display: flex; flex-direction: column; gap: 15px; }
@@ -59,7 +59,6 @@ body {
 /* ── action zone — FIXED HEIGHT across all 3 states ─────────────────── */
 /* 1 button (开始采集) → 2 (采集中) → 3 (采集完成); the row height never changes. */
 .action { display: flex; gap: 10px; height: 108px; }
-[data-density="compact"] .action { height: 96px; }
 
 /* shared button shell */
 .actbtn {
@@ -84,8 +83,8 @@ body {
 /* STATE A — single full-width primary */
 .act-start {
     flex: 1; gap: 16px;
-    background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 60%, var(--blue)));
-    box-shadow: 0 1px 2px rgba(28,28,24,.12), 0 12px 28px color-mix(in srgb, var(--purple) 36%, transparent);
+    background: linear-gradient(135deg, var(--blue), color-mix(in srgb, var(--blue) 60%, var(--indigo)));
+    box-shadow: 0 1px 2px rgba(28,28,24,.12), 0 12px 28px color-mix(in srgb, var(--blue) 36%, transparent);
 }
 .start-glyph { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.9); display: grid; place-items: center; flex: none; }
 .start-glyph::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
@@ -135,8 +134,6 @@ body {
 .mcard[data-count="1"] { justify-content: flex-start; gap: 0; }
 .mcard[data-count="1"] .mcard-row { padding-bottom: 9px; border-bottom: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
 .mcard-n { padding-top: 9px; font-size: 22px; font-weight: 700; letter-spacing: .01em; }
-[data-density="compact"] .mcard { min-height: 84px; padding: 10px; }
-[data-density="compact"] .mcard[data-count="1"] { min-height: 84px; }
 
 /* per-source color tints */
 .mcard[data-tone="blue"]   { background: var(--blue-bg);   color: var(--blue-ink);   border-color: color-mix(in srgb, var(--blue) 22%, transparent); }
@@ -175,11 +172,6 @@ body {
     display: inline-flex; align-items: center; gap: 3px; cursor: pointer;
 }
 .link:hover { text-decoration: underline; }
-
-/* mode badge */
-.badge { font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 6px; letter-spacing: .01em; white-space: nowrap; }
-.badge[data-mode="standard"] { background: var(--blue-bg); color: var(--blue-ink); }
-.badge[data-mode="deep"] { background: var(--purple-bg); color: var(--purple-ink); }
 
 /* dark logo tweak */
 [data-theme="dark"] .logo-ring, [data-theme="dark"] .logo-ring::after { border-color: #fff; }

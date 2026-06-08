@@ -10,7 +10,6 @@ import { format_system_time } from '../shared/system_time';
 import type { RecordConfig } from '../shared/types';
 
 type PopupState = 'ready' | 'recording' | 'saved';
-type CaptureMode = 'standard' | 'deep';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -86,12 +85,6 @@ function fmt_dur_ms(ms: number): string {
     return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
-function mode_badge(mode: CaptureMode): string {
-    return `<span class="badge" data-mode="${mode === 'deep' ? 'deep' : 'standard'}">${
-        mode === 'deep' ? t('modeDeep') : t('modeStandard')
-    }</span>`;
-}
-
 function metric_grid(stats: CaptureStats | null): string {
     const cards = CAPTURE.map((src) => {
         const has = stats != null && src.stat != null;
@@ -111,7 +104,6 @@ let recent_sessions: Session[] = [];
 
 function recent_list(): string {
     const rows = recent_sessions.slice(0, 3).map((s) => {
-        const mode: CaptureMode = s.mode === 'deep' ? 'deep' : 'standard';
         const events = fmt_num(s.stats?.event_count ?? 0);
         const dur = s.ended_at
             ? fmt_dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime())
@@ -120,7 +112,7 @@ function recent_list(): string {
         return `<a class="recent-row" data-session="${escape_html(s.capture_id)}">
             <span class="recent-ic">${ICON.clock}</span>
             <span class="recent-main">
-                <span class="recent-top"><b>${when}</b>${mode_badge(mode)}</span>
+                <span class="recent-top"><b>${when}</b></span>
                 <span class="recent-sub mono">${dur} · ${events} events</span>
             </span>
             <span class="recent-go link">${t('viewDetail')} ${ICON.chevron}</span>

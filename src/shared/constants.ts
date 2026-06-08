@@ -1,7 +1,7 @@
 // shared/constants.ts
 import type { RecordConfig } from './types';
 
-export const DB_NAME = 'record_all_db';
+export const DB_NAME = 'capture_all_db';
 export const DB_VERSION = 2;
 
 export const STORE_NAMES = {
@@ -53,7 +53,7 @@ export const DEFAULT_USER_CONFIG = {
     system_time_timezone: 'browser' as const,
     detail_time_display_mode: 'system' as const,
     export_directory: '',
-    export_filename_template: 'record_all_{capture_id}_{date}.{ext}',
+    export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
     export_save_as: true,
     agent_bridge_enabled: false,
     agent_bridge_url: 'http://127.0.0.1:17831',

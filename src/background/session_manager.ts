@@ -28,6 +28,7 @@ export async function start_session(config: RecordConfig = DEFAULT_CONFIG): Prom
         config_snapshot: config,
         stats: {
             event_count: 0,
+            nav_count: 0,
             request_count: 0,
             log_count: 0,
             error_count: 0,

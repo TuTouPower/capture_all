@@ -153,6 +153,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         config_snapshot: config,
         stats: {
             event_count: 0,
+            nav_count: 0,
             request_count: 0,
             log_count: 0,
             error_count: 0,
@@ -425,6 +426,9 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
     try {
         await write_events([event]);
         current_capture.stats.event_count++;
+        if (event.category === 'navigation') {
+            current_capture.stats.nav_count++;
+        }
         if (event.type === 'input_event') {
             current_capture.stats.storage_change_count++;
         }

@@ -3,192 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Record All</title>
+  <title>Capture All 全采</title>
+  <link rel="stylesheet" href="../shared/design_tokens.css">
   <link rel="stylesheet" href="./popup.css">
 </head>
 <body>
-  <div class="popup-container">
-    <!-- Settings Button -->
-    <div class="settings-bar">
-      <button class="btn-settings" id="settingsBtn" title="Settings">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-          <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.421-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.116l.094-.318z"/>
-        </svg>
+  <div class="popup" id="popup">
+    <header class="phead">
+      <div class="brand">
+        <span class="logo"><span class="logo-ring"></span></span>
+        <b>Capture All <span class="brand-cn">全采</span></b>
+      </div>
+      <button class="panelbtn" id="panelBtn" title="主面板">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/></svg>
+        <span data-i18n="mainPanel">主面板</span>
       </button>
-    </div>
-
-    <!-- Settings Panel (hidden by default) -->
-    <div class="settings-panel" id="settingsPanel" style="display: none;">
-      <div class="settings-header">
-        <h3 data-i18n="settings">Settings</h3>
-        <button class="btn-close" id="closeSettings">&times;</button>
-      </div>
-      <div class="settings-body">
-        <div class="config-group">
-          <label data-i18n="language">Language</label>
-          <select id="languageSelect">
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-          </select>
-        </div>
-        <div class="config-group">
-          <label data-i18n="theme">Theme</label>
-          <select id="themeSelect">
-            <option value="follow-system" data-i18n="themeFollowSystem">Follow System</option>
-            <option value="light" data-i18n="themeLight">Light</option>
-            <option value="dark" data-i18n="themeDark">Dark</option>
-          </select>
-        </div>
-        <div class="config-group">
-          <label data-i18n="systemTimeTimezone">System Time Timezone</label>
-          <select id="systemTimeTimezone">
-            <option value="browser" data-i18n="timezoneBrowser">Follow Browser / System</option>
-            <option value="UTC">UTC</option>
-            <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
-          </select>
-        </div>
-        <div class="config-group">
-          <label data-i18n="detailTimeDisplayMode">Detail Time Display</label>
-          <select id="detailTimeDisplayMode">
-            <option value="system" data-i18n="detailTimeSystem">System Time</option>
-            <option value="relative" data-i18n="detailTimeRelative">Relative Time</option>
-          </select>
-        </div>
-        <div class="config-group">
-          <label data-i18n="exportDirectory">Export Directory</label>
-          <input type="text" id="exportDirectory" placeholder="record-all/exports" />
-          <small class="hint" data-i18n="exportDirectoryDesc">Relative to Chrome Downloads; leave empty for default</small>
-        </div>
-        <div class="config-group">
-          <label data-i18n="exportFilenameTemplate">Export Filename</label>
-          <input type="text" id="exportFilenameTemplate" />
-          <small class="hint" data-i18n="exportFilenameTemplateDesc">Tokens: {capture_id}, {date}, {ext}</small>
-        </div>
-        <div class="config-group">
-          <label class="inline-label">
-            <input type="checkbox" id="exportSaveAs" />
-            <span data-i18n="exportSaveAs">Ask where to save each export</span>
-          </label>
-        </div>
-        <div class="config-group">
-          <label data-i18n="agentBridge">MCP Bridge</label>
-          <label class="inline-label">
-            <input type="checkbox" id="agentBridgeEnabled" />
-            <span data-i18n="agentBridgeEnabled">Enable MCP bridge</span>
-          </label>
-          <small class="hint" data-i18n="agentBridgeDesc">Local bridge only; token is required before connecting</small>
-          <small class="hint error-text" id="agentBridgeError" style="display: none;"></small>
-        </div>
-        <div class="config-group">
-          <label data-i18n="agentBridgeUrl">Bridge URL</label>
-          <input type="text" id="agentBridgeUrl" placeholder="http://127.0.0.1:17831" />
-        </div>
-        <div class="config-group">
-          <label data-i18n="agentBridgeToken">Bridge Token</label>
-          <input type="password" id="agentBridgeToken" />
-        </div>
-        <div class="config-group">
-          <label data-i18n="agentBridgePollInterval">Poll Interval (ms)</label>
-          <input type="number" id="agentBridgePollInterval" min="250" max="300000" step="250" />
-        </div>
-        <div class="config-group">
-          <label class="inline-label">
-            <input type="checkbox" id="redactData" />
-            <span data-i18n="redactData">Redact Sensitive Data</span>
-          </label>
-          <small class="hint" data-i18n="redactDataDesc">Mask passwords, tokens, and truncate long text</small>
-        </div>
-      </div>
-    </div>
-
-    <!-- Status Section -->
-    <div class="status-section">
-      <div class="status-indicator" id="statusIndicator">
-        <span class="dot"></span>
-        <span class="status-text" data-i18n="ready">Ready</span>
-      </div>
-      <div class="session-info" id="sessionInfo" style="display: none;">
-        <span class="session-id"></span>
-        <span class="session-duration"></span>
-      </div>
-      <div class="body-capture-status" id="bodyCaptureStatus" style="display: none;"></div>
-    </div>
-
-    <!-- Mode Selection -->
-    <div class="mode-section">
-      <h3 data-i18n="selectMode">Select Recording Mode</h3>
-      <div class="mode-buttons">
-        <button class="mode-btn" id="basicBtn" data-mode="basic">
-          <span class="mode-title" data-i18n="basicTitle">Basic Recording</span>
-          <span class="mode-desc" data-i18n="basicDesc">Mouse, keyboard, scroll, DOM changes, network metadata</span>
-        </button>
-        <button class="mode-btn" id="advancedBtn" data-mode="advanced">
-          <span class="mode-title" data-i18n="advancedTitle">Advanced Recording</span>
-          <span class="mode-desc" data-i18n="advancedDesc">+ Console logs, response bodies (requires debugger)</span>
-          <span class="mode-warning" data-i18n="advancedWarning">May trigger Chrome debugger warning</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Configuration -->
-    <div class="config-section" id="configSection">
-      <details>
-        <summary data-i18n="configuration">Configuration</summary>
-        <div class="config-options">
-          <div class="config-group">
-            <label data-i18n="mousePrecision">Mouse Precision</label>
-            <select id="mousePrecision">
-              <option value="clicks" data-i18n="clicksOnly">Clicks only</option>
-              <option value="clicks_scroll_drag" selected data-i18n="clicksScrollDrag">Clicks + Scroll + Drag</option>
-              <option value="full_trajectory" data-i18n="fullTrajectory">Full trajectory</option>
-            </select>
-          </div>
-          <div class="config-group">
-            <label>
-              <input type="checkbox" id="captureKeyboard" />
-              <span data-i18n="captureKeyboard">Capture Keyboard</span>
-              <span class="warning" data-i18n="sensitiveData">Sensitive data</span>
-            </label>
-          </div>
-          <div class="config-group">
-            <label>
-              <input type="checkbox" id="captureInputValues" />
-              <span data-i18n="captureInputValues">Capture Input Values</span>
-              <span class="warning" data-i18n="sensitiveData">Sensitive data</span>
-            </label>
-          </div>
-          <div class="config-group">
-            <label>
-              <input type="checkbox" id="captureRequestBody" />
-              <span data-i18n="captureRequestBody">Capture Request Body</span>
-            </label>
-          </div>
-          <div class="config-group">
-            <label>
-              <input type="checkbox" id="captureResponseBody" />
-              <span data-i18n="captureResponseBody">Capture Response Body</span>
-            </label>
-          </div>
-        </div>
-      </details>
-    </div>
-
-    <!-- Action Buttons -->
-    <div class="action-section">
-      <button class="btn-primary" id="startBtn" data-i18n="startRecording">Start Recording</button>
-      <button class="btn-danger" id="stopBtn" style="display: none;" data-i18n="stopRecording">Stop Recording</button>
-    </div>
-
-    <!-- History Section -->
-    <div class="history-section">
-      <h3 data-i18n="recentSessions">Recent Sessions</h3>
-      <div class="history-list" id="historyList">
-        <div class="history-empty" data-i18n="noSessions">No sessions recorded yet</div>
-      </div>
-    </div>
+    </header>
+    <div id="view"></div>
   </div>
-
   <script type="module" src="./popup.ts"></script>
 </body>
 </html>

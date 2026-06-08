@@ -1,452 +1,400 @@
-// popup/popup.ts
-import type { RecordConfig, CaptureRecord, Session, UserConfig, ThemeMode, SystemTimeTimezone, DetailTimeDisplayMode } from '../shared/types';
+// popup/popup.ts — Capture All 全采 采集控制台
+// Unified popup, 3 states: 就绪 / 采集中 / 采集完成. Real recording wiring.
+import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
-import { init_locale, t, apply_translations, set_locale, type Locale } from '../shared/i18n';
-import { init_theme, set_theme } from '../shared/theme';
+import { init_locale, t, apply_translations } from '../shared/i18n';
+import { init_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
-import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
+import type { RecordConfig } from '../shared/types';
 
-let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
-let is_recording = false;
-let current_capture: CaptureRecord | null = null;
-let duration_timer: ReturnType<typeof setInterval> | null = null;
+type PopupState = 'ready' | 'recording' | 'saved';
+type CaptureMode = 'standard' | 'deep';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
-// DOM Elements
-const statusIndicator = document.getElementById('statusIndicator')!;
-const statusText = statusIndicator.querySelector('.status-text')!;
-const dot = statusIndicator.querySelector('.dot')!;
-const sessionInfo = document.getElementById('sessionInfo')!;
-const basicBtn = document.getElementById('basicBtn')!;
-const advancedBtn = document.getElementById('advancedBtn')!;
-const startBtn = document.getElementById('startBtn')!;
-const stopBtn = document.getElementById('stopBtn')!;
-const historyList = document.getElementById('historyList')!;
-const mousePrecision = document.getElementById('mousePrecision') as HTMLSelectElement;
-const captureKeyboard = document.getElementById('captureKeyboard') as HTMLInputElement;
-const captureInputValues = document.getElementById('captureInputValues') as HTMLInputElement;
-const captureRequestBody = document.getElementById('captureRequestBody') as HTMLInputElement;
-const captureResponseBody = document.getElementById('captureResponseBody') as HTMLInputElement;
-const settingsBtn = document.getElementById('settingsBtn')!;
-const settingsPanel = document.getElementById('settingsPanel')!;
-const closeSettings = document.getElementById('closeSettings')!;
-const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
-const themeSelect = document.getElementById('themeSelect') as HTMLSelectElement;
-const systemTimeTimezone = document.getElementById('systemTimeTimezone') as HTMLSelectElement;
-const detailTimeDisplayMode = document.getElementById('detailTimeDisplayMode') as HTMLSelectElement;
-const exportDirectory = document.getElementById('exportDirectory') as HTMLInputElement;
-const exportFilenameTemplate = document.getElementById('exportFilenameTemplate') as HTMLInputElement;
-const exportSaveAs = document.getElementById('exportSaveAs') as HTMLInputElement;
-const agentBridgeEnabled = document.getElementById('agentBridgeEnabled') as HTMLInputElement;
-const agentBridgeUrl = document.getElementById('agentBridgeUrl') as HTMLInputElement;
-const agentBridgeToken = document.getElementById('agentBridgeToken') as HTMLInputElement;
-const agentBridgePollInterval = document.getElementById('agentBridgePollInterval') as HTMLInputElement;
-const agentBridgeError = document.getElementById('agentBridgeError') as HTMLElement;
-const redactData = document.getElementById('redactData') as HTMLInputElement;
+let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
+let state: PopupState = 'ready';
+let current_capture: CaptureRecord | null = null;
+let finished_capture: CaptureRecord | null = null;
+let live_counts: CaptureStats | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
 
-// Initialize
-document.addEventListener('DOMContentLoaded', async () => {
-    if (is_extension) {
-        await init_locale();
-        await init_theme();
-        await load_user_config_and_apply();
-        await load_state();
-        await load_history();
-    }
+const view = document.getElementById('view')!;
+const panelBtn = document.getElementById('panelBtn')!;
+
+// ── inline icons (standard UI glyphs only) ──────────────────────────────
+const ICON: Record<string, string> = {
+    ext: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v4.8l3 1.7"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
+    check: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.4 12.4l2.5 2.5 4.7-5.3"/></svg>',
+    download: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11m0 0l-3.8-3.8M12 14.5l3.8-3.8M5 19.5h14"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l5 5v12H7z"/><path d="M14 3.5v5h5M10 13h6M10 16.5h4"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5A8 8 0 1 0 18 17"/><path d="M20 5v5h-5"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"/></svg>',
+    pointer: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 3l5.4 15.6 2.25-6.45 6.45-2.25z"/></svg>',
+    globe: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg>',
+    braces: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4c-2 0-2.5 1-2.5 3.5S5 11 3.5 12c1.5 1 2 2 2 4.5S6 20 8 20M16 4c2 0 2.5 1 2.5 3.5S19 11 20.5 12c-1.5 1-2 2-2 4.5S18 20 16 20"/></svg>',
+    console: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M6 9l3 3-3 3M12.5 15h4"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4.5M12 17h.01"/></svg>',
+    storage: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
+    cookie: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-5-5 4 4 0 0 1-4-4z"/><path d="M9 11.5h.01M14 14.5h.01M9.5 15.5h.01M15 9h.01"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+};
+
+interface CaptureSource {
+    key: keyof CaptureStats | 'nav' | 'mask';
+    i18n: string;
+    icon: string;
+    tone: string;
+    stat: keyof CaptureStats | null;
+}
+
+// the 8 capture sources (fixed order + colors per spec)
+const CAPTURE: CaptureSource[] = [
+    { key: 'event_count',          i18n: 'capUser',    icon: 'pointer', tone: 'blue',   stat: 'event_count' },
+    { key: 'nav',                  i18n: 'capNav',     icon: 'globe',   tone: 'indigo', stat: null },
+    { key: 'request_count',        i18n: 'capNet',     icon: 'braces',  tone: 'purple', stat: 'request_count' },
+    { key: 'log_count',            i18n: 'capConsole', icon: 'console', tone: 'amber',  stat: 'log_count' },
+    { key: 'error_count',          i18n: 'capError',   icon: 'alert',   tone: 'red',    stat: 'error_count' },
+    { key: 'storage_change_count', i18n: 'capStorage', icon: 'storage', tone: 'green',  stat: 'storage_change_count' },
+    { key: 'cookie_change_count',  i18n: 'capCookie',  icon: 'cookie',  tone: 'cyan',   stat: 'cookie_change_count' },
+    { key: 'mask',                 i18n: 'capMask',    icon: 'shield',  tone: 'green',  stat: null },
+];
+
+function escape_html(s: string): string {
+    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+}
+
+function fmt_num(n: number): string {
+    return n.toLocaleString('en-US');
+}
+
+function fmt_hms(seconds: number): string {
+    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+}
+
+function fmt_dur_ms(ms: number): string {
+    const total = Math.floor(ms / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+}
+
+function current_mode(): CaptureMode {
+    return user_config.selected_mode === 'advanced' ? 'deep' : 'standard';
+}
+
+function mode_badge(mode: CaptureMode): string {
+    return `<span class="badge" data-mode="${mode === 'deep' ? 'deep' : 'standard'}">${
+        mode === 'deep' ? t('modeDeep') : t('modeStandard')
+    }</span>`;
+}
+
+function metric_grid(stats: CaptureStats | null): string {
+    const cards = CAPTURE.map((src) => {
+        let count_html = '';
+        if (stats) {
+            const n = src.stat ? stats[src.stat] : 0;
+            count_html = `<span class="mcard-n mono">${fmt_num(n)}</span>`;
+        }
+        return `<div class="mcard" data-tone="${src.tone}" data-count="${stats ? 1 : 0}">
+            <span class="mcard-ic">${ICON[src.icon]}</span>
+            <span class="mcard-lbl">${t(src.i18n as never)}</span>
+            ${count_html}
+        </div>`;
+    }).join('');
+    return `<div class="metrics">${cards}</div>`;
+}
+
+let recent_sessions: Session[] = [];
+
+function recent_list(): string {
+    const rows = recent_sessions.slice(0, 3).map((s) => {
+        const mode: CaptureMode = s.mode === 'deep' ? 'deep' : 'standard';
+        const events = fmt_num(s.stats?.event_count ?? 0);
+        const dur = s.ended_at
+            ? fmt_dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime())
+            : '—';
+        const when = escape_html(format_system_time(s.started_at, user_config));
+        return `<a class="recent-row" data-session="${escape_html(s.capture_id)}">
+            <span class="recent-ic">${ICON.clock}</span>
+            <span class="recent-main">
+                <span class="recent-top"><b>${when}</b>${mode_badge(mode)}</span>
+                <span class="recent-sub mono">${dur} · ${events} events</span>
+            </span>
+            <span class="recent-go link">${t('viewDetail')} ${ICON.chevron}</span>
+        </a>`;
+    }).join('');
+    const body = rows || `<div class="recent-empty">${t('noSessions')}</div>`;
+    return `<div class="recent">
+        <div class="recent-hd">
+            <span>${t('recentSessions')}</span>
+            <a class="link" id="viewAll">${t('viewAll')} ${ICON.chevron}</a>
+        </div>
+        <div class="recent-list">${body}</div>
+    </div>`;
+}
+
+function render_ready(): string {
+    const deep = current_mode() === 'deep';
+    return `<div class="body">
+        <div class="unirow">
+            <div class="status"><span class="dot" data-tone="green"></span><b>${t('ready')}</b></div>
+            <div class="seg" data-deep="${deep ? 1 : 0}">
+                <button data-mode="standard" data-on="${!deep ? 1 : 0}">${t('modeStandard')}</button>
+                <button data-mode="deep" data-on="${deep ? 1 : 0}">${t('modeDeep')}</button>
+            </div>
+        </div>
+        <button class="cta cta-main" id="startBtn"><span class="rec-glyph"></span>${t('startCapture')}</button>
+        ${metric_grid(null)}
+        ${recent_list()}
+    </div>`;
+}
+
+function render_recording(): string {
+    const mode = current_capture
+        ? (current_capture.mode === 'deep' ? 'deep' : 'standard')
+        : current_mode();
+    const elapsed = current_capture
+        ? fmt_hms((Date.now() - new Date(current_capture.started_at).getTime()) / 1000)
+        : '00:00:00';
+    return `<div class="body">
+        <div class="unirow">
+            <div class="status">
+                <span class="dot pulse" data-tone="red"></span>
+                <b class="rec-label">${t('recording')}</b>
+                <span class="timer mono" id="timer">${elapsed}</span>
+            </div>
+            ${mode_badge(mode as CaptureMode)}
+        </div>
+        <div class="row2">
+            <button class="cta" data-tone="red" style="flex:1.6" id="stopBtn">${ICON.stop}${t('stopCapture')}</button>
+            <button class="cta ghost" id="liveDetailBtn">${ICON.ext}${t('liveDetail')}</button>
+        </div>
+        ${metric_grid(live_counts ?? current_capture?.stats ?? null)}
+        ${recent_list()}
+    </div>`;
+}
+
+function render_saved(): string {
+    const cap = finished_capture;
+    const mode: CaptureMode = cap && cap.mode === 'deep' ? 'deep' : 'standard';
+    const dur = cap && cap.ended_at
+        ? fmt_dur_ms(new Date(cap.ended_at).getTime() - new Date(cap.started_at).getTime())
+        : fmt_dur_ms(cap?.duration_ms ?? 0);
+    return `<div class="body">
+        <div class="unirow">
+            <div class="status">
+                <span class="ck" data-tone="green">${ICON.check}</span>
+                <b style="color:var(--green-ink)">${t('captureDone')}</b>
+                <span class="timer mono done">${dur}</span>
+            </div>
+            ${mode_badge(mode)}
+        </div>
+        <div class="row2 row3btns">
+            <a class="cta" data-tone="blue" style="flex:1.5" id="openDetailBtn">${ICON.doc}${t('openDetail')}</a>
+            <button class="cta ghost" id="exportBtn">${ICON.download}${t('exportLabel')}</button>
+            <button class="cta ghost" id="newBtn">${ICON.refresh}${t('newCapture')}</button>
+        </div>
+        ${metric_grid(cap?.stats ?? null)}
+        ${recent_list()}
+    </div>`;
+}
+
+function render(): void {
+    const popup = document.getElementById('popup')!;
+    popup.classList.toggle('is-rec', state === 'recording');
+    if (state === 'recording') view.innerHTML = render_recording();
+    else if (state === 'saved') view.innerHTML = render_saved();
+    else view.innerHTML = render_ready();
     apply_translations();
-    setup_event_listeners();
-    update_mode_selection();
-    setup_settings();
-});
-
-async function load_user_config_and_apply(): Promise<void> {
-    user_config = await load_user_config();
-
-    // Apply to UI
-    mousePrecision.value = user_config.mouse_precision;
-    captureKeyboard.checked = user_config.keyboard_capture_mode !== 'none';
-    captureInputValues.checked = user_config.capture_input_values;
-    captureRequestBody.checked = user_config.capture_request_body;
-    captureResponseBody.checked = user_config.capture_response_body;
-    redactData.checked = user_config.redact_data;
-    themeSelect.value = user_config.theme;
-    languageSelect.value = user_config.locale;
-    systemTimeTimezone.value = user_config.system_time_timezone;
-    detailTimeDisplayMode.value = user_config.detail_time_display_mode;
-    exportDirectory.value = user_config.export_directory;
-    exportFilenameTemplate.value = user_config.export_filename_template;
-    exportSaveAs.checked = user_config.export_save_as;
-    agentBridgeEnabled.checked = user_config.agent_bridge_enabled;
-    agentBridgeUrl.value = user_config.agent_bridge_url;
-    agentBridgeToken.value = user_config.agent_bridge_token;
-    agentBridgePollInterval.value = String(user_config.agent_bridge_poll_interval_ms);
+    wire_view();
 }
 
-async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_recording', 'current_capture']);
-    is_recording = result.is_recording || false;
-    current_capture = result.current_capture || null;
-
-    update_mode_selection();
-    update_recording_state();
+function open_dashboard(query = ''): void {
+    if (!is_extension) return;
+    const url = chrome.runtime.getURL('src/dashboard/dashboard.html' + query);
+    chrome.tabs.create({ url });
 }
 
-function setup_settings(): void {
-    settingsBtn.addEventListener('click', () => {
-        settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
-    });
-
-    closeSettings.addEventListener('click', () => {
-        settingsPanel.style.display = 'none';
-    });
-}
-
-function setup_event_listeners(): void {
-    basicBtn.addEventListener('click', () => select_mode('basic'));
-    advancedBtn.addEventListener('click', () => select_mode('advanced'));
-    startBtn.addEventListener('click', start_recording);
-    stopBtn.addEventListener('click', stop_recording);
-
-    // Language change
-    languageSelect.addEventListener('change', async () => {
-        const locale = languageSelect.value as Locale;
-        set_locale(locale);
-        await save_user_config({ locale });
-        apply_translations();
-        update_recording_state();
-        load_history();
-    });
-
-    // Theme change
-    themeSelect.addEventListener('change', async () => {
-        const theme = themeSelect.value as ThemeMode;
-        await set_theme(theme);
-        await save_user_config({ theme });
-    });
-
-    // Redact toggle
-    redactData.addEventListener('change', async () => {
-        user_config = { ...user_config, redact_data: redactData.checked };
-        await save_user_config({ redact_data: redactData.checked });
-    });
-
-    systemTimeTimezone.addEventListener('change', async () => {
-        const system_time_timezone = systemTimeTimezone.value as SystemTimeTimezone;
-        user_config = { ...user_config, system_time_timezone };
-        await save_user_config({ system_time_timezone });
-        await load_history();
-    });
-
-    detailTimeDisplayMode.addEventListener('change', async () => {
-        const detail_time_display_mode = detailTimeDisplayMode.value as DetailTimeDisplayMode;
-        user_config = { ...user_config, detail_time_display_mode };
-        await save_user_config({ detail_time_display_mode });
-    });
-
-    exportDirectory.addEventListener('change', async () => {
-        const export_directory = exportDirectory.value;
-        user_config = { ...user_config, export_directory };
-        await save_user_config({ export_directory });
-    });
-
-    exportFilenameTemplate.addEventListener('change', async () => {
-        const export_filename_template = exportFilenameTemplate.value || DEFAULT_USER_CONFIG.export_filename_template;
-        exportFilenameTemplate.value = export_filename_template;
-        user_config = { ...user_config, export_filename_template };
-        await save_user_config({ export_filename_template });
-    });
-
-    exportSaveAs.addEventListener('change', async () => {
-        const export_save_as = exportSaveAs.checked;
-        user_config = { ...user_config, export_save_as };
-        await save_user_config({ export_save_as });
-    });
-
-    agentBridgeEnabled.addEventListener('change', persist_agent_bridge_config);
-    agentBridgeUrl.addEventListener('change', persist_agent_bridge_config);
-    agentBridgeToken.addEventListener('change', persist_agent_bridge_config);
-    agentBridgePollInterval.addEventListener('change', persist_agent_bridge_config);
-
-    // Config change listeners
-    mousePrecision.addEventListener('change', persist_config);
-    captureKeyboard.addEventListener('change', persist_config);
-    captureInputValues.addEventListener('change', persist_config);
-    captureRequestBody.addEventListener('change', persist_config);
-    captureResponseBody.addEventListener('change', persist_config);
-}
-
-function select_mode(mode: 'basic' | 'advanced'): void {
-    user_config.selected_mode = mode;
-    if (is_extension) save_user_config({ selected_mode: mode });
-    update_mode_selection();
-}
-
-function update_mode_selection(): void {
-    basicBtn.classList.toggle('selected', user_config.selected_mode === 'basic');
-    advancedBtn.classList.toggle('selected', user_config.selected_mode === 'advanced');
-}
-
-async function persist_config(): Promise<void> {
-    const patch: Partial<UserConfig> = {
-        mouse_precision: mousePrecision.value as UserConfig['mouse_precision'],
-        keyboard_capture_mode: captureKeyboard.checked ? 'shortcuts' : 'none',
-        capture_input_values: captureInputValues.checked,
-        capture_request_body: captureRequestBody.checked,
-        capture_response_body: captureResponseBody.checked,
-        redact_data: redactData.checked
-    };
-    user_config = { ...user_config, ...patch };
-    await save_user_config(patch);
-}
-
-async function persist_agent_bridge_config(): Promise<void> {
-    try {
-        const patch = normalize_agent_bridge_config({
-            agent_bridge_enabled: agentBridgeEnabled.checked,
-            agent_bridge_url: agentBridgeUrl.value,
-            agent_bridge_token: agentBridgeToken.value,
-            agent_bridge_poll_interval_ms: Number(agentBridgePollInterval.value)
+function wire_view(): void {
+    view.querySelectorAll('.seg button').forEach((b) => {
+        b.addEventListener('click', () => {
+            const m = (b as HTMLElement).dataset.mode === 'deep' ? 'advanced' : 'basic';
+            user_config = { ...user_config, selected_mode: m };
+            if (is_extension) save_user_config({ selected_mode: m });
+            render();
         });
-        user_config = { ...user_config, ...patch };
-        agentBridgeEnabled.checked = patch.agent_bridge_enabled;
-        agentBridgeUrl.value = patch.agent_bridge_url;
-        agentBridgeToken.value = patch.agent_bridge_token;
-        agentBridgePollInterval.value = String(patch.agent_bridge_poll_interval_ms);
-        agentBridgeError.style.display = 'none';
-        agentBridgeError.textContent = '';
-        await save_user_config(patch);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        user_config = { ...user_config, agent_bridge_enabled: false };
-        agentBridgeEnabled.checked = false;
-        agentBridgeError.textContent = message;
-        agentBridgeError.style.display = 'block';
-        await save_user_config({ agent_bridge_enabled: false });
-    }
+    });
+
+    view.querySelector('#startBtn')?.addEventListener('click', start_capture);
+    view.querySelector('#stopBtn')?.addEventListener('click', stop_capture);
+    view.querySelector('#newBtn')?.addEventListener('click', () => { state = 'ready'; render(); });
+    view.querySelector('#liveDetailBtn')?.addEventListener('click', () => {
+        if (current_capture) open_dashboard(`?session=${current_capture.capture_id}&page=detail`);
+    });
+    view.querySelector('#openDetailBtn')?.addEventListener('click', () => {
+        if (finished_capture) open_dashboard(`?session=${finished_capture.capture_id}&page=detail`);
+    });
+    view.querySelector('#exportBtn')?.addEventListener('click', export_finished);
+    view.querySelector('#viewAll')?.addEventListener('click', () => open_dashboard());
+    view.querySelectorAll('.recent-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            const id = (row as HTMLElement).dataset.session;
+            if (id) open_dashboard(`?session=${id}&page=detail`);
+        });
+    });
 }
 
 function get_record_config(): RecordConfig {
-    const base_config = user_config.selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
-
+    const base = user_config.selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
     return {
-        ...base_config,
+        ...base,
         mouse_precision: user_config.mouse_precision,
         keyboard_capture_mode: user_config.keyboard_capture_mode,
         capture_input_values: user_config.capture_input_values,
         capture_request_body: user_config.capture_request_body,
         capture_response_body: user_config.capture_response_body,
-        redact_data: user_config.redact_data
+        redact_data: user_config.redact_data,
     };
 }
 
-async function start_recording(): Promise<void> {
-    if (!is_extension) return;
-
+async function start_capture(): Promise<void> {
+    if (!is_extension) { state = 'recording'; render(); return; }
     const config = get_record_config();
     const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
     try {
-        const response = await chrome.runtime.sendMessage({
-            action: 'start',
-            session_id,
-            config
-        });
-
-        if (response.success) {
-            is_recording = true;
-            current_capture = {
-                capture_id: session_id,
-                name: 'Capture ' + new Date().toLocaleString(),
-                status: 'capturing',
-                mode: config.capture_mode === 'advanced' ? 'deep' : 'standard',
-                started_at: new Date(Date.now()).toISOString(),
-                ended_at: null,
-                duration_ms: 0,
-                start_url: '',
-                end_url: null,
-                tab_id: 0,
-                window_id: null,
-                config_snapshot: config,
-                stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
-                export_status: 'not_exported',
-                tags: [],
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            };
-            chrome.storage.local.set({ is_recording: true, current_capture });
-            update_recording_state();
-            await load_history();
-        } else {
-            alert(`${t('error')}: ${response.error}`);
-        }
+        const response = await chrome.runtime.sendMessage({ action: 'start', session_id, config });
+        if (!response?.success) { alert(`${t('error')}: ${response?.error}`); return; }
+        current_capture = {
+            capture_id: session_id,
+            name: 'Capture ' + new Date().toLocaleString(),
+            status: 'capturing',
+            mode: config.capture_mode === 'advanced' ? 'deep' : 'standard',
+            started_at: new Date().toISOString(),
+            ended_at: null,
+            duration_ms: 0,
+            start_url: '', end_url: null, tab_id: 0, window_id: null,
+            config_snapshot: config,
+            stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            export_status: 'not_exported',
+            tags: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        live_counts = null;
+        chrome.storage.local.set({ is_recording: true, current_capture });
+        state = 'recording';
+        render();
+        start_timer();
     } catch (error) {
         alert(`${t('error')}: ${error}`);
     }
 }
 
-async function stop_recording(): Promise<void> {
-    if (!is_extension) return;
-
+async function stop_capture(): Promise<void> {
+    if (!is_extension) { state = 'saved'; render(); return; }
     try {
         const response = await chrome.runtime.sendMessage({ action: 'stop' });
-
-        if (response.success) {
-            is_recording = false;
-            current_capture = null;
-            chrome.storage.local.set({ is_recording: false, current_capture: null });
-            update_recording_state();
-            await load_history();
+        if (!response?.success) return;
+        stop_timer();
+        if (current_capture) {
+            finished_capture = {
+                ...current_capture,
+                status: 'completed',
+                ended_at: new Date().toISOString(),
+                duration_ms: Date.now() - new Date(current_capture.started_at).getTime(),
+                stats: live_counts ?? current_capture.stats,
+            };
         }
+        current_capture = null;
+        live_counts = null;
+        chrome.storage.local.set({ is_recording: false, current_capture: null });
+        await load_history();
+        state = 'saved';
+        render();
     } catch (error) {
         alert(`${t('error')}: ${error}`);
     }
 }
 
-function update_recording_state(): void {
-    if (is_recording) {
-        dot.classList.add('recording');
-        dot.classList.remove('ready');
-        statusText.textContent = t('recording');
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'block';
-        sessionInfo.style.display = 'block';
-
-        if (current_capture) {
-            sessionInfo.querySelector('.session-id')!.textContent = `${t('sessionId')}: ${current_capture.capture_id}`;
-            start_duration_timer();
-            update_body_capture_status();
-        }
-    } else {
-        dot.classList.remove('recording');
-        dot.classList.add('ready');
-        statusText.textContent = t('ready');
-        startBtn.style.display = 'block';
-        stopBtn.style.display = 'none';
-        sessionInfo.style.display = 'none';
-        stop_duration_timer();
-        update_body_capture_status();
+async function export_finished(): Promise<void> {
+    if (!is_extension || !finished_capture) return;
+    try {
+        await chrome.runtime.sendMessage({ action: 'export_json', session_id: finished_capture.capture_id });
+    } catch (error) {
+        alert(`${t('error')}: ${error}`);
     }
 }
 
-async function update_body_capture_status(): Promise<void> {
-    const el = document.getElementById('bodyCaptureStatus');
-    if (!el) return;
+function start_timer(): void {
+    stop_timer();
+    timer = setInterval(async () => {
+        const el = document.getElementById('timer');
+        if (el && current_capture) {
+            el.textContent = fmt_hms((Date.now() - new Date(current_capture.started_at).getTime()) / 1000);
+        }
+        await refresh_counts();
+    }, 1000);
+}
 
-    if (!is_recording || !current_capture) {
-        el.style.display = 'none';
-        return;
-    }
+function stop_timer(): void {
+    if (timer) { clearInterval(timer); timer = null; }
+}
 
+async function refresh_counts(): Promise<void> {
+    if (!is_extension || state !== 'recording') return;
     try {
         const status = await chrome.runtime.sendMessage({ action: 'get_status' });
-        const bc = status?.body_capture;
-        if (!bc || bc.mode === 'none') {
-            el.style.display = 'none';
-            return;
+        const stats: CaptureStats | undefined = status?.stats ?? status?.current_capture?.stats;
+        if (stats) {
+            live_counts = stats;
+            CAPTURE.forEach((src, i) => {
+                if (!src.stat) return;
+                const card = view.querySelectorAll('.mcard')[i];
+                const n = card?.querySelector('.mcard-n');
+                if (n) n.textContent = fmt_num(stats[src.stat!]);
+            });
         }
-
-        el.style.display = 'block';
-        const mode_labels: Record<string, string> = {
-            'extension_cdp': 'Extension CDP',
-            'external_cdp_bridge': 'External CDP Bridge',
-            'fallback_hook': 'Fallback Hook'
-        };
-        const status_labels: Record<string, string> = {
-            'active': 'Active',
-            'partial': 'Partial',
-            'failed': 'Failed',
-            'not_enabled': 'Not Enabled'
-        };
-
-        el.textContent = `${status_labels[bc.status] || bc.status} · ${mode_labels[bc.mode] || bc.mode}`;
-        if (bc.message) {
-            el.title = bc.message;
-        }
-        el.className = 'body-capture-status ' + bc.status;
     } catch {
-        el.style.display = 'none';
-    }
-}
-
-function start_duration_timer(): void {
-    stop_duration_timer();
-    if (!current_capture) return;
-
-    const durationEl = sessionInfo.querySelector('.session-duration')!;
-    const update = () => {
-        const duration = Date.now() - new Date(current_capture!.started_at).getTime();
-        const seconds = Math.floor(duration / 1000);
-        const minutes = Math.floor(seconds / 60);
-        durationEl.textContent = `${minutes}m ${seconds % 60}s`;
-    };
-
-    update();
-    duration_timer = setInterval(update, 1000);
-}
-
-function stop_duration_timer(): void {
-    if (duration_timer) {
-        clearInterval(duration_timer);
-        duration_timer = null;
+        // best-effort live counts
     }
 }
 
 async function load_history(): Promise<void> {
     if (!is_extension) return;
-
     try {
-        const sessions: Session[] = await chrome.runtime.sendMessage({ action: 'list_sessions' });
-
-        if (sessions.length === 0) {
-            historyList.innerHTML = `<div class="history-empty">${t('noSessions')}</div>`;
-            return;
-        }
-
-        historyList.innerHTML = sessions.slice(0, 20).map(session => `
-            <div class="history-item" data-id="${session.capture_id}">
-                <div class="history-meta">
-                    <span class="history-time">${format_system_time(session.started_at, user_config)}</span>
-                    <span class="history-duration">${format_duration(session)}</span>
-                </div>
-                <div class="history-actions">
-                    <button class="btn-sm primary" data-action="view" data-session="${session.capture_id}">${t('view')}</button>
-                    <button class="btn-sm" data-action="delete" data-session="${session.capture_id}">${t('delete')}</button>
-                </div>
-            </div>
-        `).join('');
-
-        // Event delegation for history buttons
-        historyList.onclick = async (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-            const btn = target.closest('[data-action]') as HTMLElement;
-            if (!btn) return;
-
-            const action = btn.dataset.action;
-            const sessionId = btn.dataset.session;
-            if (!action || !sessionId) return;
-
-            if (action === 'view') {
-                const url = chrome.runtime.getURL(`src/detail/detail.html?session=${sessionId}`);
-                chrome.tabs.create({ url });
-            } else if (action === 'delete') {
-                if (confirm(t('deleteConfirm'))) {
-                    await chrome.runtime.sendMessage({ action: 'delete_session', session_id: sessionId });
-                    await load_history();
-                }
-            }
-        };
+        recent_sessions = await chrome.runtime.sendMessage({ action: 'list_sessions' }) || [];
     } catch {
-        historyList.innerHTML = `<div class="history-empty">${t('error')}</div>`;
+        recent_sessions = [];
     }
 }
 
-function format_duration(session: Session): string {
-    if (!session.ended_at) return t('recording');
-    const duration = new Date(session.ended_at).getTime() - new Date(session.started_at).getTime();
-    const minutes = Math.floor(duration / 60000);
-    const seconds = Math.floor((duration % 60000) / 1000);
-    return `${minutes}m ${seconds}s`;
+async function load_state(): Promise<void> {
+    const result = await chrome.storage.local.get(['is_recording', 'current_capture']);
+    if (result.is_recording && result.current_capture) {
+        current_capture = result.current_capture;
+        state = 'recording';
+    } else {
+        state = 'ready';
+    }
 }
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (is_extension) {
+        await init_locale();
+        await init_theme();
+        user_config = await load_user_config();
+        await load_state();
+        await load_history();
+    }
+    panelBtn.addEventListener('click', () => open_dashboard());
+    render();
+    if (state === 'recording') start_timer();
+});

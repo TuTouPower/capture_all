@@ -50,7 +50,6 @@ function session_dur(s: Session): string {
 function session_name(s: Session): string {
     return s.name || `${format_system_time(s.started_at, user_config)} 的采集`;
 }
-function mode_kind(m: string): 'deep' | 'std' { return m === 'deep' ? 'deep' : 'std'; }
 
 // estimated on-disk size from stats (real storage size is not tracked per session)
 function est_bytes(s: Session): number {
@@ -224,9 +223,7 @@ function render_content(): void {
 function render_captures(): string {
     const total = sessions.length;
     const withErr = sessions.filter((s) => (s.stats?.error_count || 0) > 0).length;
-    const deep = sessions.filter((s) => s.mode === 'deep').length;
     const unexp = sessions.filter((s) => s.export_status !== 'exported').length;
-    const live = sessions.filter((s) => s.status === 'capturing').length;
     const totalBytes = sessions.reduce((a, s) => a + est_bytes(s), 0);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const yest = new Date(today.getTime() - 86400000);
@@ -240,10 +237,8 @@ function render_captures(): string {
     const stats = [
         { icon: 'navCaptures', lbl: '全部采集', val: num(total), tint: 'blue', sub: dDay ? `较昨日 ${dDay}` : '较昨日 +0%', subTone: 'green' },
         { icon: 'err', lbl: '有错误', val: num(withErr), tint: 'red', sub: pct(withErr, total) },
-        { icon: 'storage', lbl: '深度采集', val: num(deep), tint: 'purple', sub: pct(deep, total) },
         { icon: 'navExport', lbl: '未导出', val: num(unexp), tint: 'amber', sub: pct(unexp, total) },
         { icon: 'storage', lbl: '占用空间', val: fmt_size(totalBytes), tint: 'green', sub: '估算大小' },
-        { icon: 'navCurrent', lbl: '当前采集中', val: num(live), tint: 'blue', sub: '进行中', live: true },
     ];
     const rows = sessions.map((s) => {
         const id = esc(s.capture_id);
@@ -253,7 +248,6 @@ function render_captures(): string {
             <td><span class="cap-url mono" title="${esc(s.start_url)}">${esc(strip_proto(s.start_url) || '—')}</span></td>
             <td><span class="cap-time mono">${esc(format_system_time(s.started_at, user_config))}</span></td>
             <td><span class="cap-dur mono">${session_dur(s)}</span></td>
-            <td><span class="chip" data-mode="${mode_kind(s.mode)}">${s.mode === 'deep' ? '深度采集' : '标准采集'}</span></td>
             <td class="col-num mono">${num(s.stats?.event_count || 0)}</td>
             <td class="col-num mono">${num(s.stats?.request_count || 0)}</td>
             <td class="col-num"><span class="cap-errs mono" data-bad="${(s.stats?.error_count || 0) > 0 ? 1 : 0}">${num(s.stats?.error_count || 0)}</span></td>
@@ -266,7 +260,7 @@ function render_captures(): string {
             </span></td>
         </tr>`;
     }).join('');
-    const empty = `<tr><td colspan="13" style="text-align:center;color:var(--ink-4);padding:40px">暂无采集记录</td></tr>`;
+    const empty = `<tr><td colspan="12" style="text-align:center;color:var(--ink-4);padding:40px">暂无采集记录</td></tr>`;
     return `<div class="page">
         <div class="pg-head">
             <div class="pg-title"><h1>采集记录</h1><p>管理和查看所有已完成的采集记录，支持导出、归档和标签管理。</p></div>
@@ -280,7 +274,7 @@ function render_captures(): string {
             ${stats.map((s) => `<div class="cap-stat">
                 <span class="cap-stat-ic" data-tint="${s.tint}">${I[s.icon]}</span>
                 <div class="cap-stat-body">
-                    <span class="cap-stat-lbl">${s.live ? '<span class="live-dot"></span>' : ''}${s.lbl}</span>
+                    <span class="cap-stat-lbl">${s.lbl}</span>
                     <b class="cap-stat-val mono">${s.val}</b>
                     <span class="cap-stat-sub${s.subTone === 'green' ? ' t-green' : ''}">${esc(s.sub)}</span>
                 </div>
@@ -288,7 +282,6 @@ function render_captures(): string {
         </div>
         <div class="cap-filterbar">
             <button class="fb-select">状态: <b>全部</b> ${I.chevD}</button>
-            <button class="fb-select">模式: <b>全部</b> ${I.chevD}</button>
             <button class="fb-reset" id="capReset">${I.reset}重置</button>
             <div class="fb-spacer"></div>
             <button class="ibtn" id="capRefresh2" title="刷新">${I.refresh}</button>
@@ -297,7 +290,7 @@ function render_captures(): string {
             <table class="cap-table">
                 <thead><tr>
                     <th class="col-chk"><input type="checkbox" class="ck" id="capAll"></th>
-                    <th>采集名称</th><th>页面 / URL</th><th>时间</th><th>时长</th><th>模式</th>
+                    <th>采集名称</th><th>页面 / URL</th><th>时间</th><th>时长</th>
                     <th class="col-num">事件数</th><th class="col-num">请求数</th><th class="col-num">错误数</th>
                     <th class="col-num">大小</th><th>导出状态</th><th>标签</th><th class="col-act">操作</th>
                 </tr></thead>
@@ -419,7 +412,6 @@ function render_detail(): string {
                     <h1>${esc(name)}</h1>
                     ${s ? `<span class="dt-id">${esc(s.capture_id)}</span>` : ''}
                     <span class="dt-state"><span class="dot"></span>${s?.status === 'capturing' ? '采集中' : '已结束'}</span>
-                    ${s ? `<span class="chip" data-mode="${mode_kind(s.mode)}">${s.mode === 'deep' ? '深度采集' : '标准采集'}</span>` : ''}
                 </div>
                 <div class="dt-meta">
                     ${I.cal}<span class="mono">${esc(s ? format_system_time(s.started_at, user_config) : '')}</span>
@@ -788,7 +780,6 @@ function render_settings(): string {
                 <section class="set-section" id="set-defaults">
                     <h2>采集默认值</h2>
                     <div class="set-card">
-                        <div class="field" style="margin-bottom:18px"><span class="field-lbl">默认模式</span>${seg('selected_mode', [['basic', '标准采集'], ['advanced', '深度采集']], cfg.selected_mode)}</div>
                         <div class="set-grid c3">
                             <div class="field"><span class="field-lbl">捕获请求体</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
                             <div class="field"><span class="field-lbl">捕获响应体</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
@@ -895,7 +886,6 @@ function render_current(): string {
     const rows = live.map((s) => `<div class="exp-task" data-open="${esc(s.capture_id)}" style="cursor:pointer">
         <span class="et-ic" style="color:var(--blue-ink)">${I.navCurrent}</span>
         <div class="et-main"><b>${esc(session_name(s))}</b><div class="et-sub">${esc(strip_proto(s.start_url))} · ${num(s.stats?.event_count || 0)} 事件 · ${num(s.stats?.request_count || 0)} 请求</div></div>
-        <span class="chip" data-mode="${mode_kind(s.mode)}">${s.mode === 'deep' ? '深度采集' : '标准采集'}</span>
         <span class="dt-state"><span class="dot" style="background:var(--blue)"></span><span style="color:var(--blue-ink)" class="mono">采集中</span></span>
     </div>`).join('');
     return `<div class="page">

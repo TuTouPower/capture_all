@@ -23,7 +23,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 // Data label toggles — all ON by default, clickable only in 'ready' state
 const toggles: Record<string, boolean> = {
     event_count: true,          // 用户行为
-    nav: true,                  // 页面导航
+    nav_count: true,            // 页面导航
     request_count: true,        // 网络请求
     log_count: true,            // 控制台
     error_count: true,          // 错误异常
@@ -56,7 +56,7 @@ const ICON: Record<string, string> = {
 };
 
 interface CaptureSource {
-    key: keyof CaptureStats | 'nav' | 'mask';
+    key: keyof CaptureStats | 'mask';
     i18n: string;
     icon: string;
     tone: string;
@@ -66,7 +66,7 @@ interface CaptureSource {
 // the 8 capture sources (fixed order + colors per spec)
 const CAPTURE: CaptureSource[] = [
     { key: 'event_count',          i18n: 'capUser',    icon: 'pointer', tone: 'blue',   stat: 'event_count' },
-    { key: 'nav',                  i18n: 'capNav',     icon: 'globe',   tone: 'indigo', stat: null },
+    { key: 'nav_count',            i18n: 'capNav',     icon: 'globe',   tone: 'indigo', stat: 'nav_count' },
     { key: 'request_count',        i18n: 'capNet',     icon: 'braces',  tone: 'purple', stat: 'request_count' },
     { key: 'log_count',            i18n: 'capConsole', icon: 'console', tone: 'amber',  stat: 'log_count' },
     { key: 'error_count',          i18n: 'capError',   icon: 'alert',   tone: 'red',    stat: 'error_count' },
@@ -278,7 +278,7 @@ async function start_capture(): Promise<void> {
             duration_ms: 0,
             start_url: '', end_url: null, tab_id: 0, window_id: null,
             config_snapshot: config,
-            stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            stats: { event_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
             tags: [],
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

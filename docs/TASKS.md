@@ -6,23 +6,40 @@
 
 ## P0 · 功能缺陷
 
-### P0.1 采集中标签计数始终为 0
-- **现象**：采集中状态下，8 个数据标签（用户行为/页面导航/网络请求等）下方数字始终显示 0
-- **原因分析**：`popup.ts` `refresh_counts()` 每秒调用 `chrome.runtime.sendMessage({ action: 'get_status' })`，但 `get_status` handler 可能未返回正确的 `stats` 结构；或者返回了 stats 但字段名不匹配（如 `event_count` vs `events`）
-- **影响**：用户无法看到实时采集进度
-- **文件**：`src/popup/popup.ts` `refresh_counts()` (L319-335)、`src/background/service_worker.ts` `get_status` handler
+### ✅ P0.0 数据标签应为可点击的采集开关
+- **状态**：已修复 — `4ada80a`。8 标签卡片改为可点击开关，'ready' 状态下可切换，toggle 状态存入 chrome.storage
+- **现象**：弹出窗口中 8 个数据标签（用户行为/页面导航/网络请求/控制台/错误异常/Storage/Cookie/脱敏）只是静态展示卡片，不可交互
+- **期望行为**：
+  - 每个数据标签卡片是一个开关按钮，用户可以点击切换开启/关闭
+  - 点击=开启采集该类型数据（卡片高亮/选中态），没点=关闭采集（卡片灰显/未选中态）
+  - 脱敏卡片：点击=开启脱敏，没点=关闭脱敏
+  - 网络请求卡片：点击=采集网络请求，没点=不采集网络请求
+  - 状态切换应在开始采集前完成，采集中不可切换
+- **影响**：用户无法控制采集范围，所有类型强制全采或全不采
 
-### P0.2 停止采集按钮无效
-- **现象**：采集中状态点击红色「点击结束」按钮（#stopBtn），无法结束采集
-- **原因分析**：`stop_capture()` → `chrome.runtime.sendMessage({ action: 'stop' })` → SW `stop_recording()` 可能返回 `{ success: false }` 或抛异常被静默吞掉；也可能是 `wire_view()` 事件绑定在 DOM 替换后失效
-- **影响**：用户无法正常停止采集
-- **文件**：`src/popup/popup.ts` `stop_capture()` (L275-299)、`src/background/service_worker.ts` `stop_recording()` (L312)
+### ✅ P0.1 采集中标签计数始终为 0
+- **状态**：已修复。`get_status` 返回 `current_capture`，popup `refresh_counts` 可读取实时 stats
 
-### P0.3 实时详情页内容为空
-- **现象**：采集过程中点击「实时详情」按钮跳转到 dashboard `?session=xxx&page=detail`，但时间线/网络/控制台三个 Tab 内容全部为空，只能看到事件数和请求数
-- **原因分析**：dashboard detail 页通过 `list_events`/`list_network`/`list_console` 等消息从 SW 拉数据，这些消息 handler 可能未正确返回实时数据；或 session_id 传递错误
-- **影响**：实时详情功能完全不可用
-- **文件**：`src/dashboard/dashboard.ts` `load_detail()`、`src/background/agent_data_queries.ts`
+### ✅ P0.2 停止采集按钮无效
+- **状态**：已修复。`stop_capture` 容错处理，即使 SW 返回失败也强制转换状态
+
+### ✅ P0.3 实时详情页内容为空
+- **状态**：已修复。`get_capture_data` 现在查询全部 7 个 category store
+
+### ✅ P0.4 页面导航事件采集不到数据
+- **状态**：已修复。`CaptureStats` 新增 `nav_count`，SW 中 navigation category 事件计入 nav_count
+
+### ✅ P0.5 主面板状态不实时更新
+- **状态**：已修复。dashboard 每 2s 自动轮询 `load_sessions()`，状态变化自动 re-render
+
+### ✅ P0.6 采集详情页完全不可用
+- **状态**：已修复。`get_capture_data` 查询全部 7 个 store，合并为 all_events 返回。格式选择器 + 导出按钮已有
+
+### ✅ P0.7 导出按钮点击无效
+- **状态**：已修复。`export_session` 创建 Blob 下载，支持 JSON/JSONL/HTML/HAR。详情页加格式选择器
+
+### ✅ P0.8 去掉导出状态字段
+- **状态**：已修复。`export_status` 字段从 `CaptureRecord` 移除，dashboard 导出列替换为「已完成」统计
 
 ---
 

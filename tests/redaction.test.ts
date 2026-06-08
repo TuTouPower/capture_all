@@ -16,25 +16,25 @@ describe('redact_headers', () => {
     it('redacts authorization header', () => {
         const headers = { 'Authorization': 'Bearer token123', 'Content-Type': 'application/json' };
         const result = redact_headers(headers);
-        expect(result['Authorization']).toBe('[REDACTED]');
-        expect(result['Content-Type']).toBe('application/json');
+        expect(result.headers['Authorization']).toBe('[REDACTED]');
+        expect(result.headers['Content-Type']).toBe('application/json');
     });
 
     it('redacts cookie header', () => {
         const headers = { 'Cookie': 'session=abc123' };
-        expect(redact_headers(headers)['Cookie']).toBe('[REDACTED]');
+        expect(redact_headers(headers).headers['Cookie']).toBe('[REDACTED]');
     });
 
     it('redacts headers containing sensitive words', () => {
         const headers = { 'x-auth-token': 'value', 'custom-key-header': 'value' };
         const result = redact_headers(headers);
-        expect(result['x-auth-token']).toBe('[REDACTED]');
-        expect(result['custom-key-header']).toBe('[REDACTED]');
+        expect(result.headers['x-auth-token']).toBe('[REDACTED]');
+        expect(result.headers['custom-key-header']).toBe('[REDACTED]');
     });
 
     it('keeps safe headers', () => {
         const headers = { 'Accept': 'application/json', 'User-Agent': 'test' };
-        expect(redact_headers(headers)).toEqual(headers);
+        expect(redact_headers(headers).headers).toEqual(headers);
     });
 });
 
@@ -42,18 +42,18 @@ describe('redact_url', () => {
     it('redacts sensitive query params when enabled', () => {
         const url = 'https://example.com?token=abc123&name=test';
         const result = redact_url(url, true);
-        expect(result).toContain('token=%5BREDACTED%5D');
-        expect(result).toContain('name=test');
+        expect(result.url).toContain('token=%5BREDACTED%5D');
+        expect(result.url).toContain('name=test');
     });
 
     it('returns original url when disabled', () => {
         const url = 'https://example.com?token=abc123';
-        expect(redact_url(url, false)).toBe(url);
+        expect(redact_url(url, false).url).toBe(url);
     });
 
     it('handles invalid url gracefully', () => {
         const url = 'not-a-url';
-        expect(redact_url(url, true)).toBe(url);
+        expect(redact_url(url, true).url).toBe(url);
     });
 });
 
@@ -99,15 +99,15 @@ describe('truncate_request_body', () => {
 
 describe('truncate_response_body', () => {
     it('returns null for null input', () => {
-        expect(truncate_response_body(null)).toBeNull();
+        expect(truncate_response_body(null).body).toBeNull();
     });
 
     it('truncates large body unconditionally', () => {
         const big_body = 'y'.repeat(MAX_RESPONSE_BODY_BYTES + 500);
         const result = truncate_response_body(big_body);
-        expect(result).not.toBeNull();
-        expect(result!.length).toBeLessThan(big_body.length);
-        expect(result).toContain('[TRUNCATED]');
+        expect(result.body).not.toBeNull();
+        expect(result.body!.length).toBeLessThan(big_body.length);
+        expect(result.body).toContain('[TRUNCATED]');
     });
 });
 
@@ -124,7 +124,7 @@ describe('truncate_console_args', () => {
 describe('redaction_and_truncation_split', () => {
     it('redact_headers skips redaction when disabled', () => {
         const headers = { 'Authorization': 'Bearer token123', 'Cookie': 'session=abc' };
-        const result = redact_headers(headers, false);
+        const result = redact_headers(headers, false).headers;
         expect(result['Authorization']).toBe('Bearer token123');
         expect(result['Cookie']).toBe('session=abc');
     });

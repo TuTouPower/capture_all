@@ -100,7 +100,7 @@ describe('request_header_redaction', () => {
             'Content-Type': 'application/json',
             'Accept': 'text/html'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['Authorization']).toBe('[REDACTED]');
         expect(result['Content-Type']).toBe('application/json');
         expect(result['Accept']).toBe('text/html');
@@ -111,7 +111,7 @@ describe('request_header_redaction', () => {
             'Cookie': 'session_id=abc123; user=john',
             'Host': 'example.com'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['Cookie']).toBe('[REDACTED]');
         expect(result['Host']).toBe('example.com');
     });
@@ -121,7 +121,7 @@ describe('request_header_redaction', () => {
             'X-Api-Key': 'sk-1234567890abcdef',
             'Accept': 'application/json'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['X-Api-Key']).toBe('[REDACTED]');
         expect(result['Accept']).toBe('application/json');
     });
@@ -133,7 +133,7 @@ describe('request_header_redaction', () => {
             'X-Bearer-Token': 'bearer-val',
             'Normal-Header': 'safe'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['X-CSRF-Token']).toBe('[REDACTED]');
         expect(result['Custom-Key-Header']).toBe('[REDACTED]');
         expect(result['X-Bearer-Token']).toBe('[REDACTED]');
@@ -147,13 +147,13 @@ describe('request_header_redaction', () => {
             'X-Api-Key': 'key123',
             'Content-Type': 'application/json'
         };
-        const result = redact_headers(headers, false);
+        const result = redact_headers(headers, false).headers;
         expect(result).toEqual(headers);
     });
 
     it('redacts proxy-authorization header', () => {
         const headers = { 'Proxy-Authorization': 'Basic dXNlcjpwYXNz' };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['Proxy-Authorization']).toBe('[REDACTED]');
     });
 });
@@ -166,7 +166,7 @@ describe('response_header_redaction', () => {
             'Set-Cookie': 'id=abc123; HttpOnly; Secure',
             'Content-Type': 'text/html'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['Set-Cookie']).toBe('[REDACTED]');
         expect(result['Content-Type']).toBe('text/html');
     });
@@ -176,7 +176,7 @@ describe('response_header_redaction', () => {
             'WWW-Authenticate': 'Bearer realm="example"',
             'Cache-Control': 'no-cache'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result['WWW-Authenticate']).toBe('[REDACTED]');
         expect(result['Cache-Control']).toBe('no-cache');
     });
@@ -187,7 +187,7 @@ describe('response_header_redaction', () => {
             'Cache-Control': 'max-age=3600',
             'X-Request-Id': 'req-123'
         };
-        const result = redact_headers(headers, true);
+        const result = redact_headers(headers, true).headers;
         expect(result).toEqual(headers);
     });
 });
@@ -374,14 +374,14 @@ describe('body_parsing_raw', () => {
 describe('url_redaction_in_network', () => {
     it('redacts sensitive query params in request URL', () => {
         const url = 'https://api.example.com/data?token=secret123&name=test';
-        const result = redact_url(url, true);
+        const result = redact_url(url, true).url;
         expect(result).toContain('token=%5BREDACTED%5D');
         expect(result).toContain('name=test');
     });
 
     it('redacts auth and password params', () => {
         const url = 'https://example.com/login?auth=abc&password=xyz&user=john';
-        const result = redact_url(url, true);
+        const result = redact_url(url, true).url;
         expect(result).toContain('auth=%5BREDACTED%5D');
         expect(result).toContain('password=%5BREDACTED%5D');
         expect(result).toContain('user=john');
@@ -389,6 +389,6 @@ describe('url_redaction_in_network', () => {
 
     it('returns URL unchanged when redact is disabled', () => {
         const url = 'https://example.com?token=secret';
-        expect(redact_url(url, false)).toBe(url);
+        expect(redact_url(url, false).url).toBe(url);
     });
 });

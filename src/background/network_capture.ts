@@ -241,7 +241,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 let body: string = result.body;
                 const byte_len = new TextEncoder().encode(body).length;
                 if (byte_len > MAX_RESPONSE_BODY_BYTES) {
-                    body = truncate_response_body(body) as string;
+                    const result = truncate_response_body(body);
+                    body = result.body!;
                     cdp_body_results.set(req_id, { body, status: 'too_large', timestamp: Date.now() });
                 } else {
                     cdp_body_results.set(req_id, { body, status: 'captured', timestamp: Date.now() });
@@ -275,7 +276,7 @@ function schedule_orphan_check(req_id: string): void {
         const event: CdpBodyEvent = {
             request_id: req_id,
             tab_id: dbg_tab_id || 0,
-            url: redact_url(meta?.url || '', redact_q),
+            url: redact_url(meta?.url || '', redact_q).url,
             method: meta?.method || 'GET',
             status_code: meta?.status_code || 0,
             timestamp: body_result.timestamp,
@@ -284,8 +285,8 @@ function schedule_orphan_check(req_id: string): void {
             request_body_status: meta?.request_body_status || 'not_enabled',
             response_body: body_result.body,
             response_body_status: body_result.status,
-            request_headers: redact_hdrs ? redact_headers(meta?.request_headers || {}, true) : (meta?.request_headers || {}),
-            response_headers: redact_hdrs ? redact_headers(meta?.response_headers || {}, true) : (meta?.response_headers || {})
+            request_headers: redact_hdrs ? redact_headers(meta?.request_headers || {}, true).headers : (meta?.request_headers || {}),
+            response_headers: redact_hdrs ? redact_headers(meta?.response_headers || {}, true).headers : (meta?.response_headers || {})
         };
 
         on_cdp_body_event(event);
@@ -389,7 +390,7 @@ function handle_before_request(details: any): void {
         cdp_request_id: details.requestId,
         tab_id: details.tabId,
         method: details.method,
-        url: redact_url(details.url, Boolean(config.redact_data) && config.redact_url_query),
+        url: redact_url(details.url, Boolean(config.redact_data) && config.redact_url_query).url,
         timestamp: details.timeStamp,
         request_headers: {},
         response_headers: {},
@@ -408,7 +409,7 @@ function handle_before_send_headers(details: any): void {
 
     const headers = headers_array_to_map(details.requestHeaders);
     pending.request_headers = (config.redact_data && config.redact_sensitive_headers)
-        ? redact_headers(headers, true) : headers;
+        ? redact_headers(headers, true).headers : headers;
 }
 
 function handle_headers_received(details: any): void {
@@ -418,7 +419,7 @@ function handle_headers_received(details: any): void {
 
     const headers = headers_array_to_map(details.responseHeaders);
     pending.response_headers = (config.redact_data && config.redact_sensitive_headers)
-        ? redact_headers(headers, true) : headers;
+        ? redact_headers(headers, true).headers : headers;
 }
 
 function build_network_event(

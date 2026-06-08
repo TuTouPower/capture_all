@@ -1,5 +1,6 @@
 // content/content_script.ts
-import type { RecordConfig } from '../shared/types';
+import type { RecordConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
+import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
@@ -57,10 +58,14 @@ function start_capture(config: RecordConfig): void {
     console.log('Record All: Content capture started');
 
     // Send page load event
-    send_event('page_load', {
-        load_time_ms: performance.timing.loadEventEnd - performance.timing.navigationStart,
-        dom_content_loaded_ms: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart
-    });
+    const page_load_data: PageLoadData = {
+        url: window.location.href,
+        title: document.title,
+        load_event_time_ms: performance.timing.loadEventEnd - performance.timing.navigationStart || null,
+        dom_content_loaded_time_ms: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart || null,
+        navigation_start_time: performance.timeOrigin ? new Date(performance.timeOrigin).toISOString() : null,
+    };
+    send_capture_event('navigation', 'page_load', page_load_data);
 
     // Start capture modules based on config
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,9 +83,9 @@ function start_capture(config: RecordConfig): void {
     // Visibility change
     document.addEventListener('visibilitychange', handle_visibility_change);
 
-    // SPA navigation
-    window.addEventListener('popstate', handle_navigation);
-    window.addEventListener('hashchange', handle_navigation);
+    // SPA navigation — popstate + hashchange
+    window.addEventListener('popstate', handle_popstate_navigation);
+    window.addEventListener('hashchange', handle_hashchange_navigation);
 
     // DOMContentLoaded (may have already fired)
     if (document.readyState === 'loading') {
@@ -90,18 +95,51 @@ function start_capture(config: RecordConfig): void {
     }
 }
 
-function handle_navigation(): void {
+function handle_popstate_navigation(): void {
     if (!is_capturing) return;
     const new_url = window.location.href;
     if (new_url === last_url) return;
     const from = last_url;
     last_url = new_url;
-    send_event('navigation', { from, to: new_url });
+
+    const data: RouteChangeData = {
+        from_url: from,
+        to_url: new_url,
+        route_action: 'push_state',
+        from_path: new URL(from).pathname,
+        to_path: new URL(new_url).pathname,
+        title: document.title,
+        is_spa: true,
+    };
+    send_capture_event('navigation', 'route_change', data);
+}
+
+function handle_hashchange_navigation(event: HashChangeEvent): void {
+    if (!is_capturing) return;
+    const from = event.oldURL;
+    const to = event.newURL;
+    last_url = to;
+
+    const data: RouteChangeData = {
+        from_url: from,
+        to_url: to,
+        route_action: 'hash_change',
+        from_path: new URL(from).pathname,
+        to_path: new URL(to).pathname,
+        title: document.title,
+        is_spa: true,
+    };
+    send_capture_event('navigation', 'route_change', data);
 }
 
 function handle_dom_ready(): void {
     if (!is_capturing) return;
-    send_event('dom_ready', { timestamp: Date.now() });
+    const data: DomReadyData = {
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState as 'loading' | 'interactive' | 'complete',
+    };
+    send_capture_event('navigation', 'dom_ready', data);
 }
 
 function stop_capture(): void {
@@ -118,8 +156,8 @@ function stop_capture(): void {
     stop_network_hook();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);
-    window.removeEventListener('popstate', handle_navigation);
-    window.removeEventListener('hashchange', handle_navigation);
+    window.removeEventListener('popstate', handle_popstate_navigation);
+    window.removeEventListener('hashchange', handle_hashchange_navigation);
 }
 
 function handle_visibility_change(): void {
@@ -131,6 +169,26 @@ function handle_visibility_change(): void {
     });
 }
 
+/** Send a fully-typed CaptureEvent for navigation/lifecycle events */
+function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: string, data: unknown): void {
+    const event = create_base_event({
+        capture_id,
+        category,
+        type: type as any,
+        relative_time_ms: get_relative_time(capture_start_epoch_ms),
+        tab_id,
+        frame_id,
+        url: window.location.href,
+        source: 'content_script',
+    });
+    chrome.runtime.sendMessage({
+        action: 'event',
+        event: { ...event, data }
+    }).catch((_err: unknown) => {
+        // Ignore errors (e.g., extension context invalidated)
+    });
+}
+
 function send_event(type_or_event: string | Record<string, unknown>, data?: unknown): void {
     if (!is_capturing) return;
 
@@ -138,12 +196,12 @@ function send_event(type_or_event: string | Record<string, unknown>, data?: unkn
     // Old format: called with (type: string, data) from un-migrated modules
     const event = typeof type_or_event === 'string'
         ? {
-            session_id: '',
-            relative_time: performance.now(),
-            absolute_time: Date.now(),
+            capture_id,
+            relative_time_ms: get_relative_time(capture_start_epoch_ms),
+            absolute_time: new Date().toISOString(),
             type: type_or_event,
             data,
-            tab_id: 0,
+            tab_id,
             frame_id,
             url: window.location.href
         }

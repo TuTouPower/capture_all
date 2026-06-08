@@ -58,8 +58,8 @@ export function merge_matched(
     web_meta: WebRequestMeta,
     cdp_event: CdpBodyEvent,
     correlation_status: NetworkCorrelationStatus
-): NetworkRequest {
-    const request: NetworkRequest = {
+): any {
+    const request = {
         session_id: web_meta.session_id,
         relative_time: web_meta.relative_time,
         absolute_time: web_meta.absolute_time,
@@ -74,7 +74,7 @@ export function merge_matched(
         response_body: cdp_event.response_body,
         response_body_status: cdp_event.response_body_status,
         duration_ms: web_meta.duration_ms,
-        resource_type: web_meta.resource_type || cdp_event.resource_type,
+        resource_type: (web_meta.resource_type || cdp_event.resource_type) as NetworkRequest['resource_type'],
         correlation_status,
         cdp_request_id: cdp_event.request_id
     };
@@ -86,7 +86,7 @@ export function build_cdp_only_request(
     cdp_event: CdpBodyEvent,
     session_id: string,
     start_time: number
-): NetworkRequest {
+): any {
     return {
         session_id,
         relative_time: cdp_event.timestamp - start_time,
@@ -102,13 +102,13 @@ export function build_cdp_only_request(
         response_body: cdp_event.response_body,
         response_body_status: cdp_event.response_body_status,
         duration_ms: 0,
-        resource_type: cdp_event.resource_type,
+        resource_type: cdp_event.resource_type as NetworkRequest['resource_type'],
         correlation_status: 'cdp_only',
         cdp_request_id: cdp_event.request_id
     };
 }
 
-export function build_web_request_only_request(web_meta: WebRequestMeta): NetworkRequest {
+export function build_web_request_only_request(web_meta: WebRequestMeta): any {
     return {
         session_id: web_meta.session_id,
         relative_time: web_meta.relative_time,
@@ -124,7 +124,7 @@ export function build_web_request_only_request(web_meta: WebRequestMeta): Networ
         response_body: null,
         response_body_status: 'not_enabled',
         duration_ms: web_meta.duration_ms,
-        resource_type: web_meta.resource_type,
+        resource_type: web_meta.resource_type as NetworkRequest['resource_type'],
         correlation_status: 'web_request_only'
     };
 }

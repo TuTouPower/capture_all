@@ -1,5 +1,5 @@
 // popup/popup.ts
-import type { RecordConfig, Session, UserConfig, ThemeMode, SystemTimeTimezone, DetailTimeDisplayMode } from '../shared/types';
+import type { RecordConfig, CaptureRecord, Session, UserConfig, ThemeMode, SystemTimeTimezone, DetailTimeDisplayMode } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
 import { init_locale, t, apply_translations, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
@@ -10,7 +10,7 @@ import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let is_recording = false;
-let current_session: Session | null = null;
+let current_capture: CaptureRecord | null = null;
 let duration_timer: ReturnType<typeof setInterval> | null = null;
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
@@ -86,9 +86,9 @@ async function load_user_config_and_apply(): Promise<void> {
 }
 
 async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_recording', 'current_session']);
+    const result = await chrome.storage.local.get(['is_recording', 'current_capture']);
     is_recording = result.is_recording || false;
-    current_session = result.current_session || null;
+    current_capture = result.current_capture || null;
 
     update_mode_selection();
     update_recording_state();
@@ -257,14 +257,26 @@ async function start_recording(): Promise<void> {
 
         if (response.success) {
             is_recording = true;
-            current_session = {
-                id: session_id,
-                start_time: Date.now(),
-                end_time: null,
-                config,
-                stats: { event_count: 0, request_count: 0, log_count: 0, dom_changes: 0 }
+            current_capture = {
+                capture_id: session_id,
+                name: 'Capture ' + new Date().toLocaleString(),
+                status: 'capturing',
+                mode: config.capture_mode === 'advanced' ? 'deep' : 'standard',
+                started_at: new Date(Date.now()).toISOString(),
+                ended_at: null,
+                duration_ms: 0,
+                start_url: '',
+                end_url: null,
+                tab_id: 0,
+                window_id: null,
+                config_snapshot: config,
+                stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+                export_status: 'not_exported',
+                tags: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             };
-            chrome.storage.local.set({ is_recording: true, current_session });
+            chrome.storage.local.set({ is_recording: true, current_capture });
             update_recording_state();
             await load_history();
         } else {
@@ -283,8 +295,8 @@ async function stop_recording(): Promise<void> {
 
         if (response.success) {
             is_recording = false;
-            current_session = null;
-            chrome.storage.local.set({ is_recording: false, current_session: null });
+            current_capture = null;
+            chrome.storage.local.set({ is_recording: false, current_capture: null });
             update_recording_state();
             await load_history();
         }
@@ -302,8 +314,8 @@ function update_recording_state(): void {
         stopBtn.style.display = 'block';
         sessionInfo.style.display = 'block';
 
-        if (current_session) {
-            sessionInfo.querySelector('.session-id')!.textContent = `${t('sessionId')}: ${current_session.id}`;
+        if (current_capture) {
+            sessionInfo.querySelector('.session-id')!.textContent = `${t('sessionId')}: ${current_capture.capture_id}`;
             start_duration_timer();
             update_body_capture_status();
         }
@@ -323,7 +335,7 @@ async function update_body_capture_status(): Promise<void> {
     const el = document.getElementById('bodyCaptureStatus');
     if (!el) return;
 
-    if (!is_recording || !current_session) {
+    if (!is_recording || !current_capture) {
         el.style.display = 'none';
         return;
     }
@@ -361,11 +373,11 @@ async function update_body_capture_status(): Promise<void> {
 
 function start_duration_timer(): void {
     stop_duration_timer();
-    if (!current_session) return;
+    if (!current_capture) return;
 
     const durationEl = sessionInfo.querySelector('.session-duration')!;
     const update = () => {
-        const duration = Date.now() - current_session!.start_time;
+        const duration = Date.now() - new Date(current_capture!.started_at).getTime();
         const seconds = Math.floor(duration / 1000);
         const minutes = Math.floor(seconds / 60);
         durationEl.textContent = `${minutes}m ${seconds % 60}s`;
@@ -394,14 +406,14 @@ async function load_history(): Promise<void> {
         }
 
         historyList.innerHTML = sessions.slice(0, 20).map(session => `
-            <div class="history-item" data-id="${session.id}">
+            <div class="history-item" data-id="${session.capture_id}">
                 <div class="history-meta">
-                    <span class="history-time">${format_system_time(session.start_time, user_config)}</span>
+                    <span class="history-time">${format_system_time(session.started_at, user_config)}</span>
                     <span class="history-duration">${format_duration(session)}</span>
                 </div>
                 <div class="history-actions">
-                    <button class="btn-sm primary" data-action="view" data-session="${session.id}">${t('view')}</button>
-                    <button class="btn-sm" data-action="delete" data-session="${session.id}">${t('delete')}</button>
+                    <button class="btn-sm primary" data-action="view" data-session="${session.capture_id}">${t('view')}</button>
+                    <button class="btn-sm" data-action="delete" data-session="${session.capture_id}">${t('delete')}</button>
                 </div>
             </div>
         `).join('');
@@ -432,8 +444,8 @@ async function load_history(): Promise<void> {
 }
 
 function format_duration(session: Session): string {
-    if (!session.end_time) return t('recording');
-    const duration = session.end_time - session.start_time;
+    if (!session.ended_at) return t('recording');
+    const duration = new Date(session.ended_at).getTime() - new Date(session.started_at).getTime();
     const minutes = Math.floor(duration / 60000);
     const seconds = Math.floor((duration % 60000) / 1000);
     return `${minutes}m ${seconds}s`;

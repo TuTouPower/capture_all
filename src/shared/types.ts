@@ -60,6 +60,7 @@ export interface CaptureEvent {
     redaction_status: 'none' | 'redacted';
     raw_available: boolean;
     created_at: string;
+    data?: unknown;
 }
 
 // ============================================================
@@ -268,6 +269,12 @@ export interface NetworkRequestData {
     error_text: string | null;
     capture_method: 'web_request' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
     body_capture_mode: BodyCaptureMode;
+    session_id?: string;
+    tab_id?: number;
+    relative_time?: number;
+    absolute_time?: number;
+    correlation_status?: NetworkCorrelationStatus;
+    cdp_request_id?: string;
 }
 
 // ============================================================

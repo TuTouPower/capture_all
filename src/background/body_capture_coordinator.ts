@@ -248,7 +248,7 @@ async function try_external_cdp_bridge(
 function convert_bridge_event_to_request(
     evt: BridgeBodyEvent,
     session_id: string
-): NetworkRequest {
+): any {
     return {
         session_id,
         relative_time: evt.timestamp,
@@ -264,7 +264,7 @@ function convert_bridge_event_to_request(
         response_body: evt.response_body ?? null,
         response_body_status: evt.response_body_status || 'failed',
         duration_ms: 0,
-        resource_type: evt.resource_type || 'other',
+        resource_type: (evt.resource_type || 'other') as NetworkRequest['resource_type'],
         correlation_status: 'cdp_only',
         cdp_request_id: evt.request_id
     };

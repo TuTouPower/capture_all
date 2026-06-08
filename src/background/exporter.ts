@@ -1,38 +1,40 @@
 // background/exporter.ts
 import { escape_for_html_embed } from '../shared/escape';
-import { get_session, get_events, get_network_requests, get_console_logs } from './storage';
+import { get_capture, get_events_by_category, get_network_requests, get_console_events } from './storage';
 import { load_user_config } from '../shared/user_config';
-import { add_absolute_system_time, add_session_system_times, add_system_times_to_session_data, format_system_time } from '../shared/system_time';
-import type { NetworkRequest, Session, UserConfig } from '../shared/types';
+import { add_absolute_system_time, add_capture_system_times, add_system_times_to_capture_data, format_system_time } from '../shared/system_time';
+import type { NetworkRequestData, CaptureRecord, UserConfig } from '../shared/types';
+import type { ExportableCaptureData } from '../shared/system_time';
 
-export async function export_json(session_id: string): Promise<string> {
-    const session = await get_session(session_id);
-    if (!session) throw new Error('Session not found');
+export async function export_json(capture_id: string): Promise<string> {
+    const capture = await get_capture(capture_id);
+    if (!capture) throw new Error('Capture not found');
 
     const [events, network_requests, console_logs] = await Promise.all([
-        get_events(session_id, 0, 100000),
-        get_network_requests(session_id, 0, 100000),
-        get_console_logs(session_id, 0, 100000)
+        get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_network_requests(capture_id, 0, 100000),
+        get_console_events(capture_id, 0, 100000)
     ]);
 
     const user_config = await load_user_config();
-    const data = add_system_times_to_session_data({ session, events, network_requests, console_logs }, user_config);
-    return JSON.stringify(data, null, 2);
+    const data: ExportableCaptureData = { capture, events, network_requests, console_events: console_logs };
+    const result = add_system_times_to_capture_data(data, user_config);
+    return JSON.stringify(result, null, 2);
 }
 
-export async function export_jsonl(session_id: string): Promise<string> {
-    const session = await get_session(session_id);
-    if (!session) throw new Error('Session not found');
+export async function export_jsonl(capture_id: string): Promise<string> {
+    const session = await get_capture(capture_id);
+    if (!session) throw new Error('Capture not found');
 
     const [events, network_requests, console_logs] = await Promise.all([
-        get_events(session_id, 0, 100000),
-        get_network_requests(session_id, 0, 100000),
-        get_console_logs(session_id, 0, 100000)
+        get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_network_requests(capture_id, 0, 100000),
+        get_console_events(capture_id, 0, 100000)
     ]);
 
     const user_config = await load_user_config();
     const lines: string[] = [];
-    lines.push(JSON.stringify({ ...add_session_system_times(session, user_config), type: 'session' }));
+    lines.push(JSON.stringify({ ...add_capture_system_times(session, user_config), type: 'capture' }));
 
     for (const event of events) {
         lines.push(JSON.stringify({ ...add_absolute_system_time(event, user_config), type: 'event' }));
@@ -47,23 +49,24 @@ export async function export_jsonl(session_id: string): Promise<string> {
     return lines.join('\n');
 }
 
-export async function export_html(session_id: string): Promise<string> {
-    const session = await get_session(session_id);
-    if (!session) throw new Error('Session not found');
+export async function export_html(capture_id: string): Promise<string> {
+    const session = await get_capture(capture_id);
+    if (!session) throw new Error('Capture not found');
 
     const [events, network_requests, console_logs] = await Promise.all([
-        get_events(session_id, 0, 100000),
-        get_network_requests(session_id, 0, 100000),
-        get_console_logs(session_id, 0, 100000)
+        get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_network_requests(capture_id, 0, 100000),
+        get_console_events(capture_id, 0, 100000)
     ]);
 
     const user_config = await load_user_config();
-    const data = add_system_times_to_session_data({ session, events, network_requests, console_logs }, user_config);
-    const json_str = JSON.stringify(data);
+    const data: ExportableCaptureData = { capture: session, events, network_requests, console_events: console_logs };
+    const result = add_system_times_to_capture_data(data, user_config);
+    const json_str = JSON.stringify(result);
     const safe_json = escape_for_html_embed(json_str);
 
-    const start_date = format_system_time(session.start_time, user_config);
-    const duration_ms = session.end_time ? session.end_time - session.start_time : 0;
+    const start_date = format_system_time(session.started_at, user_config);
+    const duration_ms = session.ended_at ? new Date(session.ended_at).getTime() - new Date(session.started_at).getTime() : 0;
     const duration_str = format_duration(duration_ms);
 
     const event_count = session.stats.event_count || events.length;
@@ -74,6 +77,7 @@ export async function export_html(session_id: string): Promise<string> {
         (event_count + request_count + log_count) * 0.5
     );
 
+    const capture_mode = (session.config_snapshot as Record<string, unknown>)?.capture_mode || 'basic';
     const body_capture_info = session.body_capture_mode
         ? `<div class="summary-item"><label>Body Capture</label><span>${session.body_capture_mode} · ${session.body_capture_status || 'unknown'}</span></div>`
         : '';
@@ -82,7 +86,7 @@ export async function export_html(session_id: string): Promise<string> {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Record All - Session ${session_id}</title>
+<title>Record All - Capture ${capture_id}</title>
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
 .container { max-width: 960px; margin: 0 auto; }
@@ -99,13 +103,13 @@ pre { background: #f8f8f8; padding: 12px; border-radius: 4px; overflow-x: auto; 
 </head>
 <body>
 <div class="container">
-<h1>Record All - Session Report</h1>
+<h1>Record All - Capture Report</h1>
 <div class="summary">
   <div class="summary-grid">
-    <div class="summary-item"><label>Session ID</label><span>${session_id}</span></div>
+    <div class="summary-item"><label>Capture ID</label><span>${capture_id}</span></div>
     <div class="summary-item"><label>Start Time</label><span>${start_date}</span></div>
     <div class="summary-item"><label>Duration</label><span>${duration_str}</span></div>
-    <div class="summary-item"><label>Mode</label><span>${session.config.capture_mode}</span></div>
+    <div class="summary-item"><label>Mode</label><span>${capture_mode}</span></div>
     <div class="summary-item"><label>Events</label><span>${event_count}</span></div>
     <div class="summary-item"><label>Network Requests</label><span>${request_count}</span></div>
     <div class="summary-item"><label>Console Logs</label><span>${log_count}</span></div>
@@ -129,11 +133,11 @@ document.getElementById('jsonData').textContent = JSON.stringify(data, null, 2);
 </html>`;
 }
 
-export async function export_har(session_id: string): Promise<string> {
-    const session = await get_session(session_id);
-    if (!session) throw new Error('Session not found');
+export async function export_har(capture_id: string): Promise<string> {
+    const session = await get_capture(capture_id);
+    if (!session) throw new Error('Capture not found');
 
-    const network_requests = await get_network_requests(session_id, 0, 100000);
+    const network_requests = await get_network_requests(capture_id, 0, 100000);
     const user_config = await load_user_config();
     const har = build_har(session, network_requests, user_config);
     return JSON.stringify(har, null, 2);
@@ -192,21 +196,23 @@ interface HarLog {
     };
 }
 
-function build_har(session: Session, requests: NetworkRequest[], user_config: Pick<UserConfig, 'system_time_timezone'>): HarLog {
+function build_har(session: CaptureRecord, requests: NetworkRequestData[], user_config: Pick<UserConfig, 'system_time_timezone'>): HarLog {
     const entries = requests.map(r => build_har_entry(r, user_config));
+    const started_at_ms = new Date(session.started_at).getTime();
+    const ended_at_ms = session.ended_at ? new Date(session.ended_at).getTime() : -1;
     return {
         log: {
             version: '1.2',
             creator: { name: 'record_all', version: '1.0' },
             browser: { name: 'Chrome', version: 'unknown' },
             pages: [{
-                startedDateTime: new Date(session.start_time).toISOString(),
-                _startedDateTimeSystemTime: format_system_time(session.start_time, user_config),
-                id: session.id,
-                title: `Session ${session.id}`,
+                startedDateTime: new Date(started_at_ms).toISOString(),
+                _startedDateTimeSystemTime: format_system_time(session.started_at, user_config),
+                id: session.capture_id,
+                title: `Capture ${session.capture_id}`,
                 pageTimings: {
                     onContentLoad: -1,
-                    onLoad: session.end_time ? session.end_time - session.start_time : -1
+                    onLoad: ended_at_ms > 0 ? ended_at_ms - started_at_ms : -1
                 }
             }],
             entries
@@ -214,7 +220,7 @@ function build_har(session: Session, requests: NetworkRequest[], user_config: Pi
     };
 }
 
-function build_har_entry(r: NetworkRequest, user_config: Pick<UserConfig, 'system_time_timezone'>): HarEntry {
+function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 'system_time_timezone'>): HarEntry {
     const req_headers = headers_to_array(r.request_headers);
     const res_headers = headers_to_array(r.response_headers);
     const query_string = parse_query_string(r.url);
@@ -222,9 +228,12 @@ function build_har_entry(r: NetworkRequest, user_config: Pick<UserConfig, 'syste
     const res_mime = get_header(r.response_headers, 'content-type') || 'application/octet-stream';
     const duration = Math.max(0, r.duration_ms || 0);
 
+    // Use request start_time_ms as absolute time proxy (relative to capture start)
+    const abs_time_ms = r.start_time_ms ?? 0;
+
     const entry: HarEntry = {
-        startedDateTime: new Date(r.absolute_time).toISOString(),
-        _startedDateTimeSystemTime: format_system_time(r.absolute_time, user_config),
+        startedDateTime: new Date(abs_time_ms).toISOString(),
+        _startedDateTimeSystemTime: format_system_time(abs_time_ms, user_config),
         time: duration,
         request: {
             method: (r.method || 'GET').toUpperCase(),
@@ -237,7 +246,7 @@ function build_har_entry(r: NetworkRequest, user_config: Pick<UserConfig, 'syste
         },
         response: {
             status: r.status_code || 0,
-            statusText: status_text(r.status_code),
+            statusText: status_text(r.status_code ?? 0),
             httpVersion: 'HTTP/1.1',
             headers: res_headers,
             cookies: [],

@@ -100,6 +100,28 @@ export interface I18nStrings {
     agentBridgeToken: string;
     agentBridgePollInterval: string;
     agentBridgeDesc: string;
+
+    // Popup (Capture All redesign)
+    mainPanel: string;
+    captureDone: string;
+    startCapture: string;
+    stopCapture: string;
+    liveDetail: string;
+    openDetail: string;
+    exportLabel: string;
+    newCapture: string;
+    modeStandard: string;
+    modeDeep: string;
+    viewAll: string;
+    viewDetail: string;
+    capUser: string;
+    capNav: string;
+    capNet: string;
+    capConsole: string;
+    capError: string;
+    capStorage: string;
+    capCookie: string;
+    capMask: string;
 }
 
 const en: I18nStrings = {
@@ -194,11 +216,32 @@ const en: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: 'Poll Interval (ms)',
     agentBridgeDesc: 'Local bridge only; token is required before connecting',
+
+    mainPanel: 'Main Panel',
+    captureDone: 'Capture Complete',
+    startCapture: 'Start Capture',
+    stopCapture: 'Stop Capture',
+    liveDetail: 'Live Detail',
+    openDetail: 'Open Detail',
+    exportLabel: 'Export',
+    newCapture: 'New Capture',
+    modeStandard: 'Standard',
+    modeDeep: 'Deep',
+    viewAll: 'View All',
+    viewDetail: 'View Detail',
+    capUser: 'User Actions',
+    capNav: 'Navigation',
+    capNet: 'Network',
+    capConsole: 'Console',
+    capError: 'Errors',
+    capStorage: 'Storage',
+    capCookie: 'Cookie',
+    capMask: 'Redaction',
 };
 
 const zh: I18nStrings = {
     ready: '就绪',
-    recording: '录制中',
+    recording: '采集中',
     sessionId: 'ID',
 
     selectMode: '选择录制模式',
@@ -222,8 +265,8 @@ const zh: I18nStrings = {
     startRecording: '开始录制',
     stopRecording: '停止录制',
 
-    recentSessions: '最近录制',
-    noSessions: '暂无录制记录',
+    recentSessions: '最近采集',
+    noSessions: '暂无采集记录',
     view: '查看',
     delete: '删除',
     deleteConfirm: '确定删除此录制？',
@@ -288,6 +331,27 @@ const zh: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: '轮询间隔（毫秒）',
     agentBridgeDesc: '仅连接本地 bridge；必须填写 token 才会连接',
+
+    mainPanel: '主面板',
+    captureDone: '采集完成',
+    startCapture: '开始采集',
+    stopCapture: '停止采集',
+    liveDetail: '实时详情',
+    openDetail: '打开详情',
+    exportLabel: '导出',
+    newCapture: '开始新采集',
+    modeStandard: '标准采集',
+    modeDeep: '深度采集',
+    viewAll: '查看全部',
+    viewDetail: '查看详情',
+    capUser: '用户行为',
+    capNav: '页面导航',
+    capNet: '网络请求',
+    capConsole: '控制台',
+    capError: '错误异常',
+    capStorage: 'Storage',
+    capCookie: 'Cookie',
+    capMask: '脱敏',
 };
 
 const locales: Record<Locale, I18nStrings> = { en, zh };

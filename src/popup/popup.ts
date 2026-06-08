@@ -1,10 +1,10 @@
 // popup/popup.ts — Capture All 全采 采集控制台
-// Unified popup, 3 states: 就绪 / 采集中 / 采集完成. Real recording wiring.
+// Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real recording wiring.
 import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../shared/types';
 import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
-import { load_user_config, save_user_config } from '../shared/user_config';
+import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import type { RecordConfig } from '../shared/types';
@@ -86,10 +86,6 @@ function fmt_dur_ms(ms: number): string {
     return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
-function current_mode(): CaptureMode {
-    return user_config.selected_mode === 'advanced' ? 'deep' : 'standard';
-}
-
 function mode_badge(mode: CaptureMode): string {
     return `<span class="badge" data-mode="${mode === 'deep' ? 'deep' : 'standard'}">${
         mode === 'deep' ? t('modeDeep') : t('modeStandard')
@@ -98,15 +94,14 @@ function mode_badge(mode: CaptureMode): string {
 
 function metric_grid(stats: CaptureStats | null): string {
     const cards = CAPTURE.map((src) => {
-        let count_html = '';
-        if (stats) {
-            const n = src.stat ? stats[src.stat] : 0;
-            count_html = `<span class="mcard-n mono">${fmt_num(n)}</span>`;
-        }
-        return `<div class="mcard" data-tone="${src.tone}" data-count="${stats ? 1 : 0}">
-            <span class="mcard-ic">${ICON[src.icon]}</span>
-            <span class="mcard-lbl">${t(src.i18n as never)}</span>
-            ${count_html}
+        const has = stats != null && src.stat != null;
+        const n = has ? fmt_num(stats![src.stat!]) : '';
+        return `<div class="mcard" data-tone="${src.tone}" data-count="${has ? 1 : 0}">
+            <div class="mcard-row">
+                <span class="mcard-ic">${ICON[src.icon]}</span>
+                <span class="mcard-lbl">${t(src.i18n as never)}</span>
+            </div>
+            ${has ? `<span class="mcard-n mono">${n}</span>` : ''}
         </div>`;
     }).join('');
     return `<div class="metrics">${cards}</div>`;
@@ -142,40 +137,32 @@ function recent_list(): string {
 }
 
 function render_ready(): string {
-    const deep = current_mode() === 'deep';
     return `<div class="body">
-        <div class="unirow">
-            <div class="status"><span class="dot" data-tone="green"></span><b>${t('ready')}</b></div>
-            <div class="seg" data-deep="${deep ? 1 : 0}">
-                <button data-mode="standard" data-on="${!deep ? 1 : 0}">${t('modeStandard')}</button>
-                <button data-mode="deep" data-on="${deep ? 1 : 0}">${t('modeDeep')}</button>
-            </div>
+        <div class="action">
+            <button class="actbtn act-start" id="startBtn">
+                <span class="start-glyph"></span>
+                <span class="start-txt">${t('startCapture')}</span>
+            </button>
         </div>
-        <button class="cta cta-main" id="startBtn"><span class="rec-glyph"></span>${t('startCapture')}</button>
         ${metric_grid(null)}
         ${recent_list()}
     </div>`;
 }
 
 function render_recording(): string {
-    const mode = current_capture
-        ? (current_capture.mode === 'deep' ? 'deep' : 'standard')
-        : current_mode();
     const elapsed = current_capture
         ? fmt_hms((Date.now() - new Date(current_capture.started_at).getTime()) / 1000)
         : '00:00:00';
     return `<div class="body">
-        <div class="unirow">
-            <div class="status">
-                <span class="dot pulse" data-tone="red"></span>
-                <b class="rec-label">${t('recording')}</b>
-                <span class="timer mono" id="timer">${elapsed}</span>
-            </div>
-            ${mode_badge(mode as CaptureMode)}
-        </div>
-        <div class="row2">
-            <button class="cta" data-tone="red" style="flex:1.6" id="stopBtn">${ICON.stop}${t('stopCapture')}</button>
-            <button class="cta ghost" id="liveDetailBtn">${ICON.ext}${t('liveDetail')}</button>
+        <div class="action">
+            <button class="actbtn act-stop" id="stopBtn" title="${t('clickToEnd')}">
+                <span class="stop-glyph">${ICON.stop}</span>
+                <span class="stop-time mono" id="timer">${elapsed}</span>
+                <span class="stop-hint">${t('clickToEnd')}</span>
+            </button>
+            <button class="actbtn act-ghost" id="liveDetailBtn">
+                ${ICON.ext}<span>${t('liveDetail')}</span>
+            </button>
         </div>
         ${metric_grid(live_counts ?? current_capture?.stats ?? null)}
         ${recent_list()}
@@ -184,23 +171,23 @@ function render_recording(): string {
 
 function render_saved(): string {
     const cap = finished_capture;
-    const mode: CaptureMode = cap && cap.mode === 'deep' ? 'deep' : 'standard';
     const dur = cap && cap.ended_at
         ? fmt_dur_ms(new Date(cap.ended_at).getTime() - new Date(cap.started_at).getTime())
         : fmt_dur_ms(cap?.duration_ms ?? 0);
     return `<div class="body">
-        <div class="unirow">
-            <div class="status">
-                <span class="ck" data-tone="green">${ICON.check}</span>
-                <b style="color:var(--green-ink)">${t('captureDone')}</b>
-                <span class="timer mono done">${dur}</span>
+        <div class="action">
+            <div class="act-done">
+                <span class="done-time mono">${dur}</span>
+                <span class="done-check">${ICON.check}</span>
             </div>
-            ${mode_badge(mode)}
-        </div>
-        <div class="row2 row3btns">
-            <a class="cta" data-tone="blue" style="flex:1.5" id="openDetailBtn">${ICON.doc}${t('openDetail')}</a>
-            <button class="cta ghost" id="exportBtn">${ICON.download}${t('exportLabel')}</button>
-            <button class="cta ghost" id="newBtn">${ICON.refresh}${t('newCapture')}</button>
+            <div class="act-col">
+                <a class="actbtn act-ghost" id="openDetailBtn">
+                    ${ICON.ext}<span>${t('openDetail')}</span>
+                </a>
+                <button class="actbtn act-ghost" id="newBtn">
+                    ${ICON.refresh}<span>${t('newCapture')}</span>
+                </button>
+            </div>
         </div>
         ${metric_grid(cap?.stats ?? null)}
         ${recent_list()}
@@ -224,15 +211,6 @@ function open_dashboard(query = ''): void {
 }
 
 function wire_view(): void {
-    view.querySelectorAll('.seg button').forEach((b) => {
-        b.addEventListener('click', () => {
-            const m = (b as HTMLElement).dataset.mode === 'deep' ? 'advanced' : 'basic';
-            user_config = { ...user_config, selected_mode: m };
-            if (is_extension) save_user_config({ selected_mode: m });
-            render();
-        });
-    });
-
     view.querySelector('#startBtn')?.addEventListener('click', start_capture);
     view.querySelector('#stopBtn')?.addEventListener('click', stop_capture);
     view.querySelector('#newBtn')?.addEventListener('click', () => { state = 'ready'; render(); });
@@ -242,7 +220,6 @@ function wire_view(): void {
     view.querySelector('#openDetailBtn')?.addEventListener('click', () => {
         if (finished_capture) open_dashboard(`?session=${finished_capture.capture_id}&page=detail`);
     });
-    view.querySelector('#exportBtn')?.addEventListener('click', export_finished);
     view.querySelector('#viewAll')?.addEventListener('click', () => open_dashboard());
     view.querySelectorAll('.recent-row').forEach((row) => {
         row.addEventListener('click', () => {
@@ -319,15 +296,6 @@ async function stop_capture(): Promise<void> {
         await load_history();
         state = 'saved';
         render();
-    } catch (error) {
-        alert(`${t('error')}: ${error}`);
-    }
-}
-
-async function export_finished(): Promise<void> {
-    if (!is_extension || !finished_capture) return;
-    try {
-        await chrome.runtime.sendMessage({ action: 'export_json', session_id: finished_capture.capture_id });
     } catch (error) {
         alert(`${t('error')}: ${error}`);
     }

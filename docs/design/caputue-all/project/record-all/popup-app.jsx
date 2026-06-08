@@ -83,18 +83,17 @@ function RecentList() {
     <div className="recent">
       <div className="recent-hd">
         <span>最近采集</span>
-        <a href="detail.html" className="link" onClick={(e) => { e.preventDefault(); console.log("查看全部"); }}>
+        <a href="dashboard.html" className="link">
           查看全部 <I.chevron/>
         </a>
       </div>
       <div className="recent-list">
         {RECENT.map((r) => (
-          <a key={r.id} href="detail.html" className="recent-row"
-             onClick={(e) => { e.preventDefault(); console.log("查看详情", r.id); }}>
+          <a key={r.id} href="dashboard.html" className="recent-row">
             <span className="recent-ic"><I.clock/></span>
             <span className="recent-main">
               <span className="recent-top">
-                <b>{r.when}</b><ModeBadge mode={r.mode}/>
+                <b>{r.when}</b>
               </span>
               <span className="recent-sub mono">{r.dur} · {r.events} events</span>
             </span>
@@ -154,8 +153,7 @@ function SavedView({ onNew }) {
           <span className="done-check"><I.check/></span>
         </div>
         <div className="act-col">
-          <a href="detail.html" className="actbtn act-ghost"
-             onClick={(e) => { e.preventDefault(); console.log("打开详情"); }}>
+          <a href="dashboard.html" className="actbtn act-ghost">
             <I.ext/><span>查看详情</span>
           </a>
           <button className="actbtn act-ghost" onClick={onNew}>
@@ -187,8 +185,7 @@ const SCENARIOS = [
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "scenario": "ready",
   "theme": "light",
-  "density": "regular",
-  "accent": "#6d33e0"
+  "accent": "#3b82f6"
 }/*EDITMODE-END*/;
 
 function App() {
@@ -197,13 +194,12 @@ function App() {
   const [seconds, setSeconds] = useState(208);        // 00:03:28
   const timer = useRef(null);
 
-  /* appearance: theme / density / accent (drives blue-purple primary) */
+  /* appearance: theme / accent (drives the blue primary) */
   useEffect(() => {
     document.documentElement.dataset.theme = t.theme;
-    document.documentElement.dataset.density = t.density;
-    document.documentElement.style.setProperty("--purple", t.accent);
-    document.documentElement.style.setProperty("--purple-ink", t.accent);
-  }, [t.theme, t.density, t.accent]);
+    document.documentElement.style.setProperty("--blue", t.accent);
+    document.documentElement.style.setProperty("--blue-ink", t.accent);
+  }, [t.theme, t.accent]);
 
   /* running timer while recording */
   useEffect(() => {
@@ -266,10 +262,8 @@ function App() {
         <TweakSection label="外观"/>
         <TweakRadio label="主题" value={t.theme} options={["light", "dark"]}
           onChange={(v) => setTweak("theme", v)}/>
-        <TweakRadio label="密度" value={t.density} options={["regular", "compact"]}
-          onChange={(v) => setTweak("density", v)}/>
         <TweakColor label="主色" value={t.accent}
-          options={["#6d33e0", "#5b41e0", "#7c3aed", "#4f46e5"]}
+          options={["#2563eb", "#1d4ed8", "#3b82f6", "#1e40af"]}
           onChange={(v) => setTweak("accent", v)}/>
       </TweaksPanel>
     </div>

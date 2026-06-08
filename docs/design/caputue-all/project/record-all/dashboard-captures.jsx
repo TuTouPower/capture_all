@@ -56,7 +56,6 @@ function CapturesPage({ onOpen }) {
 
       <div className="cap-filterbar">
         <FilterPill label="状态" value="全部"/>
-        <FilterPill label="模式" value="全部"/>
         <FilterPill label="错误" value="全部"/>
         <div className="fb-daterange">
           时间范围：<span className="mono">2025-05-10</span><span className="arrow">→</span><span className="mono">2025-05-17</span>
@@ -77,7 +76,6 @@ function CapturesPage({ onOpen }) {
               <th>页面 / URL</th>
               <th><span className="sortable">时间 <DI.chevD style={{transform:"scale(.8)"}}/></span></th>
               <th>时长</th>
-              <th>模式</th>
               <th className="col-num">事件数</th>
               <th className="col-num">请求数</th>
               <th className="col-num">错误数</th>
@@ -103,7 +101,6 @@ function CapturesPage({ onOpen }) {
                 <td><span className="cap-url mono" title={r.url}>{r.url.replace(/^https?:\/\//,"")}</span></td>
                 <td><span className="cap-time mono">{r.time}</span></td>
                 <td><span className="cap-dur mono">{r.dur}</span></td>
-                <td><span className="chip" data-mode={r.mode}>{r.mode==="deep"?"深度采集":"标准采集"}</span></td>
                 <td className="col-num mono">{r.events}</td>
                 <td className="col-num mono">{r.reqs}</td>
                 <td className="col-num"><span className="cap-errs mono" data-bad={r.errs>0?1:0}>{r.errs}</span></td>

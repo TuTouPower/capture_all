@@ -73,7 +73,7 @@ function DtEventList({ view, setView, selIdx, onSelect }) {
       </div>
 
       {view === "trace" ? (
-        <div className="dt-events"><TimelineView onSelect={()=>onSelect(7)} density="regular"/></div>
+        <div className="dt-events"><TimelineView onSelect={()=>onSelect(7)}/></div>
       ) : (
         <div className="dt-events scroll">
           <table className="dt-ev-table">
@@ -177,7 +177,7 @@ function DtInspector({ onClose, onJump }) {
         {tab === "response" && (<>
           <div className="insp-logmsg" style={{margin:"-16px -16px 0",borderRadius:0}}>
             <span className="lvl-tag" data-lvl="error" style={{flex:"none"}}>500</span>
-            <span>Internal Server Error — 响应体已采集（深度采集模式）</span>
+            <span>Internal Server Error — 响应体已采集</span>
           </div>
           <div className="dti-sec" style={{marginTop:6}}>Body / 响应体</div>
           <div className="codeblock mono scroll"><pre>{`{\n  "error": "OrderProcessingError",\n  "message": "Cannot read properties of undefined (reading 'id')",\n  "trace_id": "8f3a2b19-6b4e",\n  "status": 500\n}`}</pre></div>
@@ -331,7 +331,6 @@ function DetailPage({ rec, onBack }) {
             <h1>{rec.name}</h1>
             <span className="dt-id">{rec.id} <button className="ibtn" title="复制 ID">{DI.copy()}</button></span>
             <span className="dt-state"><span className="dot"/>已结束</span>
-            <span className="chip" data-mode="deep">深度采集</span>
           </div>
           <div className="dt-meta">
             {DI.cal()}<span className="mono">2026-06-06 14:32:08 — 14:44:50</span>

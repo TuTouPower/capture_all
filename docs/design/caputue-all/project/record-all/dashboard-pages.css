@@ -211,8 +211,6 @@
 .btn-agent svg { color: var(--surface); }
 .btn-agent:hover { background: var(--ink-2); }
 
-[data-density="compact"] .dt-ev-table td { padding: 7px 14px; }
-
 /* ════════════════════ SETTINGS PAGE ════════════════════ */
 .set-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 196px 1fr; overflow: hidden; }
 .set-subnav { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--surface-2); overflow-y: auto; }

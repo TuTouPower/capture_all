@@ -13,7 +13,7 @@ function CurrentPage({ onOpen }) {
       <div className="simple-pad scroll">
         <div className="live-banner">
           <span className="lb-dot"/>
-          <div className="lb-main"><b>采集中</b><span className="lb-time">00:03:28</span><p>app.example.com/dashboard · 深度采集 · 含响应体采集</p></div>
+          <div className="lb-main"><b>采集中</b><span className="lb-time">00:03:28</span><p>app.example.com/dashboard · 含响应体采集</p></div>
           <button className="btn danger"><DI.stop/>停止采集</button>
           <button className="btn" onClick={()=>onOpen(CAP_ROWS[0])}><DI.expand/>实时详情</button>
         </div>
@@ -21,7 +21,6 @@ function CurrentPage({ onOpen }) {
           <div className="exp-task" key={r.id} onClick={()=>onOpen(r)} style={{cursor:"pointer"}}>
             <span className="et-ic" style={{color:"var(--blue-ink)"}}>{DI.navCurrent()}</span>
             <div className="et-main"><b>{r.name}</b><div className="et-sub">{r.url.replace(/^https?:\/\//,"")} · {r.events} 事件 · {r.reqs} 请求</div></div>
-            <span className="chip" data-mode={r.mode}>{r.mode==="deep"?"深度采集":"标准采集"}</span>
             <span className="dt-state"><span className="dot" style={{background:"var(--blue)"}}/><span style={{color:"var(--blue-ink)"}} className="mono">{r.dur}</span></span>
             <button className="ibtn">{DI.more()}</button>
           </div>
@@ -96,8 +95,7 @@ function IntegrationsPage() {
 const TWEAK_DEFAULTS_D = /*EDITMODE-BEGIN*/{
   "page": "captures",
   "theme": "light",
-  "density": "regular",
-  "accent": "#2563eb"
+  "accent": "#3b82f6"
 }/*EDITMODE-END*/;
 
 function App() {
@@ -108,10 +106,9 @@ function App() {
   useEffectD(() => { setPage(t.page); }, [t.page]);
   useEffectD(() => {
     document.documentElement.dataset.theme = t.theme;
-    document.documentElement.dataset.density = t.density;
     document.documentElement.style.setProperty("--blue", t.accent);
     document.documentElement.style.setProperty("--blue-ink", t.accent);
-  }, [t.theme, t.density, t.accent]);
+  }, [t.theme, t.accent]);
 
   const go = (p) => { setPage(p); setTweak("page", p); };
   const openRec = (r) => { setRec(r); setPage("detail"); setTweak("page","detail"); };
@@ -168,8 +165,7 @@ function App() {
         ]} onChange={go}/>
         <TweakSection label="外观"/>
         <TweakRadio label="主题" value={t.theme} options={["light","dark"]} onChange={(v)=>setTweak("theme",v)}/>
-        <TweakRadio label="密度" value={t.density} options={["regular","compact"]} onChange={(v)=>setTweak("density",v)}/>
-        <TweakColor label="主色" value={t.accent} options={["#2563eb","#0e7c63","#c2410c","#6d33e0"]} onChange={(v)=>setTweak("accent",v)}/>
+        <TweakColor label="主色" value={t.accent} options={["#2563eb","#1d4ed8","#3b82f6","#1e40af"]} onChange={(v)=>setTweak("accent",v)}/>
       </TweaksPanel>
     </div>
   );

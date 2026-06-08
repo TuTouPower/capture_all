@@ -108,13 +108,29 @@ async function get_capture_data(capture_id: string): Promise<any> {
     const capture = await get_capture(capture_id);
     if (!capture) return { success: false, error: 'Capture not found' };
 
-    const [events, network_requests, console_events] = await Promise.all([
+    const [user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000)
+        get_console_events(capture_id, 0, 100000),
+        get_events_by_category(capture_id, 'error', 0, 100000),
+        get_events_by_category(capture_id, 'storage', 0, 100000),
+        get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
-    return { success: true, session: capture, events, network_requests, console_logs: console_events };
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+
+    return {
+        success: true,
+        session: capture,
+        events: all_events,
+        nav_events,
+        network_requests,
+        console_logs: console_events,
+        error_events,
+        storage_changes,
+        cookie_changes
+    };
 }
 
 /** Map RecordConfig.capture_mode to CaptureRecord.mode */

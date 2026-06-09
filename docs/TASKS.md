@@ -211,19 +211,19 @@
 - **文件**：`tests/e2e-stop.spec.ts`
 - 点击红色停止 → 进入完成状态 → `{ action: 'stop' }` 返回 `{ success: true }` → 连续 3 次开始-停止无残留
 
-### P4.8 实时详情不为空（修复 P0.3）
+### ✅ P4.8 实时详情不为空（修复 P0.3）
 - **文件**：`tests/e2e-realtime-detail.spec.ts`
 - 采集中点「实时详情」→ dashboard 时间线有事件 → 网络 Tab 有请求 → 控制台 Tab 有日志
 
-### P4.9 Popup/Dashboard 七标签一致性
+### ✅ P4.9 Popup/Dashboard 七标签一致性
 - **文件**：`tests/e2e-consistency.spec.ts`
 - 完成采集 → 记录 popup 7 标签名+计数 → dashboard 对比 → 名称/顺序/计数完全一致
 
-### P4.10 主面板采集记录列表
+### ✅ P4.10 主面板采集记录列表
 - **文件**：`tests/e2e-dashboard-list.spec.ts`
 - 完成 3 次采集 → dashboard 列表显示 3 条 → 无"模式"列 → 无模式筛选 → 无"当前采集中"卡片
 
-### P4.11 主面板采集详情各 Tab
+### ✅ P4.11 主面板采集详情各 Tab
 - **文件**：`tests/e2e-detail-tabs.spec.ts`
 - 概览/时间线/网络/控制台/Storage/Cookie 各 Tab 切换 → 均有内容 → 面包屑可返回
 

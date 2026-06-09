@@ -32,6 +32,9 @@ let dt_sel = -1;
 let dt_insp_open = false;
 let dt_play = 49.5; // trace playhead position (%)
 
+// Network detail panel state
+let dt_net_sel = -1;
+
 const root = document.getElementById('root')!;
 
 // ── helpers ─────────────────────────────────────────────────────────────
@@ -456,7 +459,10 @@ function render_detail(): string {
 function render_detail_tab(showInsp: boolean): string {
     if (dt_tab === 'overview') return render_dt_overview();
     if (dt_tab === 'config') return render_dt_config();
-    if (dt_tab === 'network') return `<div class="dt-body" data-insp="0"><div class="dt-list">${render_net_table()}</div></div>`;
+    if (dt_tab === 'network') {
+        const show_net_insp = dt_insp_open && dt_net_sel >= 0 && dt_net_sel < detail_network.length;
+        return `<div class="dt-body" data-insp="${show_net_insp ? 1 : 0}"><div class="dt-list">${render_net_table()}</div>${show_net_insp ? render_net_inspector() : ''}</div>`;
+    }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
     if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change', 'cookie_change'], ['时间', '类型', 'Key / 名称', '详情', '来源'])}</div>`;
     if (dt_tab === 'evidence') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event', 'dom_mutation'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
@@ -628,9 +634,9 @@ function render_net_table(): string {
         <div class="net-row net-head mono" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px">
             <span>时间</span><span>方法</span><span>URL</span><span>状态</span><span>类型</span><span>耗时</span>
         </div>
-        ${detail_network.length ? detail_network.map((r) => {
+        ${detail_network.length ? detail_network.map((r, idx) => {
         const err = (r.status_code || 0) >= 400;
-        return `<div class="net-row${err ? ' err' : ''}" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px">
+        return `<div class="net-row${err ? ' err' : ''}" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px" data-netidx="${idx}" data-sel="${dt_net_sel === idx ? 1 : 0}">
             <span class="mono dim">${esc((r as unknown as Record<string, unknown>).timestamp || rel_time(0))}</span>
             <span class="mono"><span class="method-sm" data-m="${esc(r.method)}">${esc(r.method)}</span></span>
             <span class="mono url-cell" title="${esc(r.url)}">${esc(r.url)}</span>
@@ -640,6 +646,45 @@ function render_net_table(): string {
         </div>`;
     }).join('') : empty}
     </div></div></div>` + (rows ? '' : '');
+}
+
+function render_net_inspector(): string {
+    const req = detail_network[dt_net_sel];
+    if (!req) return '';
+    const err = (req.status_code || 0) >= 400;
+    const req_hdrs = req.request_headers ? Object.entries(req.request_headers).map(([k, v]) => `<div class="dti-field"><span class="k">${esc(k)}</span><span class="v mono">${esc(String(v))}</span></div>`).join('') : '<span class="dim">—</span>';
+    const res_hdrs = req.response_headers ? Object.entries(req.response_headers).map(([k, v]) => `<div class="dti-field"><span class="k">${esc(k)}</span><span class="v mono">${esc(String(v))}</span></div>`).join('') : '<span class="dim">—</span>';
+    const req_body = req.request_body ? `<pre class="body-pre">${esc(req.request_body)}</pre>` : '<span class="dim">—</span>';
+    const res_body = req.response_body ? `<pre class="body-pre">${esc(req.response_body.slice(0, 8000))}${req.response_body.length > 8000 ? '\n... (truncated)' : ''}</pre>` : '<span class="dim">—</span>';
+    return `<aside class="dt-insp scroll">
+        <div class="dti-hd">
+            <div class="dti-hd-l"><div class="dti-title"><b class="mono">${esc(req.method)} ${esc(req.url.slice(0, 60))}${req.url.length > 60 ? '...' : ''}</b></div></div>
+            <div class="dti-nav"><button class="ibtn" data-net-insp-close="1">${I.close}</button></div>
+        </div>
+        <div class="dti-body">
+            <div class="ov-panel-hd">基本信息</div>
+            <div class="dti-grid c2" style="margin-top:4px">
+                <div class="dti-field"><span class="k">方法</span><span class="v mono">${esc(req.method)}</span></div>
+                <div class="dti-field"><span class="k">状态码</span><span class="v mono" style="color:${err ? 'var(--red-ink)' : 'var(--green-ink)'}">${esc(req.status_code)} ${esc(req.status_text || '')}</span></div>
+                <div class="dti-field"><span class="k">资源类型</span><span class="v mono">${esc(req.resource_type)}</span></div>
+                <div class="dti-field"><span class="k">耗时</span><span class="v mono">${req.duration_ms != null ? Math.round(req.duration_ms) + ' ms' : '—'}</span></div>
+                <div class="dti-field"><span class="k">协议</span><span class="v mono">${esc(req.protocol || '—')}</span></div>
+                <div class="dti-field"><span class="k">MIME</span><span class="v mono">${esc(req.mime_type || '—')}</span></div>
+                <div class="dti-field"><span class="k">缓存</span><span class="v mono">${req.from_cache ? 'from ' + (req.cache_status || 'cache') : 'no cache'}</span></div>
+                <div class="dti-field"><span class="k">采集方式</span><span class="v mono">${esc(req.capture_method || '—')}</span></div>
+            </div>
+            <div class="dti-field span2" style="margin-top:4px"><span class="k">URL</span><span class="v mono" style="word-break:break-all">${esc(req.url)}</span></div>
+            ${req.error_text ? `<div class="dti-field span2"><span class="k">错误</span><span class="v mono" style="color:var(--red-ink)">${esc(req.error_text)}</span></div>` : ''}
+            <div class="ov-panel-hd" style="margin-top:12px">请求头</div>
+            <div class="dti-related" style="margin-top:4px">${req_hdrs}</div>
+            <div class="ov-panel-hd" style="margin-top:12px">响应头</div>
+            <div class="dti-related" style="margin-top:4px">${res_hdrs}</div>
+            <div class="ov-panel-hd" style="margin-top:12px">请求体</div>
+            <div style="margin-top:4px">${req_body}</div>
+            <div class="ov-panel-hd" style="margin-top:12px">响应体 <span style="font-weight:400;font-size:11px;color:var(--ink-3)">${req.response_body_status || ''}</span></div>
+            <div style="margin-top:4px">${res_body}</div>
+        </div>
+    </aside>`;
 }
 
 function render_con_table(): string {
@@ -750,6 +795,13 @@ function wire_detail(): void {
     });
     c.querySelector('[data-open-url]')?.addEventListener('click', () => { const u = detail_session?.start_url; if (u) chrome.tabs.create({ url: u }); });
     c.querySelector('[data-nav-settings]')?.addEventListener('click', () => go('settings'));
+    // Network row click → open detail inspector
+    c.querySelectorAll('[data-netidx]').forEach((row) => row.addEventListener('click', () => {
+        dt_net_sel = Number((row as HTMLElement).dataset.netidx);
+        dt_insp_open = true;
+        render_content();
+    }));
+    c.querySelector('[data-net-insp-close]')?.addEventListener('click', () => { dt_insp_open = false; dt_net_sel = -1; render_content(); });
     wire_trace();
 }
 

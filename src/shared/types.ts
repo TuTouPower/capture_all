@@ -240,6 +240,8 @@ export interface TabUrlChangeData {
 // ============================================================
 
 export interface NetworkRequestData {
+    capture_id?: string;
+    event_id?: string;
     request_id: string;
     method: string;
     url: string;
@@ -282,6 +284,8 @@ export interface NetworkRequestData {
 // ============================================================
 
 export interface ConsoleEventData {
+    capture_id?: string;
+    event_id?: string;
     level: 'log' | 'warn' | 'info' | 'debug' | 'error';
     args_preview: string[];
     args_status: 'captured' | 'redacted';
@@ -298,6 +302,8 @@ export interface ConsoleEventData {
 // ============================================================
 
 export interface RuntimeExceptionData {
+    capture_id?: string;
+    event_id?: string;
     message: string;
     error_name: string | null;
     stack_trace: string | null;
@@ -350,6 +356,8 @@ export interface CaptureErrorData {
 // ============================================================
 
 export interface StorageChangeData {
+    capture_id?: string;
+    event_id?: string;
     storage_type: 'local' | 'session';
     action: 'set' | 'remove' | 'clear';
     key: string | null;
@@ -366,6 +374,8 @@ export interface StorageChangeData {
 // ============================================================
 
 export interface CookieChangeData {
+    capture_id?: string;
+    event_id?: string;
     name: string;
     domain: string;
     path: string;

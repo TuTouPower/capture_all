@@ -444,6 +444,8 @@ function build_network_event(
     const redacted_headers = config.redact_data && config.redact_sensitive_headers;
 
     const data: NetworkRequestData = {
+        capture_id: event.capture_id,
+        event_id: event.event_id,
         request_id: pending.cdp_request_id || crypto.randomUUID(),
         method: pending.method || 'GET',
         url: pending.url || '',

@@ -1121,10 +1121,16 @@ async function init(): Promise<void> {
         const prev_state = sessions.map(s => `${s.capture_id}:${s.status}`);
         await load_sessions();
         const cur_state = sessions.map(s => `${s.capture_id}:${s.status}`);
-        if (prev_state.join(',') !== cur_state.join(',')) {
+        const sessions_changed = prev_state.join(',') !== cur_state.join(',');
+        if (sessions_changed) {
             if (page === 'captures' || page === 'current' || page === 'exports') {
                 render_content();
             }
+        }
+        // 实时详情页自动刷新：采集中每 2s 更新数据
+        if (page === 'detail' && detail_session?.status === 'capturing') {
+            await load_detail(detail_session.capture_id);
+            render_content();
         }
     }, 2000);
 }

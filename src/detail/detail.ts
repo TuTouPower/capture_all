@@ -85,8 +85,12 @@ function render_overview(): void {
     setText('startTime', format_system_time(s.started_at, user_config));
     setText('duration', s.ended_at ? format_duration(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) : 'In progress');
     setText('eventCount', String(s.stats.event_count || events.length));
+    setText('navCount', String(s.stats.nav_count || 0));
     setText('requestCount', String(s.stats.request_count || network_requests.length));
     setText('logCount', String(s.stats.log_count || console_logs.length));
+    setText('errorCount', String(s.stats.error_count || 0));
+    setText('storageCount', String(s.stats.storage_change_count || 0));
+    setText('cookieCount', String(s.stats.cookie_change_count || 0));
 }
 
 function render_timeline(): void {

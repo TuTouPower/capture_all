@@ -7,14 +7,11 @@ import type { LogTransport } from '../shared/logger';
 
 export class IndexedDBLogTransport implements LogTransport {
     private buffer: AppLogEntry[] = [];
-    private readonly batch_size = 50;
     private flush_timer: ReturnType<typeof setTimeout> | null = null;
 
     write(entry: AppLogEntry): void {
         this.buffer.push(entry);
-        if (this.buffer.length >= this.batch_size) {
-            this.schedule_flush();
-        }
+        this.schedule_flush();
     }
 
     private schedule_flush(): void {

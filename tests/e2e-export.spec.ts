@@ -1,31 +1,47 @@
-// tests/e2e-export.spec.ts — 导出验证
+// tests/e2e-export.spec.ts — 导出四格式验证
+// JSON: capture_id + category + type 字段完整
+// JSONL: 逐行合法 JSON
+// HAR: 标准格式 log.entries
+// HTML: 无 XSS 风险
 import { test, expect } from '@playwright/test';
 import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
 
-test.describe('导出', () => {
+interface ExportResult {
+    success: boolean;
+    json?: string;
+    jsonl?: string;
+    html?: string;
+    har?: string;
+}
+
+test.describe('导出四格式', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;
+    let capture_id = '';
 
-    test.beforeAll(async () => { fix = await launch_extension(); });
-    test.afterAll(async () => { await fix.context.close(); });
-
-    test('完成采集后可导出（验证导出消息可用）', async () => {
+    test.beforeAll(async () => {
+        fix = await launch_extension();
+        // 完成一次采集获取 capture_id
         const popup = await open_popup(fix);
-        await popup.waitForTimeout(300);
-
-        // 完成一次采集
         await popup.locator('#startBtn').click();
         await popup.waitForTimeout(500);
+
         const site = await open_site(fix, TEST_SITES.baidu);
         await site.waitForTimeout(2000);
+        const input = site.locator('#kw');
+        if (await input.isVisible()) {
+            await input.click();
+            await input.fill('export test');
+            await site.locator('#su').click();
+            await site.waitForTimeout(3000);
+        }
         await site.close();
         await popup.bringToFront();
         await popup.locator('#stopBtn').click();
-        await popup.waitForTimeout(1500);
+        await popup.waitForTimeout(2000);
 
-        // 验证完成状态
-        await expect(popup.locator('#openDetailBtn')).toBeVisible();
-
-        // 进入 dashboard 验证导出功能可用
+        // 从 popup 获取 capture_id (dashboard 需要)
+        const popup_html = await popup.innerHTML('body');
+        // 进入 dashboard 获取完整的 capture_id
         const [dashboard] = await Promise.all([
             fix.context.waitForEvent('page', { timeout: 10000 }),
             popup.locator('#openDetailBtn').click(),
@@ -33,16 +49,194 @@ test.describe('导出', () => {
         await dashboard.waitForLoadState('domcontentloaded');
         await dashboard.waitForTimeout(2000);
 
-        // 验证 dashboard 有导出按钮
-        const export_btns = dashboard.locator('[id*="export" i], [id*="Export"]');
-        // 即使没有明确的导出按钮，dashboard 页面也应该加载
-
-        const html = await dashboard.content();
-        // 验证使用新命名
-        expect(html).not.toContain('record_all');
-        expect(html).not.toContain('Record All');
+        // 获取 session 列表中的第一个 capture_id
+        capture_id = await dashboard.evaluate(() => {
+            const btn = document.querySelector('[data-export]') as HTMLElement | null;
+            return btn?.dataset?.export || '';
+        });
 
         await dashboard.close();
         await popup.close();
+
+        if (!capture_id) {
+            console.warn('⚠ 未找到 capture_id，导出测试可能失败');
+        }
+    });
+
+    test.afterAll(async () => { await fix.context.close(); });
+
+    test('JSON 格式包含 capture_id + category + type', async () => {
+        expect(capture_id, '需要有效的 capture_id').toBeTruthy();
+
+        // 打开 dashboard 并在页面上下文中调用导出
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1000);
+
+        const json_result = await dashboard.evaluate(async (id) => {
+            try {
+                const r = await (chrome.runtime.sendMessage({
+                    action: 'export_json',
+                    session_id: id,
+                }) as Promise<{ success: boolean; json?: string }>);
+                return r;
+            } catch {
+                return { success: false, json: undefined };
+            }
+        }, capture_id);
+
+        await dashboard.close();
+
+        expect(json_result.success, 'JSON 导出应成功').toBe(true);
+        expect(json_result.json, 'JSON 导出应有内容').toBeTruthy();
+
+        const data = JSON.parse(json_result.json!);
+        expect(data, 'JSON 数据应有 capture_id').toHaveProperty('capture_id');
+        expect(typeof data.capture_id).toBe('string');
+        expect(data.capture_id.length).toBeGreaterThan(0);
+
+        // 检查 category 和 type 字段存在于事件中
+        if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+            for (const ev of data.events) {
+                expect(ev, '每个事件应有 category').toHaveProperty('category');
+                expect(typeof ev.category).toBe('string');
+                expect(ev.category.length).toBeGreaterThan(0);
+
+                expect(ev, '每个事件应有 type').toHaveProperty('type');
+                expect(typeof ev.type).toBe('string');
+                expect(ev.type.length).toBeGreaterThan(0);
+            }
+        }
+    });
+
+    test('JSONL 格式逐行合法 JSON', async () => {
+        expect(capture_id, '需要有效的 capture_id').toBeTruthy();
+
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1000);
+
+        const jsonl_result = await dashboard.evaluate(async (id) => {
+            try {
+                const r = await (chrome.runtime.sendMessage({
+                    action: 'export_jsonl',
+                    session_id: id,
+                }) as Promise<{ success: boolean; jsonl?: string }>);
+                return r;
+            } catch {
+                return { success: false, jsonl: undefined };
+            }
+        }, capture_id);
+
+        await dashboard.close();
+
+        expect(jsonl_result.success, 'JSONL 导出应成功').toBe(true);
+        expect(jsonl_result.jsonl, 'JSONL 导出应有内容').toBeTruthy();
+
+        const lines = jsonl_result.jsonl!.trim().split('\n');
+        expect(lines.length, 'JSONL 至少有一行').toBeGreaterThan(0);
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parsed = JSON.parse(line);
+            expect(parsed, `JSONL 第 ${i + 1} 行为合法 JSON`).toBeDefined();
+            expect(typeof parsed).toBe('object');
+            // 每行应有 category 字段
+            expect(parsed, `JSONL 第 ${i + 1} 行应有 category`).toHaveProperty('category');
+        }
+    });
+
+    test('HAR 格式为标准 HAR 1.2', async () => {
+        expect(capture_id, '需要有效的 capture_id').toBeTruthy();
+
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1000);
+
+        const har_result = await dashboard.evaluate(async (id) => {
+            try {
+                const r = await (chrome.runtime.sendMessage({
+                    action: 'export_har',
+                    session_id: id,
+                }) as Promise<{ success: boolean; har?: string }>);
+                return r;
+            } catch {
+                return { success: false, har: undefined };
+            }
+        }, capture_id);
+
+        await dashboard.close();
+
+        expect(har_result.success, 'HAR 导出应成功').toBe(true);
+        expect(har_result.har, 'HAR 导出应有内容').toBeTruthy();
+
+        const har = JSON.parse(har_result.har!);
+        // HAR 1.2 格式: { log: { version, creator, entries: [...] } }
+        expect(har, 'HAR 应有 log 属性').toHaveProperty('log');
+        expect(har.log, 'HAR log 应有 version').toHaveProperty('version');
+        expect(har.log.version, 'HAR 版本应为 1.2').toBe('1.2');
+        expect(har.log, 'HAR log 应有 creator').toHaveProperty('creator');
+        expect(har.log, 'HAR log 应有 entries').toHaveProperty('entries');
+        expect(Array.isArray(har.log.entries), 'HAR entries 应为数组').toBe(true);
+
+        // 验证 entry 结构
+        if (har.log.entries.length > 0) {
+            const entry = har.log.entries[0];
+            expect(entry, 'HAR entry 应有 startedDateTime').toHaveProperty('startedDateTime');
+            expect(entry, 'HAR entry 应有 request').toHaveProperty('request');
+            expect(entry, 'HAR entry 应有 response').toHaveProperty('response');
+            expect(entry.request, 'HAR request 应有 method').toHaveProperty('method');
+            expect(entry.request, 'HAR request 应有 url').toHaveProperty('url');
+            expect(entry.response, 'HAR response 应有 status').toHaveProperty('status');
+        }
+    });
+
+    test('HTML 格式无 XSS 风险', async () => {
+        expect(capture_id, '需要有效的 capture_id').toBeTruthy();
+
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1000);
+
+        const html_result = await dashboard.evaluate(async (id) => {
+            try {
+                const r = await (chrome.runtime.sendMessage({
+                    action: 'export_html',
+                    session_id: id,
+                }) as Promise<{ success: boolean; html?: string }>);
+                return r;
+            } catch {
+                return { success: false, html: undefined };
+            }
+        }, capture_id);
+
+        await dashboard.close();
+
+        expect(html_result.success, 'HTML 导出应成功').toBe(true);
+        expect(html_result.html, 'HTML 导出应有内容').toBeTruthy();
+
+        const html = html_result.html!;
+
+        // XSS 风险检测
+        const xss_patterns = [
+            /<script[^>]*>/i,
+            /onerror\s*=/i,
+            /onload\s*=/i,
+            /onclick\s*=/i,
+            /javascript\s*:/i,
+            /<iframe[^>]*>/i,
+            /<object[^>]*>/i,
+            /<embed[^>]*>/i,
+            /eval\s*\(/i,
+            /document\.cookie/i,
+        ];
+
+        for (const pattern of xss_patterns) {
+            expect(html, `HTML 不应包含 XSS 模式: ${pattern}`).not.toMatch(pattern);
+        }
+
+        // HTML 应有基本结构
+        expect(html, 'HTML 应包含 doctype 或 html 标签').toMatch(/<!DOCTYPE|<html/i);
     });
 });

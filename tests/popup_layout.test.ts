@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 // 源自 CSS: .action { height: 88px }
 const ACTION_HEIGHT_PX = 88;
 
-// 源自 CSS: .popup { width: 267px } / body { width: 267px }
-const POPUP_WIDTH_PX = 267;
+// 源自 CSS: .popup { width: 300px } / body { width: 300px }
+const POPUP_WIDTH_PX = 300;
 
 // 源自 CSS: .mcard { min-height: 62px }
 const MCARD_MIN_HEIGHT_PX = 62;
@@ -191,12 +191,12 @@ describe('total popup height', () => {
 });
 
 // ============================================================
-// Popup 宽度 = 267px
+// Popup 宽度 = 300px
 // ============================================================
 
 describe('popup width', () => {
-    it('宽度 = 267px', () => {
-        expect(POPUP_WIDTH_PX).toBe(267);
+    it('宽度 = 300px', () => {
+        expect(POPUP_WIDTH_PX).toBe(300);
     });
 
     it('宽度不是旧值 400px', () => {
@@ -220,7 +220,7 @@ describe('layout regression guards', () => {
     });
 
     it('popup width 不变 — 回归保护', () => {
-        expect(POPUP_WIDTH_PX).toBe(267);
+        expect(POPUP_WIDTH_PX).toBe(300);
     });
 
     it('mcard min-height 不变 — 回归保护', () => {

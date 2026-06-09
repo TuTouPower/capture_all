@@ -713,10 +713,18 @@ function render_dt_config(): string {
         <p style="font-size:12.5px;color:var(--ink-3);margin:14px 0 0">本次采集使用的配置（只读快照）。如需修改默认值，请前往 <span class="lnk" data-nav-settings="1">设置 → 采集默认值</span>。</p>
         <div class="ov-panel" style="margin-top:14px">
             <div class="ov-panel-hd">采集模块</div>
+            ${item('用户行为', cfg.event_count_enabled !== false)}
+            ${item('页面导航', cfg.nav_count_enabled !== false)}
             ${item('网络请求', cfg.capture_network !== false)}
+            ${item('控制台', cfg.capture_console !== false)}
+            ${item('错误异常', cfg.error_count_enabled !== false)}
+            ${item('Storage', cfg.storage_change_count_enabled !== false)}
+            ${item('Cookie', cfg.cookie_change_count_enabled !== false)}
+        </div>
+        <div class="ov-panel" style="margin-top:14px">
+            <div class="ov-panel-hd">采集选项</div>
             ${item('请求体采集', !!cfg.capture_request_body)}
             ${item('响应体采集', !!cfg.capture_response_body)}
-            ${item('Console', cfg.capture_console !== false)}
             ${item('输入值', !!cfg.capture_input_values)}
         </div>
         <div class="ov-panel" style="margin-top:14px">

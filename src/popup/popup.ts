@@ -262,7 +262,13 @@ function get_record_config(): RecordConfig {
         capture_request_body: user_config.capture_request_body,
         capture_response_body: user_config.capture_response_body,
         redact_data: toggles.mask !== false,
-    };
+        // All 7 label toggles for config display
+        event_count_enabled: toggles.event_count !== false,
+        nav_count_enabled: toggles.nav_count !== false,
+        error_count_enabled: toggles.error_count !== false,
+        storage_change_count_enabled: toggles.storage_change_count !== false,
+        cookie_change_count_enabled: toggles.cookie_change_count !== false,
+    } as RecordConfig;
 }
 
 async function start_capture(): Promise<void> {

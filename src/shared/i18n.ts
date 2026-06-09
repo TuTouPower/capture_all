@@ -242,7 +242,7 @@ const zh: I18nStrings = {
     stopRecording: '停止采集',
 
     recentSessions: '最近采集',
-    noSessions: '暂无采集记录',
+    noSessions: '暂无采集',
     view: '查看',
     delete: '删除',
     deleteConfirm: '确定删除此采集？',

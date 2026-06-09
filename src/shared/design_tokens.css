@@ -33,9 +33,9 @@
     --blue: #2563eb;         --blue-ink: #1d4ed8;    --blue-bg: #eaf1fe;
     --purple: #6d33e0;       --purple-ink: #5a26c4;  --purple-bg: #f1ecfd;
     --amber: #d98510;        --amber-ink: #b56a06;   --amber-bg: #fef6e7;
-    --cyan: #0e9aaf;         --cyan-bg: #e7f7f9;
-    --indigo: #4a52d6;       --indigo-bg: #ecedfb;
-    --yellow: #b88407;       --yellow-bg: #fbf3df;
+    --cyan: #0e9aaf;         --cyan-ink: #0b7d8a;    --cyan-bg: #e7f7f9;
+    --indigo: #4a52d6;       --indigo-ink: #3a42c4;   --indigo-bg: #ecedfb;
+    --yellow: #b88407;       --yellow-ink: #956a06;   --yellow-bg: #fbf3df;
 
     /* data-source colors (PRD 19.3) */
     --src-user: #2563eb;
@@ -79,6 +79,13 @@
     --green: #2ec46a; --red: #f2554a; --blue: #5b8def; --purple: #9a73f0;
     --amber: #eaa53a; --green-ink: #2ec46a; --red-ink: #f2554a;
     --blue-ink: #5b8def; --purple-ink: #9a73f0; --amber-ink: #eaa53a;
+    --cyan: #2db5c5; --cyan-ink: #2db5c5; --indigo: #7b8cff; --indigo-ink: #7b8cff;
+    --yellow: #d4a520; --yellow-ink: #d4a520;
+
+    /* data-source colors — lifted for dark mode */
+    --src-user: #5b8def; --src-network: #9a73f0; --src-console: #eaa53a;
+    --src-error: #f2554a; --src-storage: #2ec46a; --src-cookie: #d4a520;
+    --src-dom: #2db5c5; --src-nav: #7b8cff; --src-session: #a0a098;
 
     --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 16px 44px rgba(0,0,0,.5);
     --shadow-pop: 0 8px 28px rgba(0,0,0,.55);

@@ -359,6 +359,8 @@ export interface ExportAppLogsOptions {
 
 export async function export_app_logs(options: ExportAppLogsOptions): Promise<string> {
     const transport = get_app_log_transport();
+    // Flush pending buffer entries before querying IndexedDB
+    await transport.flush();
     const entries = await transport.get_entries(100000, 0, {
         level: options.level,
         module: options.module,

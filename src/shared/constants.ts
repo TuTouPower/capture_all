@@ -2,7 +2,7 @@
 import type { RecordConfig } from './types';
 
 export const DB_NAME = 'capture_all_db';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORE_NAMES = {
     CAPTURES: 'captures',
@@ -14,6 +14,7 @@ export const STORE_NAMES = {
     STORAGE_CHANGES: 'storage_changes',
     COOKIE_CHANGES: 'cookie_changes',
     CAPTURE_LIFECYCLE_EVENTS: 'capture_lifecycle_events',
+    APP_LOGS: 'app_logs',
 } as const;
 
 export const MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
@@ -58,5 +59,7 @@ export const DEFAULT_USER_CONFIG = {
     agent_bridge_enabled: false,
     agent_bridge_url: 'http://127.0.0.1:17831',
     agent_bridge_token: '',
-    agent_bridge_poll_interval_ms: 1000
+    agent_bridge_poll_interval_ms: 1000,
+    log_level: 'warn' as const,
+    log_max_entries: 10000,
 };

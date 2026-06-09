@@ -9,6 +9,10 @@ import { start_storage_capture, stop_storage_capture } from './storage_capture';
 import { start_xhr_fetch_capture, stop_xhr_fetch_capture } from './xhr_fetch_capture';
 import { start_network_hook, stop_network_hook } from './network_hook';
 import { DEFAULT_CONFIG } from '../shared/constants';
+import { Logger, MessageLogTransport } from '../shared/logger';
+
+const log_transport = new MessageLogTransport();
+const logger = new Logger('content/script', log_transport);
 
 let is_capturing = false;
 let frame_id = 0;
@@ -22,10 +26,10 @@ if (window !== window.top) {
     frame_id = Math.floor(Math.random() * 1000000);
 }
 
-console.log('Capture All: Content Script loaded at', window.location.href);
+logger.info('Content script loaded', { url: window.location.href });
 
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
-    console.log('Capture All: Content received message:', message.action);
+    logger.debug('Content received message', { action: message.action });
     if (message.action === 'start') {
         capture_id = message.capture_id ?? '';
         capture_start_epoch_ms = message.capture_start_epoch_ms ?? Date.now();
@@ -44,7 +48,7 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
 // Check if recording is already active when content script loads
 chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
     if (response?.is_capturing && !is_capturing) {
-        console.log('Capture All: Recording already active, starting capture');
+        logger.info('Recording already active, starting capture');
         start_capture(response.config || DEFAULT_CONFIG);
     }
 }).catch((_err: unknown) => {
@@ -55,7 +59,7 @@ function start_capture(config: RecordConfig): void {
     if (is_capturing) return;
 
     is_capturing = true;
-    console.log('Capture All: Content capture started');
+    logger.info('Content capture started');
 
     // Send page load event
     const page_load_data: PageLoadData = {
@@ -158,6 +162,9 @@ function stop_capture(): void {
     document.removeEventListener('visibilitychange', handle_visibility_change);
     window.removeEventListener('popstate', handle_popstate_navigation);
     window.removeEventListener('hashchange', handle_hashchange_navigation);
+
+    // Flush remaining log entries before shutdown
+    log_transport.flush().catch(() => {});
 }
 
 function handle_visibility_change(): void {

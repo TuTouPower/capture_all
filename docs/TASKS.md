@@ -293,35 +293,35 @@
 
 > 方案详见 `docs/specs/logging_system.md`
 
-### P7.1 日志基础设施
-- **状态**：待实施
+### ✅ P7.1 日志基础设施
+- **状态**：已实施 — Logger 类 + MessageLogTransport + IndexedDBLogTransport + 类型/常量扩展
 - **文件**：`src/shared/logger.ts`（新建）、`src/background/app_log_storage.ts`（新建）
 - `Logger` 类：`debug/info/warn/error` 四级，级别门控，自动捕获 error stack
 - `LogTransport` 接口：`IndexedDBLogTransport`（SW/dashboard/popup 直写 IndexedDB）+ `MessageLogTransport`（content script 经 SW 中继）
 - `UserConfig` 扩展：`log_level`（默认 `warn`）+ `log_max_entries`（默认 10000）
 
-### P7.2 DB 迁移 v2 → v3
-- **状态**：待实施
+### ✅ P7.2 DB 迁移 v2 → v3
+- **状态**：已实施
 - **文件**：`src/background/storage.ts`、`src/shared/constants.ts`
 - 新增 `app_logs` store（keyPath: `id`，indexes: `timestamp`/`level`/`module`）
 - `DB_VERSION` 2 → 3，`STORE_NAMES` 加 `APP_LOGS`
 
-### P7.3 日志导出 API
-- **状态**：待实施
+### ✅ P7.3 日志导出 API
+- **状态**：已实施
 - **文件**：`src/background/exporter.ts`、`src/background/service_worker.ts`
 - `export_app_logs(options)` 支持 JSON/JSONL，按 level/module/时间范围筛选
-- SW 新 action：`export_app_logs` / `clear_app_logs` / `app_log_batch` / `get_app_log_count`
+- SW 新 action：`export_app_logs` / `clear_app_logs` / `app_log_batch` / `get_app_log_count` / `set_log_level`
 - `clear_app_logs()` 清空 app_logs store
 
-### P7.4 诊断日志设置页面
-- **状态**：待实施
+### ✅ P7.4 诊断日志设置页面
+- **状态**：已实施
 - **文件**：`src/dashboard/dashboard.ts`
 - 设置导航加「诊断日志」section
 - 日志级别 segmented control（debug/info/warn/error/silent）、最大条数 input、当前日志数展示
 - 导出 JSON / 导出 JSONL / 清除所有日志按钮
 
-### P7.5 console.* → Logger 迁移
-- **状态**：待实施
+### ✅ P7.5 console.* → Logger 迁移
+- **状态**：已实施
 - **涉及文件**：8 个文件约 30 处 `console.log/warn/error`
 - `src/background/service_worker.ts`（18 处）→ `logger.info/warn/error`
 - `src/background/session_manager.ts`（3 处）

@@ -40,6 +40,23 @@ const view = document.getElementById('view')!;
 const panelBtn = document.getElementById('panelBtn')!;
 
 // ── inline icons (standard UI glyphs only) ──────────────────────────────
+// Toggle key → Chinese tag label (for capture.tags)
+const TAG_LABEL: Record<string, string> = {
+    event_count: '用户行为',
+    nav_count: '页面导航',
+    request_count: '网络请求',
+    log_count: '控制台',
+    error_count: '错误异常',
+    storage_change_count: 'Storage',
+    cookie_change_count: 'Cookie',
+};
+
+function build_tags(): string[] {
+    return CAPTURE
+        .filter((src) => src.key !== 'mask' && toggles[src.key] !== false)
+        .map((src) => TAG_LABEL[src.key]);
+}
+
 const ICON: Record<string, string> = {
     ext: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/></svg>',
     clock: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v4.8l3 1.7"/></svg>',
@@ -289,7 +306,7 @@ async function start_capture(): Promise<void> {
             start_url: '', end_url: null, tab_id: 0, window_id: null,
             config_snapshot: config,
             stats: { event_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
-            tags: [],
+            tags: build_tags(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };

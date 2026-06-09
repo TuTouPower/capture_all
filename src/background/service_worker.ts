@@ -194,6 +194,17 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     const tab_id = active_tab?.id ?? 0;
     const window_id = (active_tab as { windowId?: number })?.windowId ?? null;
 
+    // Build tags from config toggle fields
+    const cfg = config as unknown as Record<string, unknown>;
+    const tags: string[] = [];
+    if (cfg.event_count_enabled !== false) tags.push('用户行为');
+    if (cfg.nav_count_enabled !== false) tags.push('页面导航');
+    if (config.capture_network) tags.push('网络请求');
+    if (config.capture_console) tags.push('控制台');
+    if (cfg.error_count_enabled !== false) tags.push('错误异常');
+    if (cfg.storage_change_count_enabled !== false) tags.push('Storage');
+    if (cfg.cookie_change_count_enabled !== false) tags.push('Cookie');
+
     // Create CaptureRecord in IndexedDB
     const capture: CaptureRecord = {
         capture_id: session_id,
@@ -217,7 +228,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
             storage_change_count: 0,
             cookie_change_count: 0,
         },
-        tags: [],
+        tags,
         created_at: now_iso,
         updated_at: now_iso,
     };

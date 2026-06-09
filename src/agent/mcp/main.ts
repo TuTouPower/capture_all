@@ -4,11 +4,11 @@ import { z } from 'zod';
 import { BridgeMcpClient } from './client';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from './tools';
 
-const bridge_url = process.env.RECORD_ALL_BRIDGE_URL;
-const bridge_token = process.env.RECORD_ALL_BRIDGE_TOKEN;
+const bridge_url = process.env.CAPTURE_ALL_BRIDGE_URL;
+const bridge_token = process.env.CAPTURE_ALL_BRIDGE_TOKEN;
 
 if (!bridge_url || !bridge_token) {
-    throw new Error('RECORD_ALL_BRIDGE_URL and RECORD_ALL_BRIDGE_TOKEN are required');
+    throw new Error('CAPTURE_ALL_BRIDGE_URL and CAPTURE_ALL_BRIDGE_TOKEN are required');
 }
 
 const client = new BridgeMcpClient(bridge_url, bridge_token);

@@ -25,6 +25,10 @@ import {
 
 let db: IDBDatabase | null = null;
 
+export async function get_db(): Promise<IDBDatabase> {
+    return init_db();
+}
+
 export async function init_db(): Promise<IDBDatabase> {
     if (db) return db;
 
@@ -119,6 +123,16 @@ export async function init_db(): Promise<IDBDatabase> {
                 const s = database.createObjectStore(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, { keyPath: 'event_id' });
                 s.createIndex('capture_id', 'capture_id');
                 s.createIndex('relative_time_ms', 'relative_time_ms');
+            }
+
+            // v3 migration: app_logs store
+            if (!database.objectStoreNames.contains(STORE_NAMES.APP_LOGS)) {
+                const log_store = database.createObjectStore(STORE_NAMES.APP_LOGS, {
+                    keyPath: 'id',
+                });
+                log_store.createIndex('timestamp', 'timestamp');
+                log_store.createIndex('level', 'level');
+                log_store.createIndex('module', 'module');
             }
         };
     });

@@ -1,9 +1,10 @@
 // background/exporter.ts
 import { escape_for_html_embed } from '../shared/escape';
 import { get_capture, get_events_by_category, get_network_requests, get_console_events } from './storage';
+import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../shared/user_config';
 import { add_absolute_system_time, add_capture_system_times, add_system_times_to_capture_data, format_system_time } from '../shared/system_time';
-import type { NetworkRequestData, CaptureRecord, UserConfig } from '../shared/types';
+import type { NetworkRequestData, CaptureRecord, UserConfig, LogLevel } from '../shared/types';
 import type { ExportableCaptureData } from '../shared/system_time';
 
 export async function export_json(capture_id: string): Promise<string> {
@@ -342,4 +343,36 @@ function format_duration(ms: number): string {
     const hours = Math.floor(minutes / 60);
     if (hours > 0) return hours + 'h ' + (minutes % 60) + 'm ' + (seconds % 60) + 's';
     return minutes + 'm ' + (seconds % 60) + 's';
+}
+
+// ============================================================
+// App log export
+// ============================================================
+
+export interface ExportAppLogsOptions {
+    format: 'json' | 'jsonl';
+    level?: LogLevel;
+    module?: string;
+    since?: number;
+    until?: number;
+}
+
+export async function export_app_logs(options: ExportAppLogsOptions): Promise<string> {
+    const transport = get_app_log_transport();
+    const entries = await transport.get_entries(100000, 0, {
+        level: options.level,
+        module: options.module,
+        since: options.since,
+        until: options.until,
+    });
+
+    if (options.format === 'jsonl') {
+        return entries.map(e => JSON.stringify(e)).join('\n');
+    }
+    return JSON.stringify({
+        exported_at: new Date().toISOString(),
+        total: entries.length,
+        filters: { level: options.level, module: options.module },
+        entries,
+    }, null, 2);
 }

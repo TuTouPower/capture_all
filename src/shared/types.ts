@@ -522,6 +522,31 @@ export interface UserConfig {
     agent_bridge_url: string;
     agent_bridge_token: string;
     agent_bridge_poll_interval_ms: number;
+    log_level: LogLevel;
+    log_max_entries: number;
+}
+
+// ============================================================
+// Logging system types
+// ============================================================
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
+
+export interface AppLogEntry {
+    id: string;
+    timestamp: number;
+    level: LogLevel;
+    module: string;
+    message: string;
+    details?: unknown;
+    stack?: string;
+}
+
+export interface LogQueryFilter {
+    level?: LogLevel;
+    module?: string;
+    since?: number;
+    until?: number;
 }
 
 // ============================================================

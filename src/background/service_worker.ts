@@ -129,6 +129,13 @@ async function handle_message(message: any): Promise<any> {
             const count = await get_app_log_transport().count();
             return { success: true, count };
         }
+        case 'set_log_level': {
+            if (message.level) {
+                Logger.set_level(message.level);
+                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: message.level } });
+            }
+            return { success: true };
+        }
         default:
             return { success: false, error: 'Unknown action' };
     }

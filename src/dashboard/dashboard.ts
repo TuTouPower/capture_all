@@ -7,7 +7,11 @@ import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from '../background/app_log_storage';
 import { I } from './icons';
+
+const logger = new Logger('dashboard', get_app_log_transport());
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -356,7 +360,7 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         a.href = url; a.download = `capture_all_${id}.${ext}`;
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-    } catch (err) { console.error('Export error:', err); }
+    } catch (err) { logger.error('Export error', err); }
 }
 async function del_session(id: string): Promise<void> {
     if (!is_extension || !confirm('确定删除此采集记录？')) return;
@@ -778,7 +782,8 @@ function render_settings(): string {
     const cfg = user_config;
     const SET_NAV: [string, string, string][] = [
         ['general', '通用', 'navSettings'], ['defaults', '采集默认值', 'navCurrent'],
-        ['privacy', '隐私与脱敏', 'err'], ['export', '导出', 'navExport'], ['integrations', '集成', 'navMcp'],
+        ['privacy', '隐私与脱敏', 'err'], ['export', '导出', 'navExport'],
+        ['diagnostics', '诊断日志', 'console'], ['integrations', '集成', 'navMcp'],
     ];
     return `<div class="page">
         <div class="pg-head">
@@ -824,6 +829,19 @@ function render_settings(): string {
                         <div class="field span2"><span class="field-lbl">文件名模板</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
                         <div class="field span2"><span class="field-lbl">导出目录</span><input class="input mono" data-cfg="export_directory" value="${esc(cfg.export_directory)}" placeholder="capture-all/exports"></div>
                         <div class="field"><span class="field-lbl">每次询问保存位置</span>${sw('export_save_as', cfg.export_save_as)}</div>
+                    </div></div>
+                </section>
+                <section class="set-section" id="set-diagnostics">
+                    <h2>诊断日志</h2>
+                    <div class="set-card"><div class="set-grid">
+                        <div class="field"><span class="field-lbl">日志级别</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
+                        <div class="field"><span class="field-lbl">最大储存条数</span><input class="input mono" type="number" data-cfg="log_max_entries" value="${esc(String(cfg.log_max_entries))}" min="100" max="100000" step="100"><span style="font-size:12px;color:var(--ink-3)">超出后自动删除最旧记录</span></div>
+                        <div class="field"><span class="field-lbl">当前日志数</span><span id="logCount" class="mono" style="font-weight:600">—</span></div>
+                        <div class="field span2" style="display:flex;gap:8px">
+                            <button class="btn sm" id="exportLogJson"><span>${I.export}</span>导出 JSON</button>
+                            <button class="btn sm" id="exportLogJsonl"><span>${I.export}</span>导出 JSONL</button>
+                            <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>清除所有日志</button>
+                        </div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-integrations" style="margin-bottom:8px">
@@ -881,6 +899,11 @@ function wire_settings(): void {
             s.querySelectorAll('button').forEach((x) => (x as HTMLElement).dataset.on = '0');
             (btn as HTMLElement).dataset.on = '1';
             if (name === 'theme') { await set_theme(val as ThemeMode); await persist({ theme: val as ThemeMode }); }
+            else if (name === 'log_level') {
+                Logger.set_level(val as 'debug' | 'info' | 'warn' | 'error' | 'silent');
+                await persist({ log_level: val as 'debug' | 'info' | 'warn' | 'error' | 'silent' });
+                chrome.runtime.sendMessage({ action: 'set_log_level', level: val }).catch(() => {});
+            }
             else await persist({ [name]: val } as Partial<UserConfig>);
         }));
     });
@@ -900,8 +923,64 @@ function wire_settings(): void {
             if (name === 'locale') { set_locale(v as Locale); await persist({ locale: v as Locale }); }
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
+            else if (name === 'log_max_entries') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
         });
+    });
+    wire_diagnostics_settings(c);
+}
+
+async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
+    // Load current log count
+    const update_count = async () => {
+        const el = c.querySelector('#logCount');
+        if (!el) return;
+        try {
+            const r = await chrome.runtime.sendMessage({ action: 'get_app_log_count' });
+            el.textContent = r?.count != null ? `${r.count.toLocaleString('en-US')} 条` : '—';
+        } catch {
+            el.textContent = '—';
+        }
+    };
+    update_count();
+
+    // Export JSON
+    c.querySelector('#exportLogJson')?.addEventListener('click', async () => {
+        try {
+            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'json' } });
+            if (!r?.success) { alert('导出失败'); return; }
+            const blob = new Blob([r.data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) { logger.error('Export logs error', e); }
+    });
+
+    // Export JSONL
+    c.querySelector('#exportLogJsonl')?.addEventListener('click', async () => {
+        try {
+            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'jsonl' } });
+            if (!r?.success) { alert('导出失败'); return; }
+            const blob = new Blob([r.data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) { logger.error('Export JSONL error', e); }
+    });
+
+    // Clear logs
+    c.querySelector('#clearLogs')?.addEventListener('click', async () => {
+        if (!confirm('确定清空所有诊断日志？此操作不可撤销。')) return;
+        try {
+            await chrome.runtime.sendMessage({ action: 'clear_app_logs' });
+            update_count();
+        } catch (e) { logger.error('Clear logs error', e); }
     });
 }
 

@@ -7,7 +7,11 @@ import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from '../background/app_log_storage';
 import type { RecordConfig } from '../shared/types';
+
+const logger = new Logger('popup', get_app_log_transport());
 
 type PopupState = 'ready' | 'recording' | 'saved';
 
@@ -298,7 +302,7 @@ async function stop_capture(): Promise<void> {
     try {
         const response = await chrome.runtime.sendMessage({ action: 'stop' });
         if (!response?.success) {
-            console.warn('Capture All: stop returned success=false, forcing state transition');
+            logger.warn('stop returned success=false, forcing state transition');
         }
         stop_timer();
         if (current_capture) {

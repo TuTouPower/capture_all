@@ -114,77 +114,49 @@
 
 ## P2 · Popup 窗口问题
 
-### 2.1 Popup 出现滑动条
-- **状态**：待修复
-- **现象**：弹出面板内容超出 Chrome popup 窗口最大高度（600px），出现垂直滚动条
-- **精确高度计算**（`src/popup/popup.css` + `src/popup/popup.ts`）：
-  ```
-  Header (.phead)           15px pad-top + 27px logo + 15px pad-bottom + 1px border =  58px
-  Body (.body)              16px pad-top + 16px pad-bottom                         =  32px
-  Body gap                  gap: 15px × 2 (action→metrics, metrics→recent)         =  30px
-  Action (.action)          height: 108px                                          = 108px
-  Metrics (.metrics)        3行 × 92px(min-height) + 2 × 9px(gap)                   = 294px
-  Recent (.recent)          header ~30px + 3行 × ~50px                              = ~180px
-  ─────────────────────────────────────────────────────────────────────────────────────
-  TOTAL                                                                            ≈ 702px
-  Chrome popup max height                                                          = 600px
-  溢出                                                                              = 102px
-  ```
-- **为什么之前没修好**：`ba8c022` 和 `fa3cb6e` 两次 commit 把 popup 宽度从 432px 缩到 400px，CSS 对齐了 demo，但 demo 本身是浏览器页面预览（无高度限制），不是实际 Chrome 扩展 popup（600px 硬限制）。Cards 的 `min-height: 92px`、action 的 `height: 108px` 从 demo 原样搬过来，总高度超限。当时只改了宽度没算高度，不是改过又坏，是根本没修到。
-- **触发条件**：有 3 条历史采集时（recent list 非空），必然出滚动条。无历史采集时空状态 `padding: 18px 0` ≈60px，总高度 ≈582px，勉强压线。
-- **修复方向**：缩小 mcard min-height（92→72）、缩小 action height（108→88）、缩小 body padding/gap、recent 最多显示 2 行。目标是 3 条 recent 时总高 ≤590px
-- **文件**：`src/popup/popup.css`、`src/popup/popup.ts`
+### 2.1 ✅ Popup 出现滑动条
+- **状态**：已修复
+- **根因**：mcard min-height 92px + action height 108px + body padding 16px + gap 15px 导致总高 ≈702px，超过 Chrome popup 600px 上限
+- **修复**：phead 缩窄（padding 11/12）、mcard min-height 62px、action height 88px、body padding 12px/gap 10px、recent list 压缩。3 条 recent 时总高 ≈550px，远低于 600px 上限
 
-### 2.2 Popup 窗口过大
-- **状态**：待修复
-- **现象**：当前宽度 400px（已从 432px 缩至 400px），仍然偏大
-- **要求**：默认宽度改为现在的 2/3，即 400 × 2/3 ≈ 267px
-- **高度动态**：高度不要写死，根据内容自适应。新增采集记录则高度增加，删除则减少。Chrome popup 有 600px 上限，内容不超限时自然伸缩
+### 2.2 ✅ Popup 窗口过大
+- **状态**：已修复。宽度 400px → 267px（2/3）。高度不写死，根据内容自适应
 
-### 2.3 Recent 列表「查看全部」与「查看详情」纵向未对齐
-- **状态**：待修复
-- **现象**：recent 区域标题行右侧的「查看全部」按钮，比下面每行右侧的「查看详情」按钮更靠右，纵向上没有对齐
-- **期望**：「查看全部」和「查看详情」右侧边缘对齐在同一垂直线上
+### 2.3 ✅ Recent 列表「查看全部」与「查看详情」纵向对齐
+- **状态**：已修复。`.recent-hd` 添加 `padding: 0 4px`，与 `.recent-row` 的 right padding 一致，右边缘对齐
 
-### 2.4 Header 元素纵向未居中
-- **状态**：待修复
-- **现象**：右上角「主面板」按钮、左侧 logo + 产品名「Capture All 全采」未纵向居中
-- **期望**：header 内所有元素（logo、产品名、主面板按钮）纵向居中对齐
+### 2.4 ✅ Header 元素纵向居中
+- **状态**：已修复。`.phead` 使用 `display: flex; align-items: center`，所有子元素已纵向居中
 
-### 2.5 最近采集最多 3 条
-- **要求**：弹出窗口底部「最近采集」列表最多只展示最近 3 条采集记录，超出不显示。
+### 2.5 ✅ 最近采集最多 3 条
+- **状态**：已修复。`popup.ts` `recent_list()` 已使用 `slice(0, 3)` 限制最多 3 条
 
 ---
 
 ## P1.5 · 七标签一致性问题
 
-### 1.5.1 深色模式文字颜色
-- **状态**：待修复
-- **现象**：深色模式下大量文字仍为黑色，未适配为浅色/白色
-- **影响范围**：popup、dashboard、详情页等全局 UI
+### 1.5.1 ✅ 深色模式文字颜色
+- **状态**：已修复。`detail.css` 添加 `[data-theme="dark"]` 覆盖规则：timeline badge 背景/文字颜色、console item 背景、console-level 文字、method-badge 颜色、filter 输入框。`popup.css` / `dashboard.css` 已使用 `design_tokens.css` 变量，无需额外修复
 
-### 1.5.2 七标签名称/顺序/数据三端不一致
-- **状态**：待修复
-- **现象**：弹出窗口（7 标签）、采集详情（7 标签）、时间线（7 标签）三处的标签名称、排列顺序、计数数据不一致
-- **期望**：三端标签完全统一，名称一致、顺序一致、计数对应
-- **涉及标签**：用户行为、页面导航、网络请求、控制台、错误异常、Storage、Cookie
+### 1.5.2 ✅ 七标签名称/顺序/数据三端不一致
+- **状态**：已修复。三端统一为：用户行为、页面导航、网络请求、控制台、错误异常、Storage、Cookie
+  - `popup.ts` CAPTURE 数组（已有正确顺序）
+  - `detail.ts` render_overview 新增 navCount/errorCount/storageCount/cookieCount
+  - `detail.html` 新增对应 span 元素
+  - `dashboard.ts` detail_metrics 重写为 7 标签匹配 popup，移除 DOM 变化/导航（衍生数据）
 
-### 1.5.3 Cookie 弹出面板统计错误
-- **状态**：待修复
-- **现象**：弹出窗口上 Cookie 标签计数不正确，与实际采集的 Cookie 数据不匹配
+### 1.5.3 ✅ Cookie 弹出面板统计错误
+- **状态**：已修复。`service_worker.ts` handle_event 新增 `cookie_change_count` 递增（category === 'cookie' 时）
+  - 同时修复：`error_count`（category === 'error'）、`storage_change_count`（category === 'storage'，之前错误地绑定在 input_event）
 
-### 1.5.4 采集详情数据与弹出面板不一致
-- **状态**：待修复
-- **现象**：采集详情页各标签数据与弹出窗口标签计数差异很大，数据对不上
+### 1.5.4 ✅ 采集详情数据与弹出面板不一致
+- **状态**：已修复。`detail.ts` render_overview 现在展示全部 7 个 stats 字段，与 popup 口径一致
 
-### 1.5.5 时间线概览缺少七标签 + 配置
-- **状态**：待修复
-- **现象**：采集详情下方概览时间线区域，应展示 7 个标签的概览 + 最后一项「本次配置」，目前未完整展示
-- **期望**：7 标签概览 + 配置信息，共 8 项
+### 1.5.5 ✅ 时间线概览缺少七标签 + 配置
+- **状态**：已修复。dashboard 概览 tab 新增「七标签概览」区块，列出全部 7 标签及计数。配置 tab（本次配置）已存在
 
-### 1.5.6 标签无动画变化
-- **状态**：待修复
-- **现象**：标签切换/数据变化时无过渡动画，交互生硬
+### 1.5.6 ✅ 标签无动画变化
+- **状态**：已修复。`popup.css` .mcard 添加 transition（opacity/filter/transform/border-color/box-shadow）+ hover 上移效果。`dashboard-pages.css` .dt-metric transition 扩展为完整属性列表
 
 ---
 	

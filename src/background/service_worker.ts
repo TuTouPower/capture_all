@@ -12,12 +12,15 @@ import { start_network_capture, stop_network_capture, set_cdp_body_event_handler
 import { start_console_capture, stop_console_capture } from './console_capture';
 import { start_exception_capture, stop_exception_capture } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
-import { export_json, export_jsonl, export_html, export_har } from './exporter';
+import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
 import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../shared/redaction';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+import { load_user_config } from '../shared/user_config';
 import type {
     UserConfig, RecordConfig, CaptureEvent, CaptureRecord,
     NetworkRequestData, ConsoleEventData,
@@ -25,6 +28,8 @@ import type {
     CaptureStartedData, CaptureStoppedData,
 } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
+
+const logger = new Logger('background/sw', get_app_log_transport());
 
 let is_capturing = false;
 let current_capture: CaptureRecord | null = null;
@@ -38,7 +43,9 @@ const last_active_tab = new Map<number, { tab_id: number; url: string }>();
 // Initialize
 chrome.runtime.onInstalled.addListener(async () => {
     await init_db();
-    console.log('Capture All: Extension installed');
+    const config = await load_user_config();
+    Logger.set_level(config.log_level);
+    logger.info('Extension installed');
     start_agent_bridge();
 });
 
@@ -48,7 +55,7 @@ setup_keepalive_listener();
 // Message handler
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
     handle_message(message).then(sendResponse).catch(error => {
-        console.error('Capture All: Message handler error:', error);
+        logger.error('Message handler error', error);
         sendResponse({ success: false, error: error.message });
     });
     return true; // Keep channel open for async response
@@ -99,6 +106,29 @@ async function handle_message(message: any): Promise<any> {
             } catch (e: unknown) {
                 return { success: false, error: e instanceof Error ? e.message : String(e) };
             }
+        case 'app_log_batch': {
+            const transport = get_app_log_transport();
+            for (const entry of (message.entries || [])) {
+                transport.write(entry);
+            }
+            return { success: true };
+        }
+        case 'export_app_logs': {
+            try {
+                const content = await export_app_logs(message.options || { format: 'json' });
+                return { success: true, data: content };
+            } catch (e) {
+                return { success: false, error: e instanceof Error ? e.message : String(e) };
+            }
+        }
+        case 'clear_app_logs': {
+            await get_app_log_transport().clear();
+            return { success: true };
+        }
+        case 'get_app_log_count': {
+            const count = await get_app_log_transport().count();
+            return { success: true, count };
+        }
         default:
             return { success: false, error: 'Unknown action' };
     }
@@ -226,13 +256,13 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         if (tabs[0]?.id) {
             const result = await start_console_capture(session_id, start_time, tabs[0].id, config.redact_data, handle_console_log);
             if (!result.success) {
-                console.warn('Capture All: Console capture failed:', result.error);
+                logger.warn('Console capture failed', result.error);
             } else {
                 debugger_attached_tab_id = tabs[0].id;
             }
             const ex_result = await start_exception_capture(session_id, start_time, tabs[0].id, handle_console_log);
             if (!ex_result.success) {
-                console.warn('Capture All: Exception capture failed:', ex_result.error);
+                logger.warn('Exception capture failed', ex_result.error);
             } else {
                 debugger_attached_tab_id = tabs[0].id;
             }
@@ -299,7 +329,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
-    console.log('Capture All: Notifying', all_tabs.length, 'tabs to start');
+    logger.info(`Notifying ${all_tabs.length} tabs to start`);
     for (const tab of all_tabs) {
         if (tab.id) {
             try {
@@ -310,9 +340,9 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
                     capture_start_epoch_ms: start_time,
                     tab_id: tab.id,
                 });
-                console.log('Capture All: Sent start to tab', tab.id, tab.url);
+                logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
             } catch (err) {
-                console.warn('Capture All: Failed to send start to tab', tab.id, err);
+                logger.warn(`Failed to send start to tab ${tab.id}`, err);
             }
         }
     }
@@ -322,7 +352,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         last_active_tab.set((active_tab as { windowId?: number }).windowId ?? 0, { tab_id: active_tab.id, url: active_tab.url || '' });
     }
 
-    console.log('Capture All: Recording started');
+    logger.info('Recording started');
     return { success: true };
 }
 
@@ -364,7 +394,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
         try {
             await update_capture(current_capture);
         } catch (err) {
-            console.error('Capture All: Failed to update capture:', err);
+            logger.error('Failed to update capture', err);
         }
     }
 
@@ -410,7 +440,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     current_capture = null;
     last_active_tab.clear();
-    console.log('Capture All: Recording stopped');
+    logger.info('Recording stopped');
     return { success: true };
 }
 
@@ -420,7 +450,7 @@ async function persist_stats(): Promise<void> {
         current_capture.updated_at = new Date().toISOString();
         await update_capture(current_capture);
     } catch (err) {
-        console.error('Capture All: Failed to persist capture stats:', err);
+        logger.error('Failed to persist capture stats', err);
     }
 }
 
@@ -445,12 +475,18 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
         if (event.category === 'navigation') {
             current_capture.stats.nav_count++;
         }
-        if (event.type === 'input_event') {
+        if (event.category === 'storage') {
             current_capture.stats.storage_change_count++;
+        }
+        if (event.category === 'cookie') {
+            current_capture.stats.cookie_change_count++;
+        }
+        if (event.category === 'error') {
+            current_capture.stats.error_count++;
         }
         await persist_stats();
     } catch (err) {
-        console.error('Capture All: Failed to write event:', err);
+        logger.error('Failed to write event', err);
     }
 
     return { success: true };
@@ -529,7 +565,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
         current_capture.stats.request_count++;
         await persist_stats();
     } catch (err) {
-        console.error('Capture All: Failed to write network request:', err);
+        logger.error('Failed to write network request', err);
     }
 }
 
@@ -545,7 +581,7 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
         current_capture.stats.log_count++;
         await persist_stats();
     } catch (err) {
-        console.error('Capture All: Failed to write console log:', err);
+        logger.error('Failed to write console log', err);
     }
 }
 
@@ -588,9 +624,9 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             capture_start_epoch_ms: start_time,
             tab_id: activeInfo.tabId,
         });
-        console.log('Capture All: Sent start to tab', activeInfo.tabId);
+        logger.debug(`Sent start to tab ${activeInfo.tabId}`);
     } catch (err) {
-        console.warn('Capture All: Failed to send start to tab', activeInfo.tabId, err);
+        logger.warn(`Failed to send start to tab ${activeInfo.tabId}`, err);
     }
 });
 
@@ -674,9 +710,9 @@ function start_agent_bridge(): void {
 
 // Global error handler
 self.addEventListener('error', (event) => {
-    console.error('Capture All: SW error:', event.error);
+    logger.error('SW error', event.error);
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-    console.error('Capture All: SW unhandled rejection:', event.reason);
+    logger.error('SW unhandled rejection', event.reason);
 });

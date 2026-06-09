@@ -374,8 +374,6 @@ async function open_detail(id: string): Promise<void> {
 // ── detail page ─────────────────────────────────────────────────────────
 function detail_metrics(): { icon: string; lbl: string; val: string; color: string; danger?: boolean; filter?: string; delta?: string; dTone?: string }[] {
     const st = detail_session?.stats;
-    const domN = detail_events.filter((e) => e.type === 'dom_mutation').length;
-    const navN = detail_events.filter((e) => event_kind(e) === 'nav').length;
     // previous session (chronologically before current) for real deltas
     let prev: Session | null = null;
     if (detail_session) {
@@ -393,13 +391,13 @@ function detail_metrics(): { icon: string; lbl: string; val: string; color: stri
         return { delta: txt, dTone: txt.startsWith('-') ? 'red' : 'green' };
     };
     return [
-        { icon: 'clock', lbl: '事件', val: num(st?.event_count || detail_events.length), color: 'var(--src-user)', ...d(st?.event_count || 0, ps?.event_count) },
-        { icon: 'storage', lbl: '请求', val: num(st?.request_count || detail_network.length), color: 'var(--src-network)', filter: 'network', ...d(st?.request_count || 0, ps?.request_count) },
-        { icon: 'err', lbl: '失败', val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'errors', ...d(st?.error_count || 0, ps?.error_count) },
-        { icon: 'console', lbl: '控制台', val: num(st?.log_count || detail_console.length), color: 'var(--src-console)', filter: 'console', ...d(st?.log_count || 0, ps?.log_count) },
-        { icon: 'storage', lbl: '存储变化', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage', ...d(st?.storage_change_count || 0, ps?.storage_change_count) },
-        { icon: 'dom', lbl: 'DOM 变化', val: num(domN), color: 'var(--src-dom)' },
-        { icon: 'nav', lbl: '导航', val: num(navN), color: 'var(--src-nav)' },
+        { icon: 'ui', lbl: '用户行为', val: num(st?.event_count || 0), color: 'var(--src-user)', filter: 'user', ...d(st?.event_count || 0, ps?.event_count) },
+        { icon: 'nav', lbl: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav', ...d(st?.nav_count || 0, ps?.nav_count) },
+        { icon: 'net', lbl: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network', ...d(st?.request_count || 0, ps?.request_count) },
+        { icon: 'console', lbl: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console', ...d(st?.log_count || 0, ps?.log_count) },
+        { icon: 'err', lbl: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'error', ...d(st?.error_count || 0, ps?.error_count) },
+        { icon: 'storage', lbl: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage', ...d(st?.storage_change_count || 0, ps?.storage_change_count) },
+        { icon: 'cookie', lbl: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', filter: 'cookie', ...d(st?.cookie_change_count || 0, ps?.cookie_change_count) },
     ];
 }
 
@@ -681,9 +679,18 @@ function render_dt_overview(): string {
                     <div class="dti-field"><span class="k">事件总数</span><span class="v mono">${num(st?.event_count || detail_events.length)}</span></div>
                     <div class="dti-field"><span class="k">错误总数</span><span class="v red mono">${num(st?.error_count || 0)}</span></div>
                 </div>
-                <div class="ov-panel-hd" style="margin-top:6px">问题概览</div>
-                <button class="issue" data-tab="console"><span class="issue-dot" style="background:var(--red)"></span><span class="issue-main"><b>失败请求 ${num(st?.error_count || 0)} 个</b><span class="mono">网络请求 ${num(st?.request_count || 0)} 个</span></span></button>
-                <button class="issue" data-tab="console"><span class="issue-dot" style="background:var(--amber)"></span><span class="issue-main"><b>控制台日志 ${num(st?.log_count || 0)} 个</b></span></button>
+                <div class="ov-panel-hd" style="margin-top:6px">七标签概览</div>
+                <div class="dti-related" style="margin-top:4px">
+                    ${[
+                        { label: '用户行为', val: num(st?.event_count || 0), color: 'var(--src-user)', icon: 'ui' },
+                        { label: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', icon: 'nav' },
+                        { label: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', icon: 'net' },
+                        { label: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', icon: 'console' },
+                        { label: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', icon: 'err' },
+                        { label: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', icon: 'storage' },
+                        { label: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', icon: 'cookie' },
+                    ].map((m) => `<div class="rel-row" style="cursor:default"><span class="rel-t mono">${m.val}</span><span class="rel-ic" style="color:${m.color}">${I[m.icon]}</span><span class="rel-ev">${m.label}</span></div>`).join('')}
+                </div>
             </div>
             <div class="ov-panel">
                 <div class="ov-panel-hd">关键时间线</div>

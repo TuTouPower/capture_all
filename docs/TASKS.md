@@ -165,50 +165,34 @@
 
 > 记录于 2026-06-09。以下问题均为用户实测发现，待分析修复。
 
-### 1.6.1 采集中「实时详情」按钮溢出弹窗边界
-- **状态**：待修复
-- **现象**：采集状态下，右侧「实时详情」按钮超出弹出窗口边界，只能看到一半
-- **根因疑问**：弹窗 body/popup 已设 overflow: hidden 和固定宽度，为什么按钮还能溢出？需排查 flex 布局或按钮定位
+### ✅ 1.6.1 采集中「实时详情」按钮溢出弹窗边界
+- **状态**：已修复 — `781711a`。`.stop-time` 22px→18px, `.stop-hint` 13px→11.5px, `.actbtn` 加 `min-width:0` + `padding` 压缩
 
-### 1.6.2 实时详情页不自动刷新
-- **状态**：待修复
-- **现象**：采集中点「实时详情」进入详情页，数据不随用户操作实时更新。只有手动点刷新按钮刷新整个页面，数据才会更新
-- **期望**：实时详情页应自动轮询或推送更新，无需手动刷新
+### ✅ 1.6.2 实时详情页不自动刷新
+- **状态**：已修复。`dashboard.ts` 轮询中增加 detail 页面判断，采集中自动 reload_detail()
 
-### 1.6.3 深色模式部分文字仍为黑色（残留）
-- **状态**：待修复
-- **现象**：深色模式下仍有部分文字为黑色，之前已修过一轮（1.5.1）但未完全覆盖
-- **影响范围**：popup、dashboard 详情、设置等页面
+### ✅ 1.6.3 深色模式部分文字仍为黑色（残留）
+- **状态**：已修复 — `a52f196`。`design_tokens.css` 添加 `--indigo-ink`/`--cyan-ink`/`--yellow-ink`，dark 覆盖全部 9 色
 
-### 1.6.4 Dashboard 时间线标签名与数据标签不对齐
-- **状态**：待修复
-- **现象**：
-  - 时间线 tab 中显示「网络」，应为「网络请求」（对齐七标签）
-  - 时间线 tab 中显示「导航」，应为「页面导航」（对齐七标签）
-- **期望**：三端标签名完全统一 — 用户行为 / 页面导航 / 网络请求 / 控制台 / 错误异常 / Storage / Cookie
+### ✅ 1.6.4 Dashboard 时间线标签名与数据标签不对齐
+- **状态**：已修复 — `e292823`。「网络」→「网络请求」，「导航」→「页面导航」
 
-### 1.6.5 记录详情 — 网络请求列表点击无详情
-- **状态**：待修复
-- **现象**：采集详情 → 网络 tab 能看到请求列表，但点击单个请求后看不到请求体、返回体、地址、状态码等具体内容
-- **期望**：点击请求展开详情面板，显示 method/URL/status/headers/body/response 等完整字段
+### ✅ 1.6.5 记录详情 — 网络请求列表点击无详情
+- **状态**：已修复 — `290454d`。网络行加 `data-netidx` + 点击 handler + 右侧详情面板
 
-### 1.6.6 记录详情「本次配置」只显示 5 个开关
-- **状态**：待修复
-- **现象**：采集详情下方「本次配置」区域，原本应有 7 个采集开关，实际只显示了 5 个
-- **期望**：显示全部 7 个标签对应的采集开关状态（用户行为/页面导航/网络请求/控制台/错误异常/Storage/Cookie）
+### ✅ 1.6.6 记录详情「本次配置」只显示 5 个开关
+- **状态**：已修复 — `cd6b722`。config_snapshot 保存全部 7 标签 toggle，配置页三区分离
 
-### 1.6.7 扩展运行日志导出为空
-- **状态**：待修复
-- **现象**：Dashboard → 诊断日志 → 导出日志 JSON，文件内容为空（无日志条目）
-- **复现文件**：C:\\Users\\Karson\\Downloads\\capture_all_logs_2026-06-09T04-55-33-402Z.json
-- **参考**：同时导出的采集记录文件数据正常
-- **根因推测**：app_log_storage.ts 的 get_entries() 查询逻辑或 export_app_logs() 未正确读取 IndexedDB app_logs store
+### ✅ 1.6.7 扩展运行日志导出为空
+- **状态**：已修复 — `46a0979`。app_log_storage 每次 write 都 schedule_flush + exporter 查询前 flush buffer
 
-### 1.6.8 导出文件 capture.tags 为空数组
+### ✅ 1.6.8 导出文件 capture.tags 为空数组
+- **状态**：已修复 — `5fb5159`。popup.ts + service_worker.ts：从 toggle/config 构建中文标签写入 capture.tags
+
+### 1.6.9 打包生成的扩展名字和介绍未更新
 - **状态**：待修复
-- **现象**：全部 7 个采集开关都开启的情况下导出 JSON，`capture.tags` 为 `[]`，预期应为 `["用户行为", "页面导航", "网络请求", "控制台", "错误异常", "Storage", "Cookie"]`
-- **复现文件**：C:\\Users\\Karson\\Downloads\\capture_all_session_1780980428315_reb5bg2.json
-- **影响**：导出文件无法反映用户本次采集开启了哪些数据标签
+- **现象**：`npm run build` 打包生成的扩展，浏览器加载后显示的扩展名称和介绍仍是旧值，未同步为 "Capture All" / "全采"
+- **期望**：manifest.json 中 `name` 和 `description` 字段更新为当前产品名和介绍
 
 ---
 ## P3 · 已完成的 Demo 对齐项（仅供参考）
@@ -234,33 +218,28 @@
 > 网站：`baidu.com` `toutiao.com` `qq.com` `sina.com`
 > 目标：覆盖 PRD 全部 7 个用户故事，每个 P0 缺陷有至少一个 E2E 验证。
 
-### P4.1 完整采集流程 — baidu.com
+### ✅ P4.1 完整采集流程 — baidu.com
+- **状态**：已完成 — `9ea03aa`
 - **文件**：`tests/e2e-baidu.spec.ts`
 - 启动扩展 → 打开 popup → 点击开始采集 → 打开 baidu.com 搜索 → 验证 7 标签计数 > 0 → 停止 → 验证完成状态 → 进入 dashboard 时间线有事件
 
-### P4.2 完整采集流程 — toutiao.com
-- **文件**：`tests/e2e-toutiao.spec.ts`
-- 开始采集 → toutiao.com 滚动+点击 → 验证「用户行为」「网络请求」计数增长 → 停止 → dashboard 网络 Tab 非空
+### ✅ P4.2 完整采集流程 — toutiao.com
+- **状态**：已完成 — `9ea03aa`
 
-### P4.3 完整采集流程 — qq.com
-- **文件**：`tests/e2e-qq.spec.ts`
-- 开始采集 → qq.com 多次导航 → 「页面导航」计数 > 0 → dashboard 无"模式"列/筛选/卡片
+### ✅ P4.3 完整采集流程 — qq.com
+- **状态**：已完成 — `9ea03aa`
 
-### P4.4 完整采集流程 — sina.com
-- **文件**：`tests/e2e-sina.spec.ts`
-- 开始采集 → sina.com 操作 → 导出 JSON 验证 `capture_id` 非 `session_id` → 导出 HTML 验证 XSS 转义
+### ✅ P4.4 完整采集流程 — sina.com
+- **状态**：已完成 — `9ea03aa`
 
-### P4.5 弹出窗口三状态切换
-- **文件**：`tests/e2e-states.spec.ts`
-- 状态 1（开始）蓝按钮 7 标签无数字 → 状态 2（采集中）红计时+计数 → 状态 3（完成）绿时长+勾选 → 三种状态格子等高 108px → 无滚动条 → 无 mode badge
+### ✅ P4.5 弹出窗口三状态切换
+- **状态**：已完成 — `9ea03aa`
 
-### P4.6 七标签实时计数（修复 P0.1）
-- **文件**：`tests/e2e-labels.spec.ts`
-- 开始采集 → baidu.com 点击 5 次 → 轮询 popup → 「用户行为」≥ 5 → 「网络请求」> 0 → 验证不是全 0
+### ✅ P4.6 七标签实时计数（修复 P0.1）
+- **状态**：已完成 — `9ea03aa`
 
-### P4.7 停止采集按钮（修复 P0.2）
-- **文件**：`tests/e2e-stop.spec.ts`
-- 点击红色停止 → 进入完成状态 → `{ action: 'stop' }` 返回 `{ success: true }` → 连续 3 次开始-停止无残留
+### ✅ P4.7 停止采集按钮（修复 P0.2）
+- **状态**：已完成 — `9ea03aa`
 
 ### ✅ P4.8 实时详情不为空（修复 P0.3）
 - **文件**：`tests/e2e-realtime-detail.spec.ts`
@@ -278,13 +257,11 @@
 - **文件**：`tests/e2e-detail-tabs.spec.ts`
 - 概览/时间线/网络/控制台/Storage/Cookie 各 Tab 切换 → 均有内容 → 面包屑可返回
 
-### P4.12 导出四格式
-- **文件**：`tests/e2e-export.spec.ts`
-- JSON 含 `capture_id`+`category`+`type` → JSONL 逐行合法 → HAR 标准格式 → HTML 自包含无 XSS
+### ✅ P4.12 导出四格式
+- **状态**：已完成 — `9ea03aa`
 
-### P4.13 UI 审计：旧概念残留
-- **文件**：`tests/e2e-ui-audit.spec.ts`
-- popup/dashboard HTML 不含 `深度采集` `标准采集` `就绪` `mode` `density` `录制` `记录` → 主色 `#3b82f6` → 设置无默认模式选项
+### ✅ P4.13 UI 审计：旧概念残留
+- **状态**：已完成 — `9ea03aa`
 
 ---
 
@@ -318,21 +295,18 @@
 
 ## P6 · 单元测试补充
 
-### P6.1 七标签计数计算
-- **文件**：`tests/label_counts.test.ts`
-- `category → label` 映射 → `label_counts` 从 events 计算 → 空列表全 0 → `dom_data`/`capture_lifecycle` 不计入
+### ✅ P6.1 七标签计数计算
+- **状态**：已完成 — `5a0c55a`
 
-### P6.2 stop_capture 消息协议
-- **文件**：`tests/stop_capture.test.ts`
-- `{ action: 'stop' }` 响应格式 → 未采集中调用返回错误 → flush 后 stats 正确
+### ✅ P6.2 stop_capture 消息协议
+- **状态**：已完成 — `5a0c55a`
 
 ### ✅ P6.3 实时数据查询
 - **状态**：已完成 — `tests/live_data_queries.test.ts`
 - 活跃采集 `list_events`/`list_network` 返回实时数据 → 完成后返回全量 → 模拟 get_capture_data 合并 7 category 行为
 
-### P6.4 UI 字符串审计
-- **文件**：`tests/ui_strings.test.ts`
-- 扫描全项目 `.ts` `.html` → 不含 `Record All` `record_all` `深度采集` `标准采集` `录制`
+### ✅ P6.4 UI 字符串审计
+- **状态**：已完成 — `5a0c55a`
 
 ### ✅ P6.5 Popup 布局计算
 - **状态**：已完成 — `tests/popup_layout.test.ts`

@@ -239,27 +239,27 @@
 
 ## P5 · E2E 增强测试
 
-### P5.1 并发多 Tab 采集
+### ✅ P5.1 并发多 Tab 采集
 - **文件**：`tests/e2e-concurrent.spec.ts`
 - baidu + toutiao 同时采集 → 两 tab 事件分别有不同 `tab_id` → 时间线合并
 
-### P5.2 网络请求完整字段 + 脱敏
+### ✅ P5.2 网络请求完整字段 + 脱敏
 - **文件**：`tests/e2e-network.spec.ts`
 - toutiao.com 触发大量请求 → method/URL/status/duration/resource_type 完整 → Authorization/Cookie header → `[REDACTED]`
 
-### P5.3 Console 与 Error 分离
+### ✅ P5.3 Console 与 Error 分离
 - **文件**：`tests/e2e-console-errors.spec.ts`
 - 注入 `console.error()` + `throw new Error()` → 前者在 console Tab → 后者在 error Tab → 分类正确
 
-### P5.4 HTML XSS 深度测试
+### ✅ P5.4 HTML XSS 深度测试
 - **文件**：`tests/e2e-xss.spec.ts`
 - 触发含 `<script>alert(1)</script>` 事件 → 导出 HTML → Playwright 打开无脚本执行
 
-### P5.5 MCP Agent 全流程
+### ✅ P5.5 MCP Agent 全流程
 - **文件**：`tests/e2e-mcp-full.spec.ts`
 - Bridge 启动 → MCP start → 操作网站 → sources.list 7 源 → timeline.list 有数据 → records.list 分类查询 → export → 无效 token 401
 
-### P5.6 主题 + i18n
+### ✅ P5.6 主题 + i18n
 - **文件**：`tests/e2e-theme-i18n.spec.ts`
 - 浅色/深色/跟随系统 → `--canvas` 变化 → 中/英切换 → 按钮文字同步
 

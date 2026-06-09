@@ -120,7 +120,7 @@
 - **修复**：phead 缩窄（padding 11/12）、mcard min-height 62px、action height 88px、body padding 12px/gap 10px、recent list 压缩。3 条 recent 时总高 ≈550px，远低于 600px 上限
 
 ### 2.2 ✅ Popup 窗口过大
-- **状态**：已修复。宽度 400px → 267px（2/3）。高度不写死，根据内容自适应
+- **状态**：已修复。宽度 400px → 300px。高度不写死，根据内容自适应
 
 ### 2.3 ✅ Recent 列表「查看全部」与「查看详情」纵向对齐
 - **状态**：已修复。`.recent-hd` 添加 `padding: 0 4px`，与 `.recent-row` 的 right padding 一致，右边缘对齐
@@ -285,7 +285,7 @@
 
 ### ✅ P6.5 Popup 布局计算
 - **状态**：已完成 — `tests/popup_layout.test.ts`
-- 三状态操作区 88px → 卡片总高 ≤ 590px → 三列网格 → 宽度 267px
+- 三状态操作区 88px → 卡片总高 ≤ 590px → 三列网格 → 宽度 300px
 
 ---
 

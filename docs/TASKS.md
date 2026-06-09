@@ -275,17 +275,17 @@
 - **文件**：`tests/stop_capture.test.ts`
 - `{ action: 'stop' }` 响应格式 → 未采集中调用返回错误 → flush 后 stats 正确
 
-### P6.3 实时数据查询
-- **文件**：`tests/live_data_queries.test.ts`
-- 活跃采集 `list_events`/`list_network` 返回实时数据 → 完成后返回全量
+### ✅ P6.3 实时数据查询
+- **状态**：已完成 — `tests/live_data_queries.test.ts`
+- 活跃采集 `list_events`/`list_network` 返回实时数据 → 完成后返回全量 → 模拟 get_capture_data 合并 7 category 行为
 
 ### P6.4 UI 字符串审计
 - **文件**：`tests/ui_strings.test.ts`
 - 扫描全项目 `.ts` `.html` → 不含 `Record All` `record_all` `深度采集` `标准采集` `录制`
 
-### P6.5 Popup 布局计算
-- **文件**：`tests/popup_layout.test.ts`
-- 三状态操作区 108px → 卡片总高 ≤ 600px → 三列网格
+### ✅ P6.5 Popup 布局计算
+- **状态**：已完成 — `tests/popup_layout.test.ts`
+- 三状态操作区 88px → 卡片总高 ≤ 590px → 三列网格 → 宽度 267px
 
 ---
 
@@ -329,7 +329,8 @@
 - `src/content/content_script.ts`（4 处）→ `MessageLogTransport`，停止 `console.log` 防止污染采集数据
 - `src/dashboard/dashboard.ts`、`src/popup/popup.ts`、`src/devtools/*.ts`
 
-### P7.6 日志系统 E2E 测试
+### ✅ P7.6 日志系统 E2E 测试
+- **状态**：已完成 — `tests/e2e-logging.spec.ts`
 - **文件**：`tests/e2e-logging.spec.ts`
 - 级别切换 → silent 无日志增长 → debug 恢复 → 导出 JSON 含内部日志 → 导出采集数据不含扩展日志 → 超上限自动清理
 

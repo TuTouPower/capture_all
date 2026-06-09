@@ -23,7 +23,7 @@ export default defineConfig({
         },
         {
             name: 'e2e-ext',
-            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina}.spec.ts',
+            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina,logging}.spec.ts',
             fullyParallel: false,
             workers: 1,
             retries: 0,
@@ -56,11 +56,24 @@ export default defineConfig({
         },
         {
             name: 'e2e-mcp',
-            testMatch: 'e2e-mcp.spec.ts',
+            testMatch: 'e2e-mcp*.spec.ts',
             use: {
                 headless: false,
                 launchOptions: {
                     args: ['--no-first-run', '--no-default-browser-check'],
+                },
+            },
+        },
+        {
+            name: 'e2e-p1',
+            testMatch: 'e2e-{concurrent,network,console-errors,xss,mcp-full,theme-i18n}.spec.ts',
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check', '--disable-gpu'],
                 },
             },
         },

@@ -136,6 +136,10 @@ async function handle_message(message: any): Promise<any> {
             }
             return { success: true };
         }
+        case 'flush_app_logs': {
+            await get_app_log_transport().flush();
+            return { success: true };
+        }
         default:
             return { success: false, error: 'Unknown action' };
     }

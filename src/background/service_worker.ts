@@ -483,6 +483,8 @@ async function handle_fallback_body_event(data: any): Promise<void> {
         : data.url || '';
 
     const request: NetworkRequestData = {
+        capture_id: current_capture_id ?? undefined,
+        event_id: `fallback_${Date.now().toString(36)}`,
         request_id: `fallback_${Date.now()}`,
         method: data.method || 'GET',
         url,
@@ -520,6 +522,8 @@ async function handle_fallback_body_event(data: any): Promise<void> {
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
     const request: NetworkRequestData = 'event' in payload ? (payload as { data: NetworkRequestData }).data : (payload as NetworkRequestData);
+    if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
+    if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     try {
         await write_network_requests([request]);
         current_capture.stats.request_count++;
@@ -532,7 +536,12 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 async function handle_console_log(event: CaptureEvent): Promise<void> {
     if (!is_capturing || !current_capture) return;
     try {
-        await write_console_events([event.data as ConsoleEventData]);
+        const data = event.data as ConsoleEventData;
+        if (data) {
+            data.capture_id = current_capture_id ?? undefined;
+            data.event_id = event.event_id;
+        }
+        await write_console_events([data]);
         current_capture.stats.log_count++;
         await persist_stats();
     } catch (err) {

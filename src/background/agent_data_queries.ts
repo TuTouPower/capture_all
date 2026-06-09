@@ -213,8 +213,8 @@ function get_record_absolute_time(record: AgentRecord): number | null {
 }
 
 function get_native_record_id(record: AgentRecord): string {
-    if ('event_id' in record) return record.event_id;
-    if ('request_id' in record) return record.request_id;
+    if ('event_id' in record && record.event_id) return record.event_id;
+    if ('request_id' in record && record.request_id) return record.request_id;
     return `${get_record_sort_key(record)}:${get_record_absolute_time(record) ?? ''}`;
 }
 

@@ -10,14 +10,20 @@ export async function export_json(capture_id: string): Promise<string> {
     const capture = await get_capture(capture_id);
     if (!capture) throw new Error('Capture not found');
 
-    const [events, network_requests, console_logs] = await Promise.all([
+    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000)
+        get_console_events(capture_id, 0, 100000),
+        get_events_by_category(capture_id, 'error', 0, 100000),
+        get_events_by_category(capture_id, 'storage', 0, 100000),
+        get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+
     const user_config = await load_user_config();
-    const data: ExportableCaptureData = { capture, events, network_requests, console_events: console_logs };
+    const data: ExportableCaptureData = { capture, events: all_events, network_requests, console_events: console_logs };
     const result = add_system_times_to_capture_data(data, user_config);
     return JSON.stringify(result, null, 2);
 }
@@ -26,17 +32,23 @@ export async function export_jsonl(capture_id: string): Promise<string> {
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [events, network_requests, console_logs] = await Promise.all([
+    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000)
+        get_console_events(capture_id, 0, 100000),
+        get_events_by_category(capture_id, 'error', 0, 100000),
+        get_events_by_category(capture_id, 'storage', 0, 100000),
+        get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
+
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
 
     const user_config = await load_user_config();
     const lines: string[] = [];
     lines.push(JSON.stringify({ ...add_capture_system_times(session, user_config), type: 'capture' }));
 
-    for (const event of events) {
+    for (const event of all_events) {
         lines.push(JSON.stringify({ ...add_absolute_system_time(event, user_config), type: 'event' }));
     }
     for (const req of network_requests) {
@@ -53,14 +65,20 @@ export async function export_html(capture_id: string): Promise<string> {
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [events, network_requests, console_logs] = await Promise.all([
+    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
+        get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000)
+        get_console_events(capture_id, 0, 100000),
+        get_events_by_category(capture_id, 'error', 0, 100000),
+        get_events_by_category(capture_id, 'storage', 0, 100000),
+        get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+
     const user_config = await load_user_config();
-    const data: ExportableCaptureData = { capture: session, events, network_requests, console_events: console_logs };
+    const data: ExportableCaptureData = { capture: session, events: all_events, network_requests, console_events: console_logs };
     const result = add_system_times_to_capture_data(data, user_config);
     const json_str = JSON.stringify(result);
     const safe_json = escape_for_html_embed(json_str);
@@ -69,7 +87,7 @@ export async function export_html(capture_id: string): Promise<string> {
     const duration_ms = session.ended_at ? new Date(session.ended_at).getTime() - new Date(session.started_at).getTime() : 0;
     const duration_str = format_duration(duration_ms);
 
-    const event_count = session.stats.event_count || events.length;
+    const event_count = session.stats.event_count || all_events.length;
     const request_count = session.stats.request_count || network_requests.length;
     const log_count = session.stats.log_count || console_logs.length;
 

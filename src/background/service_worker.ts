@@ -31,6 +31,9 @@ import { DEFAULT_CONFIG } from '../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
 
+// Bind chrome.dbg alias to real chrome.debugger API (debugger is reserved in TS)
+(chrome as any).dbg = (chrome as any).debugger;
+
 let is_capturing = false;
 let current_capture: CaptureRecord | null = null;
 let current_capture_id: string | null = null;

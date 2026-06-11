@@ -167,14 +167,56 @@
 | e2e-mcp-full 数据回环 | 7 源验证 + timeline 内容 + 搜索词条回环 | `2fd5092` |
 | agent 并发 | queue +3 并发 enqueue/dequeue 测试 | `27d7312` |
 
-### 剩余未修复（~15 个，技术原因不可修）
+### 剩余未修复（~15 个，逐个说明技术原因）
 
-| 类别 | 原因 |
-|------|------|
-| agent dispatcher/client 三层 mock | 需重构测试架构，非本次范围 |
-| 外部 CDP bridge 集成 | 需真实 CDP 端口，headless 不可用 |
-| WCAG 对比度 | 需 axe-core 等工具 |
-| 1000+ 事件大量导出 | 需专门性能测试环境 |
+#### 1. agent dispatcher + client 三层 mock 阻断集成（~5 P0）
+
+| 文件 | 具体问题 | 为何不可修 |
+|------|---------|-----------|
+| `agent_command_dispatcher.test.ts` | `vi.mock` 替换了 storage/exporter/data_queries 三个模块，IndexedDB schema 变更测试不报错 | 需要真实 IndexedDB（`fake-indexeddb` 或 `happy-dom`），引入新依赖 + 迁移全部 mock 成本高 |
+| `agent_bridge_client.test.ts` | `vi.spyOn(fetch)` mock 替代真实 HTTP，Bridge 协议变更检测不到 | 需要启动真实 Bridge server 进程（涉及 `src/agent/` 完整启动），非纯单元测试能覆盖 |
+| 跨模块集成 | 无测试覆盖 Bridge HTTP → command dispatch → storage read → data aggregation → export → download 完整链路 | 需要 E2E 级别环境，且 Bridge server 需在独立进程运行 |
+| `agent_bridge_client` recording mock | `start_recording: vi.fn()` mock 替代真实采集管线，采集流程 bug 漏检 | 采集管线依赖 Chrome extension API（tabs/webRequest/debugger），Node 环境不可用 |
+
+**修复需要：** `fake-indexeddb` + 真实 Bridge server 进程 + 独立 E2E 基础设施。非本次范围，需单独项目。
+
+#### 2. 并发/竞态测试（~3 P0）
+
+| 具体问题 | 为何不可修 |
+|---------|-----------|
+| `agent_bridge_client.test.ts` mock fetch 瞬间 resolve，心跳+轮询+回传并发不测 | Node 单线程 mock 无法模拟真实网络时序 |
+| `agent_bridge_server.test.ts` 并发 long-poll 测试与 server 实现不兼容（HTTP/1.1 连接复用阻塞） | 尝试过 `http.request` + `agent:false` + fetch 多种方案，均超时。server 实现本身不支持同一连接的并发 long-poll |
+| 多 tab 并发采集竞态 | 需要真实 Chrome 多 tab 环境，Playwright 可测但已有 `e2e-concurrent` 覆盖基本场景 |
+
+**修复需要：** 重构 server 实现支持 HTTP/2 multiplexing，或使用真实并发测试框架。
+
+#### 3. 外部 CDP bridge 集成（~3 P0）
+
+| 具体问题 | 为何不可修 |
+|---------|-----------|
+| `external_cdp_bridge_client.test.ts`: `start`/`poll`/`stop` 有单元测试但从未对真实 CDP 端口验证 | 需要 Chrome 以 `--remote-debugging-port=9223` 启动 |
+| `e2e-cdp-capture.spec.ts`: 已改名+加 body_capture_mode 验证，但用 `launchPersistentContext` 而非 `connectOverCDP` | Playwright Chromium launch 方式不支持同时开 CDP 端口给扩展用 |
+| CDP attach 失败后 fallback 到 external bridge 的完整链路 | 需要真实 CDP 端口 + 外部 bridge 服务同时运行 |
+
+**修复需要：** 真实 Chrome + CDP 端口 + 外部 bridge 服务。Headless CI 环境不可用。
+
+#### 4. 视觉无障碍（~2 P0）
+
+| 具体问题 | 为何不可修 |
+|---------|-----------|
+| WCAG AA 对比度 >= 4.5:1 从未验证 | 需要 `axe-core` 或 Playwright `accessibility snapshot` API |
+| 键盘导航从未测试 | 需要完整的键盘事件模拟 + focus trap 检测 |
+
+**修复需要：** `@axe-core/playwright`（额外依赖），或手动实现 WCAG 算法。
+
+#### 5. 性能/边界（~2 P0）
+
+| 具体问题 | 为何不可修 |
+|---------|-----------|
+| 1000+ 事件大规模导出从未测试 | 需要生成 1000+ 事件的数据集，执行时间可能超过 CI 限制 |
+| 30s+ 长时间采集稳定性 | 需要真实 Chrome 环境 + 长时间等待，CI 中不实用 |
+
+**修复需要：** 专门性能测试套件 + 更长 CI timeout。
 
 ### 最终统计
 

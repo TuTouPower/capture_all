@@ -115,6 +115,27 @@
 
 ---
 
+## 修复状态（2026-06-11）
+
+| # | 修复项 | 状态 | 提交 |
+|---|--------|------|------|
+| 1 | label_counts 幽灵覆盖 | ✅ | `8838bd1` |
+| 2 | live_data_queries mock 对齐 | ✅ | `a4fa6a0` |
+| 3 | network_capture 真实导入 | ✅ | `8e0ec8b` |
+| 4 | stop_capture 测试真函数 | ✅ | `60fe22a` |
+| 5 | popup_layout 溢出检测 | ✅ | `ba6e9fc` |
+| 6 | E2E 网站数据验证 | ✅ | `1c862bb` |
+| 7 | e2e-helpers 就绪检测 | ✅ | `1c862bb` |
+| 8 | theme-i18n computed color | ✅ | `cbc642d` |
+| 9 | 导出 saveAs 验证 | ✅ | `2892d69` |
+| 10 | agent 零覆盖补充 | ✅ | `743b2cf` |
+
+**已修：10 大类，+73 tests。** 剩余缺口为非关键 P1/P2 或需要 E2E 环境依赖的项。
+
+## 已知固有问题
+
+- `agent_bridge_client.test.ts` 5 个 IndexedDB 错误：测试环境无 IndexedDB，`app_log_storage.ts` 的 flush timer 在 test teardown 后触发。不影响测试结果，需在 vitest global setup 中 mock `indexedDB`。
+
 ## 建议修复优先级
 
 1. **立即**：修复 `label_counts.test.ts`（幽灵覆盖）、`network_capture.test.ts`（本地副本）、`live_data_queries.test.ts`（mock 反向）

@@ -54,7 +54,8 @@ export async function start_body_capture(
     _start_time: number,
     config: RecordConfig,
     active_tab_id: number | null,
-    deps: CoordinatorDeps
+    deps: CoordinatorDeps,
+    already_attached_tab_id?: number | null
 ): Promise<BodyCaptureStartResult> {
     if (!config.capture_response_body) {
         coordinator_state = {
@@ -65,9 +66,11 @@ export async function start_body_capture(
         return build_result();
     }
 
+    const already_attached = (already_attached_tab_id != null && already_attached_tab_id === active_tab_id);
+
     // Tier 1: Extension CDP
     if (active_tab_id !== null) {
-        const cdp_result = await enable_response_body_capture(active_tab_id, false);
+        const cdp_result = await enable_response_body_capture(active_tab_id, already_attached);
         if (cdp_result.success) {
             coordinator_state = {
                 mode: 'extension_cdp',

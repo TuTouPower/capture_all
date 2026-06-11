@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Capture All",
   "version": "0.1.0",
-  "description": "Record browser operations: network, console, mouse, keyboard, scroll, DOM changes",
+  "description": "Browser debugging black box — record user actions, navigation, network, console, errors, storage, and cookie evidence for structured review, analysis, export, and AI agent querying",
   "permissions": [
     "storage",
     "webRequest",

@@ -1,5 +1,7 @@
 // tests/popup_layout.test.ts — P6.5 Popup 布局计算单测
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // ============================================================
 // 布局常量 — 与 src/popup/popup.css 及 TASKS.md 对齐
@@ -238,5 +240,295 @@ describe('layout regression guards', () => {
     it('三状态操作区同高 — 格子等高 88px', () => {
         // 验证无状态导致操作区高度变化
         expect(ACTION_HEIGHT_PX).toBe(88);
+    });
+});
+
+// ============================================================
+// CSS 文件解析 — 从实际 CSS 提取值，确保测试与 CSS 同步
+// ============================================================
+
+interface ParsedCss {
+    action_height: number;
+    popup_width: number;
+    mcard_min_height: number;
+    metrics_columns: number;
+    metrics_gap: number;
+    body_padding: number;
+    body_gap: number;
+    actbtn_padding_x: number;
+    actbtn_padding_y: number;
+    actbtn_gap: number;
+    act_stop_flex: number;
+    act_ghost_flex: number;
+    action_gap: number;
+    stop_row_gap: number;
+    stop_glyph_width: number;
+    stop_glyph_height: number;
+    stop_time_font_size: number;
+    stop_hint_font_size: number;
+}
+
+function parse_css(): ParsedCss {
+    const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+    const css = readFileSync(css_path, 'utf-8');
+
+    const extract_px = (pattern: RegExp): number => {
+        const m = css.match(pattern);
+        if (!m) throw new Error(`CSS parse failed: ${pattern.source}`);
+        return parseInt(m[1], 10);
+    };
+
+    const extract_repeat = (pattern: RegExp): number => {
+        const m = css.match(pattern);
+        if (!m) throw new Error(`CSS parse failed: ${pattern.source}`);
+        return parseInt(m[1], 10);
+    };
+
+    const extract_flex = (selector: string): number => {
+        const re = new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{[^}]*?flex:\\s*([\\d.]+)`, 's');
+        const m = css.match(re);
+        if (!m) throw new Error(`CSS parse failed: flex for ${selector}`);
+        return parseFloat(m[1]);
+    };
+
+    // Extract padding from .actbtn { padding: 0 6px } → [y, x]
+    const extract_padding = (): [number, number] => {
+        const re = /\.actbtn\s*\{[^}]*?padding:\s*(\d+)(?:px)?\s+(\d+)px/;
+        const m = css.match(re);
+        if (!m) throw new Error('CSS parse failed: .actbtn padding');
+        return [parseInt(m[1], 10), parseInt(m[2], 10)];
+    };
+    const [act_pad_y, act_pad_x] = extract_padding();
+
+    return {
+        action_height:   extract_px(/\.action\s*\{[^}]*?height:\s*(\d+)px/),
+        popup_width:     extract_px(/body\s*\{[^}]*?width:\s*(\d+)px/),
+        mcard_min_height:extract_px(/\.mcard\s*\{[^}]*?min-height:\s*(\d+)px/),
+        metrics_columns: extract_repeat(/\.metrics\s*\{[^}]*?repeat\((\d+)/),
+        metrics_gap:     extract_px(/\.metrics\s*\{[^}]*?gap:\s*(\d+)px/),
+        body_padding:    extract_px(/\.body\s*\{[^}]*?padding:\s*(\d+)px/),
+        body_gap:        extract_px(/\.body\s*\{[^}]*?gap:\s*(\d+)px/),
+        actbtn_padding_x: act_pad_x,
+        actbtn_padding_y: act_pad_y,
+        actbtn_gap:      extract_px(/\.actbtn\s*\{[^}]*?gap:\s*(\d+)px/),
+        act_stop_flex:   extract_flex('.act-stop'),
+        act_ghost_flex:  extract_flex('.action .act-ghost'),
+        action_gap:      extract_px(/\.action\s*\{[^}]*?gap:\s*(\d+)px/),
+        stop_row_gap:    extract_px(/\.stop-row\s*\{[^}]*?gap:\s*(\d+)px/),
+        stop_glyph_width:extract_px(/\.stop-glyph\s*\{[^}]*?width:\s*(\d+)px/),
+        stop_glyph_height:extract_px(/\.stop-glyph\s*\{[^}]*?height:\s*(\d+)px/),
+        stop_time_font_size: extract_px(/\.stop-time\s*\{[^}]*?font-size:\s*(\d+)px/),
+        stop_hint_font_size: parseFloat(css.match(/\.stop-hint\s*\{[^}]*?font-size:\s*([\d.]+)px/)![1]),
+        act_stop_gap:     extract_px(/\.act-stop\s*\{[^}]*?gap:\s*(\d+)px/),
+    };
+}
+
+let _parsed: ParsedCss | null = null;
+function parsed_css(): ParsedCss {
+    if (_parsed == null) _parsed = parse_css();
+    return _parsed;
+}
+
+describe('CSS file parsed values match hardcoded constants', () => {
+    it('action height 88px from CSS matches constant', () => {
+        expect(parsed_css().action_height).toBe(ACTION_HEIGHT_PX);
+    });
+
+    it('popup width 300px from CSS matches constant', () => {
+        expect(parsed_css().popup_width).toBe(POPUP_WIDTH_PX);
+    });
+
+    it('mcard min-height 62px from CSS matches constant', () => {
+        expect(parsed_css().mcard_min_height).toBe(MCARD_MIN_HEIGHT_PX);
+    });
+
+    it('metrics 3 columns from CSS matches constant', () => {
+        expect(parsed_css().metrics_columns).toBe(METRICS_COLUMNS);
+    });
+
+    it('metrics gap 7px from CSS matches constant', () => {
+        expect(parsed_css().metrics_gap).toBe(METRICS_GAP_PX);
+    });
+
+    it('body padding 12px from CSS matches constant', () => {
+        expect(parsed_css().body_padding).toBe(12);
+    });
+
+    it('body gap 10px from CSS matches constant', () => {
+        expect(parsed_css().body_gap).toBe(BODY_GAP_PX);
+    });
+});
+
+// ============================================================
+// 停止按钮布局 — Bug 5 回归防护（scrollWidth ≤ clientWidth）
+// ============================================================
+//
+// Bug 5: 停止按钮文案溢出 → 改为两行布局（flex-direction: column）
+// 修复方案: .act-stop 使用 column 方向，每行元素独占全宽，文本可换行
+//
+// 布局推导:
+//   body 宽 = 300 - 2*12(padding) = 276px
+//   action gap = 10px
+//   action children = .act-stop(flex:1.7) + .act-ghost(flex:1) = 2.7
+//   stop 按钮宽 = (276 - 10) * 1.7 / 2.7 ≈ 167.4px
+//   stop 内容宽 = 167.4 - 2*6(padding) ≈ 155.4px
+//
+// vitest 环境为 node，无法使用 scrollWidth / clientWidth，
+// 改为数学等价验证：内容固定宽度 ≤ 容器可用宽度
+
+describe('stop button layout — Bug 5 regression (scrollWidth ≤ clientWidth)', () => {
+    function stop_button_available_width(): number {
+        const css = parsed_css();
+        const body_content_w = css.popup_width - 2 * css.body_padding;
+        const total_flex = css.act_stop_flex + css.act_ghost_flex;
+        const stop_w = ((body_content_w - css.action_gap) * css.act_stop_flex) / total_flex;
+        // content area = button width - left/right padding
+        return stop_w - 2 * css.actbtn_padding_x;
+    }
+
+    it('.act-stop 使用 flex-direction: column（两行布局）', () => {
+        // 两行布局是 Bug 5 修复的核心：列方向让每行独占全宽
+        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css = readFileSync(css_path, 'utf-8');
+        expect(css).toMatch(/\.act-stop\s*\{[^}]*flex-direction:\s*column/);
+    });
+
+    it('.act-stop 使用 white-space: normal 允许多行换行', () => {
+        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css = readFileSync(css_path, 'utf-8');
+        expect(css).toMatch(/\.act-stop\s*\{[^}]*white-space:\s*normal/);
+    });
+
+    it('stop-glyph 固定宽度 ≤ 停止按钮内容宽度', () => {
+        // glyph 是 flex: none，其 32px 远小于 155px → 不会溢出
+        const css = parsed_css();
+        const avail = stop_button_available_width();
+        expect(css.stop_glyph_width).toBeLessThanOrEqual(avail);
+        expect(css.stop_glyph_width).toBe(32);
+    });
+
+    it('stop-row 固定子元素总宽度 ≤ 停止按钮内容宽度', () => {
+        // stop-row 包含: stop-glyph(32px, flex:none) + gap(6px)
+        // 文本 stop-hint 占剩余空间，white-space: normal 允许换行
+        const css = parsed_css();
+        const avail = stop_button_available_width();
+        const row_fixed = css.stop_glyph_width + css.stop_row_gap;
+        expect(row_fixed).toBeLessThanOrEqual(avail);
+    });
+
+    it('停止按钮内容可用宽度 > 80px（文本有足够空间）', () => {
+        // 即使最坏情况，剩余空间也足够容纳 "点击结束采集"（约 70px @ 11.5px 字号）
+        const avail = stop_button_available_width();
+        expect(avail).toBeGreaterThan(80);
+    });
+
+    it('停止按钮宽度在合理范围内（flex 1.7 占比）', () => {
+        const css = parsed_css();
+        const body_content_w = css.popup_width - 2 * css.body_padding;
+        const total_flex = css.act_stop_flex + css.act_ghost_flex;
+        const stop_w = ((body_content_w - css.action_gap) * css.act_stop_flex) / total_flex;
+        // 约 167px
+        expect(stop_w).toBeGreaterThan(140);
+        expect(stop_w).toBeLessThan(200);
+    });
+
+    it('stop-row 中 .stop-hint 的可用宽度 > 文本最小需求（≈ 70px）', () => {
+        const css = parsed_css();
+        const avail = stop_button_available_width();
+        const hint_available = avail - css.stop_glyph_width - css.stop_row_gap;
+        // "点击结束采集" 6 个中文 ≈ 69px @ 11.5px，预留 margin
+        expect(hint_available).toBeGreaterThan(70);
+    });
+
+    it('scrollWidth ≤ clientWidth 数学等价：固定元素总宽 ≤ 容器宽', () => {
+        // 由于 column 布局 + white-space: normal，每行独占全宽
+        // 唯一可能溢出的行是 stop-row，其中固定元素为 glyph(32px) + gap(6px)
+        const css = parsed_css();
+        const avail = stop_button_available_width();
+        const row_fixed = css.stop_glyph_width + css.stop_row_gap;
+        // 剩余给 text 的空间
+        const text_avail = avail - row_fixed;
+        expect(text_avail).toBeGreaterThan(50); // 远大于单个字符宽度
+    });
+
+    it('记录态 action 总宽度不超出 body 内容宽度', () => {
+        const css = parsed_css();
+        const body_content_w = css.popup_width - 2 * css.body_padding;
+        // action 内两子元素 flex 分完宽度，无溢出
+        const total_flex = css.act_stop_flex + css.act_ghost_flex;
+        const stop_w = ((body_content_w - css.action_gap) * css.act_stop_flex) / total_flex;
+        const ghost_w = ((body_content_w - css.action_gap) * css.act_ghost_flex) / total_flex;
+        const action_total = stop_w + css.action_gap + ghost_w;
+        expect(action_total).toBeCloseTo(body_content_w, 0);
+    });
+
+    it('act-stop 无 overflow: hidden 之外的隐藏（内容应可见）', () => {
+        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css = readFileSync(css_path, 'utf-8');
+        // .act-stop 不应有 text-overflow: ellipsis 或 overflow: hidden
+        // 但可以有 overflow: hidden（在 .mcard 上有，用于文本截断）
+        // 验证 .act-stop 没有 text-overflow: ellipsis
+        const act_stop_block = css.match(/\.act-stop\s*\{[^}]*\}/);
+        if (act_stop_block) {
+            expect(act_stop_block[0]).not.toMatch(/text-overflow:\s*ellipsis/);
+        }
+    });
+});
+
+// ============================================================
+// 记录态按钮两行布局不溢出
+// ============================================================
+
+describe('recording-state two-row layout does not overflow', () => {
+    function stop_button_content_width(): number {
+        const css = parsed_css();
+        const body_content_w = css.popup_width - 2 * css.body_padding;
+        const total_flex = css.act_stop_flex + css.act_ghost_flex;
+        const stop_w = ((body_content_w - css.action_gap) * css.act_stop_flex) / total_flex;
+        return stop_w - 2 * css.actbtn_padding_x;
+    }
+
+    it('第一行 .stop-time 独占内容宽度', () => {
+        // column 布局 → stop-time 是块级，宽度 = 内容宽
+        const css = parsed_css();
+        const content_w = stop_button_content_width();
+        // 计时文本 "00:00:00" 7 字符 @ 18px ≈ 126px，< 155px
+        expect(content_w).toBeGreaterThan(126);
+    });
+
+    it('第二行 .stop-row 独占内容宽度', () => {
+        // column 布局 → stop-row 也独占全宽
+        const content_w = stop_button_content_width();
+        expect(content_w).toBeGreaterThan(100);
+    });
+
+    it('stop-glyph 高度 32px 配合 action height 88px', () => {
+        const css = parsed_css();
+        expect(css.stop_glyph_height).toBe(32);
+        // glyph 32px + stop-time(~25px) + gap(4px) ≤ action height 88px
+        const stack_h = 25 + 4 + 32; // time(estimate) + gap + row
+        expect(stack_h).toBeLessThanOrEqual(css.action_height);
+    });
+
+    it('两行内容总高度不超过 action 88px', () => {
+        const css = parsed_css();
+        // stop-time font-size 18px ≈ line-height ~25px
+        // gap = 4px
+        // stop-row height = stop-glyph 32px (largest in row)
+        const total = 25 + css.act_stop_gap + 32 + css.actbtn_padding_y * 2;
+        expect(total).toBeLessThanOrEqual(css.action_height);
+    });
+
+    it('记录态 action 两子元素都存在 flex 值', () => {
+        const css = parsed_css();
+        expect(css.act_stop_flex).toBeGreaterThan(0);
+        expect(css.act_ghost_flex).toBeGreaterThan(0);
+        // flex 比例确保两个按钮都在可视区域内
+        expect(css.act_stop_flex + css.act_ghost_flex).toBeGreaterThan(2);
+    });
+
+    it('action gap 不变 — 防止按钮间距变化导致溢出', () => {
+        const css = parsed_css();
+        expect(css.action_gap).toBe(10);
     });
 });

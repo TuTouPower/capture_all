@@ -1,12 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
+import 'fake-indexeddb/auto';
 import { dispatch_agent_command, type AgentRuntimeHandlers } from '../src/background/agent_command_dispatcher';
 import type { AgentCommand } from '../src/agent/shared/protocol';
 import type { RecordConfig } from '../src/shared/types';
-
-vi.mock('../src/background/storage', () => ({
-    list_captures: vi.fn(async () => []),
-    get_capture: vi.fn(async () => null)
-}));
 
 vi.mock('../src/background/exporter', () => ({
     export_json: vi.fn(async () => '{}'),

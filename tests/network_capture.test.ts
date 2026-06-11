@@ -7,89 +7,12 @@ import {
     redact_url
 } from '../src/shared/redaction';
 import { MAX_REQUEST_BODY_BYTES } from '../src/shared/constants';
-
-// ─── helpers ported from background/network_capture.ts ───
-// These are pure logic functions that live inside the module.
-// We replicate them here so we can unit-test the logic in isolation.
-
-function headers_array_to_map(
-    arr: Array<{ name: string; value?: string }> | undefined
-): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (!arr) return out;
-    for (const h of arr) {
-        out[h.name] = h.value || '';
-    }
-    return out;
-}
-
-function encode_form_data(form: Record<string, string | string[]>): string {
-    const parts: string[] = [];
-    for (const [key, values] of Object.entries(form)) {
-        const vals = Array.isArray(values) ? values : [values];
-        for (const v of vals) {
-            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
-        }
-    }
-    return parts.join('&');
-}
-
-function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const parts: string[] = [];
-    for (const part of raw) {
-        if (part.bytes) {
-            parts.push(decoder.decode(part.bytes));
-        }
-    }
-    return parts.join('');
-}
-
-type BodyCaptureStatus = 'not_enabled' | 'captured' | 'failed' | 'too_large' | 'unsupported';
-
-interface ExtractResult {
-    body: string | null;
-    status: BodyCaptureStatus;
-}
-
-function extract_request_body(
-    details: any,
-    capture_enabled: boolean
-): ExtractResult {
-    if (!capture_enabled) {
-        return { body: null, status: 'not_enabled' };
-    }
-    const rb = details.requestBody;
-    if (!rb) {
-        return { body: null, status: 'unsupported' };
-    }
-    if (rb.error) {
-        return { body: null, status: 'failed' };
-    }
-
-    let body: string | null = null;
-    if (rb.formData) {
-        body = encode_form_data(rb.formData);
-    } else if (rb.raw && Array.isArray(rb.raw) && rb.raw.length > 0) {
-        try {
-            body = decode_raw_body(rb.raw);
-        } catch {
-            return { body: null, status: 'failed' };
-        }
-    } else {
-        return { body: null, status: 'unsupported' };
-    }
-
-    if (body === null || body.length === 0) {
-        return { body, status: 'captured' };
-    }
-
-    const byte_len = new TextEncoder().encode(body).length;
-    if (byte_len > MAX_REQUEST_BODY_BYTES) {
-        return { body: truncate_request_body(body), status: 'too_large' };
-    }
-    return { body, status: 'captured' };
-}
+import {
+    decode_raw_body,
+    encode_form_data,
+    extract_request_body,
+    headers_array_to_map
+} from '../src/background/network_capture';
 
 // ─── request header redaction ───
 

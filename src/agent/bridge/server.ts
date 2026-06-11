@@ -20,7 +20,7 @@ const EXTENSION_TTL_MS = 5000;
 const BRIDGE_VERSION = '0.1.0';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
 
-export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void> }> {
+export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
     const queue = new AgentCommandQueue();
     let heartbeat: ExtensionHeartbeat | null = null;
 
@@ -134,6 +134,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     return {
         url: `http://${config.host}:${actual_port(server)}`,
         close: () => new Promise((resolve) => server.close(() => resolve())),
+        _server: server,
     };
 }
 

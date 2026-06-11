@@ -1,7 +1,7 @@
 // background/network_capture.ts
 // Network capture with CDP response body support.
 // webRequest records headers/status/timing/request body.
-// CDP (chrome.debugger) captures response bodies via Network.getResponseBody
+// CDP (chrome.dbg) captures response bodies via Network.getResponseBody
 // triggered on Network.loadingFinished.
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)

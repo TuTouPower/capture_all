@@ -46,6 +46,29 @@ test.describe('Capture All — Real Extension', () => {
         await dashboard.close();
     });
 
+    test('IBM Plex Sans + Mono 字体已加载', async () => {
+        const popup = await open_popup(fix);
+        await popup.waitForTimeout(500);
+
+        // 等待所有字体就绪
+        await popup.evaluate(() => document.fonts.ready);
+
+        const sans_ok = await popup.evaluate(() =>
+            document.fonts.check('12px "IBM Plex Sans"'));
+        const mono_ok = await popup.evaluate(() =>
+            document.fonts.check('12px "IBM Plex Mono"'));
+
+        expect(sans_ok, '"IBM Plex Sans" 字体应已加载').toBe(true);
+        expect(mono_ok, '"IBM Plex Mono" 字体应已加载').toBe(true);
+
+        // 确认实际渲染使用了正确字体
+        const body_font = await popup.evaluate(() =>
+            window.getComputedStyle(document.body).fontFamily);
+        expect(body_font).toContain('IBM Plex Sans');
+
+        await popup.close();
+    });
+
     test('full recording flow: start → navigate → stop → check recent', async () => {
         const popup = await open_popup(fix);
         await popup.locator('#startBtn').click();

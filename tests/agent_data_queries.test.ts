@@ -1,12 +1,34 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import {
     get_record_from_session_data,
     get_timeline_from_session_data,
+    get_timeline_item_from_session_data,
     list_data_sources_from_session_data,
     list_records_from_session_data,
+    load_agent_session_data,
     type AgentSessionData
 } from '../src/background/agent_data_queries';
-import type { CaptureEvent, CaptureRecord, ConsoleEventData, NetworkRequestData, RuntimeExceptionData } from '../src/shared/types';
+import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../src/shared/types';
+
+vi.mock('../src/background/storage', () => ({
+    get_capture: vi.fn(),
+    get_events_by_category: vi.fn(),
+    get_network_requests: vi.fn(),
+    get_console_events: vi.fn(),
+    get_error_events: vi.fn(),
+    get_storage_changes: vi.fn(),
+    get_cookie_changes: vi.fn(),
+}));
+
+import {
+    get_capture,
+    get_events_by_category,
+    get_network_requests,
+    get_console_events,
+    get_error_events,
+    get_storage_changes,
+    get_cookie_changes,
+} from '../src/background/storage';
 
 const capture: CaptureRecord = {
     capture_id: 'capture_1',
@@ -228,5 +250,180 @@ describe('agent data queries', () => {
             'network_requests:request_1',
             'navigation_events:page_load_1'
         ]);
+    });
+
+    test('get_timeline_item_from_session_data delegates to get_record_from_session_data', () => {
+        const result = get_timeline_item_from_session_data(data, 'network_requests:request_1');
+        expect(result).toEqual({
+            record_id: 'network_requests:request_1',
+            source: 'network_requests',
+            data: network_requests[0]
+        });
+    });
+
+    test('get_timeline_item_from_session_data throws for unknown record', () => {
+        expect(() => get_timeline_item_from_session_data(data, 'network_requests:r_nonexistent')).toThrow(
+            'RECORD_NOT_FOUND'
+        );
+    });
+});
+
+describe('load_agent_session_data', () => {
+    test('loads all 7 data sources and wraps capture', async () => {
+        const mock_capture: CaptureRecord = {
+            capture_id: 'cap-1',
+            name: 'Test Capture',
+            status: 'completed',
+            mode: 'standard',
+            started_at: '1970-01-01T00:00:00.000Z',
+            ended_at: '1970-01-01T00:00:05.000Z',
+            duration_ms: 5000,
+            start_url: 'https://example.com',
+            end_url: 'https://example.com/done',
+            tab_id: 1,
+            window_id: null,
+            config_snapshot: {},
+            stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            export_status: 'not_exported',
+            tags: [],
+            created_at: '1970-01-01T00:00:00.000Z',
+            updated_at: '1970-01-01T00:00:05.000Z'
+        };
+
+        vi.mocked(get_capture).mockResolvedValue(mock_capture);
+        vi.mocked(get_events_by_category).mockResolvedValue([]);
+        vi.mocked(get_network_requests).mockResolvedValue([]);
+        vi.mocked(get_console_events).mockResolvedValue([]);
+        vi.mocked(get_error_events).mockResolvedValue([]);
+        vi.mocked(get_storage_changes).mockResolvedValue([]);
+        vi.mocked(get_cookie_changes).mockResolvedValue([]);
+
+        const result = await load_agent_session_data('cap-1');
+
+        expect(result.capture).toEqual(mock_capture);
+        expect(result.sources).toEqual({
+            user_action_events: [],
+            navigation_events: [],
+            network_requests: [],
+            console_events: [],
+            error_events: [],
+            storage_changes: [],
+            cookie_changes: []
+        });
+
+        expect(get_capture).toHaveBeenCalledWith('cap-1');
+        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'user_action', 0, 100000);
+        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'navigation', 0, 100000);
+        expect(get_network_requests).toHaveBeenCalledWith('cap-1', 0, 100000);
+        expect(get_console_events).toHaveBeenCalledWith('cap-1', 0, 100000);
+        expect(get_error_events).toHaveBeenCalledWith('cap-1', 0, 100000);
+        expect(get_storage_changes).toHaveBeenCalledWith('cap-1', 0, 100000);
+        expect(get_cookie_changes).toHaveBeenCalledWith('cap-1', 0, 100000);
+    });
+
+    test('throws SESSION_NOT_FOUND when capture is missing', async () => {
+        vi.mocked(get_capture).mockResolvedValue(null);
+
+        await expect(load_agent_session_data('cap-missing')).rejects.toThrow('SESSION_NOT_FOUND');
+    });
+
+    test('loads non-empty data sources', async () => {
+        const mock_capture: CaptureRecord = {
+            capture_id: 'cap-2',
+            name: 'Cap 2',
+            status: 'completed',
+            mode: 'standard',
+            started_at: '1970-01-01T00:00:00.000Z',
+            ended_at: '1970-01-01T00:00:10.000Z',
+            duration_ms: 10000,
+            start_url: 'https://test.com',
+            end_url: 'https://test.com/end',
+            tab_id: 2,
+            window_id: null,
+            config_snapshot: {},
+            stats: { event_count: 1, request_count: 1, log_count: 1, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            export_status: 'not_exported',
+            tags: [],
+            created_at: '1970-01-01T00:00:00.000Z',
+            updated_at: '1970-01-01T00:00:10.000Z'
+        };
+
+        const nav_event: CaptureEvent = {
+            event_id: 'nav-1',
+            capture_id: 'cap-2',
+            category: 'navigation',
+            type: 'page_load',
+            relative_time_ms: 10,
+            absolute_time: '1970-01-01T00:00:00.010Z',
+            tab_id: 2,
+            frame_id: 0,
+            url: 'https://test.com',
+            top_frame_url: null,
+            page_title: 'Test',
+            source: 'content_script',
+            severity: 'info',
+            related_event_ids: [],
+            redaction_status: 'none',
+            raw_available: true,
+            created_at: '1970-01-01T00:00:00.010Z',
+            data: { load_time_ms: 50 }
+        };
+
+        const console_log: ConsoleEventData = {
+            level: 'log',
+            args_preview: ['hello'],
+            args_status: 'captured',
+            stack_trace: null,
+            source_url: 'https://test.com/app.js',
+            line: 10,
+            column: 5,
+            repeat_count: null,
+            related_network_request_id: null,
+            relative_time: 20,
+            absolute_time: 20
+        } as ConsoleEventData & { relative_time: number; absolute_time: number };
+
+        const storage_change: StorageChangeData = {
+            storage_type: 'localStorage',
+            action: 'set',
+            key: 'theme',
+            origin: 'https://test.com',
+            new_value: 'dark',
+            old_value: null,
+            value_status: 'captured',
+            relative_time: 30,
+            absolute_time: 30
+        } as StorageChangeData & { relative_time: number; absolute_time: number };
+
+        const cookie_change: CookieChangeData = {
+            name: 'session',
+            domain: '.test.com',
+            path: '/',
+            cause: 'set',
+            value: 'abc',
+            value_status: 'captured',
+            removed: false,
+            relative_time: 40,
+            absolute_time: 40
+        } as CookieChangeData & { relative_time: number; absolute_time: number };
+
+        vi.mocked(get_capture).mockResolvedValue(mock_capture);
+        vi.mocked(get_events_by_category)
+            .mockResolvedValueOnce([]) // user_action
+            .mockResolvedValueOnce([nav_event]); // navigation
+        vi.mocked(get_network_requests).mockResolvedValue([]);
+        vi.mocked(get_console_events).mockResolvedValue([console_log]);
+        vi.mocked(get_error_events).mockResolvedValue([]);
+        vi.mocked(get_storage_changes).mockResolvedValue([storage_change]);
+        vi.mocked(get_cookie_changes).mockResolvedValue([cookie_change]);
+
+        const result = await load_agent_session_data('cap-2');
+
+        expect(result.capture).toBe(mock_capture);
+        expect(result.sources.user_action_events).toEqual([]);
+        expect(result.sources.navigation_events).toEqual([nav_event]);
+        expect(result.sources.console_events).toEqual([console_log]);
+        expect(result.sources.storage_changes).toEqual([storage_change]);
+        expect(result.sources.cookie_changes).toEqual([cookie_change]);
     });
 });

@@ -128,4 +128,183 @@ describe('execute_mcp_tool', () => {
             extension_online: false,
         });
     });
+
+    it('routes start_recording to recording.start command', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, {
+            name: 'start_recording',
+            arguments: { url: 'https://example.com', mode: 'standard' }
+        });
+        const command = await take_next_command(server.url);
+
+        expect(command).toMatchObject({
+            type: 'recording.start',
+            payload: { url: 'https://example.com', mode: 'standard' },
+        });
+
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 'sess-1' } }),
+        });
+
+        await expect(tool_promise).resolves.toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { session_id: 'sess-1' },
+        });
+    });
+
+    it('routes sessions.list to sessions.list command', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, { name: 'list_sessions' });
+        const command = await take_next_command(server.url);
+
+        expect(command).toMatchObject({
+            type: 'sessions.list',
+            payload: {},
+        });
+
+        const sessions = [{ session_id: 's1', name: 'Test 1' }, { session_id: 's2', name: 'Test 2' }];
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { sessions } }),
+        });
+
+        await expect(tool_promise).resolves.toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { sessions },
+        });
+    });
+
+    it('routes sources.list to sources.list command', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, {
+            name: 'list_data_sources',
+            arguments: { session_id: 'sess-1' }
+        });
+        const command = await take_next_command(server.url);
+
+        expect(command).toMatchObject({
+            type: 'sources.list',
+            payload: { session_id: 'sess-1' },
+        });
+
+        const sources = [{ source: 'network_requests', count: 5 }];
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { sources } }),
+        });
+
+        await expect(tool_promise).resolves.toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { sources },
+        });
+    });
+
+    it('routes timeline.list to timeline.list command with query params', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, {
+            name: 'get_timeline',
+            arguments: { session_id: 'sess-1', start_time: 100, end_time: 500, limit: 20, order: 'desc' }
+        });
+        const command = await take_next_command(server.url);
+
+        expect(command).toMatchObject({
+            type: 'timeline.list',
+            payload: { session_id: 'sess-1', start_time: 100, end_time: 500, limit: 20, order: 'desc' },
+        });
+
+        const timeline = { total: 2, records: [{ record_id: 'r1' }, { record_id: 'r2' }] };
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: timeline }),
+        });
+
+        await expect(tool_promise).resolves.toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: timeline,
+        });
+    });
+
+    it('routes session.export to session.export command', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, {
+            name: 'export_session',
+            arguments: { session_id: 'sess-1', format: 'json' }
+        });
+        const command = await take_next_command(server.url);
+
+        expect(command).toMatchObject({
+            type: 'session.export',
+            payload: { session_id: 'sess-1', format: 'json' },
+        });
+
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { export_url: 'blob:...' } }),
+        });
+
+        await expect(tool_promise).resolves.toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { export_url: 'blob:...' },
+        });
+    });
+
+    it('throws for unknown tool name', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await expect(execute_mcp_tool(client, { name: 'nonexistent_tool' })).rejects.toThrow(
+            'Unknown MCP tool: nonexistent_tool'
+        );
+    });
 });

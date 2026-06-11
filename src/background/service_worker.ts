@@ -9,8 +9,8 @@ import {
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
 import { start_network_capture, stop_network_capture, set_cdp_body_event_handler } from './network_capture';
-import { start_console_capture, stop_console_capture } from './console_capture';
-import { start_exception_capture, stop_exception_capture } from './exception_capture';
+import { start_console_capture, stop_console_capture, is_console_active } from './console_capture';
+import { start_exception_capture, stop_exception_capture, is_exception_active } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
@@ -652,6 +652,41 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         logger.debug(`Sent start to tab ${activeInfo.tabId}`);
     } catch (err) {
         logger.warn(`Failed to send start to tab ${activeInfo.tabId}`, err);
+    }
+
+    // Retry CDP-based capture on tab switch if previously failed (e.g. chrome:// URL at start)
+    if (current_config.capture_console && !is_console_active()) {
+        const result = await start_console_capture(
+            current_capture_id!, start_time, activeInfo.tabId,
+            current_config.redact_data, handle_event
+        );
+        if (result.success) {
+            logger.info('Console capture retry succeeded on tab ' + activeInfo.tabId);
+        }
+    }
+    if (current_config.capture_console && !is_exception_active()) {
+        const result = await start_exception_capture(
+            current_capture_id!, start_time, activeInfo.tabId, handle_event
+        );
+        if (result.success) {
+            logger.info('Exception capture retry succeeded on tab ' + activeInfo.tabId);
+        }
+    }
+    if (current_config.capture_network && current_config.capture_response_body) {
+        const body_result = await start_body_capture(
+            current_capture_id!, start_time, current_config, activeInfo.tabId,
+            {
+                get_active_tab_url: async () => tab_url,
+                get_bridge_config: async () => {
+                    const uc = await load_user_config();
+                    return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
+                },
+                on_network_request: (req: any) => handle_event(req)
+            }
+        );
+        if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
+            logger.info('Body capture retry succeeded on tab ' + activeInfo.tabId);
+        }
     }
 });
 

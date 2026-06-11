@@ -34,7 +34,7 @@ tests/
 ├── e2e-*.spec.ts     # Playwright E2E（每个网站/场景独立文件）
 ├── e2e.spec.ts       # 基础 E2E（headless）
 ├── e2e-mcp.spec.ts   # MCP 闭环
-└── e2e-9223.spec.ts  # CDP 端口
+└── e2e-cdp-capture.spec.ts  # CDP body capture 验证
 ```
 
 ## 关键路径

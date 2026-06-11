@@ -99,7 +99,7 @@
 
 - `e2e-helpers.ts`：`launch_extension` 不验证扩展是否完全就绪（IndexedDB 初始化？bridge 连通？）
 - `e2e-helpers.ts`：无清理/隔离辅助函数 — 一个测试污染后所有测试静默失败
-- `e2e-9223.spec.ts`：文件名含 `9223` 但实际用 `launchPersistentContext`，不是 CDP 连接
+- `e2e-cdp-capture.spec.ts`：已改名并加入 body_capture_mode + response_body_status 验证
 
 ---
 
@@ -163,7 +163,7 @@
 | agent 三层 mock 阻断集成 | 4 | 需要重构测试架构（dispatcher/client/server），改动量大 |
 | agent 并发未测试 | 3 | 需要引入 race condition 测试框架 |
 | e2e-xss 其他注入向量 | 4 | eval/document.write 等需要特殊页面环境 |
-| e2e-9223 不测真实 CDP | 3 | 需要真实 CDP 端口连接，headless 环境不可用 |
+| e2e-cdp-capture 不测外部 CDP bridge | 3 | 需要对外部 CDP 端口连接，headless 环境不可用 |
 | e2e-theme-i18n popup/detail 切换 | 2 | 需要更多设备/视口模拟 |
 | e2e-mcp-full 数据回环 | 3 | 需要在 MCP bridge 环境下运行完整闭环 |
 | 空态/错误态 UI | 3 | 需要模拟权限拒绝等真实浏览器场景 |

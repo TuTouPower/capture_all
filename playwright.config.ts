@@ -45,8 +45,8 @@ export default defineConfig({
             },
         },
         {
-            name: 'e2e-9223',
-            testMatch: 'e2e-9223.spec.ts',
+            name: 'e2e-cdp-capture',
+            testMatch: 'e2e-cdp-capture.spec.ts',
             use: {
                 headless: false,
                 launchOptions: {

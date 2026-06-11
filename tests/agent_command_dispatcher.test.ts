@@ -30,7 +30,6 @@ vi.mock('../src/background/agent_data_queries', () => ({
 }));
 
 const config: RecordConfig = {
-    capture_mode: 'basic',
     mouse_precision: 'clicks',
     capture_console: false,
     capture_network: true,

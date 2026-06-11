@@ -8,7 +8,7 @@ export interface CaptureRecord {
     capture_id: string;
     name: string;
     status: 'capturing' | 'completed';
-    mode: 'standard' | 'deep' | 'custom';
+    mode: 'standard';
     started_at: string;           // ISO string
     ended_at: string | null;
     duration_ms: number;
@@ -397,7 +397,7 @@ export interface CookieChangeData {
 
 export interface CaptureStartedData {
     capture_id: string;
-    mode: 'standard' | 'deep' | 'custom';
+    mode: 'standard';
     config_snapshot: object;
     start_url: string;
     trigger: 'popup' | 'main_panel' | 'shortcut';
@@ -485,7 +485,6 @@ export interface BodyCaptureStartResult {
 // ============================================================
 
 export interface RecordConfig {
-    capture_mode: 'basic' | 'advanced';
     mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
     capture_console: boolean;
     capture_network: boolean;
@@ -504,7 +503,6 @@ export type SystemTimeTimezone = 'browser' | 'UTC' | 'Asia/Shanghai';
 export type DetailTimeDisplayMode = 'relative' | 'system';
 
 export interface UserConfig {
-    selected_mode: 'basic' | 'advanced';
     mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
     keyboard_capture_mode: 'none' | 'shortcuts' | 'all';
     capture_input_values: boolean;

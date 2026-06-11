@@ -44,7 +44,6 @@ test.beforeAll(async () => {
     await page.evaluate(async (cfg) => {
         await chrome.storage.local.set({
             user_config: {
-                selected_mode: 'basic',
                 mouse_precision: 'clicks',
                 keyboard_capture_mode: 'none',
                 capture_input_values: false,

@@ -90,6 +90,81 @@ describe('correlate', () => {
         const cdp = make_cdp_event({ url: 'https://example.com/api/data?t=2' });
         expect(correlate(web, cdp)).toBe('matched');
     });
+
+    // Edge case: Chrome may emit absolute_time: 0 or pre-epoch timestamps for cached resources
+    it('returns ambiguous when CDP timestamp is zero (Chrome cached response)', () => {
+        const web = make_web_meta({ absolute_time: 1700000000000 });
+        const cdp = make_cdp_event({ timestamp: 0 });
+        expect(correlate(web, cdp)).toBe('ambiguous');
+    });
+
+    it('returns ambiguous when web absolute_time is zero', () => {
+        const web = make_web_meta({ absolute_time: 0 });
+        const cdp = make_cdp_event({ timestamp: 1700000000000 });
+        expect(correlate(web, cdp)).toBe('ambiguous');
+    });
+
+    it('returns ambiguous when CDP timestamp is negative (pre-epoch)', () => {
+        const web = make_web_meta({ absolute_time: 1000000000000 });
+        const cdp = make_cdp_event({ timestamp: -1 });
+        expect(correlate(web, cdp)).toBe('ambiguous');
+    });
+
+    it('returns ambiguous when web absolute_time is negative', () => {
+        const web = make_web_meta({ absolute_time: -1 });
+        const cdp = make_cdp_event({ timestamp: 1000000000000 });
+        expect(correlate(web, cdp)).toBe('ambiguous');
+    });
+
+    it('returns ambiguous when both timestamps are zero (time diff == 0, within window)', () => {
+        const web = make_web_meta({ absolute_time: 0 });
+        const cdp = make_cdp_event({ timestamp: 0 });
+        expect(correlate(web, cdp)).toBe('matched');
+    });
+
+    it('does not crash when CDP timestamp is Number.MIN_SAFE_INTEGER', () => {
+        const web = make_web_meta({ absolute_time: 0 });
+        const cdp = make_cdp_event({ timestamp: Number.MIN_SAFE_INTEGER });
+        expect(() => correlate(web, cdp)).not.toThrow();
+        expect(correlate(web, cdp)).toBe('ambiguous');
+    });
+
+    // Edge case: duplicate CDP events with same URL/method/status but different request_id
+    it('matches both CDP events when duplicates differ only by request_id', () => {
+        const web = make_web_meta();
+        const cdp_a = make_cdp_event({ request_id: 'cdp_aaa' });
+        const cdp_b = make_cdp_event({ request_id: 'cdp_bbb' });
+        expect(correlate(web, cdp_a)).toBe('matched');
+        expect(correlate(web, cdp_b)).toBe('matched');
+    });
+
+    it('handles duplicate CDP events where one has different URL base', () => {
+        const web = make_web_meta({ url: 'https://example.com/api/data' });
+        const cdp_a = make_cdp_event({
+            request_id: 'cdp_aaa',
+            url: 'https://example.com/api/data'
+        });
+        const cdp_b = make_cdp_event({
+            request_id: 'cdp_bbb',
+            url: 'https://example.com/api/other'
+        });
+        expect(correlate(web, cdp_a)).toBe('matched');
+        expect(correlate(web, cdp_b)).toBe('ambiguous');
+    });
+
+    it('handles duplicate CDP events where one has different timestamp outside window', () => {
+        const web = make_web_meta({ absolute_time: 1700000000000 });
+        const cdp_a = make_cdp_event({
+            request_id: 'cdp_aaa',
+            timestamp: 1700000000000
+        });
+        const cdp_b = make_cdp_event({
+            request_id: 'cdp_bbb',
+            timestamp: 1700000005000 // 5s later
+        });
+        expect(correlate(web, cdp_a)).toBe('matched');
+        expect(correlate(web, cdp_b)).toBe('ambiguous');
+    });
 });
 
 describe('merge_matched', () => {

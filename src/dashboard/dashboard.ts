@@ -361,10 +361,12 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
         const blob = new Blob([content], { type: mime });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `capture_all_${id}.${ext}`;
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+        chrome.downloads.download({
+            url,
+            filename: `capture_all_${id}.${ext}`,
+            saveAs: user_config.export_save_as,
+        });
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) { logger.error('Export error', err); }
 }
 async function del_session(id: string): Promise<void> {
@@ -438,7 +440,7 @@ function render_detail(): string {
                 </div>
             </div>
             <div class="dt-head-r">
-                <select id="dtExportFmt" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);margin-right:6px">
+                <select id="dtExportFmt" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);margin-right:6px">
                     <option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
                 </select>
                 <button class="btn" data-dexport="1"><span>${I.export}</span>导出</button>
@@ -1013,11 +1015,12 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
             if (!r?.success) { alert('导出失败'); return; }
             const blob = new Blob([r.data], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-            document.body.appendChild(a); a.click(); a.remove();
-            URL.revokeObjectURL(url);
+            chrome.downloads.download({
+                url,
+                filename: `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+                saveAs: user_config.export_save_as,
+            });
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (e) { logger.error('Export logs error', e); }
     });
 
@@ -1028,11 +1031,12 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
             if (!r?.success) { alert('导出失败'); return; }
             const blob = new Blob([r.data], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
-            document.body.appendChild(a); a.click(); a.remove();
-            URL.revokeObjectURL(url);
+            chrome.downloads.download({
+                url,
+                filename: `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`,
+                saveAs: user_config.export_save_as,
+            });
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (e) { logger.error('Export JSONL error', e); }
     });
 

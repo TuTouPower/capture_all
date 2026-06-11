@@ -227,7 +227,7 @@
 
 .set-scroll { overflow-y: auto; padding: 24px 28px 28px; }
 .set-section { margin-bottom: 30px; scroll-margin-top: 16px; }
-.set-section > h2 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
+.set-section > h2 { margin: 0 0 16px; font-size: 17px; font-weight: 600; color: var(--ink); }
 .set-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
 .set-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 18px 20px; }
 .set-grid.c2 { grid-template-columns: repeat(2, minmax(0,1fr)); }

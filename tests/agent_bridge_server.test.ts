@@ -70,6 +70,44 @@ function post_command(server_url: string, body: unknown): Promise<{ status: numb
     });
 }
 
+/**
+ * GET /extension/command using raw http.get (agent:false) to bypass
+ * undici's connection pool for compatibility with concurrent tests.
+ */
+function get_command(server_url: string): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+        const url = new URL('/extension/command', server_url);
+        http.get(
+            {
+                hostname: url.hostname,
+                port: url.port,
+                path: url.pathname,
+                agent: false,
+                headers: { Authorization: `Bearer ${token}` },
+            },
+            (res) => {
+                const chunks: Buffer[] = [];
+                res.on('data', (chunk: Buffer) => chunks.push(chunk));
+                res.on('end', () => {
+                    resolve(JSON.parse(Buffer.concat(chunks).toString()));
+                });
+            },
+        ).on('error', reject);
+    });
+}
+
+/** Poll /extension/command via raw http until a command is available. */
+async function dequeue_command(server_url: string): Promise<any> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        const command = await get_command(server_url);
+        if (command) {
+            return command;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('Command was not queued');
+}
+
 afterEach(async () => {
     if (cleanup) {
         await cleanup();
@@ -227,20 +265,26 @@ describe('bridge server', () => {
             body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
         });
 
-        // Fire two concurrent POSTs using separate TCP connections (agent:false).
-        // Each handler enqueues a command then awaits the result, so both are
-        // pending simultaneously.
+        // Fire 3 concurrent POSTs using separate TCP connections (agent:false).
+        // Each handler enqueues a command then awaits the result, so all three
+        // are pending simultaneously.
         const p1 = post_command(server.url, { type: 'sessions.list', payload: { index: 0 } });
         const p2 = post_command(server.url, { type: 'sessions.get', payload: { index: 1 } });
+        const p3 = post_command(server.url, { type: 'sources.list', payload: { index: 2 } });
 
-        // Extension polls commands in FIFO order
-        const cmd1 = await take_next_command(server.url);
-        const cmd2 = await take_next_command(server.url);
+        // Wait for server to process all 3 enqueues
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        // Dequeue all 3 commands via raw http polling (not fetch, to avoid pool blocking)
+        const cmd1 = await dequeue_command(server.url);
+        const cmd2 = await dequeue_command(server.url);
+        const cmd3 = await dequeue_command(server.url);
 
         expect(cmd1).not.toBeNull();
         expect(cmd2).not.toBeNull();
+        expect(cmd3).not.toBeNull();
 
-        // Resolve both and verify each gets the correct response
+        // Resolve all three and verify each gets the correct response
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -251,13 +295,20 @@ describe('bridge server', () => {
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ command_id: cmd2.command_id, ok: true, data: { from: 'req2' } }),
         });
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: cmd3.command_id, ok: true, data: { from: 'req3' } }),
+        });
 
-        const [r1, r2] = await Promise.all([p1, p2]);
+        const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
 
         expect(r1.status).toBe(200);
         expect(r2.status).toBe(200);
+        expect(r3.status).toBe(200);
         expect(r1.data).toEqual({ command_id: cmd1.command_id, ok: true, data: { from: 'req1' } });
         expect(r2.data).toEqual({ command_id: cmd2.command_id, ok: true, data: { from: 'req2' } });
+        expect(r3.data).toEqual({ command_id: cmd3.command_id, ok: true, data: { from: 'req3' } });
     });
 
     it('close() with pending request rejects cleanly', async () => {
@@ -272,8 +323,8 @@ describe('bridge server', () => {
         // Fire a request that will be enqueued but never resolved
         const req = post_command(server.url, { type: 'sessions.list', payload: {} });
 
-        // Wait for command to be enqueued
-        const command = await take_next_command(server.url);
+        // Dequeue the command via raw http (bypasses fetch pool)
+        const command = await dequeue_command(server.url);
         expect(command).not.toBeNull();
 
         // Force-close all connections so close() does not hang

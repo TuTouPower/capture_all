@@ -81,8 +81,10 @@
   6. `export_json()` / `export_jsonl()` / `export_html()` 改为查询全部 7 个 category store（与 `get_capture_data` 一致）
   7. 测试：写入 → flush → 按 capture_id 查询 → 验证数据不丢失；导出 JSON 验证 events/network_requests/console_events 非空
 
-### P0.10 网络请求返回体全部未捕获（CDP debugger 抢占）
-- **状态**：待修复
+### ✅ P0.10 网络请求返回体全部未捕获（CDP debugger 抢占）
+- **状态**：已修复。CDP attach 统一到 service_worker，三系统共享同一 debugger<br>
+  console_capture/exception_capture 新增 `already_attached` 参数，body_capture_coordinator 新增 `already_attached_tab_id` 参数<br>
+  重试路径（onActivated/onUpdated）同步更新
 - **现象**：导出 JSON 中 `network_requests` 数组有 132 条，弹窗统计也正确。但所有 132 条的 `response_body` 全部为空，`response_body_status` 全部为 `not_enabled`，`body_capture_mode` 显示 `extension_cdp` 但 body 实际并未捕获。复现文件：`capture_all_session_1781180877123_cw5hegh.json`
 - **直接根因**：`network_capture.ts:168` 的 `enable_response_body_capture()` 中 `dbg_tab_id` 始终为 `null`，导致 `handle_completed()` 所有请求走 line 502 `send_to_background(build_network_event(pending, details, null, 'not_enabled'))`，body 不捕获
 - **上游根因 — CDP 抢占**：启动时在 `chrome://newtab/`（受限 URL），`chrome.dbg.attach` 失败。用户切换到 `https://opencode.ai/` 后，`tab.onUpdated` 触发重试（line 751-788），但重试顺序导致抢占：
@@ -106,6 +108,19 @@
   - `src/background/body_capture_coordinator.ts` — `start_body_capture` 接收 `already_attached` 参数
   - `src/background/service_worker.ts` — 初始/重试调用传递 `debugger_attached_tab_id`；`last_tab_urls` 初始化
   - `src/content/network_hook.ts` / `src/content/xhr_fetch_capture.ts` — fallback body 捕获
+
+---
+
+## 用户加的bug记录
+
+以下 bug 都要找原因为什么测试没有发现，测试有问题就补测试，文档有问题就改文档，最后才是改代码解决 bug。我要的是这次错了修正后以后不再犯。
+
+网络请求的数量统计到了，但是时间序列里显示为 0，其他数据标签也有类似问题。
+一些文本会再深色模式下黑色，应该是白色的。包括但不限于 Capture All 采集记录 主面板里的全部采集的数量统计 记录详情导出的格式选择 json jsonl等文本
+导出日志和采集记录的时候没有询问用户导出日志直接就导出了。即使打开了相关的开关。
+主面板设置里面设置两个字 还有通用 采集默认值等文本都是黑色在深色模式下，应该是白色的。
+弹出窗口，采集中的情况下，文本会超出按钮。02:01:12 点击结束，文本要限制在按钮里，放不下你可以分两行，第一行时间统计 第二行，结束符号和点击结束四个字
+
 
 ---
 
@@ -215,10 +230,8 @@
 ### ✅ 1.6.8 导出文件 capture.tags 为空数组
 - **状态**：已修复 — `5fb5159`。popup.ts + service_worker.ts：从 toggle/config 构建中文标签写入 capture.tags
 
-### 1.6.9 打包生成的扩展名字和介绍未更新
-- **状态**：待修复
-- **现象**：`npm run build` 打包生成的扩展，浏览器加载后显示的扩展名称和介绍仍是旧值，未同步为 "Capture All" / "全采"
-- **期望**：manifest.json 中 `name` 和 `description` 字段更新为当前产品名和介绍
+### ✅ 1.6.9 打包生成的扩展名字和介绍未更新
+- **状态**：已修复。manifest.json `description` 更新，`name` 已为 "Capture All"
 
 ---
 
@@ -227,46 +240,40 @@
 > 测试计划：`docs/E2E_GAP.md`
 > 现状：25 个 E2E 测试文件全部只测 UI 渲染和按钮状态切换，零个验证采集数据字段完整性。
 
-### P1.7.0 测试基础设施 — 本地测试页面 + 服务器
-- **状态**：待实现
+### ✅ P1.7.0 测试基础设施 — 本地测试页面 + 服务器
+- **状态**：已完成
 - **内容**：
   - `tests/fixtures/test-page.html`：确定性测试页面（console/fetch/cookie/localStorage/按钮/错误）
   - `tests/fixtures/server.ts`：Node.js HTTP 静态服务器，端口 17832，`GET /api/test` 返回固定 JSON
-  - `npm run test:e2e` 脚本自动启动/关闭服务器
+  - `package.json` 新增 `test:e2e:server` 脚本
 
-### P1.7.1 e2e-capture-baidu — 百度全开采集字段结构验证
-- **状态**：待实现
-- **内容**：弹窗全 ON → 百度采集 → 导出 JSON → 逐字段验证结构（类型正确、字段存在）
-- **断言**：~30 项（NetworkRequest/ConsoleEvent/CaptureEvent/CaptureRecord/顶层字段）
+### ✅ P1.7.1 e2e-capture-baidu — 百度全开采集字段结构验证
+- **状态**：已完成
+- **文件**：`tests/e2e-capture-baidu.spec.ts`
 
-### P1.7.2 e2e-capture-local — 本地页面全开采集结构+内容验证
-- **状态**：待实现
-- **内容**：弹窗全 ON → 本地页面采集 → 导出 JSON → 结构验证 + 精确内容断言
-- **断言**：~40 项（含 response_body 内容匹配、console 内容匹配、cookie/storage 精确名称等）
+### ✅ P1.7.2 e2e-capture-local — 本地页面全开采集结构+内容验证
+- **状态**：已完成
+- **文件**：`tests/e2e-capture-local.spec.ts`
 
-### P1.7.3 e2e-toggle-effects — 弹窗 8 开关功能验证
-- **状态**：待实现
-- **内容**：每个开关单独关闭 → 采集 → 验证对应数据消失、其他仍在、tags/config_snapshot 正确
-- **断言**：8 场景 × ~8 断言 = ~64 项
+### ✅ P1.7.3 e2e-toggle-effects — 弹窗 8 开关功能验证
+- **状态**：已完成
+- **文件**：`tests/e2e-toggle-effects.spec.ts`
 
-### P1.7.4 e2e-cdp-retry — CDP 重试验证
-- **状态**：待实现
-- **内容**：
-  - 场景 A：chrome:// 启动 → 标签切换 → console/body 恢复
-  - 场景 B：chrome:// 启动 → URL 跳转 → console/body 恢复
-  - 场景 C：导出日志确认 retry succeeded 消息
+### ✅ P1.7.4 e2e-cdp-retry — CDP 重试验证
+- **状态**：已完成
+- **文件**：`tests/e2e-cdp-retry.spec.ts`
 
-### P1.7.5 e2e-settings-effects — 设置子开关验证
-- **状态**：待实现
-- **内容**：设置页关 response_body / request_body / input_values / redact_data → 采集验证
+### ✅ P1.7.5 e2e-settings-effects — 设置子开关验证
+- **状态**：已完成
+- **文件**：`tests/e2e-settings-effects.spec.ts`
 
-### P1.7.6 e2e-cycle-integrity — 多轮采集数据隔离
-- **状态**：待实现
-- **内容**：连续 3 次开始-停止，验证 capture_id 不同、数据不交叉、status 正确
+### ✅ P1.7.6 e2e-cycle-integrity — 多轮采集数据隔离
+- **状态**：已完成
+- **文件**：`tests/e2e-cycle-integrity.spec.ts`
 
-### P1.7.7 e2e-export-content — 导出内容正确性
-- **状态**：待实现
-- **内容**：JSON/HAR/HTML 导出后内容语义验证（非仅格式）
+### ✅ P1.7.7 e2e-export-content — 导出内容正确性
+- **状态**：已完成
+- **文件**：`tests/e2e-export-content.spec.ts`
 
 ---
 ## P3 · 已完成的 Demo 对齐项（仅供参考）

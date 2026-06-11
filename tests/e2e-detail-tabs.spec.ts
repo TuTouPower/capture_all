@@ -45,17 +45,17 @@ test.describe('详情页 Tab 切换 P4.11', () => {
         expect(body_text).toContain('Capture All');
         expect(body_text.length).toBeGreaterThan(100);
 
-        // 定义要测试的 Tab：data-tab 值 + 期望的内容选择器
-        const tabs: { tab: string; name: string; content_selector: string }[] = [
-            { tab: 'overview', name: '概览', content_selector: '.ov-panel' },
-            { tab: 'timeline', name: '时间线', content_selector: 'tr[data-ev], .tl-lanes' },
-            { tab: 'network', name: '网络', content_selector: '.net-row' },
-            { tab: 'console', name: '控制台', content_selector: '.con-row' },
-            { tab: 'storage', name: '存储', content_selector: '.net-table' },
-            { tab: 'evidence', name: '证据', content_selector: '.net-table' },
+        // 定义要测试的 Tab：data-tab 值 + 数据行选择器（排除表头）+ 内容区域选择器
+        const tabs: { tab: string; name: string; content_selector: string; area_selector: string }[] = [
+            { tab: 'overview', name: '概览', content_selector: '.ov-panel', area_selector: '.ov' },
+            { tab: 'timeline', name: '时间线', content_selector: 'tr[data-ev], .tl-lanes', area_selector: '.tl-lanes' },
+            { tab: 'network', name: '网络', content_selector: '.net-row:not(.net-head)', area_selector: '.net-table' },
+            { tab: 'console', name: '控制台', content_selector: '.con-row:not(.con-head)', area_selector: '.con-table' },
+            { tab: 'storage', name: '存储', content_selector: '.con-row:not(.con-head)', area_selector: '.net-table' },
+            { tab: 'evidence', name: '证据', content_selector: '.con-row:not(.con-head)', area_selector: '.net-table' },
         ];
 
-        for (const { tab, name, content_selector } of tabs) {
+        for (const { tab, name, content_selector, area_selector } of tabs) {
             const tab_btn = detail_page.locator(`[data-tab="${tab}"]`);
             if (!(await tab_btn.isVisible({ timeout: 2000 }).catch(() => false))) {
                 continue; // 某些 Tab 可能未渲染，跳过
@@ -63,14 +63,26 @@ test.describe('详情页 Tab 切换 P4.11', () => {
             await tab_btn.click();
             await detail_page.waitForTimeout(800);
 
-            // 验证 Tab 内区域有内容
+            // 验证 Tab 内数据行存在（排除表头行）
             const region = detail_page.locator(content_selector);
             const content_count = await region.count();
             expect(content_count, `${name} Tab 应有内容`).toBeGreaterThan(0);
 
-            // 额外验证：该 Tab 区域不为空文本
-            const tab_html = await detail_page.locator('.dt-list, .simple-pad, .ov-panel').first().innerHTML();
+            // 使用 Tab 专属选择器验证内容区域不为空文本
+            const tab_html = await detail_page.locator(area_selector).first().innerHTML();
             expect(tab_html.length, `${name} Tab 内容不应为空`).toBeGreaterThan(20);
+
+            // 网络 Tab 深层验证：数据行包含 http(s) URL
+            if (tab === 'network' && content_count > 0) {
+                const row_text = await region.first().innerText();
+                expect(row_text, '网络 Tab 数据行应包含 http(s) URL').toMatch(/https?:\/\//);
+            }
+
+            // 控制台 Tab 深层验证：存在日志级别标记 .lvl-tag[data-lvl]
+            if (tab === 'console') {
+                const lvl_count = await detail_page.locator('.con-table .lvl-tag[data-lvl]').count();
+                expect(lvl_count, '控制台 Tab 应包含日志级别标记').toBeGreaterThan(0);
+            }
         }
 
         // 验证面包屑可返回

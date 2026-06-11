@@ -131,18 +131,22 @@ describe('tab_url_change_dedup', () => {
     it('emits event for new URL', () => {
         const urls = new Map<number, string>();
         expect(should_emit_url_change(urls, 1, 'https://a.com')).toBe(true);
+        expect(urls.get(1)).toBe('https://a.com');
     });
 
     it('skips duplicate URL for same tab', () => {
         const urls = new Map<number, string>();
         should_emit_url_change(urls, 1, 'https://a.com');
+        expect(urls.get(1)).toBe('https://a.com');
         expect(should_emit_url_change(urls, 1, 'https://a.com')).toBe(false);
+        expect(urls.get(1)).toBe('https://a.com');
     });
 
     it('emits when URL changes to different value', () => {
         const urls = new Map<number, string>();
         should_emit_url_change(urls, 1, 'https://a.com');
         expect(should_emit_url_change(urls, 1, 'https://b.com')).toBe(true);
+        expect(urls.get(1)).toBe('https://b.com');
     });
 
     it('tracks URLs per tab independently', () => {
@@ -150,11 +154,36 @@ describe('tab_url_change_dedup', () => {
         should_emit_url_change(urls, 1, 'https://a.com');
         // Same URL on different tab should emit
         expect(should_emit_url_change(urls, 2, 'https://a.com')).toBe(true);
+        expect(urls.get(1)).toBe('https://a.com');
+        expect(urls.get(2)).toBe('https://a.com');
     });
 
     it('skips empty URL', () => {
         const urls = new Map<number, string>();
         expect(should_emit_url_change(urls, 1, '')).toBe(false);
+        // Map should remain unchanged for empty URL
+        expect(urls.has(1)).toBe(false);
+    });
+
+    it('detects hash fragment as URL change', () => {
+        const urls = new Map<number, string>();
+        should_emit_url_change(urls, 1, 'https://a.com/page');
+        expect(should_emit_url_change(urls, 1, 'https://a.com/page#section')).toBe(true);
+        expect(urls.get(1)).toBe('https://a.com/page#section');
+    });
+
+    it('detects hash removal as URL change', () => {
+        const urls = new Map<number, string>();
+        should_emit_url_change(urls, 1, 'https://a.com/page#section');
+        expect(should_emit_url_change(urls, 1, 'https://a.com/page')).toBe(true);
+        expect(urls.get(1)).toBe('https://a.com/page');
+    });
+
+    it('skips same hash fragment as duplicate', () => {
+        const urls = new Map<number, string>();
+        should_emit_url_change(urls, 1, 'https://a.com/page#section');
+        expect(should_emit_url_change(urls, 1, 'https://a.com/page#section')).toBe(false);
+        expect(urls.get(1)).toBe('https://a.com/page#section');
     });
 
     it('removing tab clears its dedup state', () => {

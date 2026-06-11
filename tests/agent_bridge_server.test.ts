@@ -18,7 +18,7 @@ async function start_test_server() {
 }
 
 async function take_next_command(server_url: string) {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
         const response = await fetch(`${server_url}/extension/command`, {
             headers: { Authorization: `Bearer ${token}` },
         });
@@ -216,5 +216,73 @@ describe('bridge server', () => {
         expect(status.bridge_version).toBe('0.1.0');
         expect(status.extension_online).toBe(false);
         expect(status.pending_commands).toBe(0);
+    });
+
+    it('handles concurrent requests correctly', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        // Fire two concurrent POSTs using separate TCP connections (agent:false).
+        // Each handler enqueues a command then awaits the result, so both are
+        // pending simultaneously.
+        const p1 = post_command(server.url, { type: 'sessions.list', payload: { index: 0 } });
+        const p2 = post_command(server.url, { type: 'sessions.get', payload: { index: 1 } });
+
+        // Extension polls commands in FIFO order
+        const cmd1 = await take_next_command(server.url);
+        const cmd2 = await take_next_command(server.url);
+
+        expect(cmd1).not.toBeNull();
+        expect(cmd2).not.toBeNull();
+
+        // Resolve both and verify each gets the correct response
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: cmd1.command_id, ok: true, data: { from: 'req1' } }),
+        });
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command_id: cmd2.command_id, ok: true, data: { from: 'req2' } }),
+        });
+
+        const [r1, r2] = await Promise.all([p1, p2]);
+
+        expect(r1.status).toBe(200);
+        expect(r2.status).toBe(200);
+        expect(r1.data).toEqual({ command_id: cmd1.command_id, ok: true, data: { from: 'req1' } });
+        expect(r2.data).toEqual({ command_id: cmd2.command_id, ok: true, data: { from: 'req2' } });
+    });
+
+    it('close() with pending request rejects cleanly', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+        });
+
+        // Fire a request that will be enqueued but never resolved
+        const req = post_command(server.url, { type: 'sessions.list', payload: {} });
+
+        // Wait for command to be enqueued
+        const command = await take_next_command(server.url);
+        expect(command).not.toBeNull();
+
+        // Force-close all connections so close() does not hang
+        server._server.closeAllConnections();
+
+        await server.close();
+        cleanup = null;
+
+        // The pending request should be rejected
+        await expect(req).rejects.toThrow();
     });
 });

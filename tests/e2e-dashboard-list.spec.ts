@@ -1,9 +1,46 @@
-// tests/e2e-dashboard-list.spec.ts — 采集列表：3条记录 / 无旧概念列 / 无旧卡片
+// tests/e2e-dashboard-list.spec.ts — 采集列表：3条记录 / 无旧概念列 / 无旧卡片 / 空态验证
 import { test, expect } from '@playwright/test';
 import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
 
 // 从 FORBIDDEN_STRINGS 中剔除 "记录"（"采集记录"是合法 UI 文案）
 const FORBIDDEN_CHECK = ['深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制'];
+
+test.describe('Dashboard 空态 P4.11', () => {
+    let fix: Awaited<ReturnType<typeof launch_extension>>;
+
+    test.beforeAll(async () => { fix = await launch_extension(); });
+    test.afterAll(async () => { await fix.context.close(); });
+
+    test('无采集记录时 dashboard 显示空态占位 + 计数为 0 且不崩溃', async () => {
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded' });
+        await dashboard.waitForTimeout(2000);
+
+        // 有空态占位文案
+        const body_text = await dashboard.innerText('body');
+        expect(body_text).toContain('暂无采集记录');
+
+        // 计数为 0
+        expect(body_text).toContain('共 0 条');
+
+        // 无数据行
+        const rows = dashboard.locator('tr[data-open]');
+        await expect(rows).toHaveCount(0);
+
+        await dashboard.close();
+    });
+
+    test('弹窗无最近采集时显示空态占位', async () => {
+        const popup = await open_popup(fix);
+        await popup.waitForTimeout(300);
+
+        const body_text = await popup.innerText('body');
+        // recent_empty 占位 — i18n key noSessions
+        expect(body_text).toContain('暂无采集');
+
+        await popup.close();
+    });
+});
 
 test.describe('Dashboard 采集列表 P4.10', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;

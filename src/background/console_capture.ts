@@ -18,7 +18,8 @@ export async function start_console_capture(
     startTime: number,
     targetTabId: number,
     _redactData: boolean,
-    sender: (event: CaptureEvent) => void
+    sender: (event: CaptureEvent) => void,
+    already_attached?: boolean
 ): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) return { success: true };
 
@@ -28,12 +29,14 @@ export async function start_console_capture(
     send_to_background = sender;
 
     try {
-        await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+        if (!already_attached) {
+            await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+        }
         await chrome.dbg.sendCommand({ tabId: tab_id }, 'Runtime.enable');
 
         chrome.dbg.onEvent.addListener(handle_debugger_event);
         is_capturing = true;
-        logger.info('Console capture started', { tab_id });
+        logger.info('Console capture started', { tab_id, already_attached });
 
         return { success: true };
     } catch (error) {
@@ -47,6 +50,10 @@ export async function start_console_capture(
 
 export function is_console_active(): boolean {
     return is_capturing;
+}
+
+export function get_attached_tab_id(): number | null {
+    return is_capturing ? tab_id : null;
 }
 
 export async function stop_console_capture(): Promise<void> {

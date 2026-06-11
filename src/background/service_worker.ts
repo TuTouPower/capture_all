@@ -43,6 +43,9 @@ let current_config: RecordConfig = DEFAULT_CONFIG;
 // Track last active tab for tab_switch events
 const last_active_tab = new Map<number, { tab_id: number; url: string }>();
 
+// Track which tab has the shared CDP debugger attached
+let debugger_attached_tab_id: number | null = null;
+
 // Initialize
 chrome.runtime.onInstalled.addListener(async () => {
     await init_db();
@@ -273,21 +276,36 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         start_network_capture(session_id, start_time, config, tab_id, handle_network_request);
     }
 
-    // Start console capture if enabled (advanced mode)
-    let debugger_attached_tab_id: number | null = null;
+    // Start console capture if enabled
     if (config.capture_console) {
         if (tabs[0]?.id) {
-            const result = await start_console_capture(session_id, start_time, tabs[0].id, config.redact_data, handle_console_log);
+            const tab_id = tabs[0].id;
+
+            // Attach CDP debugger once for all subsystems (console + exception + body)
+            let cdp_attached = false;
+            try {
+                await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+                cdp_attached = true;
+                debugger_attached_tab_id = tab_id;
+                logger.info('CDP debugger attached', { tab_id });
+            } catch (e) {
+                logger.warn('CDP attach failed', String(e));
+            }
+
+            const result = await start_console_capture(
+                session_id, start_time, tab_id, config.redact_data, handle_console_log,
+                cdp_attached
+            );
             if (!result.success) {
                 logger.warn('Console capture failed', result.error);
-            } else {
-                debugger_attached_tab_id = tabs[0].id;
             }
-            const ex_result = await start_exception_capture(session_id, start_time, tabs[0].id, handle_console_log);
+
+            const ex_result = await start_exception_capture(
+                session_id, start_time, tab_id, handle_console_log,
+                cdp_attached
+            );
             if (!ex_result.success) {
                 logger.warn('Exception capture failed', ex_result.error);
-            } else {
-                debugger_attached_tab_id = tabs[0].id;
             }
         }
     }
@@ -327,7 +345,8 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
                 get_active_tab_url,
                 get_bridge_config,
                 on_network_request: handle_network_request
-            }
+            },
+            debugger_attached_tab_id
         );
 
         if (current_capture) {
@@ -386,6 +405,9 @@ async function stop_recording(): Promise<{ success: boolean }> {
     }
 
     is_capturing = false;
+
+    // Reset shared CDP debugger tracking
+    debugger_attached_tab_id = null;
 
     // Write capture_lifecycle.capture_stopped event
     if (current_capture && current_capture_id) {
@@ -661,14 +683,17 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             current_config.redact_data, handle_event
         );
         if (result.success) {
+            debugger_attached_tab_id = activeInfo.tabId;
             logger.info('Console capture retry succeeded on tab ' + activeInfo.tabId);
         }
     }
     if (current_config.capture_console && !is_exception_active()) {
         const result = await start_exception_capture(
-            current_capture_id!, start_time, activeInfo.tabId, handle_event
+            current_capture_id!, start_time, activeInfo.tabId, handle_event,
+            debugger_attached_tab_id === activeInfo.tabId
         );
         if (result.success) {
+            debugger_attached_tab_id = activeInfo.tabId;
             logger.info('Exception capture retry succeeded on tab ' + activeInfo.tabId);
         }
     }
@@ -682,7 +707,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
                     return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
                 },
                 on_network_request: (req: any) => handle_event(req)
-            }
+            },
+            debugger_attached_tab_id
         );
         if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
             logger.info('Body capture retry succeeded on tab ' + activeInfo.tabId);
@@ -758,14 +784,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                 current_config.redact_data, handle_event
             );
             if (result.success) {
+                debugger_attached_tab_id = tabId;
                 logger.info('Console capture retry succeeded on tab ' + tabId + ' (URL changed)');
             }
         }
         if (current_config.capture_console && !is_exception_active()) {
             const result = await start_exception_capture(
-                current_capture_id!, start_time, tabId, handle_event
+                current_capture_id!, start_time, tabId, handle_event,
+                debugger_attached_tab_id === tabId
             );
             if (result.success) {
+                debugger_attached_tab_id = tabId;
                 logger.info('Exception capture retry succeeded on tab ' + tabId + ' (URL changed)');
             }
         }
@@ -779,7 +808,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                         return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
                     },
                     on_network_request: (req: any) => handle_event(req)
-                }
+                },
+                debugger_attached_tab_id
             );
             if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
                 logger.info('Body capture retry succeeded on tab ' + tabId + ' (URL changed)');

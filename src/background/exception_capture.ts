@@ -17,7 +17,8 @@ export async function start_exception_capture(
     cid: string,
     start_time_ms: number,
     target_tab_id: number,
-    sender: (event: CaptureEvent) => void
+    sender: (event: CaptureEvent) => void,
+    already_attached?: boolean
 ): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) return { success: true };
 
@@ -27,18 +28,21 @@ export async function start_exception_capture(
     send_event = sender;
 
     try {
-        // Try attach (may already be attached by console_capture; that's fine)
-        try {
-            await chrome.dbg.attach({ tabId: tab_id }, '1.3');
-            attached_by_us = true;
-        } catch {
+        if (already_attached) {
             attached_by_us = false;
+        } else {
+            try {
+                await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+                attached_by_us = true;
+            } catch {
+                attached_by_us = false;
+            }
         }
         await chrome.dbg.sendCommand({ tabId: tab_id }, 'Runtime.enable');
 
         chrome.dbg.onEvent.addListener(handle_debugger_event);
         is_capturing = true;
-        logger.info('Exception capture started', { tab_id, attached_by_us });
+        logger.info('Exception capture started', { tab_id, attached_by_us, already_attached });
 
         return { success: true };
     } catch (error) {

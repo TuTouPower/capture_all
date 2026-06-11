@@ -123,7 +123,7 @@ export function start_xhr_fetch_capture(sender: (type: string, data: any) => voi
             request_body_status: 'not_enabled',
             response_body: null,
             response_preview: null,
-            response_body_status: 'not_enabled',
+            response_body_status: 'not_enabled' as any,
             mime_type: null,
             request_size_bytes: null,
             response_size_bytes: null,

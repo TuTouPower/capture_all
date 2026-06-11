@@ -181,9 +181,11 @@ function render_recording(): string {
     return `<div class="body">
         <div class="action">
             <button class="actbtn act-stop" id="stopBtn" title="${t('clickToEnd')}">
-                <span class="stop-glyph">${ICON.stop}</span>
                 <span class="stop-time mono" id="timer">${elapsed}</span>
-                <span class="stop-hint">${t('clickToEnd')}</span>
+                <span class="stop-row">
+                    <span class="stop-glyph">${ICON.stop}</span>
+                    <span class="stop-hint">${t('clickToEnd')}</span>
+                </span>
             </button>
             <button class="actbtn act-ghost" id="liveDetailBtn">
                 ${ICON.ext}<span>${t('liveDetail')}</span>

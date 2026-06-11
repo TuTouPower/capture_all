@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import http from 'node:http';
 import { create_bridge_server } from '../src/agent/bridge/server';
 
 const token = 'test-token-123';
@@ -17,7 +18,7 @@ async function start_test_server() {
 }
 
 async function take_next_command(server_url: string) {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
         const response = await fetch(`${server_url}/extension/command`, {
             headers: { Authorization: `Bearer ${token}` },
         });
@@ -31,6 +32,42 @@ async function take_next_command(server_url: string) {
     }
 
     throw new Error('Command was not queued');
+}
+
+/**
+ * POST to /mcp/command using raw http.request (agent:false) to bypass
+ * undici's connection pool so that concurrent requests are not serialized.
+ */
+function post_command(server_url: string, body: unknown): Promise<{ status: number; data: unknown }> {
+    return new Promise((resolve, reject) => {
+        const url = new URL('/mcp/command', server_url);
+        const payload = JSON.stringify(body);
+        const req = http.request(
+            {
+                hostname: url.hostname,
+                port: url.port,
+                path: url.pathname,
+                method: 'POST',
+                agent: false,
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload),
+                },
+            },
+            (res) => {
+                const chunks: Buffer[] = [];
+                res.on('data', (chunk: Buffer) => chunks.push(chunk));
+                res.on('end', () => {
+                    const data = JSON.parse(Buffer.concat(chunks).toString());
+                    resolve({ status: res.statusCode || 0, data });
+                });
+            },
+        );
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
 }
 
 afterEach(async () => {

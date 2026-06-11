@@ -1,6 +1,7 @@
 // tests/e2e-theme-i18n.spec.ts — P5.6 主题 + i18n
 import { test, expect } from '@playwright/test';
 import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
+import { parse_rgb, wcag_luminance, wcag_contrast_ratio } from './wcag_contrast';
 
 test.describe.serial('主题 + i18n', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;
@@ -108,6 +109,57 @@ test.describe.serial('主题 + i18n', () => {
                     const sum = Number(m[1]) + Number(m[2]) + Number(m[3]);
                     expect(sum, `${label} 深色模式文字应偏亮 (got ${color})`).toBeGreaterThan(300);
                 }
+            }
+        }
+
+        await dashboard.close();
+    });
+
+    test('深色模式 — 关键文本元素通过 WCAG AA (4.5:1)', async () => {
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1500);
+
+        const settings_btn = dashboard.locator('[data-nav="settings"]');
+        if (await settings_btn.isVisible()) {
+            await settings_btn.click();
+            await dashboard.waitForTimeout(1000);
+        }
+
+        // 设置深色主题
+        const dark_btn = dashboard.locator('[data-seg="theme"] button[data-val="dark"]');
+        if (await dark_btn.isVisible()) {
+            await dark_btn.click();
+            await dashboard.waitForTimeout(500);
+        }
+
+        // 获取背景色
+        const bg_color = await dashboard.evaluate(() => {
+            const el = document.querySelector('.app') || document.body;
+            return getComputedStyle(el).backgroundColor;
+        });
+        const bg_rgb = parse_rgb(bg_color);
+        expect(bg_rgb, `背景色应可解析 (got ${bg_color})`).not.toBeNull();
+        const bg_lum = wcag_luminance(bg_rgb![0], bg_rgb![1], bg_rgb![2]);
+
+        // 验证关键文本元素对比度 >= 4.5
+        const text_selectors = [
+            { selector: '.pg-title h1', label: '页面标题 (.pg-title h1)' },
+            { selector: '.sb-item', label: '导航项 (.sb-item)' },
+            { selector: 'h2', label: '节标题 (h2)' },
+        ];
+        for (const { selector, label } of text_selectors) {
+            const el = dashboard.locator(selector).first();
+            if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
+                const color = await el.evaluate((node) => getComputedStyle(node).color);
+                const fg_rgb = parse_rgb(color);
+                expect(fg_rgb, `${label} 颜色应可解析 (got ${color})`).not.toBeNull();
+                const fg_lum = wcag_luminance(fg_rgb![0], fg_rgb![1], fg_rgb![2]);
+                const ratio = wcag_contrast_ratio(fg_lum, bg_lum);
+                expect(
+                    ratio,
+                    `${label}: 对比度 ${ratio.toFixed(2)}:1 应 >= 4.5 (文字 ${color}, 背景 ${bg_color})`,
+                ).toBeGreaterThanOrEqual(4.5);
             }
         }
 

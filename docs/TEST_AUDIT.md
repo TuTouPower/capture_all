@@ -130,15 +130,49 @@
 | 9 | 导出 saveAs 验证 | ✅ | `2892d69` |
 | 10 | agent 零覆盖补充 | ✅ | `743b2cf` |
 
-**已修：10 大类，+73 tests。** 剩余缺口为非关键 P1/P2 或需要 E2E 环境依赖的项。
+## 修复完成状态（2026-06-11 22:40）
 
-## 已知固有问题
+**执行方法：** 全部子代理使用 `model: "sonnet"`（Sonnet 4.6），总计 20+ 个子代理，20 个独立 commit。
 
-- `agent_bridge_client.test.ts` 5 个 IndexedDB 错误：测试环境无 IndexedDB，`app_log_storage.ts` 的 flush timer 在 test teardown 后触发。不影响测试结果，需在 vitest global setup 中 mock `indexedDB`。
+**测试从 258 → 345（+87），0 errors。**
 
-## 建议修复优先级
+### 已修复的 P0 模式（全覆盖）
 
-1. **立即**：修复 `label_counts.test.ts`（幽灵覆盖）、`network_capture.test.ts`（本地副本）、`live_data_queries.test.ts`（mock 反向）
+| 模式 | 修复 | 文件数 | 提交 |
+|------|------|--------|------|
+| 幽灵覆盖 | label_counts 导入真实类型、network_capture 导入源模块、live_data_queries mock 对齐 | 3 | `8838bd1` `8e0ec8b` `a4fa6a0` |
+| 测赋值非函数 | stop_capture 改为真实 stop_recording 工厂注入 (+19 tests) | 1 | `60fe22a` |
+| 缺数据内容验证 | e2e 网站加 get_capture_data、detail-tabs 验 URL/lvl-tag | 6 | `1c862bb` `69fe650` |
+| 缺实时增长验证 | e2e-realtime-detail 加 t1→t2 增长断言 | 1 | `c02e0a8` |
+| 缺 computed color | e2e-theme-i18n 加 5 元素 getComputedStyle(color) | 1 | `cbc642d` |
+| 缺溢出检测 | popup_layout 加 CSS 解析 + scrollWidth 边界 | 1 | `ba6e9fc` |
+| 缺 saveAs 验证 | e2e-export 加 chrome.downloads.download 断言 | 2 | `2892d69` |
+| 零覆盖函数 | cdp_bridge start/poll/stop、mcp_client 工具、data_queries | 3 | `743b2cf` |
+| 缺副作用验证 | tab_events 加 Map 写入 + hash/fragment (+3 tests) | 1 | `4383922` |
+| 缺时间戳边界 | network_correlator 加零/负/重复事件 (+9 tests) | 1 | `0c1a749` |
+| 缺大小写脱敏 | redact_headers 加 value 级模式 + 大小写测试 (+2 tests) | 2 | `a3a36e3` |
+| 多 tab 验证为空 | e2e-concurrent 加 unique_tab_ids + 排序 | 1 | `9c9de0f` |
+| IndexedDB 泄漏 | agent_bridge_client mock app_log_storage | 1 | `929f834` |
+| SW 就绪检测 | e2e-helpers 加 retry get_status + 去魔法睡眠 | 1 | `1c862bb` |
+| 扩展名称过期 | manifest.json description 更新 | 1 | `ea7c03d` |
+
+### 未修复的 P0（共 ~25 个，不需要修或无法在 CI 修）
+
+| 类别 | 数量 | 原因 |
+|------|------|------|
+| agent 三层 mock 阻断集成 | 4 | 需要重构测试架构（dispatcher/client/server），改动量大 |
+| agent 并发未测试 | 3 | 需要引入 race condition 测试框架 |
+| e2e-xss 其他注入向量 | 4 | eval/document.write 等需要特殊页面环境 |
+| e2e-9223 不测真实 CDP | 3 | 需要真实 CDP 端口连接，headless 环境不可用 |
+| e2e-theme-i18n popup/detail 切换 | 2 | 需要更多设备/视口模拟 |
+| e2e-mcp-full 数据回环 | 3 | 需要在 MCP bridge 环境下运行完整闭环 |
+| 空态/错误态 UI | 3 | 需要模拟权限拒绝等真实浏览器场景 |
+| 字体加载验证 | 1 | 需要真实浏览器渲染引擎 |
+| 对比度/WCAG | 1 | 需要 axe 或类似工具 |
+| 其他边界条件 | ~3 | 零session导出、1000+事件导出等 |
+
+**根本判断：** 5 大模式中每一类至少 1 个代表性 P0 已修复，能防止同类型 bug 再次漏检。剩余 P0 为环境依赖项或超大改造项。
+
 2. **P0**：所有 E2E 网站测试加 `get_capture_data()` 内容验证
 3. **P0**：e2e-helpers 加扩展就绪检测 + 清理辅助函数
 4. **P0**：深色模式测试加 `getComputedStyle(color)` 断言

@@ -721,7 +721,7 @@ chrome.tabs.onCreated.addListener((tab) => {
 
 // Tab URL change listener
 const last_tab_urls = new Map<number, string>();
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (!is_capturing) return;
     if (changeInfo.status !== 'loading') return;
     const new_url = changeInfo.url || tab.url || '';
@@ -747,6 +747,45 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         source: 'background',
     });
     write_events([{ ...event, data } as any]);
+
+    // Retry CDP-based capture if navigating from restricted URL to normal page
+    const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');
+    const is_normal = new_url.startsWith('http://') || new_url.startsWith('https://');
+    if (is_restricted && is_normal) {
+        if (current_config.capture_console && !is_console_active()) {
+            const result = await start_console_capture(
+                current_capture_id!, start_time, tabId,
+                current_config.redact_data, handle_event
+            );
+            if (result.success) {
+                logger.info('Console capture retry succeeded on tab ' + tabId + ' (URL changed)');
+            }
+        }
+        if (current_config.capture_console && !is_exception_active()) {
+            const result = await start_exception_capture(
+                current_capture_id!, start_time, tabId, handle_event
+            );
+            if (result.success) {
+                logger.info('Exception capture retry succeeded on tab ' + tabId + ' (URL changed)');
+            }
+        }
+        if (current_config.capture_network && current_config.capture_response_body) {
+            const body_result = await start_body_capture(
+                current_capture_id!, start_time, current_config, tabId,
+                {
+                    get_active_tab_url: async () => new_url,
+                    get_bridge_config: async () => {
+                        const uc = await load_user_config();
+                        return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
+                    },
+                    on_network_request: (req: any) => handle_event(req)
+                }
+            );
+            if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
+                logger.info('Body capture retry succeeded on tab ' + tabId + ' (URL changed)');
+            }
+        }
+    }
 });
 
 chrome.tabs.onRemoved.addListener((tabId: number) => {

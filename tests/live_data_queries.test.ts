@@ -1,5 +1,5 @@
 // tests/live_data_queries.test.ts — P6.3 实时数据查询单测
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // ============================================================
 // 模拟类型 — 与 src/shared/types.ts 对齐
@@ -42,23 +42,29 @@ interface NetworkRequestData {
 }
 
 // ============================================================
-// 模拟 get_capture_data — 合并 7 个 category
+// 模拟依赖函数 — 行为与 service_worker.ts 对齐
 // ============================================================
 
-const ALL_CATEGORIES = [
-    'user_action',
-    'navigation',
-    'network',
-    'console',
-    'error',
-    'storage',
-    'cookie',
-] as const;
+// 记录 get_events_by_category 调用参数，用于验证 offset/limit 传递
+const get_events_by_category_spy = {
+    calls: [] as Array<{ category: string; offset?: number; limit?: number }>,
+    reset(): void {
+        this.calls = [];
+    },
+};
+
+function mock_get_capture(capture_id: string): { capture_id: string } | undefined {
+    if (capture_id === 'capture_not_found' || !capture_id) return undefined;
+    return { capture_id };
+}
 
 function mock_get_events_by_category(
     _capture_id: string,
     category: string,
+    offset?: number,
+    limit?: number,
 ): CaptureEvent[] {
+    get_events_by_category_spy.calls.push({ category, offset, limit });
     return [
         {
             event_id: `evt_${category}_1`,
@@ -66,8 +72,6 @@ function mock_get_events_by_category(
             category,
             type: category === 'user_action' ? 'mouse_event'
                 : category === 'navigation' ? 'page_navigation'
-                : category === 'network' ? 'network_request'
-                : category === 'console' ? 'console_event'
                 : category === 'error' ? 'runtime_exception'
                 : category === 'storage' ? 'storage_change'
                 : 'cookie_change',
@@ -82,7 +86,11 @@ function mock_get_events_by_category(
     ];
 }
 
-function mock_get_network_requests(_capture_id: string): NetworkRequestData[] {
+function mock_get_network_requests(
+    _capture_id: string,
+    _offset?: number,
+    _limit?: number,
+): NetworkRequestData[] {
     return [
         {
             capture_id: _capture_id,
@@ -107,7 +115,11 @@ function mock_get_network_requests(_capture_id: string): NetworkRequestData[] {
     ];
 }
 
-function mock_get_console_events(_capture_id: string): CaptureEvent[] {
+function mock_get_console_events(
+    _capture_id: string,
+    _offset?: number,
+    _limit?: number,
+): CaptureEvent[] {
     return [
         {
             event_id: 'console_1',
@@ -126,30 +138,73 @@ function mock_get_console_events(_capture_id: string): CaptureEvent[] {
     ];
 }
 
-// 模拟 get_capture_data (与 service_worker.ts 中实现一致)
-async function get_capture_data(capture_id: string) {
-    const promises = ALL_CATEGORIES.map((cat) =>
-        mock_get_events_by_category(capture_id, cat),
-    );
-    const [user_events, nav_events, _net_events, _console_events,
-        error_events, storage_changes, cookie_changes] = await Promise.all(promises);
+// ============================================================
+// 模拟 get_capture_data — 与 service_worker.ts 中实现一致
+// ============================================================
 
-    const network_requests = mock_get_network_requests(capture_id);
-    const console_events = mock_get_console_events(capture_id);
+async function get_capture_data(capture_id: string) {
+    const capture = mock_get_capture(capture_id);
+    if (!capture) return { success: false, error: 'Capture not found' };
+
+    const [user_events, nav_events, network_requests, console_events,
+        error_events, storage_changes, cookie_changes] = await Promise.all([
+        mock_get_events_by_category(capture_id, 'user_action', 0, 100000),
+        mock_get_events_by_category(capture_id, 'navigation', 0, 100000),
+        Promise.resolve(mock_get_network_requests(capture_id, 0, 100000)),
+        Promise.resolve(mock_get_console_events(capture_id, 0, 100000)),
+        mock_get_events_by_category(capture_id, 'error', 0, 100000),
+        mock_get_events_by_category(capture_id, 'storage', 0, 100000),
+        mock_get_events_by_category(capture_id, 'cookie', 0, 100000),
+    ]);
+
+    // 将 network_requests 映射为 events 并入 timeline（与 service_worker.ts 对齐）
+    const network_events: CaptureEvent[] = network_requests.map(nr => ({
+        event_id: nr.event_id || `net_${nr.request_id}`,
+        capture_id: nr.capture_id || capture_id,
+        category: 'network' as const,
+        type: 'network_request' as const,
+        relative_time_ms: 0,
+        absolute_time: new Date().toISOString(),
+        tab_id: 0,
+        frame_id: 0,
+        url: nr.url,
+        data: nr,
+    }));
+
+    // 将 console_events 映射并入 timeline（与 service_worker.ts 对齐）
+    const console_events_mapped: CaptureEvent[] = console_events.map(ce => ({
+        event_id: ce.event_id,
+        capture_id: ce.capture_id || capture_id,
+        category: 'console' as const,
+        type: 'console_event' as const,
+        relative_time_ms: ce.relative_time_ms,
+        absolute_time: ce.absolute_time,
+        tab_id: ce.tab_id,
+        frame_id: ce.frame_id,
+        url: ce.url,
+        data: ce.data,
+    }));
 
     const all_events = [
         ...user_events,
         ...nav_events,
+        ...network_events,
+        ...console_events_mapped,
         ...error_events,
         ...storage_changes,
         ...cookie_changes,
     ];
 
     return {
-        session: { capture_id },
+        success: true,
+        session: capture,
         events: all_events,
+        nav_events,
         network_requests,
         console_logs: console_events,
+        error_events,
+        storage_changes,
+        cookie_changes,
     };
 }
 
@@ -162,7 +217,8 @@ describe('live data queries', () => {
         const capture_id = 'capture_live_001';
         const data = await get_capture_data(capture_id);
 
-        // 实时数据应有 session + events
+        // 实时数据应有 success + session + events
+        expect(data.success).toBe(true);
         expect(data).toHaveProperty('session');
         expect(data).toHaveProperty('events');
         expect(data).toHaveProperty('network_requests');
@@ -176,9 +232,10 @@ describe('live data queries', () => {
         const capture_id = 'capture_live_002';
         const data = await get_capture_data(capture_id);
 
-        // 7 categories: user_action + nav + error + storage + cookie = 5
-        // (network 和 console 走专用 reader)
-        expect(data.events).toHaveLength(5);
+        // 7 categories 全部入 events:
+        // user_action(1) + navigation(1) + network(2) + console(1)
+        // + error(1) + storage(1) + cookie(1) = 8
+        expect(data.events).toHaveLength(8);
     });
 
     it('每个 event 包含必要字段', async () => {
@@ -192,7 +249,6 @@ describe('live data queries', () => {
             expect(event).toHaveProperty('type');
             expect(event).toHaveProperty('relative_time_ms');
             expect(event).toHaveProperty('url');
-            expect(event).toHaveProperty('source');
         }
     });
 
@@ -263,13 +319,15 @@ describe('completed capture full data', () => {
         );
     });
 
-    it('完成后 events 包含 5 类 category event', async () => {
+    it('完成后 events 包含全部 7 类 category', async () => {
         const capture_id = 'capture_done_001';
         const data = await get_capture_data(capture_id);
 
         const categories = new Set(data.events.map((e) => e.category));
         expect(categories.has('user_action')).toBe(true);
         expect(categories.has('navigation')).toBe(true);
+        expect(categories.has('network')).toBe(true);
+        expect(categories.has('console')).toBe(true);
         expect(categories.has('error')).toBe(true);
         expect(categories.has('storage')).toBe(true);
         expect(categories.has('cookie')).toBe(true);
@@ -299,27 +357,35 @@ describe('completed capture full data', () => {
 // ============================================================
 
 describe('get_capture_data category merge', () => {
-    it('network 分类不在 events 中（走专用 reader）', async () => {
+    it('network 分类在 events 中（已合并到 timeline）', async () => {
         const capture_id = 'capture_merge_001';
         const data = await get_capture_data(capture_id);
 
         const net_events = data.events.filter(
             (e) => e.category === 'network',
         );
-        expect(net_events).toHaveLength(0);
+        expect(net_events.length).toBeGreaterThan(0);
+        // 验证映射后的 event 结构
+        for (const evt of net_events) {
+            expect(evt.type).toBe('network_request');
+            expect(evt.data).toBeDefined();
+        }
     });
 
-    it('console 分类不在 events 中（走专用 reader）', async () => {
+    it('console 分类在 events 中（已合并到 timeline）', async () => {
         const capture_id = 'capture_merge_002';
         const data = await get_capture_data(capture_id);
 
         const console_events = data.events.filter(
             (e) => e.category === 'console',
         );
-        expect(console_events).toHaveLength(0);
+        expect(console_events.length).toBeGreaterThan(0);
+        for (const evt of console_events) {
+            expect(evt.type).toBe('console_event');
+        }
     });
 
-    it('network_requests 和 console_logs 独立返回', async () => {
+    it('network_requests 和 console_logs 独立返回（供专用 reader）', async () => {
         const capture_id = 'capture_merge_003';
         const data = await get_capture_data(capture_id);
 
@@ -327,14 +393,68 @@ describe('get_capture_data category merge', () => {
         expect(data.console_logs.length).toBeGreaterThan(0);
     });
 
-    it('空 capture_id 仍返回完整结构', async () => {
+    it('空 capture_id 返回 capture not found 错误', async () => {
         const capture_id = '';
         const data = await get_capture_data(capture_id);
 
-        expect(data).toHaveProperty('session');
-        expect(data).toHaveProperty('events');
-        expect(data).toHaveProperty('network_requests');
-        expect(data).toHaveProperty('console_logs');
+        expect(data.success).toBe(false);
+        expect(data.error).toBe('Capture not found');
+    });
+});
+
+// ============================================================
+// capture not found 路径
+// ============================================================
+
+describe('capture not found', () => {
+    it('不存在的 capture_id 返回 success=false', async () => {
+        const data = await get_capture_data('capture_not_found');
+
+        expect(data.success).toBe(false);
+        expect(data.error).toBe('Capture not found');
+    });
+
+    it('返回结构不含 events / network_requests（仅 error）', async () => {
+        const data = await get_capture_data('capture_not_found');
+
+        expect(data).not.toHaveProperty('events');
+        expect(data).not.toHaveProperty('network_requests');
+        expect(data).not.toHaveProperty('console_logs');
+    });
+});
+
+// ============================================================
+// offset/limit 参数传递验证
+// ============================================================
+
+describe('get_events_by_category offset/limit', () => {
+    beforeEach(() => {
+        get_events_by_category_spy.reset();
+    });
+
+    it('传递 offset=0, limit=100000 给每个 category', async () => {
+        await get_capture_data('capture_offset_001');
+
+        // 5 个 category 通过 get_events_by_category 查询
+        expect(get_events_by_category_spy.calls.length).toBe(5);
+
+        for (const call of get_events_by_category_spy.calls) {
+            expect(call.offset).toBe(0);
+            expect(call.limit).toBe(100000);
+        }
+    });
+
+    it('查询的 5 个 category 不含 network 和 console', async () => {
+        await get_capture_data('capture_offset_002');
+
+        const categories = get_events_by_category_spy.calls.map(c => c.category);
+        expect(categories).not.toContain('network');
+        expect(categories).not.toContain('console');
+        expect(categories).toContain('user_action');
+        expect(categories).toContain('navigation');
+        expect(categories).toContain('error');
+        expect(categories).toContain('storage');
+        expect(categories).toContain('cookie');
     });
 });
 

@@ -297,9 +297,13 @@ async function start_capture(): Promise<void> {
     if (!is_extension) { state = 'recording'; render(); return; }
     const config = get_record_config();
     const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    logger.info('Starting capture', { session_id });
     try {
         const response = await chrome.runtime.sendMessage({ action: 'start', session_id, config });
-        if (!response?.success) { alert(`${t('error')}: ${response?.error}`); return; }
+        if (!response?.success) {
+            logger.error('Start capture failed', response?.error);
+            alert(`${t('error')}: ${response?.error}`); return;
+        }
         current_capture = {
             capture_id: session_id,
             name: 'Capture ' + new Date().toLocaleString(),
@@ -327,10 +331,13 @@ async function start_capture(): Promise<void> {
 
 async function stop_capture(): Promise<void> {
     if (!is_extension) { state = 'saved'; render(); return; }
+    logger.info('Stopping capture');
     try {
         const response = await chrome.runtime.sendMessage({ action: 'stop' });
         if (!response?.success) {
             logger.warn('stop returned success=false, forcing state transition');
+        } else {
+            logger.info('Capture stopped successfully');
         }
         stop_timer();
         if (current_capture) {

@@ -160,6 +160,7 @@ async function load_sessions(): Promise<void> {
     if (!is_extension) return;
     try { sessions = (await chrome.runtime.sendMessage({ action: 'list_sessions' })) || []; }
     catch { sessions = []; }
+    logger.debug('Sessions loaded', { count: sessions.length });
 }
 async function load_detail(id: string): Promise<void> {
     detail_session = null; detail_events = []; detail_network = []; detail_console = [];
@@ -172,6 +173,7 @@ async function load_detail(id: string): Promise<void> {
             detail_network = r.network_requests || [];
             detail_console = r.console_logs || [];
         }
+        logger.debug('Detail loaded', { capture_id: id, events: detail_events.length });
     } catch { /* best effort */ }
 }
 
@@ -214,7 +216,7 @@ function render_shell(): void {
     render_content();
 }
 
-function go(p: string): void { page = p; render_shell(); }
+function go(p: string): void { page = p; logger.debug('Dashboard page', { page: p }); render_shell(); }
 
 function render_content(): void {
     const c = document.getElementById('content')!;

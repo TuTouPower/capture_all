@@ -1,6 +1,10 @@
 // background/exception_capture.ts
 import type { CaptureEvent, RuntimeExceptionData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/exception', get_app_log_transport());
 
 let is_capturing = false;
 let capture_id: string;
@@ -34,9 +38,11 @@ export async function start_exception_capture(
 
         chrome.dbg.onEvent.addListener(handle_debugger_event);
         is_capturing = true;
+        logger.info('Exception capture started', { tab_id, attached_by_us });
 
         return { success: true };
     } catch (error) {
+        is_capturing = false;
         return {
             success: false,
             error: `Failed to start exception capture: ${error}`
@@ -44,9 +50,14 @@ export async function start_exception_capture(
     }
 }
 
+export function is_exception_active(): boolean {
+    return is_capturing;
+}
+
 export async function stop_exception_capture(): Promise<void> {
     if (!is_capturing) return;
     is_capturing = false;
+    logger.info('Exception capture stopped');
 
     chrome.dbg.onEvent.removeListener(handle_debugger_event);
 

@@ -4,6 +4,10 @@
 
 import type { CaptureEvent, CookieChangeData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/cookie', get_app_log_transport());
 
 type CookieCaptureEvent = CaptureEvent & { data: CookieChangeData };
 
@@ -72,6 +76,7 @@ export function start_cookie_capture(
     capture_start_epoch_ms = startTime;
     send_to_background = sender;
     is_capturing = true;
+    logger.info('Cookie capture started');
 
     cookies_api.onChanged.addListener(handle_cookie_changed);
 }
@@ -79,5 +84,6 @@ export function start_cookie_capture(
 export function stop_cookie_capture(): void {
     if (!is_capturing) return;
     is_capturing = false;
+    logger.info('Cookie capture stopped');
     cookies_api.onChanged.removeListener(handle_cookie_changed);
 }

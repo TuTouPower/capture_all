@@ -50,6 +50,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     Logger.set_level(config.log_level);
     logger.info('Extension installed');
     start_agent_bridge();
+    logger.info('Agent bridge started');
 });
 
 // Setup keepalive listener
@@ -144,6 +145,7 @@ async function handle_message(message: any): Promise<any> {
             return { success: true };
         }
         default:
+            logger.warn('Unknown message action', { action: message.action });
             return { success: false, error: 'Unknown action' };
     }
 }
@@ -179,6 +181,7 @@ async function get_capture_data(capture_id: string): Promise<any> {
 
 async function start_recording(session_id: string, config: RecordConfig): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) {
+        logger.warn('start_recording called while already capturing');
         return { success: false, error: 'Already recording' };
     }
 
@@ -334,6 +337,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
             current_capture.body_capture_message = result.message;
             await update_capture(current_capture);
         }
+        logger.info(`Body capture started via ${result.mode}`, { status: result.status, message: result.message });
     } else {
         // Record body capture as not enabled
         if (current_capture) {
@@ -608,6 +612,7 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
 // Tab activation listener - send start to new tab's content script
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (!is_capturing) return;
+    logger.debug(`Tab activated: ${activeInfo.tabId}`);
 
     // Write tab_switch event with from/to tracking
     const prev = last_active_tab.get(activeInfo.windowId);
@@ -659,6 +664,7 @@ chrome.tabs.onRemoved.addListener((_tabId: number) => {
 // Tab created listener
 chrome.tabs.onCreated.addListener((tab) => {
     if (!is_capturing) return;
+    logger.debug(`Tab created: ${tab.id}`, { url: tab.url || tab.pendingUrl });
 
     const data: TabCreatedData = {
         new_tab_id: tab.id ?? -1,
@@ -688,6 +694,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     const prev_url = last_tab_urls.get(tabId);
     if (prev_url === new_url) return;
     last_tab_urls.set(tabId, new_url);
+    logger.debug(`Tab URL changed: ${tabId}`, { from: prev_url, to: new_url });
 
     const data: TabUrlChangeData = {
         from_url: prev_url ?? null,

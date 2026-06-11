@@ -1,6 +1,10 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
 import { normalize_agent_bridge_config, type AgentBridgeUserConfig } from '../shared/agent_bridge_config';
 import type { RecordConfig } from '../shared/types';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/bridge', get_app_log_transport());
 
 export interface AgentBridgeClientDeps {
     get_user_config: () => Promise<AgentBridgeUserConfig>;
@@ -27,10 +31,13 @@ export function is_bridge_client_running(): boolean {
 export function start_bridge_client(deps: AgentBridgeClientDeps): void {
     if (running) return;
     running = true;
+    logger.info('Bridge client started');
     schedule_poll(deps);
 }
 
 export function stop_bridge_client(): void {
+    if (!running) return;
+    logger.info('Bridge client stopped');
     running = false;
     if (poll_timer !== null) {
         clearTimeout(poll_timer);

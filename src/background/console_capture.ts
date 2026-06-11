@@ -2,6 +2,10 @@
 import type { CaptureEvent, ConsoleEventData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { truncate_console_args } from '../shared/redaction';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/console', get_app_log_transport());
 
 let is_capturing = false;
 let capture_id: string;
@@ -29,9 +33,11 @@ export async function start_console_capture(
 
         chrome.dbg.onEvent.addListener(handle_debugger_event);
         is_capturing = true;
+        logger.info('Console capture started', { tab_id });
 
         return { success: true };
     } catch (error) {
+        is_capturing = false;
         return {
             success: false,
             error: `Failed to attach debugger: ${error}. Please open F12 for DevTools mode.`
@@ -39,9 +45,14 @@ export async function start_console_capture(
     }
 }
 
+export function is_console_active(): boolean {
+    return is_capturing;
+}
+
 export async function stop_console_capture(): Promise<void> {
     if (!is_capturing) return;
     is_capturing = false;
+    logger.info('Console capture stopped');
 
     chrome.dbg.onEvent.removeListener(handle_debugger_event);
 

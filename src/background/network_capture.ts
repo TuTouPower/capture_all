@@ -311,7 +311,7 @@ function headers_map_from_cdp(headers: Record<string, string>): Record<string, s
 
 // ─── webRequest handlers ───
 
-function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
+export function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
     const decoder = new TextDecoder('utf-8', { fatal: false });
     const parts: string[] = [];
     for (const part of raw) {
@@ -322,7 +322,7 @@ function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
     return parts.join('');
 }
 
-function encode_form_data(form: Record<string, string[]>): string {
+export function encode_form_data(form: Record<string, string | string[]>): string {
     const parts: string[] = [];
     for (const [key, values] of Object.entries(form)) {
         const vals = Array.isArray(values) ? values : [values];
@@ -333,8 +333,9 @@ function encode_form_data(form: Record<string, string[]>): string {
     return parts.join('&');
 }
 
-function extract_request_body(details: any): { body: string | null; status: BodyCaptureStatus } {
-    if (!config.capture_request_body) {
+export function extract_request_body(details: any, capture_enabled?: boolean): { body: string | null; status: BodyCaptureStatus } {
+    const enabled = capture_enabled ?? config.capture_request_body;
+    if (!enabled) {
         return { body: null, status: 'not_enabled' };
     }
     const rb = details.requestBody;
@@ -369,7 +370,7 @@ function extract_request_body(details: any): { body: string | null; status: Body
     return { body, status: 'captured' };
 }
 
-function headers_array_to_map(arr: Array<{ name: string; value?: string }> | undefined): Record<string, string> {
+export function headers_array_to_map(arr: Array<{ name: string; value?: string }> | undefined): Record<string, string> {
     const out: Record<string, string> = {};
     if (!arr) return out;
     for (const h of arr) {

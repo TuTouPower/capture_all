@@ -239,4 +239,59 @@ test.describe('导出四格式', () => {
         // HTML 应有基本结构
         expect(html, 'HTML 应包含 doctype 或 html 标签').toMatch(/<!DOCTYPE|<html/i);
     });
+
+    test('导出按钮点击调用 chrome.downloads.download 含 saveAs 和文件名', async () => {
+        expect(capture_id, '需要有效的 capture_id').toBeTruthy();
+
+        const dashboard = await fix.context.newPage();
+        await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await dashboard.waitForTimeout(1000);
+
+        // Mock chrome.downloads.download 捕获调用参数
+        await dashboard.evaluate(() => {
+            const calls: Array<{ url: string; filename: string; saveAs: boolean }> = [];
+            (window as any).__export_dl_calls = calls;
+            const orig = chrome.downloads.download;
+            (window as any).__orig_downloads_download = orig;
+            chrome.downloads.download = ((opts: any) => {
+                calls.push({
+                    url: String(opts.url ?? ''),
+                    filename: String(opts.filename ?? ''),
+                    saveAs: Boolean(opts.saveAs),
+                });
+                return Promise.resolve(1);
+            }) as typeof chrome.downloads.download;
+        });
+
+        // 消除导出失败时的 alert 弹窗
+        dashboard.on('dialog', (dialog) => dialog.dismiss());
+
+        // 点击采集列表行的导出按钮
+        const export_btn = dashboard.locator(`[data-export="${capture_id}"]`);
+        await export_btn.click();
+        await dashboard.waitForTimeout(2000);
+
+        // 读取 mock 捕获的下载参数，恢复原始 API
+        const calls = await dashboard.evaluate(() => {
+            const c = (window as any).__export_dl_calls as Array<{ url: string; filename: string; saveAs: boolean }>;
+            chrome.downloads.download = (window as any).__orig_downloads_download;
+            return c;
+        });
+
+        await dashboard.close();
+
+        expect(calls.length, 'chrome.downloads.download 应被调用 1 次').toBe(1);
+        const call = calls[0];
+
+        // saveAs 应匹配默认 user_config.export_save_as (true)
+        expect(call.saveAs, 'saveAs 应为 true（匹配 user_config.export_save_as 默认值）').toBe(true);
+
+        // 文件名应包含 capture_id
+        expect(call.filename, '文件名应包含 capture_id').toContain(capture_id);
+        // 默认导出格式为 JSON
+        expect(call.filename, '文件名应以 .json 结尾').toMatch(/\.json$/);
+
+        // url 应来自 URL.createObjectURL (blob:)
+        expect(call.url, 'url 应为 blob URL').toMatch(/^blob:/);
+    });
 });

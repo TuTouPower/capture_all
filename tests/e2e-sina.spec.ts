@@ -1,6 +1,6 @@
 // tests/e2e-sina.spec.ts — 完整采集流程 on sina.com.cn
 import { test, expect } from '@playwright/test';
-import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_LABELS } from './e2e-helpers';
+import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_LABELS, verify_capture_data } from './e2e-helpers';
 
 test.describe('Sina 采集流程', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;
@@ -55,6 +55,22 @@ test.describe('Sina 采集流程', () => {
         await popup.locator('#stopBtn').click();
         await popup.waitForTimeout(1500);
         await expect(popup.locator('.act-done')).toBeVisible();
+
+        // 验证实际采集数据
+        const cap_data = await verify_capture_data(popup);
+        expect(cap_data.success, 'get_capture_data 应成功').toBe(true);
+        expect(cap_data.events!.length, '事件数应 > 0').toBeGreaterThan(0);
+        expect(cap_data.network_requests!.length, '网络请求数应 > 0').toBeGreaterThan(0);
+        for (const ev of cap_data.events!.slice(0, 10)) {
+            expect(ev).toHaveProperty('category');
+            expect(ev).toHaveProperty('type');
+            expect(ev).toHaveProperty('relative_time_ms');
+        }
+        for (const nr of cap_data.network_requests!.slice(0, 5)) {
+            expect(nr).toHaveProperty('url');
+            expect(nr).toHaveProperty('method');
+            expect(nr).toHaveProperty('status_code');
+        }
 
         await popup.close();
     });

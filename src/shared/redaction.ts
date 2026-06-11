@@ -33,10 +33,14 @@ export function redact_headers(headers: Record<string, string>, enabled: boolean
     let redacted = false;
     for (const [key, value] of Object.entries(headers)) {
         const lower_key = key.toLowerCase();
+        const lower_value = value.toLowerCase();
         if (SENSITIVE_HEADER_KEYS.includes(lower_key)) {
             result[key] = '[REDACTED]';
             redacted = true;
         } else if (SENSITIVE_HEADER_PATTERNS.some(pattern => lower_key.includes(pattern))) {
+            result[key] = '[REDACTED]';
+            redacted = true;
+        } else if (SENSITIVE_HEADER_PATTERNS.some(pattern => lower_value.includes(pattern))) {
             result[key] = '[REDACTED]';
             redacted = true;
         } else {

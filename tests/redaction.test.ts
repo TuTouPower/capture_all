@@ -36,6 +36,36 @@ describe('redact_headers', () => {
         const headers = { 'Accept': 'application/json', 'User-Agent': 'test' };
         expect(redact_headers(headers).headers).toEqual(headers);
     });
+
+    it('redacts header names case-insensitively', () => {
+        const headers = {
+            'authorization': 'Bearer lowercase',
+            'AUTHORIZATION': 'Bearer uppercase',
+            'Cookie': 'session=abc',
+            'COOKIE': 'session=xyz',
+            'Content-Type': 'application/json'
+        };
+        const result = redact_headers(headers);
+        expect(result.headers['authorization']).toBe('[REDACTED]');
+        expect(result.headers['AUTHORIZATION']).toBe('[REDACTED]');
+        expect(result.headers['Cookie']).toBe('[REDACTED]');
+        expect(result.headers['COOKIE']).toBe('[REDACTED]');
+        expect(result.headers['Content-Type']).toBe('application/json');
+    });
+
+    it('redacts sensitive patterns in header values', () => {
+        const headers = {
+            'X-Custom-Data': 'token=abc123',
+            'X-Forwarded-For': '192.168.1.1',
+            'X-Api-Gateway': 'Bearer xyz789',
+            'X-Request-ID': 'req-12345'
+        };
+        const result = redact_headers(headers);
+        expect(result.headers['X-Custom-Data']).toBe('[REDACTED]');
+        expect(result.headers['X-Api-Gateway']).toBe('[REDACTED]');
+        expect(result.headers['X-Forwarded-For']).toBe('192.168.1.1');
+        expect(result.headers['X-Request-ID']).toBe('req-12345');
+    });
 });
 
 describe('redact_url', () => {

@@ -13,7 +13,7 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
     debug: 0, info: 1, warn: 2, error: 3, silent: 4,
 };
 
-let _global_level: LogLevel = 'warn';
+let _global_level: LogLevel = 'debug';
 
 export class Logger {
     constructor(

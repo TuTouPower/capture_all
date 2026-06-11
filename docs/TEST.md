@@ -167,7 +167,7 @@
 |--------|------|------|------|
 | e2e | `e2e.spec.ts` | headless | 基础采集流程 |
 | e2e-real | `e2e-real.spec.ts` | headed | 真实浏览器采集验证 |
-| e2e-9223 | `e2e-9223.spec.ts` | headed | CDP 端口测试 |
+| e2e-cdp-capture | `e2e-cdp-capture.spec.ts` | headed | 含 body capture 验证的录制测试 |
 | e2e-mcp | `e2e-mcp.spec.ts` | headed | Agent bridge + MCP 闭环 |
 
 ### 6.3 运行命令
@@ -451,7 +451,7 @@ tests/                          # 测试文件目录
 ├── *.test.ts                   # 单元测试（vitest，排除 *.spec.ts）
 ├── e2e.spec.ts                 # 基础 E2E
 ├── e2e-real.spec.ts            # 真实浏览器 E2E
-├── e2e-9223.spec.ts            # CDP 端口 E2E
+├── e2e-cdp-capture.spec.ts      # CDP body capture E2E
 └── e2e-mcp.spec.ts             # MCP 闭环 E2E
 
 artifacts/

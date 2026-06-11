@@ -84,6 +84,15 @@ function start_capture(config: RecordConfig): void {
     start_xhr_fetch_capture(send_event);
     start_network_hook(send_event);
 
+    logger.debug('All capture modules started', {
+        modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'xhr_fetch', 'network_hook'],
+        config: {
+            capture_network: config.capture_network,
+            capture_console: config.capture_console,
+            capture_response_body: config.capture_response_body,
+        }
+    });
+
     // Visibility change
     document.addEventListener('visibilitychange', handle_visibility_change);
 
@@ -150,6 +159,7 @@ function stop_capture(): void {
     if (!is_capturing) return;
 
     is_capturing = false;
+    logger.info('Content capture stopped');
 
     stop_mouse_capture();
     stop_keyboard_capture();
@@ -169,6 +179,8 @@ function stop_capture(): void {
 
 function handle_visibility_change(): void {
     if (!is_capturing) return;
+
+    logger.debug('Visibility changed', { hidden: document.hidden });
 
     send_event('tab_switch', {
         action: document.hidden ? 'deactivate' : 'activate',

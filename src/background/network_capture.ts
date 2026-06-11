@@ -11,6 +11,10 @@ import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
 import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
 import type { CdpBodyEvent } from './network_correlator';
+import { Logger } from '../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/network', get_app_log_transport());
 
 interface NetworkCaptureConfig {
     redact_sensitive_headers: boolean;
@@ -98,6 +102,7 @@ export function start_network_capture(
     send_to_background = sender;
     config = cfg;
     is_capturing = true;
+    logger.info('Network capture started', { tab_id: tabId });
 
     chrome.webRequest.onBeforeRequest.addListener(
         handle_before_request,
@@ -131,6 +136,7 @@ export function start_network_capture(
 export function stop_network_capture(): void {
     if (!is_capturing) return;
     is_capturing = false;
+    logger.info('Network capture stopped');
 
     chrome.webRequest.onBeforeRequest.removeListener(handle_before_request);
     chrome.webRequest.onBeforeSendHeaders.removeListener(handle_before_send_headers);
@@ -174,8 +180,10 @@ export async function enable_response_body_capture(
         chrome.dbg.onEvent.addListener(handle_cdp_event);
         dbg_tab_id = tab_id;
         dbg_attached_externally = already_attached;
+        logger.info('CDP body capture enabled', { tab_id, already_attached });
         return { success: true };
     } catch (error) {
+        logger.warn('CDP body capture failed', error);
         return { success: false, error: `Network.enable failed: ${error}` };
     }
 }

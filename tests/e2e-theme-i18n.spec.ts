@@ -66,7 +66,7 @@ test.describe.serial('主题 + i18n', () => {
         await dashboard.close();
     });
 
-    test('深色主题 — data-theme="dark" → --canvas 变化', async () => {
+    test('深色主题 — data-theme="dark" → 文字颜色非黑', async () => {
         const dashboard = await fix.context.newPage();
         await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await dashboard.waitForTimeout(1500);
@@ -88,6 +88,28 @@ test.describe.serial('主题 + i18n', () => {
             document.documentElement.getAttribute('data-theme'),
         );
         expect(theme_attr).toBe('dark');
+
+        // 验证关键元素文字颜色不是黑色（Bug 2/4 回归检测）
+        const color_checks = [
+            { selector: '.pg-title h1', label: '页面标题' },
+            { selector: '.sb-item', label: '导航项' },
+            { selector: '.sb-brand b', label: '品牌名' },
+            { selector: '.field-lbl', label: '字段标签' },
+            { selector: 'h2', label: '节标题' },
+        ];
+        for (const { selector, label } of color_checks) {
+            const el = dashboard.locator(selector).first();
+            if (await el.isVisible({ timeout: 2000 }).catch(() => false)) {
+                const color = await el.evaluate((node) => getComputedStyle(node).color);
+                expect(color, `${label} 在深色模式下不应为黑色`).not.toBe('rgb(0, 0, 0)');
+                // 深色模式下文字应为浅色，RGB 分量和应 > 300
+                const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (m) {
+                    const sum = Number(m[1]) + Number(m[2]) + Number(m[3]);
+                    expect(sum, `${label} 深色模式文字应偏亮 (got ${color})`).toBeGreaterThan(300);
+                }
+            }
+        }
 
         await dashboard.close();
     });
@@ -202,10 +224,19 @@ test.describe.serial('主题 + i18n', () => {
             await dashboard.waitForTimeout(500);
         }
 
-        // 页面不应崩溃，内容应正常
+        // 验证页面包含英文文本
         const body_text = await dashboard.evaluate(() => document.body.innerText || '');
         expect(body_text).toBeTruthy();
-        expect(body_text.length).toBeGreaterThan(50);
+        // 验证始终为英文的品牌名存在
+        expect(body_text).toContain('Capture All');
+        // 验证语言选择器中 "English" 选项存在
+        expect(body_text).toContain('English');
+        // 验证 locale select 当前值为 'en'
+        const locale_val = await dashboard.evaluate(() => {
+            const sel = document.querySelector('[data-cfg="locale"]') as HTMLSelectElement;
+            return sel?.value || '';
+        });
+        expect(locale_val).toBe('en');
 
         await dashboard.close();
     });

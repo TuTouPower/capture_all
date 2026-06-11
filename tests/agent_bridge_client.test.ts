@@ -2,6 +2,17 @@ import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { start_bridge_client, stop_bridge_client, is_bridge_client_running } from '../src/background/agent_bridge_client';
 import type { AgentBridgeClientDeps } from '../src/background/agent_bridge_client';
 
+// Mock app_log_storage to prevent IndexedDBLogTransport timers after teardown
+vi.mock('../src/background/app_log_storage', () => ({
+    get_app_log_transport: () => ({
+        write: vi.fn(),
+        flush: vi.fn(),
+        get_entries: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+        clear: vi.fn(),
+    }),
+}));
+
 const enabled_config = {
     agent_bridge_enabled: true,
     agent_bridge_url: 'http://127.0.0.1:17831',

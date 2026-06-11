@@ -154,15 +154,27 @@ test.describe('MCP Agent 全流程', () => {
         });
         expect(data.ok).toBe(true);
 
-        // 数据源摘要列表
-        const sources = data.data || [];
-        if (Array.isArray(sources)) {
-            // 应有至少部分数据源被检测到
-            expect(sources.length).toBeGreaterThan(0);
+        const sources: Array<{ source: string; count: number }> = data.data ?? [];
+        expect(Array.isArray(sources)).toBe(true);
+        expect(sources.length).toBeGreaterThan(0);
+
+        // 验证所有 7 个数据源名称
+        const source_names = sources.map((s) => s.source);
+        const expected_sources = [
+            'user_action_events',
+            'navigation_events',
+            'network_requests',
+            'console_events',
+            'error_events',
+            'storage_changes',
+            'cookie_changes',
+        ];
+        for (const expected of expected_sources) {
+            expect(source_names).toContain(expected);
         }
     });
 
-    test('MCP: timeline.list 有数据', async () => {
+    test('MCP: timeline.list 有数据且事件含 type 字段', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_timeline',
             type: 'timeline.list',
@@ -171,9 +183,16 @@ test.describe('MCP Agent 全流程', () => {
         });
         expect(data.ok).toBe(true);
         expect(data.data).toBeTruthy();
+        const events = data.data.records;
+        expect(Array.isArray(events)).toBe(true);
+        expect(events.length).toBeGreaterThan(0);
+        for (const event of events) {
+            expect(event).toHaveProperty('type');
+            expect(event.type).toBeTruthy();
+        }
     });
 
-    test('MCP: records.list 按 source 分类查询', async () => {
+    test('MCP: records.list 按 source 分类查询（console）', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_records_console',
             type: 'records.list',
@@ -187,9 +206,11 @@ test.describe('MCP Agent 全流程', () => {
         });
         expect(data.ok).toBe(true);
         expect(data.data).toBeTruthy();
+        expect(data.data.records).toBeDefined();
+        expect(data.data.records.length).toBeGreaterThan(0);
     });
 
-    test('MCP: records.list 按 navigation 查询', async () => {
+    test('MCP: records.list 按 source 分类查询（navigation）', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_records_nav',
             type: 'records.list',
@@ -203,9 +224,11 @@ test.describe('MCP Agent 全流程', () => {
         });
         expect(data.ok).toBe(true);
         expect(data.data).toBeTruthy();
+        expect(data.data.records).toBeDefined();
+        expect(data.data.records.length).toBeGreaterThan(0);
     });
 
-    test('MCP: session.get_all_data 返回会话 + 7 源', async () => {
+    test('MCP: session.get_all_data 返回会话 + 7 源且关键源非空', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_alldata',
             type: 'session.get_all_data',
@@ -215,11 +238,17 @@ test.describe('MCP Agent 全流程', () => {
         expect(data.ok).toBe(true);
         expect(data.data).toBeTruthy();
         const sources = data.data?.sources;
-        if (sources) {
-            // sources 对象应包含 7 个 key
-            const keys = Object.keys(sources);
-            expect(keys.length).toBeGreaterThanOrEqual(7);
-        }
+        expect(sources).toBeDefined();
+        // sources 对象应包含 7 个 key
+        const keys = Object.keys(sources as object);
+        expect(keys.length).toBeGreaterThanOrEqual(7);
+        // 验证关键数据源非空
+        const user_events = sources.user_action_events as unknown[];
+        expect(user_events).toBeDefined();
+        expect(user_events.length).toBeGreaterThan(0);
+        const net_requests = sources.network_requests as unknown[];
+        expect(net_requests).toBeDefined();
+        expect(net_requests.length).toBeGreaterThan(0);
     });
 
     test('MCP: session.export 导出 JSON', async () => {
@@ -240,6 +269,53 @@ test.describe('MCP Agent 全流程', () => {
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
+    });
+
+    test('MCP: 注入文本出现在采集数据中 — 闭合回环', async () => {
+        const all_data = await bridge_post('/mcp/command', {
+            command_id: 'full_loop',
+            type: 'session.get_all_data',
+            payload: { session_id: active_capture_id },
+            created_at: Date.now(),
+        });
+        expect(all_data.ok).toBe(true);
+        expect(all_data.data).toBeTruthy();
+        const sources = all_data.data.sources;
+        expect(sources).toBeDefined();
+
+        const search_text = 'mcp full e2e test';
+        let found = false;
+
+        // 百度搜索会将词条编码到导航 URL 的 wd 参数中
+        const nav_events: Array<{ url?: string; data?: unknown }> =
+            sources.navigation_events ?? [];
+        for (const event of nav_events) {
+            const event_url = event.url ?? '';
+            const to_url =
+                typeof event.data === 'object' && event.data !== null
+                    ? String((event.data as Record<string, unknown>).to_url ?? '')
+                    : '';
+            const combined = `${event_url} ${to_url}`;
+            if (combined.includes('wd=') || combined.includes(encodeURIComponent(search_text))) {
+                found = true;
+                break;
+            }
+        }
+
+        // 也检查网络请求 URL
+        if (!found) {
+            const net_requests: Array<{ url?: string }> =
+                sources.network_requests ?? [];
+            for (const req of net_requests) {
+                const req_url = req.url ?? '';
+                if (req_url.includes('wd=') || req_url.includes(encodeURIComponent(search_text))) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        expect(found).toBe(true);
     });
 
     test('MCP: sessions.list 列出会话', async () => {

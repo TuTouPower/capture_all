@@ -27,14 +27,13 @@ export const FLUSH_BATCH_SIZE = 100;
 export const FLUSH_INTERVAL_MS = 1000;
 
 export const DEFAULT_CONFIG: RecordConfig = {
-    capture_mode: 'basic',
     mouse_precision: 'clicks_scroll_drag',
-    capture_console: false,
+    capture_console: true,
     capture_network: true,
     keyboard_capture_mode: 'shortcuts',
-    capture_input_values: false,
-    capture_request_body: false,
-    capture_response_body: false,
+    capture_input_values: true,
+    capture_request_body: true,
+    capture_response_body: true,
     redact_sensitive_headers: true,
     redact_url_query: true,
     redact_data: true,
@@ -42,12 +41,11 @@ export const DEFAULT_CONFIG: RecordConfig = {
 };
 
 export const DEFAULT_USER_CONFIG = {
-    selected_mode: 'basic' as const,
     mouse_precision: 'clicks_scroll_drag' as const,
     keyboard_capture_mode: 'none' as const,
-    capture_input_values: false,
-    capture_request_body: false,
-    capture_response_body: false,
+    capture_input_values: true,
+    capture_request_body: true,
+    capture_response_body: true,
     redact_data: true,
     theme: 'follow-system' as const,
     locale: 'en' as const,

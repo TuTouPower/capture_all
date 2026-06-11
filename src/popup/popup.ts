@@ -1,7 +1,6 @@
 // popup/popup.ts — Capture All 全采 采集控制台
 // Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real recording wiring.
 import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../shared/types';
-import { get_basic_config, get_advanced_config } from '../shared/capture_modes';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
@@ -267,19 +266,25 @@ function wire_view(): void {
 }
 
 function get_record_config(): RecordConfig {
-    const base = user_config.selected_mode === 'basic' ? get_basic_config() : get_advanced_config();
     chrome.storage.local.set({ capture_toggles: toggles });
     return {
-        ...base,
+        // Category gates: popup toggles are direct on/off
         capture_network: toggles.request_count !== false,
         capture_console: toggles.log_count !== false,
+        // Mouse precision from user config
         mouse_precision: user_config.mouse_precision,
+        // Keyboard capture mode from user config
         keyboard_capture_mode: user_config.keyboard_capture_mode,
+        // Fine-grained extras: from dashboard settings
         capture_input_values: user_config.capture_input_values,
         capture_request_body: user_config.capture_request_body,
         capture_response_body: user_config.capture_response_body,
         redact_data: toggles.mask !== false,
-        // All 7 label toggles for config display
+        // Redaction settings
+        redact_sensitive_headers: true,
+        redact_url_query: true,
+        sample_rate_ms: 50,
+        // Toggle flags for config display (carried as extra keys)
         event_count_enabled: toggles.event_count !== false,
         nav_count_enabled: toggles.nav_count !== false,
         error_count_enabled: toggles.error_count !== false,
@@ -299,7 +304,7 @@ async function start_capture(): Promise<void> {
             capture_id: session_id,
             name: 'Capture ' + new Date().toLocaleString(),
             status: 'capturing',
-            mode: config.capture_mode === 'advanced' ? 'deep' : 'standard',
+            mode: 'standard',
             started_at: new Date().toISOString(),
             ended_at: null,
             duration_ms: 0,

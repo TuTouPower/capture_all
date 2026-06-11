@@ -96,7 +96,6 @@ export async function export_html(capture_id: string): Promise<string> {
         (event_count + request_count + log_count) * 0.5
     );
 
-    const capture_mode = (session.config_snapshot as Record<string, unknown>)?.capture_mode || 'basic';
     const body_capture_info = session.body_capture_mode
         ? `<div class="summary-item"><label>Body Capture</label><span>${session.body_capture_mode} · ${session.body_capture_status || 'unknown'}</span></div>`
         : '';
@@ -128,7 +127,6 @@ pre { background: #f8f8f8; padding: 12px; border-radius: 4px; overflow-x: auto; 
     <div class="summary-item"><label>Capture ID</label><span>${capture_id}</span></div>
     <div class="summary-item"><label>Start Time</label><span>${start_date}</span></div>
     <div class="summary-item"><label>Duration</label><span>${duration_str}</span></div>
-    <div class="summary-item"><label>Mode</label><span>${capture_mode}</span></div>
     <div class="summary-item"><label>Events</label><span>${event_count}</span></div>
     <div class="summary-item"><label>Network Requests</label><span>${request_count}</span></div>
     <div class="summary-item"><label>Console Logs</label><span>${log_count}</span></div>

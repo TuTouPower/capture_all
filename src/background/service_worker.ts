@@ -174,11 +174,6 @@ async function get_capture_data(capture_id: string): Promise<any> {
     };
 }
 
-/** Map RecordConfig.capture_mode to CaptureRecord.mode */
-function map_capture_mode(mode: 'basic' | 'advanced'): 'standard' | 'deep' | 'custom' {
-    return mode === 'advanced' ? 'deep' : 'standard';
-}
-
 async function start_recording(session_id: string, config: RecordConfig): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) {
         return { success: false, error: 'Already recording' };
@@ -210,7 +205,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         capture_id: session_id,
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
-        mode: map_capture_mode(config.capture_mode),
+        mode: 'standard',
         started_at: now_iso,
         ended_at: null,
         duration_ms: 0,
@@ -248,7 +243,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     // Write capture_lifecycle.capture_started event
     const started_data: CaptureStartedData = {
         capture_id: session_id,
-        mode: map_capture_mode(config.capture_mode),
+        mode: 'standard',
         config_snapshot: config,
         start_url,
         trigger: 'popup',
@@ -274,7 +269,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Start console capture if enabled (advanced mode)
     let debugger_attached_tab_id: number | null = null;
-    if (config.capture_console && config.capture_mode === 'advanced') {
+    if (config.capture_console) {
         if (tabs[0]?.id) {
             const result = await start_console_capture(session_id, start_time, tabs[0].id, config.redact_data, handle_console_log);
             if (!result.success) {
@@ -291,8 +286,8 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         }
     }
 
-    // Enable response body capture via coordinator (advanced mode)
-    if (config.capture_network && config.capture_response_body && config.capture_mode === 'advanced') {
+    // Enable response body capture via coordinator
+    if (config.capture_network && config.capture_response_body) {
         let target_tab_id: number | null = null;
         if (config.capture_console) {
             target_tab_id = debugger_attached_tab_id;

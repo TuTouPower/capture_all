@@ -167,7 +167,32 @@ async function get_capture_data(capture_id: string): Promise<any> {
         get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+    // Include network and console events in the events array for timeline display
+    const network_events = network_requests.map(nr => ({
+        event_id: nr.event_id || `net_${nr.request_id}`,
+        capture_id: nr.capture_id || capture_id,
+        category: 'network' as const,
+        type: 'network_request' as const,
+        relative_time_ms: nr.start_time_ms ?? 0,
+        absolute_time: '',
+        tab_id: nr.tab_id || 0,
+        frame_id: 0,
+        url: nr.url_status === 'redacted' ? '' : nr.url,
+        data: nr,
+    }));
+    const console_events_mapped = console_events.map(ce => ({
+        event_id: ce.event_id || `con_${Math.random().toString(36).slice(2, 9)}`,
+        capture_id: ce.capture_id || capture_id,
+        category: 'console' as const,
+        type: 'console_event' as const,
+        relative_time_ms: 0,
+        absolute_time: '',
+        tab_id: 0,
+        frame_id: 0,
+        url: ce.source_url || '',
+        data: ce,
+    }));
+    const all_events = [...user_events, ...nav_events, ...network_events, ...console_events_mapped, ...error_events, ...storage_changes, ...cookie_changes];
 
     return {
         success: true,

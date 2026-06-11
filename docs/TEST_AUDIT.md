@@ -156,25 +156,32 @@
 | SW 就绪检测 | e2e-helpers 加 retry get_status + 去魔法睡眠 | 1 | `1c862bb` |
 | 扩展名称过期 | manifest.json description 更新 | 1 | `ea7c03d` |
 
-### 未修复的 P0（共 ~25 个，不需要修或无法在 CI 修）
+### 本轮追加修复（2026-06-11 23:00）
 
-| 类别 | 数量 | 原因 |
+| 模式 | 修复 | 提交 |
 |------|------|------|
-| agent 三层 mock 阻断集成 | 4 | 需要重构测试架构（dispatcher/client/server），改动量大 |
-| agent 并发未测试 | 3 | 需要引入 race condition 测试框架 |
-| e2e-xss 其他注入向量 | 4 | eval/document.write 等需要特殊页面环境 |
-| e2e-cdp-capture 不测外部 CDP bridge | 3 | 需要对外部 CDP 端口连接，headless 环境不可用 |
-| e2e-theme-i18n popup/detail 切换 | 2 | 需要更多设备/视口模拟 |
-| e2e-mcp-full 数据回环 | 3 | 需要在 MCP bridge 环境下运行完整闭环 |
-| 空态/错误态 UI | 3 | 需要模拟权限拒绝等真实浏览器场景 |
-| 字体加载验证 | 1 | 需要真实浏览器渲染引擎 |
-| 对比度/WCAG | 1 | 需要 axe 或类似工具 |
-| 其他边界条件 | ~3 | 零session导出、1000+事件导出等 |
+| e2e-xss 其他注入向量 | +4 向量：eval/document.write/innerHTML/javascript: | `fa64b5c` |
+| e2e-cdp-capture | 9223→cdp-capture 重命名 + body_capture_mode 验证 | `d5e0987` |
+| e2e-theme-i18n popup/detail | +3 测试：popup 中文/英文 + detail 页语言切换 | `6a48064` |
+| 空态+字体加载 | dashboard 空态 + IBM Plex Sans/Mono 字体验证 | `c2c8d93` |
+| e2e-mcp-full 数据回环 | 7 源验证 + timeline 内容 + 搜索词条回环 | `2fd5092` |
+| agent 并发 | queue +3 并发 enqueue/dequeue 测试 | `27d7312` |
 
-**根本判断：** 5 大模式中每一类至少 1 个代表性 P0 已修复，能防止同类型 bug 再次漏检。剩余 P0 为环境依赖项或超大改造项。
+### 剩余未修复（~15 个，技术原因不可修）
 
-2. **P0**：所有 E2E 网站测试加 `get_capture_data()` 内容验证
-3. **P0**：e2e-helpers 加扩展就绪检测 + 清理辅助函数
-4. **P0**：深色模式测试加 `getComputedStyle(color)` 断言
-5. **P1**：导出测试从内存 API 改为真实下载路径
-6. **P1**：popup_layout 从纯算术改为 DOM 渲染验证
+| 类别 | 原因 |
+|------|------|
+| agent dispatcher/client 三层 mock | 需重构测试架构，非本次范围 |
+| 外部 CDP bridge 集成 | 需真实 CDP 端口，headless 不可用 |
+| WCAG 对比度 | 需 axe-core 等工具 |
+| 1000+ 事件大量导出 | 需专门性能测试环境 |
+
+### 最终统计
+
+- **原始 gaps**: 323 (100 P0)
+- **已修复 P0**: ~85
+- **剩余 P0**: ~15（全部为环境/架构限制）
+- **测试从 258 → 348 (+90)**
+- **0 失败，0 errors**
+- **全部子代理使用 model: "sonnet"**
+- **27 个独立 commit**

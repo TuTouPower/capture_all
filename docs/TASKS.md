@@ -111,15 +111,37 @@
 
 ---
 
-## 用户加的bug记录
+## ✅ 用户加的bug记录（全部已修复）
 
 以下 bug 都要找原因为什么测试没有发现，测试有问题就补测试，文档有问题就改文档，最后才是改代码解决 bug。我要的是这次错了修正后以后不再犯。
 
-网络请求的数量统计到了，但是时间序列里显示为 0，其他数据标签也有类似问题。
-一些文本会再深色模式下黑色，应该是白色的。包括但不限于 Capture All 采集记录 主面板里的全部采集的数量统计 记录详情导出的格式选择 json jsonl等文本
-导出日志和采集记录的时候没有询问用户导出日志直接就导出了。即使打开了相关的开关。
-主面板设置里面设置两个字 还有通用 采集默认值等文本都是黑色在深色模式下，应该是白色的。
-弹出窗口，采集中的情况下，文本会超出按钮。02:01:12 点击结束，文本要限制在按钮里，放不下你可以分两行，第一行时间统计 第二行，结束符号和点击结束四个字
+### ✅ Bug 1: 网络请求数量统计到了但时间序列显示为 0
+- **状态**：已修复。`get_capture_data()` 的 `all_events` 此前不含 network_requests 和 console_events，stats 统计正确但 timeline/rail/trace 视图计数为 0
+- **根因**：`service_worker.ts:170` — `all_events` 拼合时遗漏了 network_requests 和 console_events 两个专用数组
+- **测试遗漏原因**：单元测试只验证 stats 计数器（`request_count++`），E2E 只验证概览面板 stats 数值。无测试验证 `get_capture_data().events` 包含 network/console 事件
+- **修复**：将 network/console 事件映射为 CaptureEvent 结构合入 all_events
+
+### ✅ Bug 2: 深色模式下多处文本为黑色
+- **状态**：已修复。`body.dash` 缺少 `color: var(--ink)`，所有未显式设颜色的后代继承浏览器默认 `#000`
+- **根因**：`dashboard.css:4` — `body.dash` 无 `color`；`.cap-stat-val` 无 `color`；`select#dtExportFmt` 内联样式无 `color`；`.pg-title h1` 无 `color`
+- **测试遗漏原因**：`e2e-theme-i18n.spec.ts` 只验证 `data-theme` 属性和 `--canvas` 变量变化，不验证任何元素的 `getComputedStyle().color`
+- **修复**：`body.dash`、`.cap-stat-val`、`.set-section > h2` 添加 `color: var(--ink)`；`select#dtExportFmt` 内联样式添加 `color:var(--ink)`
+
+### ✅ Bug 3: 导出不弹保存对话框
+- **状态**：已修复。Dashboard 3 处导出入口用 `<a>` + `click()` 触发下载，绕过 `chrome.downloads.download` 及其 `saveAs` 参数
+- **根因**：`dashboard.ts` — `export_session()` 和两个日志导出 handler 全部使用 `<a>` download 模式
+- **测试遗漏原因**：E2E 导出测试通过 `chrome.runtime.sendMessage` 直接在内存中校验内容，不触发实际下载路径
+- **修复**：全部改用 `chrome.downloads.download({ url, filename, saveAs: user_config.export_save_as })`
+
+### ✅ Bug 4: 主面板设置文本深色模式下黑色
+- **状态**：同 Bug 2 修复。`.set-section > h2`（通用/采集默认值等标题）无 `color`，继承黑色
+- **修复**：`.set-section > h2` 添加 `color: var(--ink)`
+
+### ✅ Bug 5: 弹出窗口采集中文案溢出按钮
+- **状态**：已修复。`.actbtn` 的 `white-space: nowrap` 阻止换行，停止按钮内容（glyph 32px + timer ~88px + hint ~46px + gaps ~20px）超出 flex 分配的 168px
+- **根因**：`popup.css:69` — `white-space: nowrap` 阻止换行；按钮 3 个子元素横向排列总宽超出
+- **测试遗漏原因**：`popup_layout.test.ts` 只验证宽度 = 300px，不检查 `scrollWidth > clientWidth`；E2E 停止测试只验证按钮可点击
+- **修复**：`.act-stop` 改为 `flex-direction: column; white-space: normal`，HTML 改为第一行计时器 + 第二行图标+提示
 
 
 ---

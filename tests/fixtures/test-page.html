@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>E2E Test Page</title></head>
+<body>
+<h1>Capture All E2E Test</h1>
+<button id="btn-click">Click Me</button>
+<button id="btn-error">Trigger Error</button>
+<input id="input-text" type="text" placeholder="type something">
+<a href="page2.html" id="link-nav">Navigate</a>
+<script>
+// Console output with unique markers
+console.log('E2E_LOG_MARKER');
+console.warn('E2E_WARN_MARKER');
+
+// Cookie
+document.cookie = 'e2e_test_cookie=hello_value; path=/';
+
+// LocalStorage
+localStorage.setItem('e2e_test_key', 'e2e_test_value');
+
+// Fetch to test API
+fetch('/api/test');
+
+// Click handler
+document.getElementById('btn-click').addEventListener('click', function() {
+  console.log('E2E_BTN_CLICKED');
+});
+
+// Error handler
+document.getElementById('btn-error').addEventListener('click', function() {
+  throw new Error('E2E_ERROR_MARKER');
+});
+
+// Input handler
+document.getElementById('input-text').addEventListener('change', function() {
+  console.log('E2E_INPUT_CHANGED:', this.value);
+});
+</script>
+</body>
+</html>

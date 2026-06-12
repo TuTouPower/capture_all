@@ -250,9 +250,30 @@ function wire_view(): void {
     view.querySelector('#openDetailBtn')?.addEventListener('click', () => {
         if (finished_capture) open_dashboard(`?session=${finished_capture.capture_id}&page=detail`);
     });
-    view.querySelector('#exportBtn')?.addEventListener('click', () => {
-        if (finished_capture) {
-            chrome.runtime.sendMessage({ action: 'export_json', session_id: finished_capture.capture_id });
+    view.querySelector('#exportBtn')?.addEventListener('click', async () => {
+        if (!finished_capture) return;
+        try {
+            const resp = await chrome.runtime.sendMessage({
+                action: 'export_json',
+                session_id: finished_capture.capture_id,
+            });
+            if (resp?.success && resp.json) {
+                const blob = new Blob([resp.json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `capture_all_${finished_capture.capture_id}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                logger.error('Export failed', resp?.error);
+                alert(`${t('error')}: ${resp?.error ?? 'Export failed'}`);
+            }
+        } catch (e) {
+            logger.error('Export message failed', e);
+            alert(`${t('error')}: ${e}`);
         }
     });
     view.querySelector('#viewAll')?.addEventListener('click', () => open_dashboard());

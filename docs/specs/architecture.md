@@ -374,6 +374,36 @@ BodyCaptureCoordinator
 
 **请求关联策略**：webRequest requestId 与 CDP requestId 不同，使用 `(method, normalized_url, timestamp_window_2s, status_code, resource_type)` 五元组匹配。唯一候选合并，多个候选标记 `ambiguous` 不合并。
 
+**CDP 自动重试机制**（`service_worker.ts` + `network_capture.ts`）：
+
+当采集启动时当前 tab 为受限 URL（`chrome://` / `chrome-extension://` / `about:`），CDP attach 必然失败。系统在两处自动重试：
+
+| 触发条件 | 监听器 | 重试范围 |
+|---------|--------|---------|
+| 用户切换到其他 tab | `chrome.tabs.onActivated` | console / exception / body capture |
+| 同一 tab 从受限 URL 跳转到普通 URL | `chrome.tabs.onUpdated` | console / exception / body capture |
+
+重试流程：
+```
+1. onActivated / onUpdated 检测到非受限 URL
+2. 检查各子系统是否处于非活跃状态（is_console_active / is_exception_active）
+3. 调用 start_body_capture / start_console_capture / start_exception_capture
+4. start_body_capture 调用 enable_response_body_capture(tab_id, already_attached)
+5. enable_response_body_capture 内部：
+   - 若 dbg_tab_id === null（从未 attach 成功）→ 执行 chrome.dbg.attach + Network.enable
+   - 若 dbg_tab_id !== null 且 dbg_tab_id === tab_id → 直接返回 success（已 attach 到目标 tab）
+   - 若 dbg_tab_id !== null 且 dbg_tab_id !== tab_id → ⚠️ 当前 guard 条件有缺陷，详见 P0.39
+```
+
+**关键状态变量**（`network_capture.ts` 模块级）：
+- `dbg_tab_id: number | null` — CDP debugger 当前 attach 的 tab id，null 表示未 attach
+- `dbg_attached_externally: boolean` — true 表示 debugger 由外部（console/exception capture）attach，stop 时不 detach
+
+**约束**：
+- `dbg_tab_id` 只能持有一个值，代表 debugger 只 attach 到一个 tab
+- `enable_response_body_capture` 的 `already_attached` 参数指示 debugger 已由调用方 attach，只需 `Network.enable`
+- 多 tab 场景下，retry 按 `tabs.onActivated` 触发顺序竞争：先成功的 tab 锁定 `dbg_tab_id`，后续 tab 的 retry 被 guard 短路
+
 ### 2.8 DevTools Panel
 
 **文件**：`src/devtools/`

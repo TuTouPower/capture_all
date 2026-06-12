@@ -202,7 +202,7 @@ function render_events(): void {
     const search = document.getElementById('eventsSearch') as HTMLInputElement;
 
     const filtered = filter_events(events, filter.value, search.value)
-        .filter(e => ['mouse_event', 'keyboard_event', 'scroll_event', 'dom_mutation'].includes(e.type));
+        .filter(e => ['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'].includes(e.type));
 
     container.innerHTML = filtered.length === 0
         ? '<div class="empty-state">No events</div>'
@@ -345,8 +345,8 @@ function get_event_detail(event: RecordEvent): string {
             return `${data.action} ${data.key} ${data.code || ''}`;
         case 'scroll_event':
             return `scroll (${data.scroll_x}, ${data.scroll_y})`;
-        case 'dom_mutation':
-            return `${data.action} ${data.target_tag || ''} ${data.target_selector || ''}`;
+        case 'input_event':
+            return `${data.action || ''} ${data.target_tag || ''} ${data.target_selector || ''}`;
         case 'page_navigation':
             return `${data.from} → ${data.to}`;
         case 'page_load':

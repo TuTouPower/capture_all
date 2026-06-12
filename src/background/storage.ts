@@ -21,6 +21,7 @@ import {
     STORE_NAMES,
     MAX_SESSION_SIZE_BYTES,
     FLUSH_BATCH_SIZE,
+    FLUSH_INTERVAL_MS,
 } from '../shared/constants';
 
 let db: IDBDatabase | null = null;
@@ -389,6 +390,41 @@ export async function flush_all(): Promise<void> {
         STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
     ];
     await Promise.all(store_names.map((s) => flush_store(s)));
+}
+
+// ============================================================
+// Periodic flush — prevents small captures from losing buffered events
+// ============================================================
+
+let flush_interval: ReturnType<typeof setInterval> | null = null;
+
+export function start_periodic_flush(): void {
+    if (flush_interval) return;
+    flush_interval = setInterval(() => {
+        const store_names = [
+            STORE_NAMES.USER_ACTION_EVENTS,
+            STORE_NAMES.NAVIGATION_EVENTS,
+            STORE_NAMES.NETWORK_REQUESTS,
+            STORE_NAMES.CONSOLE_EVENTS,
+            STORE_NAMES.ERROR_EVENTS,
+            STORE_NAMES.STORAGE_CHANGES,
+            STORE_NAMES.COOKIE_CHANGES,
+            STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
+        ];
+        for (const name of store_names) {
+            const buf = buffers.get(name);
+            if (buf && buf.length > 0) {
+                flush_store(name).catch(() => { /* best effort */ });
+            }
+        }
+    }, FLUSH_INTERVAL_MS);
+}
+
+export function stop_periodic_flush(): void {
+    if (flush_interval) {
+        clearInterval(flush_interval);
+        flush_interval = null;
+    }
 }
 
 // ============================================================

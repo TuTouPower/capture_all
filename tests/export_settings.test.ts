@@ -78,7 +78,7 @@ describe('export settings', () => {
         const filename = build_export_filename(default_template_cfg, '1781265766247_7vafphp', 'json', now);
 
         expect(filename).toContain('2024-02-03');
-        expect(filename).toContain('capture_1781265766247_7vafphp');
+        expect(filename).toContain('capture_all_1781265766247_7vafphp');
         expect(filename).toMatch(/\.json$/);
         expect(filename).not.toMatch(/^capture_all_1781265766247_7vafphp\.json$/);
     });

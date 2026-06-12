@@ -10,6 +10,7 @@ export class IndexedDBLogTransport implements LogTransport {
     private flush_timer: ReturnType<typeof setTimeout> | null = null;
 
     write(entry: AppLogEntry): void {
+        if (!entry.id) return;
         this.buffer.push(entry);
         this.schedule_flush();
     }
@@ -34,6 +35,7 @@ export class IndexedDBLogTransport implements LogTransport {
         const tx = db.transaction([STORE_NAMES.APP_LOGS], 'readwrite');
         const store = tx.objectStore(STORE_NAMES.APP_LOGS);
         for (const entry of batch) {
+            if (!entry.id) continue;
             store.put(entry);
         }
 

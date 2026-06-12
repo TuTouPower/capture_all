@@ -524,25 +524,169 @@
   - `src/background/exporter.ts` / `src/dashboard/dashboard.ts` — 导出 filename 生成与保存
   - `tests/export_settings.test.ts` 或导出相关测试 — 位置记忆断言
 
-### ❌ P0.28 运行日志导出应始终使用 `.log`，不能回退为 `.txt`
-- **状态**：未修复 — 2026-06-12 用户反馈
-- **现象**：运行日志导出结果仍出现 `.txt` 格式，和期望的 `.log` 不一致。
+### ✅ P0.29 停止采集 flush_all 时 IndexedDB 写入失败：key path 未 yield 值
+- **状态**：已修复 — `48fab6e`
+- **复现日志**：`data/capture_all_logs_2026-06-12_19-05-43.log` line 41
+- **现象**：停止采集时 `flush_all` 调用 `store.put()` 抛出 `DataError`：
+  ```
+  Failed to execute 'put' on 'IDBObjectStore': Evaluating the object store's key path did not yield a value.
+  ```
+  Stack trace指向 `app_log_storage.ts` 的 flush 路径，发生在 `Promise.all` 批量写入期间。
+- **影响**：flush 失败导致部分数据可能未持久化到 IndexedDB，日志/采集数据丢失风险。当前日志显示 stop 流程继续执行（Recording stopped），但 `data` 写入可能不完整。
+- **初步判断**：`app_log_storage.ts` 的 flush buffer 中某条记录的 key path 字段为 `undefined` 或缺失，导致 `put` 操作失败。可能原因：
+  1. 日志条目 `id` 字段未生成（keyPath: `id`）
+  2. buffer 中存在空对象或结构不完整的记录
+  3. 并发写入时某条记录被清空或覆盖
+- **修复要点**：
+  1. 定位 `app_log_storage.ts` flush 逻辑，在 `put` 前校验每条记录 key path 字段非空
+  2. buffer 写入处增加 schema 校验，防止空记录进入 buffer
+  3. flush 失败时逐条重试，跳过问题记录而非整批失败
+  4. 补单测：flush 含空 id 的记录时不应整批失败
+- **影响文件**：
+  - `src/background/app_log_storage.ts` — flush buffer + put 校验
+  - `tests/app_log_storage.test.ts` — 边界条件测试
+
+### ✅ P0.30 控制台采集为零：console capture 已启动但无事件记录
+- **状态**：已修复 — `48fab6e`
+- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
+- **现象**：日志显示 console capture 正常启动（`Console capture started {"tab_id":1793063486,"already_attached":true}`），但导出 JSON 中 `console_events` 数组长度为 0。采集期间访问的是 opencode.ai（生产网站），应有控制台输出。
+- **期望行为**：`console_events` 数组应包含采集期间页面产生的 console.log/warn/error 等记录。
+- **初步判断**：
+  1. CDP `Runtime.consoleAPICalled` 或 `Log.entryAdded` 事件可能未正确监听
+  2. console handler 回调可能未正确关联（参考 P0.13 CDP 重试回调不匹配）
+  3. `handle_console_log` 写入的 store 与导出查询的 store 可能不一致
+  4. `capture_id` 未设置导致查询返回空（参考 P0.9 Bug A）
+- **修复要点**：
+  1. 检查 console_capture 的 CDP 事件监听是否与 `handle_console_log` 回调正确绑定
+  2. 验证 console 事件写入时 `capture_id` 已设置
+  3. 在已采集的 opencode.ai 页面上手动复现，确认 `Runtime.consoleAPICalled` 事件是否触发
+  4. 补 E2E：验证 console_events 数组非空
+- **影响文件**：
+  - `src/background/console_capture.ts` — CDP 事件监听
+  - `src/background/service_worker.ts` — handle_console_log + capture_id 设置
+  - `tests/e2e-console-errors.spec.ts` / `tests/e2e-capture-local.spec.ts` — console_events 非空断言
+
+### ✅ P0.31 网络请求 resource type 全部为 unknown
+- **状态**：已修复 — `48fab6e`
+- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
+- **现象**：导出 JSON 中 193 条 `network_requests` 的 `type` 字段全部为 `"unknown"`。实际请求包括 XHR/Fetch（API 调用）、Script（JS 文件）、Stylesheet（CSS 文件）、Font（字体）、Document（HTML 页面）等多种类型，但无一正确分类。
+- **期望行为**：每条 network request 的 `type` 应反映实际资源类型，如 `xhr`、`fetch`、`script`、`stylesheet`、`font`、`document`、`image`、`media` 等，与 Chrome DevTools Network 面板一致。
+- **影响**：
+  - 网络请求列表无类型过滤/分组能力
+  - 数据分析无法按资源类型聚合
+  - Dashboard 网络 tab 的 type 列无意义
+- **初步判断**：
+  1. `build_network_event` 未从 webRequest `details` 提取 `type`（`details.type` 包含 `xmlhttprequest`/`script`/`stylesheet` 等）
+  2. CDP 路径（`Network.requestWillBeSent`）有 `type` 但未传递到 `NetworkRequestData`
+  3. `NetworkRequestData.type` 字段存在但从未被赋值
+- **修复要点**：
+  1. webRequest 路径：`build_network_event` 从 `details.type` 取值并映射到标准类型名
+  2. CDP 路径：从 `Network.requestWillBeSent.params.type` 取值
+  3. 统一类型名称映射表（webRequest 用 `xmlhttprequest`，CDP 用 `XHR`，统一为 `xhr`）
+  4. 补单测：给定不同 `details.type`，验证输出 `type` 字段正确
+- **影响文件**：
+  - `src/background/network_capture.ts` — build_network_event + CDP meta
+  - `src/shared/types.ts` — 可能需新增类型映射常量
+  - `tests/network_capture.test.ts` — type 字段测试
+
+### ✅ P0.32 采集记录元数据缺失 url 和 tab_title
+- **状态**：已修复 — `48fab6e`
+- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
+- **现象**：导出 JSON 顶层 `capture.url` 和 `capture.tab_title` 均为 `undefined`。日志显示采集期间有多次 `Tab URL changed` 事件（从 `localhost:20224` → `opencode.ai/` → `opencode.ai/zh/go` → `opencode.ai/workspace/...`），但最终的 capture 元数据没有记录初始 URL 和页面标题。
+- **期望行为**：`capture.url` 应为采集开始时活动 tab 的 URL，`capture.tab_title` 应为对应页面的标题。
+- **影响**：
+  - 采集记录列表无法显示来源 URL
+  - 导出数据丢失关键上下文信息
+  - Dashboard 会话列表显示空白 URL
+- **初步判断**：`current_capture` 创建时（`start_capture`）未从活动 tab 提取 `url`/`title` 写入元数据。`session_manager.create_capture()` 可能未接收或未设置这些字段。
+- **修复要点**：
+  1. `start_capture` 创建采集记录时查询活动 tab 的 url 和 title
+  2. 写入 `current_capture.url` 和 `current_capture.tab_title`
+  3. 补单测：创建 capture 后验证 url/title 非空
+- **影响文件**：
+  - `src/background/service_worker.ts` — start_capture
+  - `src/background/session_manager.ts` — create_capture
+  - `tests/session_manager.test.ts` — url/title 字段验证
+
+### 🔄 P0.33 导出采集记录 JSON 中时间字段容易误读为未跟随浏览器时区
+- **状态**：修复中 — 2026-06-12 组3执行
+- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
+- **现象**：导出 JSON 中 `started_at`、`ended_at`、`created_at`、`updated_at`、`absolute_time` 等字段仍是 UTC ISO 字符串（例如 `2026-06-12T11:03:42.967Z`），用户已设置「跟随浏览器」后仍容易认为导出时间没有按浏览器时区显示。
+- **当前行为说明**：导出中已追加 `start_time_system_time`、`end_time_system_time`、`absolute_time_system_time` 等用户时区字段，内部机器字段仍保留 UTC。
 - **期望行为**：
-  - 运行日志导出文件扩展名固定为 `.log`
-  - 导出内容为人可读日志文本
-  - 不再出现 `.txt`、`.json` 或 `.jsonl` 运行日志导出入口
-- **测试遗漏原因**：现有测试只覆盖导出内容或 dashboard 源码片段，没有覆盖最终传给 `chrome.downloads.download` 的运行日志 filename 扩展名。
+  - 导出采集记录里面向用户阅读的时间字段必须明显使用用户设置时区
+  - UTC 机器字段如继续保留，命名/分组/文档必须明确标识为原始 UTC，避免用户误读
+  - JSON 导出可增加统一的 `*_time_label` / `*_system_time` 字段，或调整结构把人读时间放在更显眼位置
+  - 日志文本、HTML 导出、文件名继续使用用户设置时区
+- **影响**：
+  - 用户看到 `Z` 时间后会判断「跟随浏览器」未生效
+  - 导出数据同一时间存在 UTC 与本地时间两套字段，缺少清晰语义
+- **修复要点**：
+  1. 明确导出 JSON 时间字段策略：机器字段 UTC、人读字段用户时区，或全部人读化
+  2. 为 capture / event / network / console 统一补充用户时区 label 字段
+  3. 如保留 UTC 字段，在字段名或文档中明确 `*_utc` / raw timestamp 语义
+  4. 补测试：设置 `system_time_timezone: 'browser'` 或固定偏移后，导出 JSON 中人读字段符合设置且不出现误导性命名
+- **影响文件**：
+  - `src/shared/system_time.ts` — 时间字段转换与命名
+  - `src/background/exporter.ts` — JSON/JSONL/HTML/log 导出时间输出
+  - `src/shared/types.ts` — 如调整导出字段类型
+  - `tests/system_time.test.ts` / `tests/export_settings.test.ts` — 导出时间字段断言
+
+### 🔄 P0.34 系统时区选项应使用固定 UTC 偏移而不是城市时区
+- **状态**：修复中 — 2026-06-12 组3执行
+- **现象**：设置页「系统时区」当前选项类似 `跟随浏览器`、`UTC`、`Asia/Shanghai`，暴露 IANA 城市时区，不符合用户预期。
+- **期望行为**：
+  - 选项应为 `跟随浏览器`、`UTC`、`UTC+1`、`UTC+2` ... `UTC+12`、`UTC-1` ... `UTC-12`
+  - `跟随浏览器` 使用当前浏览器/系统本地时区
+  - `UTC±N` 使用固定 UTC 偏移，不绑定城市，不受夏令时影响
+  - UI 文案不出现 `Asia/Shanghai` 等城市时区名
+  - 导出文件名、HTML、日志、`*_system_time` 字段都按该设置格式化
+- **影响**：
+  - 城市时区不直观，用户想选固定偏移时无法表达
+  - 固定偏移与 IANA 时区含义不同，夏令时地区可能产生非预期变化
+- **修复要点**：
+  1. 扩展 `SystemTimeTimezone` 类型，支持 `UTC+N` / `UTC-N` 固定偏移
+  2. 设置页下拉框改为固定 UTC 偏移选项，不展示城市名
+  3. `format_system_time()` 支持固定偏移计算，不能直接把 `UTC+8` 当 `Intl` IANA `timeZone`
+  4. 迁移旧配置：`Asia/Shanghai` 可映射为 `UTC+8`，未知旧值回退 `browser`
+  5. 补测试：`UTC+1`、`UTC+8`、`UTC-5` 格式化结果正确，且文件名使用对应偏移时间
+- **影响文件**：
+  - `src/shared/types.ts` — `SystemTimeTimezone` 类型
+  - `src/shared/system_time.ts` — 固定 UTC 偏移格式化
+  - `src/shared/user_config.ts` / `src/shared/constants.ts` — 默认值与旧配置迁移
+  - `src/dashboard/dashboard.ts` / `src/shared/i18n.ts` — 设置页选项和文案
+  - `tests/system_time.test.ts` / `tests/export_settings.test.ts` — 偏移时区断言
+
+### ❌ P0.28 运行日志导出默认格式错误：现在默认是 `.txt`，应为 `.log`
+- **状态**：未修复 — 2026-06-12 用户反馈
+- **现象**：运行日志导出时，浏览器保存对话框里的默认文件类型/扩展名是 `.txt`，不是用户要求的 `.log`。
+- **期望行为**：
+  - 运行日志导出的默认文件名必须以 `.log` 结尾
+  - 浏览器保存对话框默认也应体现 `.log`，不能让用户每次手动改扩展名
+  - 导出内容保持人可读日志文本
+  - 不再出现 `.txt`、`.json` 或 `.jsonl` 作为运行日志默认导出格式
+- **测试遗漏原因**：
+  - 现有测试没有模拟 `chrome.downloads.download` 并断言最终传入的 `filename`
+  - 现有测试没有覆盖浏览器下载保存对话框中用户实际看到的默认扩展名
+  - 旧 E2E 仍偏向旧的 JSON/JSONL 日志导出入口或内容校验，没有覆盖“运行日志默认扩展名必须是 `.log`”这个用户可见结果
+- **我刚才误判的问题**：
+  - 只看源码/构建产物里某个路径出现 `.log`，不能证明用户实际导出默认就是 `.log`
+  - 不能把问题写成“可能已有 `.log` 只是测试缺口”；用户反馈的事实是“现在默认是 `.txt`”
+  - 修复前必须以真实下载行为为准，而不是只用源码字符串搜索下结论
 - **影响**：
   - 文件类型不符合用户预期
+  - 用户需要每次手动改扩展名
   - 下游按 `.log` 识别和归档会失败
 - **修复要点**：
-  1. 查找所有运行日志导出入口，确认 filename 生成路径
-  2. 将运行日志导出 filename 统一为 `.log`
-  3. 补测试：实际下载参数 filename 必须以 `.log` 结尾，且不得出现 `.txt`
+  1. 复现运行日志导出，确认保存对话框默认文件名/扩展名为何是 `.txt`
+  2. 查找所有运行日志导出入口，确认最终传给 `chrome.downloads.download` 或浏览器下载 API 的 filename
+  3. 将运行日志导出默认 filename 统一为 `.log`
+  4. 补测试：实际下载参数 filename 必须以 `.log` 结尾，且不得出现 `.txt`
+  5. 如单元测试无法覆盖保存对话框默认扩展名，补 E2E/集成测试或文档说明验证方式
 - **影响文件**：
   - `src/background/exporter.ts` — 运行日志内容和文件名
   - `src/dashboard/dashboard.ts` — 运行日志下载入口
-  - `tests/export_settings.test.ts` / dashboard 导出测试 — filename 扩展名断言
+  - `tests/export_settings.test.ts` / dashboard 导出测试 / E2E 下载测试 — filename 扩展名断言
 
 ---
 

@@ -533,3 +533,90 @@ describe('deferred queue multi-candidate resolution', () => {
         expect(retrieved.has('dk_b')).toBe(true);
     });
 });
+
+// ─── P0.31: resolve_resource_type type mapping ───
+
+// Replica of fixed resolve_resource_type with Chrome→standard mappings
+const CHROME_TYPE_MAP: Record<string, string> = {
+    'xmlhttprequest': 'xhr',
+    'main_frame': 'document',
+    'sub_frame': 'document',
+    'script': 'script',
+    'stylesheet': 'stylesheet',
+    'image': 'image',
+    'font': 'font',
+    'media': 'media',
+    'ping': 'ping',
+    'websocket': 'websocket',
+    'xhr': 'xhr',
+    'fetch': 'fetch',
+    'document': 'document',
+    'other': 'other',
+};
+
+function resolve_resource_type_fixed(raw: string): string {
+    if (!raw) return 'other';
+    const lower = raw.toLowerCase();
+    if (CHROME_TYPE_MAP[lower]) return CHROME_TYPE_MAP[lower];
+    return 'other';
+}
+
+describe('resolve_resource_type mapping', () => {
+    it('maps xmlhttprequest to xhr', () => {
+        expect(resolve_resource_type_fixed('xmlhttprequest')).toBe('xhr');
+        expect(resolve_resource_type_fixed('XMLHttpRequest')).toBe('xhr');
+    });
+
+    it('maps main_frame to document', () => {
+        expect(resolve_resource_type_fixed('main_frame')).toBe('document');
+    });
+
+    it('maps sub_frame to document', () => {
+        expect(resolve_resource_type_fixed('sub_frame')).toBe('document');
+    });
+
+    it('maps script to script', () => {
+        expect(resolve_resource_type_fixed('script')).toBe('script');
+    });
+
+    it('maps stylesheet to stylesheet', () => {
+        expect(resolve_resource_type_fixed('stylesheet')).toBe('stylesheet');
+    });
+
+    it('maps image to image', () => {
+        expect(resolve_resource_type_fixed('image')).toBe('image');
+    });
+
+    it('maps font to font', () => {
+        expect(resolve_resource_type_fixed('font')).toBe('font');
+    });
+
+    it('maps media to media', () => {
+        expect(resolve_resource_type_fixed('media')).toBe('media');
+    });
+
+    it('maps ping to ping', () => {
+        expect(resolve_resource_type_fixed('ping')).toBe('ping');
+    });
+
+    it('maps websocket to websocket', () => {
+        expect(resolve_resource_type_fixed('websocket')).toBe('websocket');
+    });
+
+    it('maps already-standard xhr to xhr', () => {
+        expect(resolve_resource_type_fixed('xhr')).toBe('xhr');
+    });
+
+    it('maps already-standard fetch to fetch', () => {
+        expect(resolve_resource_type_fixed('fetch')).toBe('fetch');
+    });
+
+    it('maps unknown types to other', () => {
+        expect(resolve_resource_type_fixed('csp_report')).toBe('other');
+        expect(resolve_resource_type_fixed('')).toBe('other');
+    });
+
+    it('maps object to other (not in standard set)', () => {
+        expect(resolve_resource_type_fixed('object')).toBe('other');
+    });
+});

@@ -438,15 +438,27 @@ export function headers_array_to_map(arr: Array<{ name: string; value?: string }
     return out;
 }
 
+const RESOURCE_TYPE_MAP: Record<string, NetworkRequestData['resource_type']> = {
+    'xmlhttprequest': 'xhr',
+    'main_frame': 'document',
+    'sub_frame': 'document',
+    'script': 'script',
+    'stylesheet': 'stylesheet',
+    'image': 'image',
+    'font': 'font',
+    'media': 'media',
+    'ping': 'ping',
+    'websocket': 'websocket',
+    'xhr': 'xhr',
+    'fetch': 'fetch',
+    'document': 'document',
+    'other': 'other',
+};
+
 function resolve_resource_type(raw: string): NetworkRequestData['resource_type'] {
-    const valid: NetworkRequestData['resource_type'][] = [
-        'fetch', 'xhr', 'document', 'script', 'stylesheet',
-        'image', 'font', 'media', 'websocket', 'other'
-    ];
-    if (valid.includes(raw as NetworkRequestData['resource_type'])) {
-        return raw as NetworkRequestData['resource_type'];
-    }
-    return 'other';
+    if (!raw) return 'other';
+    const lower = raw.toLowerCase();
+    return RESOURCE_TYPE_MAP[lower] || 'other';
 }
 
 function handle_before_request(details: any): void {

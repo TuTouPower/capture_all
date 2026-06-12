@@ -45,10 +45,10 @@ import {
 
 describe('enable_response_body_capture', () => {
     beforeEach(() => {
+        // Stop any previous capture first (uses mock counters), then reset mock
+        try { stop_network_capture(); } catch { /* not started yet */ }
         mock_chrome_debugger.reset();
         vi.clearAllMocks();
-        // Stop any previous capture to reset module state
-        try { stop_network_capture(); } catch { /* not started yet */ }
     });
 
     it('succeeds when debugger attaches and Network.enable works', async () => {
@@ -73,7 +73,7 @@ describe('enable_response_body_capture', () => {
         expect(mock_chrome_debugger.listener_count).toBe(1);
     });
 
-    it('returns success when already attached', async () => {
+    it('returns success when already attached to same tab', async () => {
         start_network_capture(
             'test_capture',
             1700000000000,
@@ -92,11 +92,39 @@ describe('enable_response_body_capture', () => {
         await enable_response_body_capture(1, false);
         expect(mock_chrome_debugger.attach_count).toBe(1);
 
-        // Second call should return success without re-attaching
+        // Second call for same tab should return success without re-attaching
+        const result = await enable_response_body_capture(1, false);
+        expect(result.success).toBe(true);
+        expect(mock_chrome_debugger.attach_count).toBe(1);
+        expect(mock_chrome_debugger.detach_count).toBe(0);
+    });
+
+    it('detaches old tab and re-attaches when called with different tab', async () => {
+        start_network_capture(
+            'test_capture',
+            1700000000000,
+            {
+                redact_sensitive_headers: false,
+                redact_url_query: false,
+                redact_data: false,
+                capture_request_body: false,
+                capture_response_body: true,
+            },
+            1,
+            () => {}
+        );
+
+        // First call on tab 1 succeeds
+        await enable_response_body_capture(1, false);
+        expect(mock_chrome_debugger.attach_count).toBe(1);
+
+        // Second call on tab 2 should detach tab 1 then attach tab 2
         const result = await enable_response_body_capture(2, false);
         expect(result.success).toBe(true);
-        // Still only 1 attach (second was skipped because dbg_tab_id already set)
-        expect(mock_chrome_debugger.attach_count).toBe(1);
+        expect(mock_chrome_debugger.detach_count).toBe(1);
+        expect(mock_chrome_debugger.last_detached_tab_id).toBe(1);
+        expect(mock_chrome_debugger.attach_count).toBe(2);
+        expect(mock_chrome_debugger.last_attached_tab_id).toBe(2);
     });
 
     it('fails when debugger attach is rejected', async () => {

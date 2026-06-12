@@ -86,6 +86,20 @@ sequenceDiagram
         Note over Coord,CDP: Network.loadingFinished -> getResponseBody
         CDP-->>Coord: body data
         Coord->>IDB: 写入 network_request (capture_method=extension_cdp)
+    else attach 失败 (chrome:// 等受限 URL)
+        CDP-->>Coord: "Cannot access a chrome:// URL"
+        Coord->>Coord: 降级为 fallback_hook
+        Note over Coord: 等待 onActivated / onUpdated 触发 retry...
+        User->>SW: 切换到普通 tab 或导航到 http(s):// URL
+        SW->>Coord: retry start_body_capture (新 tab_id)
+        Coord->>CDP: chrome.debugger.attach (新 tab_id)
+        alt retry 成功
+            CDP-->>Coord: success
+            Coord->>CDP: Network.enable
+            Note over Coord,CDP: 此后新请求可捕获 body
+        else retry 仍失败
+            Note over Coord: 保持 fallback_hook
+        end
     else another debugger attached
         CDP-->>Coord: attach 失败
         Coord->>Bridge: try external CDP

@@ -718,6 +718,38 @@
   - `src/dashboard/dashboard.ts` — 运行日志下载入口
   - `tests/export_settings.test.ts` / dashboard 导出测试 / E2E 下载测试 — filename 扩展名断言
 
+### ❌ P0.35 采集完成态导出按钮点击无反应
+- **状态**：未修复 — 2026-06-12 用户实测发现
+- **现象**：popup 采集完成状态显示「导出」按钮（P0.26 新增），但点击后无任何反应，不触发下载、不弹出保存对话框、控制台无报错。
+- **期望行为**：点击「导出」按钮应直接触发采集数据导出（默认 JSON 格式），弹出浏览器保存对话框。
+- **影响**：P0.26 按钮拆分为无效改动，用户仍必须进入详情页才能导出。
+- **初步判断**：`wire_view()` 中 `exportBtn` 的 click 事件绑定可能未正确注册，或事件处理函数中 `chrome.runtime.sendMessage` 调用方式有误（handler 不存在/action 名不匹配/权限不足）。`render_saved()` 每次状态切换重新 innerHTML 赋值，`wire_view()` 之后绑定可能被覆盖或过早调用。也可能是 `wire_view()` 只在首次调用，后续 `render()` 更新 innerHTML 后未重新绑定 `exportBtn` 事件。
+- **修复要点**：
+  1. 跟踪 `wire_view()` 调用时机 vs `render_saved()` innerHTML 替换时机
+  2. 确认 `exportBtn` click handler 中 message action 在 SW 中已注册
+  3. 补测试：完成态点击 exportBtn 触发 chrome.runtime.sendMessage
+- **影响文件**：
+  - `src/popup/popup.ts` — wire_view / render / render_saved
+  - `src/background/service_worker.ts` — message handler 注册
+
+### ❌ P0.36 采集详情页「用户行为」标签页显示无数据
+- **状态**：未修复 — 2026-06-12 用户实测发现
+- **现象**：采集记录详情中统计显示采集到了用户行为（如 23 条），但点击「用户行为」标签页后内容区域为空或显示「无数据」，看不到任何用户行为明细。此问题与已修复的 P0.23 同名但症状可能不同——P0.23 修复的是数据未合入 all_events，本次可能是数据已合入但仍不显示。
+- **期望行为**：「用户行为」标签页必须展示已采集到的全部用户行为明细，计数与列表内容一致。
+- **影响**：用户无法查看核心行为采集结果，统计数字与详情内容矛盾。
+- **初步判断**：
+  1. 详情页「用户行为」tab 的数据过滤条件可能使用了错误的 category/type 值（与事件实际 category 不匹配）
+  2. 渲染函数可能只在某一个数组（如 `detail_events`）中查找，但用户行为事件可能落在其他数据源
+  3. P0.23 修复可能只解决了 `all_events` 合并，但 detail 页渲染时重新过滤了数据
+  4. 也可能是 `detail_events` 变量在 tab 切换时被清空或覆盖
+- **修复要点**：
+  1. 在详情页加载时打印用户行为事件的实际 category/type 值
+  2. 对比「用户行为」tab 的过滤条件，确认口径一致
+  3. 确认渲染路径是否正确读取到 detail_events
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
+  - `src/detail/detail.ts` — 独立详情页数据加载
+
 ---
 
 ## ✅ 用户加的bug记录（全部已修复）

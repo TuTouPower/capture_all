@@ -78,6 +78,7 @@ interface CdpBodyResult {
     preview: string | null;
 }
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
+export const _cdp_body_results_for_test = cdp_body_results;
 
 // Orphan CDP body events: entries that haven't been matched by webRequest within timeout
 const ORPHAN_TIMEOUT_MS = 3000;
@@ -88,8 +89,10 @@ interface DeferredEntry {
     pending: PendingRequest;
     details: any;
     timer: ReturnType<typeof setTimeout>;
+    pending_cdp_ids: Set<string>;
 }
 const deferred_web_requests: Map<string, DeferredEntry> = new Map();
+export const _deferred_web_requests_for_test = deferred_web_requests;
 
 // Callback for external consumers (only used for orphan CDP events)
 let on_cdp_body_event: ((event: CdpBodyEvent) => void) | null = null;
@@ -285,25 +288,43 @@ function handle_cdp_event(source: any, method: string, params: any): void {
 }
 
 function try_resolve_deferred(cdp_req_id: string): void {
-    const deferred_key = _deferred_cdp_index.get(cdp_req_id);
-    if (!deferred_key) return;
-    _deferred_cdp_index.delete(cdp_req_id);
-
-    const entry = deferred_web_requests.get(deferred_key);
-    if (!entry) return;
+    const deferred_keys = _deferred_cdp_index.get(cdp_req_id);
+    if (!deferred_keys || deferred_keys.size === 0) return;
 
     const body_result = cdp_body_results.get(cdp_req_id);
-    if (!body_result) return;
+    if (!body_result) {
+        _deferred_cdp_index.delete(cdp_req_id);
+        return;
+    }
 
-    // Resolve: emit merged, clean up both sides
-    clearTimeout(entry.timer);
-    deferred_web_requests.delete(deferred_key);
+    // Remove this cdp_id from all deferred entries' pending sets.
+    // The first entry whose pending set becomes empty wins the body.
+    for (const dk of deferred_keys) {
+        const entry = deferred_web_requests.get(dk);
+        if (!entry) continue;
+        entry.pending_cdp_ids.delete(cdp_req_id);
+
+        if (entry.pending_cdp_ids.size === 0) {
+            // All CDP candidates for this deferred entry have resolved
+            clearTimeout(entry.timer);
+            deferred_web_requests.delete(dk);
+            cdp_body_results.delete(cdp_req_id);
+            cdp_request_meta.delete(cdp_req_id);
+            _deferred_cdp_index.delete(cdp_req_id);
+            send_to_background(build_network_event(
+                entry.pending, entry.details, body_result.body, body_result.status, body_result.preview
+            ));
+            return;
+        }
+    }
+
+    // No deferred entry fully resolved — just clean up this CDP body
     cdp_body_results.delete(cdp_req_id);
     cdp_request_meta.delete(cdp_req_id);
-    send_to_background(build_network_event(
-        entry.pending, entry.details, body_result.body, body_result.status, body_result.preview
-    ));
+    _deferred_cdp_index.delete(cdp_req_id);
 }
+
+export const _try_resolve_deferred_for_test = try_resolve_deferred;
 
 function schedule_orphan_check(req_id: string): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
@@ -339,6 +360,7 @@ function schedule_orphan_check(req_id: string): void {
         // Cleanup orphan entries
         cdp_request_meta.delete(req_id);
         cdp_body_results.delete(req_id);
+        _deferred_cdp_index.delete(req_id);
     }, ORPHAN_TIMEOUT_MS);
 }
 
@@ -565,26 +587,42 @@ function handle_completed(details: any): void {
     // No CDP match found — defer write, wait for CDP body to arrive
     // This avoids the race where webRequest completes before CDP body is resolved
     const deferred_key = `deferred_${details.requestId}`;
-    const timer = setTimeout(() => {
-        deferred_web_requests.delete(deferred_key);
-        send_to_background(build_network_event(pending, details, null, 'not_enabled'));
-    }, DEFERRED_TIMEOUT_MS);
-    deferred_web_requests.set(deferred_key, { pending, details, timer });
-
-    // Store a reverse-lookup from CDP request candidates to deferred entries
-    // for fast resolution when CDP body arrives
     const candidates = find_cdp_candidates(
         pending.url || '',
         pending.method || 'GET',
         details.statusCode
     );
+    const pending_cdp_ids = new Set(candidates);
+    const timer = setTimeout(() => {
+        deferred_web_requests.delete(deferred_key);
+        // Clean up reverse index for all pending CDP candidates
+        for (const cdp_id of pending_cdp_ids) {
+            const keys = _deferred_cdp_index.get(cdp_id);
+            if (keys) {
+                keys.delete(deferred_key);
+                if (keys.size === 0) _deferred_cdp_index.delete(cdp_id);
+            }
+        }
+        send_to_background(build_network_event(pending, details, null, 'not_enabled'));
+    }, DEFERRED_TIMEOUT_MS);
+    deferred_web_requests.set(deferred_key, { pending, details, timer, pending_cdp_ids });
+
+    // Store a reverse-lookup from CDP request candidates to deferred entries
+    // for fast resolution when CDP body arrives
     for (const cdp_id of candidates) {
-        _deferred_cdp_index.set(cdp_id, deferred_key);
+        let keys = _deferred_cdp_index.get(cdp_id);
+        if (!keys) {
+            keys = new Set();
+            _deferred_cdp_index.set(cdp_id, keys);
+        }
+        keys.add(deferred_key);
     }
 }
 
-// Reverse index: CDP request_id -> deferred entry key, for fast resolution
-const _deferred_cdp_index: Map<string, string> = new Map();
+// Reverse index: CDP request_id -> Set of deferred entry keys, for fast resolution
+// Set allows multiple deferred entries to share the same CDP candidate (concurrent requests)
+const _deferred_cdp_index: Map<string, Set<string>> = new Map();
+export const _deferred_cdp_index_for_test = _deferred_cdp_index;
 
 export function find_cdp_candidates(
     url: string,

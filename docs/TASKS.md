@@ -193,8 +193,8 @@
   8. 测试：`tests/export_utils.test.ts`（20 tests） + 更新 `tests/popup_export.test.ts`
 
 
-### ❌ P0.44 Body 大小限制改为可配置（1MB 默认 + 设置 UI）
-- **状态**：未修复 — 2026-06-13
+### ✅ P0.44 Body 大小限制改为可配置（1MB 默认 + 设置 UI）
+- **状态**：已修复 — 2026-06-13
 - **详细文档**：`docs/P0.44_BODY_SIZE_CONFIG.md`
 - **现象**：请求体限制 10KB、响应体限制 50KB，硬编码。上次采集 16 条请求超 50KB 被截断。
 - **修复要点**：
@@ -260,27 +260,27 @@
   - P0.41: not_enabled 占比 < 50%
   - P0.43: stats.user_action_count === events.filter(user_action).length
 
-### ❌ T0.2 数据管道测试
+### ✅ T0.2 数据管道测试
 
 - **目的**：验证「写入 → flush → 读取」闭环一致性，stats 计数与 event 数组长度匹配
 - **文件**：`tests/pipeline_consistency.test.ts`
 
-### ❌ T0.3 导出闭环测试
+### ✅ T0.3 导出闭环测试
 
 - **目的**：导入真实导出 JSON，验证字段完备（时区、resource_type、capture_method、body_status 分布）
 - **文件**：`tests/export_integrity.test.ts`
 
-### ❌ T0.4 渲染数据一致性测试
+### ✅ T0.4 渲染数据一致性测试
 
 - **目的**：stats 数字 vs UI 渲染行数，确保每个 tab 都有数据行
 - **文件**：`tests/detail_render_consistency.test.ts`
 
-### ❌ T0.5 入口去重审计测试
+### ✅ T0.5 入口去重审计测试
 
 - **目的**：扩展 P0.40 修复的 import 检查模式到所有共享函数（redaction、build_export_filename 等）
 - **文件**：`tests/entry_unification.test.ts`
 
-### ❌ T0.6 E2E 断言收紧
+### ✅ T0.6 E2E 断言收紧
 
 - **目的**：去掉条件跳过，改为强制断言
 - **影响文件**：`tests/e2e-export.spec.ts`、`tests/e2e-detail-tabs.spec.ts`、`tests/e2e-cdp-retry.spec.ts` 等

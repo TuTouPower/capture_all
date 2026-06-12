@@ -14,6 +14,7 @@ import {
     headers_array_to_map,
     find_matching_cdp_request,
     find_cdp_candidates,
+    resolve_resource_type,
     _cdp_request_meta_for_test,
     _cdp_body_results_for_test,
     _deferred_web_requests_for_test,
@@ -536,87 +537,109 @@ describe('deferred queue multi-candidate resolution', () => {
 
 // ─── P0.31: resolve_resource_type type mapping ───
 
-// Replica of fixed resolve_resource_type with Chrome→standard mappings
-const CHROME_TYPE_MAP: Record<string, string> = {
-    'xmlhttprequest': 'xhr',
-    'main_frame': 'document',
-    'sub_frame': 'document',
-    'script': 'script',
-    'stylesheet': 'stylesheet',
-    'image': 'image',
-    'font': 'font',
-    'media': 'media',
-    'ping': 'ping',
-    'websocket': 'websocket',
-    'xhr': 'xhr',
-    'fetch': 'fetch',
-    'document': 'document',
-    'other': 'other',
-};
-
-function resolve_resource_type_fixed(raw: string): string {
-    if (!raw) return 'other';
-    const lower = raw.toLowerCase();
-    if (CHROME_TYPE_MAP[lower]) return CHROME_TYPE_MAP[lower];
-    return 'other';
-}
-
 describe('resolve_resource_type mapping', () => {
     it('maps xmlhttprequest to xhr', () => {
-        expect(resolve_resource_type_fixed('xmlhttprequest')).toBe('xhr');
-        expect(resolve_resource_type_fixed('XMLHttpRequest')).toBe('xhr');
+        expect(resolve_resource_type('xmlhttprequest')).toBe('xhr');
     });
 
     it('maps main_frame to document', () => {
-        expect(resolve_resource_type_fixed('main_frame')).toBe('document');
+        expect(resolve_resource_type('main_frame')).toBe('document');
     });
 
     it('maps sub_frame to document', () => {
-        expect(resolve_resource_type_fixed('sub_frame')).toBe('document');
+        expect(resolve_resource_type('sub_frame')).toBe('document');
     });
 
     it('maps script to script', () => {
-        expect(resolve_resource_type_fixed('script')).toBe('script');
+        expect(resolve_resource_type('script')).toBe('script');
     });
 
     it('maps stylesheet to stylesheet', () => {
-        expect(resolve_resource_type_fixed('stylesheet')).toBe('stylesheet');
+        expect(resolve_resource_type('stylesheet')).toBe('stylesheet');
     });
 
     it('maps image to image', () => {
-        expect(resolve_resource_type_fixed('image')).toBe('image');
+        expect(resolve_resource_type('image')).toBe('image');
     });
 
     it('maps font to font', () => {
-        expect(resolve_resource_type_fixed('font')).toBe('font');
+        expect(resolve_resource_type('font')).toBe('font');
     });
 
     it('maps media to media', () => {
-        expect(resolve_resource_type_fixed('media')).toBe('media');
+        expect(resolve_resource_type('media')).toBe('media');
     });
 
     it('maps ping to ping', () => {
-        expect(resolve_resource_type_fixed('ping')).toBe('ping');
+        expect(resolve_resource_type('ping')).toBe('ping');
     });
 
     it('maps websocket to websocket', () => {
-        expect(resolve_resource_type_fixed('websocket')).toBe('websocket');
+        expect(resolve_resource_type('websocket')).toBe('websocket');
     });
 
     it('maps already-standard xhr to xhr', () => {
-        expect(resolve_resource_type_fixed('xhr')).toBe('xhr');
+        expect(resolve_resource_type('xhr')).toBe('xhr');
     });
 
     it('maps already-standard fetch to fetch', () => {
-        expect(resolve_resource_type_fixed('fetch')).toBe('fetch');
+        expect(resolve_resource_type('fetch')).toBe('fetch');
     });
 
     it('maps unknown types to other', () => {
-        expect(resolve_resource_type_fixed('csp_report')).toBe('other');
-        expect(resolve_resource_type_fixed('')).toBe('other');
+        expect(resolve_resource_type('csp_report')).toBe('other');
+        expect(resolve_resource_type('')).toBe('other');
     });
 
     it('maps object to other (not in standard set)', () => {
-        expect(resolve_resource_type_fixed('object')).toBe('other');
+        expect(resolve_resource_type('object')).toBe('other');
+    });
+});
+
+// ─── P0.31-R1: CDP PascalCase resource_type normalization ───
+
+describe('resolve_resource_type CDP PascalCase normalization', () => {
+    it('normalizes Font to font', () => {
+        expect(resolve_resource_type('Font')).toBe('font');
+    });
+
+    it('normalizes Stylesheet to stylesheet', () => {
+        expect(resolve_resource_type('Stylesheet')).toBe('stylesheet');
+    });
+
+    it('normalizes Script to script', () => {
+        expect(resolve_resource_type('Script')).toBe('script');
+    });
+
+    it('normalizes Image to image', () => {
+        expect(resolve_resource_type('Image')).toBe('image');
+    });
+
+    it('normalizes Media to media', () => {
+        expect(resolve_resource_type('Media')).toBe('media');
+    });
+
+    it('normalizes Fetch to fetch', () => {
+        expect(resolve_resource_type('Fetch')).toBe('fetch');
+    });
+
+    it('normalizes XHR to xhr', () => {
+        expect(resolve_resource_type('XHR')).toBe('xhr');
+    });
+
+    it('normalizes XMLHttpRequest to xhr', () => {
+        expect(resolve_resource_type('XMLHttpRequest')).toBe('xhr');
+    });
+
+    it('normalizes Document to document', () => {
+        expect(resolve_resource_type('Document')).toBe('document');
+    });
+
+    it('normalizes Websocket to websocket', () => {
+        expect(resolve_resource_type('Websocket')).toBe('websocket');
+    });
+
+    it('returns other for empty string', () => {
+        expect(resolve_resource_type('')).toBe('other');
     });
 });

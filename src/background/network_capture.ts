@@ -184,7 +184,16 @@ export async function enable_response_body_capture(
     already_attached: boolean
 ): Promise<{ success: boolean; error?: string }> {
     if (!is_capturing) return { success: false, error: 'not_capturing' };
-    if (dbg_tab_id !== null) return { success: true };
+    if (dbg_tab_id === tab_id) return { success: true };
+
+    // CDP attached to a different tab — detach old tab first, then re-attach
+    if (dbg_tab_id !== null) {
+        try {
+            chrome.dbg.onEvent.removeListener(handle_cdp_event);
+            await chrome.dbg.detach({ tabId: dbg_tab_id });
+        } catch { /* ignore if already detached */ }
+        dbg_tab_id = null;
+    }
 
     try {
         if (!already_attached) {
@@ -216,7 +225,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 url: request.url || '',
                 method: request.method || 'GET',
                 status_code: 0,
-                resource_type: params?.type || 'other',
+                resource_type: resolve_resource_type(params?.type || 'other'),
                 response_headers: {},
                 request_headers: headers_map_from_cdp(request.headers || {}),
                 timestamp: Date.now(),
@@ -238,7 +247,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 url: response?.url || '',
                 method: '',
                 status_code: response?.status || 0,
-                resource_type: params?.type || 'other',
+                resource_type: resolve_resource_type(params?.type || 'other'),
                 response_headers: headers_map_from_cdp(response?.headers || {}),
                 request_headers: {},
                 timestamp: Date.now(),
@@ -345,7 +354,7 @@ function schedule_orphan_check(req_id: string): void {
             method: meta?.method || 'GET',
             status_code: meta?.status_code || 0,
             timestamp: body_result.timestamp,
-            resource_type: meta?.resource_type || 'other',
+            resource_type: resolve_resource_type(meta?.resource_type || 'other'),
             request_body: meta?.request_body ?? null,
             request_body_status: meta?.request_body_status || 'not_enabled',
             response_body: body_result.body,
@@ -455,7 +464,7 @@ const RESOURCE_TYPE_MAP: Record<string, NetworkRequestData['resource_type']> = {
     'other': 'other',
 };
 
-function resolve_resource_type(raw: string): NetworkRequestData['resource_type'] {
+export function resolve_resource_type(raw: string): NetworkRequestData['resource_type'] {
     if (!raw) return 'other';
     const lower = raw.toLowerCase();
     return RESOURCE_TYPE_MAP[lower] || 'other';

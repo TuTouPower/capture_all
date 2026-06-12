@@ -2,6 +2,7 @@
 // Merges webRequest metadata and CDP body events into unified NetworkRequest.
 
 import type { NetworkRequestData, NetworkCorrelationStatus, BodyCaptureStatus } from '../shared/types';
+import { resolve_resource_type } from './network_capture';
 
 export interface CdpBodyEvent {
     request_id: string;
@@ -71,7 +72,7 @@ export function merge_matched(
         status_code: web_meta.status_code || cdp_event.status_code,
         status_text: null,
         protocol: null,
-        resource_type: (web_meta.resource_type || cdp_event.resource_type) as NetworkRequestData['resource_type'],
+        resource_type: resolve_resource_type(web_meta.resource_type || cdp_event.resource_type),
         initiator: null,
         duration_ms: web_meta.duration_ms,
         start_time_ms: null,
@@ -117,7 +118,7 @@ export function build_cdp_only_request(
         status_code: cdp_event.status_code,
         status_text: null,
         protocol: null,
-        resource_type: cdp_event.resource_type as NetworkRequestData['resource_type'],
+        resource_type: resolve_resource_type(cdp_event.resource_type),
         initiator: null,
         duration_ms: 0,
         start_time_ms: null,
@@ -160,7 +161,7 @@ export function build_web_request_only_request(web_meta: WebRequestMeta): Networ
         status_code: web_meta.status_code,
         status_text: null,
         protocol: null,
-        resource_type: web_meta.resource_type as NetworkRequestData['resource_type'],
+        resource_type: resolve_resource_type(web_meta.resource_type),
         initiator: null,
         duration_ms: web_meta.duration_ms,
         start_time_ms: null,

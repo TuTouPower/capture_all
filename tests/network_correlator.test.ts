@@ -206,7 +206,60 @@ describe('build_web_request_only_request', () => {
     });
 });
 
-// ─── field completeness ───
+// ─── P0.31-R1: CDP PascalCase resource_type normalization in correlator ───
+
+describe('P0.31-R1: resource_type normalization in correlator outputs', () => {
+    it('merge_matched normalizes PascalCase CDP resource_type to lowercase', () => {
+        const web = make_web_meta({ resource_type: 'Font' });
+        const cdp = make_cdp_event({ resource_type: 'Font' });
+        const result = merge_matched(web, cdp, 'matched');
+        expect(result.resource_type).toBe('font');
+    });
+
+    it('build_cdp_only_request normalizes PascalCase resource_type', () => {
+        const cdp = make_cdp_event({ resource_type: 'Stylesheet' });
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        expect(result.resource_type).toBe('stylesheet');
+    });
+
+    it('build_cdp_only_request normalizes Script to script', () => {
+        const cdp = make_cdp_event({ resource_type: 'Script' });
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        expect(result.resource_type).toBe('script');
+    });
+
+    it('build_cdp_only_request normalizes Image to image', () => {
+        const cdp = make_cdp_event({ resource_type: 'Image' });
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        expect(result.resource_type).toBe('image');
+    });
+
+    it('build_cdp_only_request normalizes XHR to xhr', () => {
+        const cdp = make_cdp_event({ resource_type: 'XHR' });
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        expect(result.resource_type).toBe('xhr');
+    });
+
+    it('build_web_request_only_request normalizes PascalCase resource_type', () => {
+        const web = make_web_meta({ resource_type: 'Fetch' });
+        const result = build_web_request_only_request(web);
+        expect(result.resource_type).toBe('fetch');
+    });
+
+    it('build_web_request_only_request normalizes Media to media', () => {
+        const web = make_web_meta({ resource_type: 'Media' });
+        const result = build_web_request_only_request(web);
+        expect(result.resource_type).toBe('media');
+    });
+
+    it('merge_matched normalizes when web is lowercase but CDP is PascalCase', () => {
+        const web = make_web_meta({ resource_type: 'font' });
+        const cdp = make_cdp_event({ resource_type: 'Font' });
+        // correlate will return 'ambiguous' due to mismatch, but merge can still be called
+        const result = merge_matched(web, cdp, 'matched');
+        expect(result.resource_type).toBe('font');
+    });
+});
 
 const REQUIRED_NETWORK_REQUEST_FIELDS: (keyof NetworkRequestData)[] = [
     'request_id', 'method', 'url', 'url_status', 'status_code', 'status_text',

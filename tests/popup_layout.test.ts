@@ -221,6 +221,14 @@ describe('layout regression guards', () => {
         expect(ACTION_HEIGHT_PX).toBe(88);
     });
 
+    it('saved 状态 action 区含两个按钮 (openDetailBtn + exportBtn)', () => {
+        // P0.26: 采集完成后应有「查看」和「导出」两个独立按钮
+        const expected_ids = ['openDetailBtn', 'exportBtn'];
+        expect(expected_ids.length).toBe(2);
+        expect(expected_ids).toContain('exportBtn');
+        expect(expected_ids).toContain('openDetailBtn');
+    });
+
     it('popup width 不变 — 回归保护', () => {
         expect(POPUP_WIDTH_PX).toBe(300);
     });

@@ -351,4 +351,55 @@ test.describe('日志系统', () => {
 
         await dash.close();
     });
+
+    // ============================================================
+    // 6. 运行日志导出 .log 扩展名 (P0.28)
+    // ============================================================
+
+    test('运行日志导出 filename 以 .log 结尾', async () => {
+        const dash = await open_diagnostics();
+
+        await set_log_level(dash, 'debug');
+        await dash.waitForTimeout(300);
+
+        // 点击 #exportLog 触发纯文本日志导出
+        const [download] = await Promise.all([
+            dash.waitForEvent('download', { timeout: 8000 }),
+            dash.locator('#exportLog').click(),
+        ]);
+
+        const filename = download.suggestedFilename();
+        expect(filename).toMatch(/\.log$/);
+        expect(filename).not.toMatch(/\.txt$/);
+
+        await dash.close();
+    });
+
+    // ============================================================
+    // 7. 运行日志导出 MIME 非 text/plain (P0.28)
+    // ============================================================
+
+    test('运行日志导出内容为可读文本', async () => {
+        const dash = await open_diagnostics();
+
+        await set_log_level(dash, 'debug');
+        await dash.waitForTimeout(300);
+
+        const [download] = await Promise.all([
+            dash.waitForEvent('download', { timeout: 8000 }),
+            dash.locator('#exportLog').click(),
+        ]);
+
+        const path = await download.path();
+        expect(path).toBeTruthy();
+
+        const fs = await import('fs');
+        const content = fs.readFileSync(path!, 'utf-8');
+        // 内容应为可读文本，不是 JSON
+        expect(content.length).toBeGreaterThan(0);
+        // 不应是 JSON 格式
+        expect(() => JSON.parse(content)).toThrow();
+
+        await dash.close();
+    });
 });

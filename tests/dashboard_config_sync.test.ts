@@ -17,7 +17,8 @@ describe('dashboard settings update in-memory user_config before save', () => {
         'redact_data',
         'system_time_timezone',
         'detail_time_display_mode',
-        'export_directory',
+        'export_capture_directory',
+        'export_log_directory',
         'export_filename_template',
         'export_save_as',
     ]

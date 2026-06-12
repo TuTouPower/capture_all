@@ -34,6 +34,7 @@ let dt_play = 49.5; // trace playhead position (%)
 
 // Network detail panel state
 let dt_net_sel = -1;
+let dt_net_insp_closed = false;
 
 const root = document.getElementById('root')!;
 
@@ -466,8 +467,9 @@ function render_detail_tab(showInsp: boolean): string {
     if (dt_tab === 'overview') return render_dt_overview();
     if (dt_tab === 'config') return render_dt_config();
     if (dt_tab === 'network') {
-        const show_net_insp = dt_insp_open && dt_net_sel >= 0 && dt_net_sel < detail_network.length;
-        return `<div class="dt-body" data-insp="${show_net_insp ? 1 : 0}"><div class="dt-list">${render_net_table()}</div>${show_net_insp ? render_net_inspector() : ''}</div>`;
+        const show_net_insp = !dt_net_insp_closed && detail_network.length > 0;
+        const selected_net_idx = dt_net_sel >= 0 ? dt_net_sel : 0;
+        return `<div class="dt-body dt-network-body" data-insp="${show_net_insp ? 1 : 0}"><div class="dt-list">${render_net_table(selected_net_idx)}</div>${show_net_insp ? `<div class="dt-insp-handle"></div>${render_net_inspector(selected_net_idx)}` : ''}</div>`;
     }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
     if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
@@ -506,7 +508,8 @@ function render_dt_rail(): string {
                 <span class="qf-n">${num(counts[k === 'all' ? 'all' : k] || 0)}</span>
             </button>`).join('')}
         </div>
-    </aside><div class="dt-rail-handle"></div>`;
+        <div class="dt-rail-handle"></div>
+    </aside>`;
 }
 
 function filtered_events(): RecordEvent[] {
@@ -626,7 +629,7 @@ function render_dt_inspector(): string {
     </aside>`;
 }
 
-function render_net_table(): string {
+function render_net_table(selected_net_idx = dt_net_sel): string {
     const rows = detail_network.map((r) => {
         const err = (r.status_code || 0) >= 400;
         return `<div class="net-row${err ? ' err' : ''}">
@@ -645,7 +648,7 @@ function render_net_table(): string {
         </div>
         ${detail_network.length ? detail_network.map((r, idx) => {
         const err = (r.status_code || 0) >= 400;
-        return `<div class="net-row${err ? ' err' : ''}" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px" data-netidx="${idx}" data-sel="${dt_net_sel === idx ? 1 : 0}">
+        return `<div class="net-row${err ? ' err' : ''}" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px" data-netidx="${idx}" data-sel="${selected_net_idx === idx ? 1 : 0}">
             <span class="mono dim">${esc((r as unknown as Record<string, unknown>).timestamp || rel_time(0))}</span>
             <span class="mono"><span class="method-sm" data-m="${esc(r.method)}">${esc(r.method)}</span></span>
             <span class="mono url-cell" title="${esc(r.url)}">${esc(r.url)}</span>
@@ -657,8 +660,8 @@ function render_net_table(): string {
     </div></div></div>` + (rows ? '' : '');
 }
 
-function render_net_inspector(): string {
-    const req = detail_network[dt_net_sel];
+function render_net_inspector(selected_net_idx = dt_net_sel): string {
+    const req = detail_network[selected_net_idx];
     if (!req) return '';
     const err = (req.status_code || 0) >= 400;
     const req_hdrs = req.request_headers ? Object.entries(req.request_headers).map(([k, v]) => `<div class="dti-field"><span class="k">${esc(k)}</span><span class="v mono">${esc(String(v))}</span></div>`).join('') : '<span class="dim">—</span>';
@@ -807,33 +810,33 @@ function wire_detail(): void {
     // Network row click → open detail inspector
     c.querySelectorAll('[data-netidx]').forEach((row) => row.addEventListener('click', () => {
         dt_net_sel = Number((row as HTMLElement).dataset.netidx);
-        dt_insp_open = true;
+        dt_net_insp_closed = false;
         render_content();
     }));
-    c.querySelector('[data-net-insp-close]')?.addEventListener('click', () => { dt_insp_open = false; dt_net_sel = -1; render_content(); });
+    c.querySelector('[data-net-insp-close]')?.addEventListener('click', () => { dt_net_insp_closed = true; dt_net_sel = -1; render_content(); });
     wire_rail_resize(c);
+    wire_network_resize(c);
     wire_trace();
 }
 
 function wire_rail_resize(c: HTMLElement): void {
     const handle = c.querySelector('.dt-rail-handle') as HTMLElement | null;
     if (!handle) return;
+    const body = handle.closest('.dt-body') as HTMLElement | null;
+    const rail = handle.closest('.dt-rail') as HTMLElement | null;
+    if (!body || !rail) return;
     const STORAGE_KEY = 'dt_rail_width';
     const MIN_W = 160, MAX_W = 480;
 
     const apply_width = (w: number) => {
-        document.querySelectorAll('.dt-body').forEach((body) => {
-            const el = body as HTMLElement;
-            const cols = el.style.gridTemplateColumns || getComputedStyle(el).gridTemplateColumns;
-            const parts = cols.split(' ').filter(Boolean);
-            if (parts.length >= 2) {
-                parts[0] = `${w}px`;
-                el.style.gridTemplateColumns = parts.join(' ');
-            }
-        });
+        const cols = body.style.gridTemplateColumns || getComputedStyle(body).gridTemplateColumns;
+        const parts = cols.split(' ').filter(Boolean);
+        if (parts.length >= 2) {
+            parts[0] = `${w}px`;
+            body.style.gridTemplateColumns = parts.join(' ');
+        }
     };
 
-    // Restore saved width
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
         const w = parseInt(saved);
@@ -844,7 +847,6 @@ function wire_rail_resize(c: HTMLElement): void {
         e.preventDefault();
         handle.classList.add('active');
         const startX = (e as MouseEvent).clientX;
-        const rail = handle.parentElement as HTMLElement;
         const startWidth = rail.getBoundingClientRect().width;
 
         const onMove = (ev: MouseEvent) => {
@@ -854,8 +856,48 @@ function wire_rail_resize(c: HTMLElement): void {
         };
         const onUp = () => {
             handle.classList.remove('active');
-            const railW = rail.getBoundingClientRect().width;
-            localStorage.setItem(STORAGE_KEY, String(Math.round(railW)));
+            localStorage.setItem(STORAGE_KEY, String(Math.round(rail.getBoundingClientRect().width)));
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    });
+}
+
+function wire_network_resize(c: HTMLElement): void {
+    const handle = c.querySelector('.dt-insp-handle') as HTMLElement | null;
+    if (!handle) return;
+    const body = handle.closest('.dt-network-body') as HTMLElement | null;
+    const insp = body?.querySelector('.dt-insp') as HTMLElement | null;
+    if (!body || !insp) return;
+    const STORAGE_KEY = 'dt_network_detail_width';
+    const MIN_W = 320, MAX_W = 720;
+
+    const apply_width = (w: number) => {
+        body.style.gridTemplateColumns = `minmax(0, 1fr) 5px ${w}px`;
+    };
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        const w = parseInt(saved);
+        if (w >= MIN_W && w <= MAX_W) apply_width(w);
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handle.classList.add('active');
+        const startX = (e as MouseEvent).clientX;
+        const startWidth = insp.getBoundingClientRect().width;
+
+        const onMove = (ev: MouseEvent) => {
+            const dx = startX - ev.clientX;
+            const w = Math.max(MIN_W, Math.min(MAX_W, startWidth + dx));
+            apply_width(w);
+        };
+        const onUp = () => {
+            handle.classList.remove('active');
+            localStorage.setItem(STORAGE_KEY, String(Math.round(insp.getBoundingClientRect().width)));
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
         };

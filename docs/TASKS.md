@@ -214,9 +214,9 @@
 - **影响文件**：
   - `src/background/network_capture.ts` — handle_completed + find_matching_cdp_request + schedule_orphan_check
 
-### ❌ P0.15-R1 延迟队列多候选竞态 — cdp_only 重复残留
+### ✅ P0.15-R1 延迟队列多候选竞态 — cdp_only 重复残留
 
-- **状态**：未修复
+- **状态**：已修复
 - **现象**：P0.15 修复后，录 `D:\Kar\Code\omni_usage\data\capture_all_session_1781254042687_d35v6jz.json`（2026-06-12，19s，198 条）：`body_capture_mode=extension_cdp` 全部正确，`response_preview` 正确填充，必填字段完整（P0.11/P0.14/P0.16 生效）。但仍有 **121 条重复**（198 条 → 77 唯一 URL），分布为：
   - 98 条 `correlation_status=undefined`（webRequest 路径，`build_network_event` → `send_to_background`）
   - 100 条 `correlation_status=cdp_only`（CDP orphan 路径，`schedule_orphan_check` → `build_cdp_only_request`）
@@ -447,9 +447,9 @@
 
 > 记录于 2026-06-12。
 
-### ❌ 1.8.1 深色模式下统计数字颜色为黑色
+### ✅ 1.8.1 深色模式下统计数字颜色为黑色
 
-- **状态**：未修复
+- **状态**：已修复
 - **现象**：Dashboard 采集记录列表中，各数据标签的统计数字（如「用户行为 36」中的「36」）在深色模式下显示为黑色，与深色背景融为一体不可读
 - **根因**：`.cap-stat-val` 或类似统计数字元素在深色模式下未设置 `color`，继承浏览器默认 `#000`
 - **修复要点**：
@@ -459,9 +459,9 @@
 - **影响文件**：
   - `src/dashboard/dashboard.css`
 
-### ❌ 1.8.2 详情页左侧标签导航宽度不可调
+### ✅ 1.8.2 详情页左侧标签导航宽度不可调
 
-- **状态**：未修复
+- **状态**：已修复
 - **现象**：详情页左侧标签导航栏宽度固定，标签名较长时被截断，用户无法调整侧边栏宽度来查看完整标签名
 - **期望行为**：侧边栏右侧边缘可拖拽拉伸，调整宽度
 - **修复要点**：
@@ -473,9 +473,9 @@
   - `src/detail/detail.css` — 侧边栏 + 手柄样式
   - `src/detail/detail.ts` — 拖拽逻辑
 
-### ❌ 1.8.3 详情页标签不全 — 只显示部分数据标签
+### ✅ 1.8.3 详情页标签不全 — 只显示部分数据标签
 
-- **状态**：未修复
+- **状态**：已修复
 - **现象**：详情页左侧标签导航只有 概览、时间线、网络请求、控制台 4 个标签，缺少 用户行为、页面导航、错误异常、Storage、Cookie 5 个标签。无法查看这些类型的事件数据
 - **根因**：`detail.ts` 或 `detail.html` 中标签列表只包含了 4 个 tab，未覆盖全部 7 个数据标签
 - **修复要点**：
@@ -492,9 +492,9 @@
   - `src/detail/detail.ts` — 标签渲染逻辑
   - `src/detail/detail.css` — 新增标签样式
 
-### ❌ 1.8.4 时间线标签名与七标签不一致
+### ✅ 1.8.4 时间线标签名与七标签不一致
 
-- **状态**：未修复
+- **状态**：已修复
 - **现象**：Dashboard 时间线 rail 视图中标签名与 popup 七标签口径不一致：
   - 时间线显示「网络」，应为「网络请求」
   - 标签名应统一为：用户行为、页面导航、网络请求、控制台、错误异常、Storage、Cookie

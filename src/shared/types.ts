@@ -272,7 +272,7 @@ export interface NetworkRequestData {
     from_cache: boolean | null;
     cache_status: 'memory_cache' | 'disk_cache' | 'none' | null;
     error_text: string | null;
-    capture_method: 'web_request' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
+    capture_method: 'web_request' | 'cdp_primary' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
     body_capture_mode: BodyCaptureMode;
     session_id?: string;
     tab_id?: number;

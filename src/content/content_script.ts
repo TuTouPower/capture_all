@@ -1,6 +1,7 @@
 // content/content_script.ts
 import type { RecordConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { category_for_event_type } from '../shared/event_category';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
@@ -216,6 +217,7 @@ function send_event(type_or_event: string | Record<string, unknown>, data?: unkn
     const event = typeof type_or_event === 'string'
         ? {
             capture_id,
+            category: category_for_event_type(type_or_event),
             relative_time_ms: get_relative_time(capture_start_epoch_ms),
             absolute_time: new Date().toISOString(),
             type: type_or_event,

@@ -18,6 +18,8 @@ import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_re
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../shared/redaction';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
+import { category_for_event_type } from '../shared/event_category';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../shared/user_config';
@@ -266,15 +268,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         tab_id,
         window_id,
         config_snapshot: config,
-        stats: {
-            event_count: 0,
-            nav_count: 0,
-            request_count: 0,
-            log_count: 0,
-            error_count: 0,
-            storage_change_count: 0,
-            cookie_change_count: 0,
-        },
+        stats: create_empty_capture_stats(),
         tags,
         created_at: now_iso,
         updated_at: now_iso,
@@ -543,6 +537,7 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
 
     // Set capture_id and relative_time_ms from context
     event.capture_id = current_capture_id;
+    event.category = event.category || category_for_event_type(event.type);
     if (event.absolute_time) {
         const absolute_ms = typeof event.absolute_time === 'number'
             ? event.absolute_time
@@ -557,19 +552,7 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
 
     try {
         await write_events([event]);
-        current_capture.stats.event_count++;
-        if (event.category === 'navigation') {
-            current_capture.stats.nav_count++;
-        }
-        if (event.category === 'storage') {
-            current_capture.stats.storage_change_count++;
-        }
-        if (event.category === 'cookie') {
-            current_capture.stats.cookie_change_count++;
-        }
-        if (event.category === 'error') {
-            current_capture.stats.error_count++;
-        }
+        current_capture.stats = increment_capture_event_stats(current_capture.stats, event.category);
         await persist_stats();
     } catch (err) {
         logger.error('Failed to write event', err);

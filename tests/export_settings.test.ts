@@ -3,7 +3,7 @@ import { build_export_filename } from '../src/shared/export_settings';
 
 const now = new Date('2024-02-03T04:05:06.000Z');
 
-const config = { system_time_timezone: 'Asia/Shanghai' as const };
+const config = { system_time_timezone: 'UTC+8' as const };
 
 describe('export settings', () => {
     test('builds filename from capture tokens and configured timezone', () => {

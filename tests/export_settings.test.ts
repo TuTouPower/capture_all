@@ -67,6 +67,22 @@ describe('export settings', () => {
         }
     });
 
+    test('P0.37: default template produces filename containing date', () => {
+        // 模拟 export_session() 使用 DEFAULT_USER_CONFIG 的 export_filename_template
+        // 默认模板为 'capture_all_{capture_id}_{date}.{ext}'
+        const default_template_cfg = {
+            export_capture_directory: '',
+            export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
+            ...config,
+        };
+        const filename = build_export_filename(default_template_cfg, '1781265766247_7vafphp', 'json', now);
+
+        expect(filename).toContain('2024-02-03');
+        expect(filename).toContain('capture_1781265766247_7vafphp');
+        expect(filename).toMatch(/\.json$/);
+        expect(filename).not.toMatch(/^capture_all_1781265766247_7vafphp\.json$/);
+    });
+
     test('capture and log export directories are independent', () => {
         // P0.27: 两类导出位置分别记录，互不覆盖
         const capture_cfg = {

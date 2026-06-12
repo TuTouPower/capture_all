@@ -6,6 +6,7 @@ import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time, format_system_time_filename } from '../shared/system_time';
+import { build_export_filename } from '../shared/export_settings';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -357,15 +358,16 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
         const r = await chrome.runtime.sendMessage({ action, session_id: id });
         if (!r?.success) { alert('导出失败'); return; }
-        const ext = format === 'html' ? 'html' : format === 'har' ? 'har' : format === 'jsonl' ? 'jsonl' : 'json';
+        const ext = format === 'html' ? 'html' as const : format === 'har' ? 'har' as const : format === 'jsonl' ? 'jsonl' as const : 'json' as const;
         const mime = format === 'html' ? 'text/html' : 'application/json';
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
         const blob = new Blob([content], { type: mime });
         const url = URL.createObjectURL(blob);
-        const capture_dir = user_config.export_capture_directory || '';
-        const capture_filename = capture_dir
-            ? `${capture_dir}/capture_all_${id}.${ext}`
-            : `capture_all_${id}.${ext}`;
+        const capture_filename = build_export_filename({
+            export_capture_directory: user_config.export_capture_directory,
+            export_filename_template: user_config.export_filename_template,
+            system_time_timezone: user_config.system_time_timezone,
+        }, id, ext);
         chrome.downloads.download({
             url,
             filename: capture_filename,

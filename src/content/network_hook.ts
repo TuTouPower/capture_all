@@ -264,7 +264,7 @@ export function start_network_hook(
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
 
-        send_event('network_request', {
+        send_event('network_body_hook', {
             category: 'network',
             method: d.method || 'GET',
             url: d.url || '',
@@ -283,7 +283,7 @@ export function start_network_hook(
             request_body: d.request_body ?? null,
             request_body_status: d.request_body_status || 'not_enabled',
             response_body: d.response_body ?? null,
-            response_preview: null,
+            response_preview: typeof d.response_body === 'string' ? d.response_body.slice(0, 200) : null,
             response_body_status: d.response_body_status || 'failed',
             mime_type: null,
             request_size_bytes: null,

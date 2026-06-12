@@ -611,7 +611,7 @@ async function handle_fallback_body_event(data: any): Promise<void> {
         request_body: data.request_body ?? null,
         request_body_status: data.request_body_status || 'not_enabled',
         response_body: data.response_body ?? null,
-        response_preview: null,
+        response_preview: data.response_preview ?? null,
         response_body_status: data.response_body_status || 'failed',
         mime_type: null,
         request_size_bytes: null,

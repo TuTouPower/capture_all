@@ -7,6 +7,7 @@ import {
     extract_dir_from_filename,
     load_last_export_dirs,
     save_last_export_dir,
+    track_export_dir,
 } from '../src/shared/export_utils';
 
 // Mock chrome APIs
@@ -210,6 +211,31 @@ describe('last export dirs storage', () => {
             last_log_export_dir: 'new-log-dir',
         });
     });
+
+    it('track_export_dir stores capture dir when download completes', async () => {
+        mock_search.mockResolvedValue([{ filename: 'picked/capture/file.json' }]);
+        track_export_dir(42, 'capture');
+
+        mock_on_changed_listeners[0]({ id: 42, state: { current: 'complete' } });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mock_search).toHaveBeenCalledWith({ id: 42 });
+        expect(mock_storage_set).toHaveBeenCalledWith({
+            last_capture_export_dir: 'picked/capture',
+        });
+        expect(mock_on_changed_listeners).toHaveLength(0);
+    });
+
+    it('track_export_dir removes listener when download is interrupted', () => {
+        track_export_dir(42, 'log');
+
+        mock_on_changed_listeners[0]({ id: 42, state: { current: 'interrupted' } });
+
+        expect(mock_search).not.toHaveBeenCalled();
+        expect(mock_storage_set).not.toHaveBeenCalled();
+        expect(mock_on_changed_listeners).toHaveLength(0);
+    });
 });
 
 describe('P0.40: three export entries unified', () => {
@@ -247,5 +273,34 @@ describe('P0.40: three export entries unified', () => {
         expect(popup_src).toMatch(
             /import.*download_blob.*from.*export_utils/,
         );
+    });
+
+    it('all capture export entries load and track the last capture directory', () => {
+        const { readFileSync } = require('node:fs');
+        const { resolve } = require('node:path');
+        const sources = [
+            readFileSync(resolve(__dirname, '..', 'src/dashboard/dashboard.ts'), 'utf8'),
+            readFileSync(resolve(__dirname, '..', 'src/detail/detail.ts'), 'utf8'),
+            readFileSync(resolve(__dirname, '..', 'src/popup/popup.ts'), 'utf8'),
+        ];
+
+        for (const source of sources) {
+            expect(source).toMatch(/load_last_export_dirs/);
+            expect(source).toMatch(/capture_dir/);
+            expect(source).toMatch(/track_export_dir\([^)]*,\s*'capture'\)/);
+        }
+    });
+
+    it('dashboard log export loads and tracks the last log directory separately', () => {
+        const { readFileSync } = require('node:fs');
+        const { resolve } = require('node:path');
+        const dashboard_src = readFileSync(
+            resolve(__dirname, '..', 'src/dashboard/dashboard.ts'),
+            'utf8',
+        );
+
+        expect(dashboard_src).toMatch(/load_last_export_dirs/);
+        expect(dashboard_src).toMatch(/log_dir/);
+        expect(dashboard_src).toMatch(/track_export_dir\([^)]*,\s*'log'\)/);
     });
 });

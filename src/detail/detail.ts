@@ -4,8 +4,7 @@ import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
-import { build_export_filename } from '../shared/export_settings';
-import { download_blob } from '../shared/export_utils';
+import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
 import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
@@ -269,7 +268,7 @@ async function export_json(): Promise<void> {
     });
 
     if (response.success) {
-        download_export(response.json, 'application/json', 'json');
+        await download_export(response.json, 'application/json', 'json');
     }
 }
 
@@ -282,7 +281,7 @@ async function export_jsonl(): Promise<void> {
     });
 
     if (response.success) {
-        download_export(response.jsonl, 'application/x-ndjson', 'jsonl');
+        await download_export(response.jsonl, 'application/x-ndjson', 'jsonl');
     }
 }
 
@@ -295,7 +294,7 @@ async function export_html(): Promise<void> {
     });
 
     if (response.success) {
-        download_export(response.html, 'text/html', 'html');
+        await download_export(response.html, 'text/html', 'html');
     }
 }
 
@@ -308,14 +307,25 @@ async function export_har(): Promise<void> {
     });
 
     if (response.success) {
-        download_export(response.har, 'application/json', 'har');
+        await download_export(response.har, 'application/json', 'har');
     }
 }
 
-function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): void {
+async function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): Promise<void> {
     const blob = new Blob([content], { type });
-    const filename = build_export_filename(user_config, session_id, extension);
-    download_blob(blob, filename, { save_as: true });
+    const { capture_dir } = await load_last_export_dirs();
+    const filename = build_capture_filename(
+        {
+            export_capture_directory: user_config.export_capture_directory,
+            export_filename_template: user_config.export_filename_template,
+            system_time_timezone: user_config.system_time_timezone,
+        },
+        session_id,
+        extension,
+        capture_dir,
+    );
+    const download_id = await download_blob(blob, filename, { save_as: true });
+    track_export_dir(download_id, 'capture');
 }
 
 // Helpers

@@ -66,12 +66,17 @@ export function track_export_dir(
         id: number;
         state?: { current: string };
     }) => {
-        if (
-            delta.id !== download_id ||
-            delta.state?.current !== 'complete'
-        ) {
+        if (delta.id !== download_id || !delta.state?.current) {
             return;
         }
+        if (delta.state.current !== 'complete' && delta.state.current !== 'interrupted') {
+            return;
+        }
+        if (delta.state.current === 'interrupted') {
+            chrome.downloads.onChanged.removeListener(listener);
+            return;
+        }
+        chrome.downloads.onChanged.removeListener(listener);
         chrome.downloads
             .search({ id: download_id })
             .then((results) => {
@@ -79,10 +84,10 @@ export function track_export_dir(
                     const dir = extract_dir_from_filename(
                         results[0].filename,
                     );
-                    if (dir) save_last_export_dir(type, dir);
+                    if (dir) void save_last_export_dir(type, dir);
                 }
-            });
-        chrome.downloads.onChanged.removeListener(listener);
+            })
+            .catch(() => undefined);
     };
     chrome.downloads.onChanged.addListener(listener);
 }

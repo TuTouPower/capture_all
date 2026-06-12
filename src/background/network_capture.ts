@@ -9,7 +9,7 @@
 import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus } from '../shared/types';
 import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
-import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
+import { DEFAULT_CONFIG } from '../shared/constants';
 import type { CdpBodyEvent } from './network_correlator';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
@@ -22,6 +22,8 @@ interface NetworkCaptureConfig {
     redact_data: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
+    max_request_body_bytes: number;
+    max_response_body_bytes: number;
 }
 
 interface NetworkEventPayload {
@@ -34,7 +36,7 @@ let capture_id: string;
 let start_time: number;
 let current_tab_id: number;
 let send_to_background: (payload: NetworkEventPayload) => void;
-let config: NetworkCaptureConfig;
+let config: NetworkCaptureConfig = DEFAULT_CONFIG;
 
 // Debuggee state for response body capture
 let dbg_tab_id: number | null = null;
@@ -217,6 +219,15 @@ export async function enable_response_body_capture(
     }
 }
 
+export function build_cdp_body_result(body_text: string, max_response_body_bytes = config.max_response_body_bytes): { body: string; status: BodyCaptureStatus; preview: string | null } {
+    const byte_len = new TextEncoder().encode(body_text).length;
+    if (byte_len > max_response_body_bytes) {
+        const trunc_result = truncate_response_body(body_text, max_response_body_bytes);
+        return { body: trunc_result.body!, status: 'too_large', preview: trunc_result.response_preview };
+    }
+    return { body: body_text, status: 'captured', preview: body_text.slice(0, 200) };
+}
+
 function handle_cdp_event(source: any, method: string, params: any): void {
     if (!is_capturing || dbg_tab_id === null) return;
     if (source?.tabId !== dbg_tab_id) return;
@@ -232,8 +243,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             let req_body_status: BodyCaptureStatus = 'not_enabled';
             if (config.capture_request_body && request.postData) {
                 const byte_len = new TextEncoder().encode(request.postData).length;
-                if (byte_len > MAX_REQUEST_BODY_BYTES) {
-                    req_body = truncate_request_body(request.postData);
+                if (byte_len > config.max_request_body_bytes) {
+                    req_body = truncate_request_body(request.postData, config.max_request_body_bytes);
                     req_body_status = 'too_large';
                 } else {
                     req_body = request.postData;
@@ -293,17 +304,10 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             } else if (result.base64Encoded) {
                 body_status = 'unsupported_binary';
             } else {
-                body = result.body;
-                const byte_len = new TextEncoder().encode(body!).length;
-                if (byte_len > MAX_RESPONSE_BODY_BYTES) {
-                    const trunc_result = truncate_response_body(body!);
-                    body = trunc_result.body!;
-                    preview = trunc_result.response_preview;
-                    body_status = 'too_large';
-                } else {
-                    preview = body!.slice(0, 200);
-                    body_status = 'captured';
-                }
+                const body_result = build_cdp_body_result(result.body, config.max_response_body_bytes);
+                body = body_result.body;
+                preview = body_result.preview;
+                body_status = body_result.status;
             }
 
             const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview };
@@ -467,7 +471,7 @@ export function encode_form_data(form: Record<string, string | string[]>): strin
     return parts.join('&');
 }
 
-export function extract_request_body(details: any, capture_enabled?: boolean): { body: string | null; status: BodyCaptureStatus } {
+export function extract_request_body(details: any, capture_enabled?: boolean, max_request_body_bytes = config.max_request_body_bytes): { body: string | null; status: BodyCaptureStatus } {
     const enabled = capture_enabled ?? config.capture_request_body;
     if (!enabled) {
         return { body: null, status: 'not_enabled' };
@@ -498,8 +502,8 @@ export function extract_request_body(details: any, capture_enabled?: boolean): {
     }
 
     const byte_len = new TextEncoder().encode(body).length;
-    if (byte_len > MAX_REQUEST_BODY_BYTES) {
-        return { body: truncate_request_body(body), status: 'too_large' };
+    if (byte_len > max_request_body_bytes) {
+        return { body: truncate_request_body(body, max_request_body_bytes), status: 'too_large' };
     }
     return { body, status: 'captured' };
 }

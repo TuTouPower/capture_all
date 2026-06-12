@@ -495,6 +495,8 @@ export interface RecordConfig {
     capture_input_values: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
+    max_request_body_bytes: number;
+    max_response_body_bytes: number;
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
     redact_data: boolean;
@@ -511,6 +513,8 @@ export interface UserConfig {
     capture_input_values: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
+    max_request_body_bytes: number;
+    max_response_body_bytes: number;
     redact_data: boolean;
     theme: ThemeMode;
     locale: string;

@@ -180,19 +180,48 @@
   3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
 
 
-### ❌ P0.40 popup 导出按钮无法选择导出文件夹
-- **状态**：未修复 — 2026-06-12 用户实测发现
-- **现象**：采集完成后在 popup 弹出面板点击「导出」按钮，文件直接下载到默认位置，不弹出「另存为」对话框，用户无法选择导出文件夹。
-- **期望行为**：点击导出按钮应弹出浏览器保存对话框（或提供文件夹选择），让用户自行决定导出文件保存位置。
-- **影响**：用户无法自主管理导出文件位置，所有导出文件落到默认下载目录。
-- **初步判断**：P0.35 修复中 popup 导出改用 `Blob → <a>.click()` 方式触发下载，该方式不支持弹出保存对话框。需改用 `chrome.downloads.download()` API（带 `saveAs: true`）或在导出前提供目录选择。Dashboard 端 `export_session()` 使用 `chrome.downloads.download()` 可弹出对话框，popup 端应保持一致。
+### ❌ P0.40 popup 导出按钮无法选择导出文件夹（含导出代码碎片化）
+- **状态**：未修复 — 2026-06-12 用户实测发现，2026-06-13 补充
+- **现象**：
+  1. 采集完成后在 popup 弹出面板点击「导出」按钮，文件直接下载到默认位置，不弹出「另存为」对话框，用户无法选择导出文件夹
+  2. popup 导出、dashboard 采集记录导出、运行日志导出 **三个导出入口各自实现了不同的导出代码**，逻辑重复且行为不一致
+  3. **未记录用户上一次导出选择的文件夹**，每次导出都回到默认下载目录
+  4. 采集记录导出和运行日志导出**使用同一个文件夹**，应分开
+- **期望行为**：
+  1. 三个导出入口复用同一段导出逻辑（一个共享函数），行为一致
+  2. 点击导出按钮应弹出浏览器保存对话框，让用户选择保存位置
+  3. 用户选择的导出文件夹应**持久化到 storage**，下次导出默认使用上次文件夹
+  4. 采集记录导出和运行日志导出应有**各自独立的默认文件夹**
+- **影响**：用户体验差，每次导出都要重新找文件夹；代码重复导致维护困难，改一处可能漏另一处
 - **修复要点**：
-  1. popup 导出改用 `chrome.downloads.download({ url, saveAs: true })` 触发浏览器原生保存对话框
-  2. 或在 popup 中先询问用户导出格式和位置，再调用 SW 的 export action
-  3. 补测试：验证 popup 导出调用 `chrome.downloads.download` 且 `saveAs` 为 true
+  1. 抽取共享导出函数（`download_file` 或类似），统一处理 Blob → `chrome.downloads.download({ saveAs: true })` 流程
+  2. popup、dashboard capture export、log export 三个入口改为调用同一函数
+  3. 在 user_config / storage 中分别存储 `export_capture_directory` 和 `export_log_directory`，且实际选择后持久化
+  4. 补测试：三个入口都调用同一共享函数
 - **影响文件**：
   - `src/popup/popup.ts` — exportBtn click handler
+  - `src/dashboard/dashboard.ts` — export_session / log export
+  - `src/shared/export_utils.ts` — 新建共享导出模块
+  - `src/shared/user_config.ts` — 导出目录字段
   - `tests/popup_export.test.ts` — 导出行为测试
+
+
+### ❌ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
+- **状态**：未修复 — 2026-06-13 用户实测发现
+- **现象**：采集记录详情页统计数据明确显示采集到了 11 条用户行为事件，但点击「用户行为」标签页后内容区域显示「暂无数据」，看不到任何用户行为明细。
+- **期望行为**：「用户行为」标签页必须展示已采集到的全部用户行为明细，计数与列表内容一致。
+- **影响**：用户无法查看核心行为采集结果，统计数字与详情内容矛盾。P0.36 修复后可能仍有未被覆盖的路径。
+- **初步判断**：
+  1. 可能和 P0.36 相关但不同路径——P0.36 修的是 `detail.ts` 独立详情页，但 dashboard 内嵌详情 tab 可能使用不同渲染函数
+  2. dashboard 内嵌详情页的用户行为 tab 过滤条件可能使用了错误的 category/type 值
+  3. 渲染函数可能在某一个数组中查找，但用户行为事件可能落在其他数据源
+- **修复要点**：
+  1. 确认 dashboard 详情页用户行为 tab 使用的过滤条件和数据源
+  2. 对比 stats 计数使用的查询函数和实际渲染使用的查询函数是否一致
+  3. 确认 P0.36 修复是否同时覆盖了 `detail.ts` 和 `dashboard.ts` 两个详情入口
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
+  - `src/detail/detail.ts` — 独立详情页数据加载
 
 
 ### ✅ P0.41 Response Body 采集时序竞态 — web_request 路径 ~98% not_enabled

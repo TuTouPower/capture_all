@@ -6,6 +6,7 @@ import {
     get_events_by_category, get_network_requests, get_console_events,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
+    start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
 import { start_network_capture, stop_network_capture, set_cdp_body_event_handler } from './network_capture';
@@ -312,6 +313,9 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     // Start keepalive
     start_keepalive();
 
+    // Start periodic flush to ensure buffered events reach IndexedDB promptly
+    start_periodic_flush();
+
     // Start network capture if enabled
     if (config.capture_network) {
         start_network_capture(session_id, start_time, config, tab_id, handle_network_request);
@@ -512,6 +516,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
         }
     });
 
+    await run_stop_step('stop_periodic_flush', () => { stop_periodic_flush(); });
     await run_stop_step('flush_all', () => flush_all());
 
     current_capture = null;

@@ -130,28 +130,14 @@
   4. 对比 dashboard 的 `export_session()`（有完整 await+Blob+download 链路），popup 只 fire-and-forget，无人发现差异因无测试对比两处导出路径
 
 
-### ❌ P0.36 采集详情页「用户行为」标签页显示无数据
-- **状态**：未修复 — 2026-06-12 用户实测发现
-- **现象**：采集记录详情中统计显示采集到了用户行为（如 23 条），但点击「用户行为」标签页后内容区域为空或显示「无数据」，看不到任何用户行为明细。此问题与已修复的 P0.23 同名但症状可能不同——P0.23 修复的是数据未合入 all_events，本次可能是数据已合入但仍不显示。
-- **期望行为**：「用户行为」标签页必须展示已采集到的全部用户行为明细，计数与列表内容一致。
-- **影响**：用户无法查看核心行为采集结果，统计数字与详情内容矛盾。
-- **初步判断**：
-  1. 详情页「用户行为」tab 的数据过滤条件可能使用了错误的 category/type 值（与事件实际 category 不匹配）
-  2. 渲染函数可能只在某一个数组（如 `detail_events`）中查找，但用户行为事件可能落在其他数据源
-  3. P0.23 修复可能只解决了 `all_events` 合并，但 detail 页渲染时重新过滤了数据
-  4. 也可能是 `detail_events` 变量在 tab 切换时被清空或覆盖
-- **修复要点**：
-  1. 在详情页加载时打印用户行为事件的实际 category/type 值
-  2. 对比「用户行为」tab 的过滤条件，确认口径一致
-  3. 确认渲染路径是否正确读取到 detail_events
-- **影响文件**：
-  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
-  - `src/detail/detail.ts` — 独立详情页数据加载
-- **测试遗漏原因**：
-  1. P0.23 修复后测试只验证 `get_capture_data().events` 包含用户行为事件（stats 计数层面），不验证详情页 tab 渲染出实际 DOM 行
-  2. `render_simple_events()` 按 type 白名单 `['mouse_event', 'keyboard_event', 'scroll_event', 'input_event']` 过滤 `detail_events`，无测试验证 content script 上报的实际 type 值在白名单内
-  3. 无测试验证 `detail_events` 变量在 dashboard 加载详情后被正确赋值（含用户行为事件）
-  4. E2E `e2e-detail-tabs.spec.ts` 只验证 tab 切换/存在，不验证每个 tab 内容区有至少一条数据行
+### ✅ P0.36 采集详情页「用户行为」标签页显示无数据
+- **状态**：已修复 — 2026-06-12
+- **根因**：`detail.ts` 的 `render_events()` 使用了错误的 type 白名单 `['mouse_event', 'keyboard_event', 'scroll_event', 'dom_mutation']`，其中 `dom_mutation` 不是实际事件类型，而 content script 上报的 `input_event` 缺失。同时 `storage.ts` 未实现周期性 flush，少量事件可能滞留内存 buffer 未写入 IndexedDB。
+- **修复内容**：
+  1. `src/detail/detail.ts` 行 205：白名单修正为 `['mouse_event', 'keyboard_event', 'scroll_event', 'input_event']`
+  2. `src/detail/detail.ts` 行 348：`get_event_detail()` 的 `dom_mutation` case 替换为 `input_event`
+  3. `src/background/storage.ts`：新增 `start_periodic_flush()` / `stop_periodic_flush()`，利用已定义的 `FLUSH_INTERVAL_MS`（1s）周期性 flush 缓冲区
+  4. `src/background/service_worker.ts`：采集开始时调用 `start_periodic_flush()`，停止时调用 `stop_periodic_flush()`
 
 
 ### ✅ P0.37 导出文件名不含 date，未使用系统时区

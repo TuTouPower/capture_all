@@ -230,7 +230,7 @@ test.describe.serial('多轮采集数据隔离', () => {
             typeof data.duration_ms,
             'duration_ms 应为 number'
         ).toBe('number');
-        expect(data.duration_ms, 'duration_ms 应 >= 0').toBeGreaterThanOrEqual(0);
+        expect(data.duration_ms, 'duration_ms 应 > 0').toBeGreaterThan(0);
 
         // 验证是合法 JSON（重新 parse 不抛错）
         expect(() => JSON.parse(result.json!)).not.toThrow();

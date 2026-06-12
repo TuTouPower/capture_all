@@ -73,7 +73,7 @@ test.describe.serial('七标签实时计数', () => {
 
         // 要么之前就有，要么现在有了（操作后至少有一个计数显示）
         const total = nums_before + nums_after;
-        expect(total, '应该有计数显示').toBeGreaterThanOrEqual(0); // at minimum no crash
+        expect(total, '应该有计数显示').toBeGreaterThan(0);
 
         // 停止
         if (await popup.locator('#stopBtn').isVisible()) {

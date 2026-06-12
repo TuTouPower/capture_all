@@ -57,9 +57,7 @@ test.describe('详情页 Tab 切换 P4.11', () => {
 
         for (const { tab, name, content_selector, area_selector } of tabs) {
             const tab_btn = detail_page.locator(`[data-tab="${tab}"]`);
-            if (!(await tab_btn.isVisible({ timeout: 2000 }).catch(() => false))) {
-                continue; // 某些 Tab 可能未渲染，跳过
-            }
+            await expect(tab_btn, `${name} Tab 按钮应可见`).toBeVisible({ timeout: 2000 });
             await tab_btn.click();
             await detail_page.waitForTimeout(800);
 

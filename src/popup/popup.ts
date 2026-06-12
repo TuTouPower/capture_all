@@ -6,6 +6,8 @@ import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
+import { build_export_filename } from '../shared/export_settings';
+import { download_blob } from '../shared/export_utils';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import type { RecordConfig } from '../shared/types';
@@ -259,14 +261,16 @@ function wire_view(): void {
             });
             if (resp?.success && resp.json) {
                 const blob = new Blob([resp.json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `capture_all_${finished_capture.capture_id}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                const filename = build_export_filename(
+                    {
+                        export_capture_directory: user_config.export_capture_directory,
+                        export_filename_template: user_config.export_filename_template,
+                        system_time_timezone: user_config.system_time_timezone,
+                    },
+                    finished_capture.capture_id,
+                    'json',
+                );
+                await download_blob(blob, filename, { save_as: true });
             } else {
                 logger.error('Export failed', resp?.error);
                 alert(`${t('error')}: ${resp?.error ?? 'Export failed'}`);

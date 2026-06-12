@@ -180,30 +180,17 @@
   3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
 
 
-### ❌ P0.40 popup 导出按钮无法选择导出文件夹（含导出代码碎片化）
-- **状态**：未修复 — 2026-06-12 用户实测发现，2026-06-13 补充
-- **现象**：
-  1. 采集完成后在 popup 弹出面板点击「导出」按钮，文件直接下载到默认位置，不弹出「另存为」对话框，用户无法选择导出文件夹
-  2. popup 导出、dashboard 采集记录导出、运行日志导出 **三个导出入口各自实现了不同的导出代码**，逻辑重复且行为不一致
-  3. **未记录用户上一次导出选择的文件夹**，每次导出都回到默认下载目录
-  4. 采集记录导出和运行日志导出**使用同一个文件夹**，应分开
-- **期望行为**：
-  1. 三个导出入口复用同一段导出逻辑（一个共享函数），行为一致
-  2. 点击导出按钮应弹出浏览器保存对话框，让用户选择保存位置
-  3. 用户选择的导出文件夹应**持久化到 storage**，下次导出默认使用上次文件夹
-  4. 采集记录导出和运行日志导出应有**各自独立的默认文件夹**
-- **影响**：用户体验差，每次导出都要重新找文件夹；代码重复导致维护困难，改一处可能漏另一处
-- **修复要点**：
-  1. 抽取共享导出函数（`download_file` 或类似），统一处理 Blob → `chrome.downloads.download({ saveAs: true })` 流程
-  2. popup、dashboard capture export、log export 三个入口改为调用同一函数
-  3. 在 user_config / storage 中分别存储 `export_capture_directory` 和 `export_log_directory`，且实际选择后持久化
-  4. 补测试：三个入口都调用同一共享函数
-- **影响文件**：
-  - `src/popup/popup.ts` — exportBtn click handler
-  - `src/dashboard/dashboard.ts` — export_session / log export
-  - `src/shared/export_utils.ts` — 新建共享导出模块
-  - `src/shared/user_config.ts` — 导出目录字段
-  - `tests/popup_export.test.ts` — 导出行为测试
+### ✅ P0.40 popup 导出按钮无法选择导出文件夹（含导出代码碎片化）
+- **状态**：已修复 — 2026-06-13
+- **修复内容**：
+  1. 创建 `src/shared/export_utils.ts` 统一导出模块：`download_blob()` + `build_capture_filename()` + `build_log_filename()` + 目录持久化
+  2. popup exportBtn → 改用 `download_blob(blob, filename, { save_as: true })` + `build_export_filename()`，统一 `chrome.downloads.download` 路径
+  3. dashboard `export_session()` → 改用 `download_blob()` + `build_capture_filename()`
+  4. dashboard 日志导出 → 改用 `download_blob()` + `build_log_filename()`
+  5. detail `download_export()` → 改用 `download_blob()`
+  6. `chrome.storage.local` 中分别存储 `last_capture_export_dir` / `last_log_export_dir`，下载完成后通过 `track_export_dir()` 自动提取并持久化
+  7. `chrome.d.ts` 补充 `downloads.search`、`downloads.onChanged`、`runtime.lastError` 类型声明
+  8. 测试：`tests/export_utils.test.ts`（20 tests） + 更新 `tests/popup_export.test.ts`
 
 
 ### ❌ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」

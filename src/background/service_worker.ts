@@ -715,7 +715,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (current_config.capture_console && !is_console_active()) {
         const result = await start_console_capture(
             current_capture_id!, start_time, activeInfo.tabId,
-            current_config.redact_data, handle_event
+            current_config.redact_data, handle_console_log
         );
         if (result.success) {
             debugger_attached_tab_id = activeInfo.tabId;
@@ -741,7 +741,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
                     const uc = await load_user_config();
                     return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
                 },
-                on_network_request: (req: any) => handle_event(req)
+                on_network_request: handle_network_request
             },
             debugger_attached_tab_id
         );
@@ -817,7 +817,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         if (current_config.capture_console && !is_console_active()) {
             const result = await start_console_capture(
                 current_capture_id!, start_time, tabId,
-                current_config.redact_data, handle_event
+                current_config.redact_data, handle_console_log
             );
             if (result.success) {
                 debugger_attached_tab_id = tabId;
@@ -843,7 +843,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                         const uc = await load_user_config();
                         return { bridge_url: uc.agent_bridge_url, bridge_token: uc.agent_bridge_token, cdp_ports: [] };
                     },
-                    on_network_request: (req: any) => handle_event(req)
+                    on_network_request: handle_network_request
                 },
                 debugger_attached_tab_id
             );

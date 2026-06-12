@@ -252,7 +252,7 @@ export interface NetworkRequestData {
     status_code: number | null;
     status_text: string | null;
     protocol: string | null;
-    resource_type: 'fetch' | 'xhr' | 'document' | 'script' | 'stylesheet' | 'image' | 'font' | 'media' | 'websocket' | 'other';
+    resource_type: 'fetch' | 'xhr' | 'document' | 'script' | 'stylesheet' | 'image' | 'font' | 'media' | 'websocket' | 'ping' | 'other';
     initiator: string | null;
     duration_ms: number | null;
     start_time_ms: number | null;

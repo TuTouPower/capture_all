@@ -501,7 +501,7 @@ function render_dt_rail(): string {
                 <span class="qf-n">${num(counts[k === 'all' ? 'all' : k] || 0)}</span>
             </button>`).join('')}
         </div>
-    </aside>`;
+    </aside><div class="dt-rail-handle"></div>`;
 }
 
 function filtered_events(): RecordEvent[] {
@@ -806,7 +806,57 @@ function wire_detail(): void {
         render_content();
     }));
     c.querySelector('[data-net-insp-close]')?.addEventListener('click', () => { dt_insp_open = false; dt_net_sel = -1; render_content(); });
+    wire_rail_resize(c);
     wire_trace();
+}
+
+function wire_rail_resize(c: HTMLElement): void {
+    const handle = c.querySelector('.dt-rail-handle') as HTMLElement | null;
+    if (!handle) return;
+    const STORAGE_KEY = 'dt_rail_width';
+    const MIN_W = 160, MAX_W = 480;
+
+    const apply_width = (w: number) => {
+        document.querySelectorAll('.dt-body').forEach((body) => {
+            const el = body as HTMLElement;
+            const cols = el.style.gridTemplateColumns || getComputedStyle(el).gridTemplateColumns;
+            const parts = cols.split(' ').filter(Boolean);
+            if (parts.length >= 2) {
+                parts[0] = `${w}px`;
+                el.style.gridTemplateColumns = parts.join(' ');
+            }
+        });
+    };
+
+    // Restore saved width
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        const w = parseInt(saved);
+        if (w >= MIN_W && w <= MAX_W) apply_width(w);
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handle.classList.add('active');
+        const startX = (e as MouseEvent).clientX;
+        const rail = handle.parentElement as HTMLElement;
+        const startWidth = rail.getBoundingClientRect().width;
+
+        const onMove = (ev: MouseEvent) => {
+            const dx = ev.clientX - startX;
+            const w = Math.max(MIN_W, Math.min(MAX_W, startWidth + dx));
+            apply_width(w);
+        };
+        const onUp = () => {
+            handle.classList.remove('active');
+            const railW = rail.getBoundingClientRect().width;
+            localStorage.setItem(STORAGE_KEY, String(Math.round(railW)));
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    });
 }
 
 function wire_trace(): void {

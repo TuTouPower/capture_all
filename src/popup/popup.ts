@@ -298,16 +298,16 @@ function get_record_config(): RecordConfig {
 async function start_capture(): Promise<void> {
     if (!is_extension) { state = 'recording'; render(); return; }
     const config = get_record_config();
-    const session_id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    logger.info('Starting capture', { session_id });
+    const capture_id = `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    logger.info('Starting capture', { capture_id });
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'start', session_id, config });
+        const response = await chrome.runtime.sendMessage({ action: 'start', session_id: capture_id, config });
         if (!response?.success) {
             logger.error('Start capture failed', response?.error);
             alert(`${t('error')}: ${response?.error}`); return;
         }
         current_capture = {
-            capture_id: session_id,
+            capture_id,
             name: 'Capture ' + new Date().toLocaleString(),
             status: 'capturing',
             mode: 'standard',

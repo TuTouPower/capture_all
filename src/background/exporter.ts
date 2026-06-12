@@ -348,14 +348,14 @@ function format_duration(ms: number): string {
 // ============================================================
 
 export interface ExportAppLogsOptions {
-    format: 'json' | 'jsonl';
+    format?: 'log';
     level?: LogLevel;
     module?: string;
     since?: number;
     until?: number;
 }
 
-export async function export_app_logs(options: ExportAppLogsOptions): Promise<string> {
+export async function export_app_logs(options: ExportAppLogsOptions = {}): Promise<string> {
     const transport = get_app_log_transport();
     // Flush pending buffer entries before querying IndexedDB
     await transport.flush();
@@ -365,14 +365,11 @@ export async function export_app_logs(options: ExportAppLogsOptions): Promise<st
         since: options.since,
         until: options.until,
     });
+    const user_config = await load_user_config();
 
-    if (options.format === 'jsonl') {
-        return entries.map(e => JSON.stringify(e)).join('\n');
-    }
-    return JSON.stringify({
-        exported_at: new Date().toISOString(),
-        total: entries.length,
-        filters: { level: options.level, module: options.module },
-        entries,
-    }, null, 2);
+    return entries.map(entry => {
+        const time = format_system_time(entry.timestamp, user_config);
+        const details = entry.details === undefined ? '' : ` ${JSON.stringify(entry.details)}`;
+        return `${time} [${entry.level}] [${entry.module}] ${entry.message}${details}`;
+    }).join('\n');
 }

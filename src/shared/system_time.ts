@@ -45,6 +45,10 @@ export function format_system_time(ts: string | number, config: SystemTimeConfig
     return new Intl.DateTimeFormat('sv-SE', options).format(new Date(ms));
 }
 
+export function format_system_time_filename(ts: string | number, config: SystemTimeConfig): string {
+    return format_system_time(ts, config).replace(' ', '_').replace(/:/g, '-');
+}
+
 export function add_system_times_to_capture_data(data: ExportableCaptureData, config: SystemTimeConfig): ExportableCaptureDataWithSystemTimes {
     return {
         capture: add_capture_system_times(data.capture, config),

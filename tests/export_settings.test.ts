@@ -3,32 +3,38 @@ import { build_export_filename } from '../src/shared/export_settings';
 
 const now = new Date('2024-02-03T04:05:06.000Z');
 
+const config = { system_time_timezone: 'Asia/Shanghai' as const };
+
 describe('export settings', () => {
-    test('builds filename from template tokens', () => {
+    test('builds filename from capture tokens and configured timezone', () => {
         const filename = build_export_filename({
             export_directory: '',
-            export_filename_template: 'record_all_{session_id}_{date}.{ext}'
-        }, 'session_1', 'json', now);
+            export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
+            ...config,
+        }, 'capture_1', 'json', now);
 
-        expect(filename).toBe('record_all_session_1_2024-02-03.json');
+        expect(filename).toBe('capture_all_capture_1_2024-02-03_12-05-06.json');
+        expect(filename).not.toContain('session');
     });
 
     test('prefixes configured download subdirectory', () => {
         const filename = build_export_filename({
             export_directory: 'record-all/exports',
-            export_filename_template: '{session_id}.{ext}'
-        }, 'session_1', 'har', now);
+            export_filename_template: '{capture_id}.{ext}',
+            ...config,
+        }, 'capture_1', 'har', now);
 
-        expect(filename).toBe('record-all/exports/session_1.har');
+        expect(filename).toBe('record-all/exports/capture_1.har');
     });
 
     test('removes absolute and parent path segments from download paths', () => {
         const filename = build_export_filename({
             export_directory: '/safe/../exports',
-            export_filename_template: '../{session_id}'
-        }, 'session_1', 'html', now);
+            export_filename_template: '../{capture_id}',
+            ...config,
+        }, 'capture_1', 'html', now);
 
-        expect(filename).toBe('safe/exports/session_1.html');
+        expect(filename).toBe('safe/exports/capture_1.html');
     });
 
     test('generated filenames pass chrome.downloads.download validation', () => {
@@ -37,13 +43,13 @@ describe('export settings', () => {
         // - 不含 .. 路径穿越
         // - 无连续斜杠（空路径段）
         // - 不含控制字符或 Windows 保留字符 < > : " | ? *
-        const ids = ['session_1', 'abc-123', 'test_capture'];
+        const ids = ['capture_1', 'abc-123', 'test_capture'];
         const exts: Array<'json' | 'jsonl' | 'html' | 'har'> = ['json', 'jsonl', 'html', 'har'];
         const configs = [
-            { export_directory: '', export_filename_template: 'capture_all_{capture_id}_{date}.{ext}' },
-            { export_directory: 'exports', export_filename_template: '{session_id}.{ext}' },
-            { export_directory: 'data/records', export_filename_template: 'capture_{capture_id}.{ext}' },
-            { export_directory: '/abs/../safe', export_filename_template: '../{capture_id}_{date}' },
+            { export_directory: '', export_filename_template: 'capture_all_{capture_id}_{date}.{ext}', ...config },
+            { export_directory: 'exports', export_filename_template: '{capture_id}.{ext}', ...config },
+            { export_directory: 'data/records', export_filename_template: 'capture_{capture_id}.{ext}', ...config },
+            { export_directory: '/abs/../safe', export_filename_template: '../{capture_id}_{date}', ...config },
         ];
 
         for (const config of configs) {

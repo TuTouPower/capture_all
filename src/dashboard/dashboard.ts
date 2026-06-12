@@ -5,7 +5,7 @@ import { init_locale, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
-import { format_system_time } from '../shared/system_time';
+import { format_system_time, format_system_time_filename } from '../shared/system_time';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -957,8 +957,7 @@ function render_settings(): string {
                         <div class="field"><span class="field-lbl">最大储存条数</span><input class="input mono" type="number" data-cfg="log_max_entries" value="${esc(String(cfg.log_max_entries))}" min="100" max="100000" step="100"><span style="font-size:12px;color:var(--ink-3)">超出后自动删除最旧记录</span></div>
                         <div class="field"><span class="field-lbl">当前日志数</span><span id="logCount" class="mono" style="font-weight:600">—</span></div>
                         <div class="field span2" style="display:flex;gap:8px">
-                            <button class="btn sm" id="exportLogJson"><span>${I.export}</span>导出 JSON</button>
-                            <button class="btn sm" id="exportLogJsonl"><span>${I.export}</span>导出 JSONL</button>
+                            <button class="btn sm" id="exportLog"><span>${I.export}</span>导出运行日志</button>
                             <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>清除所有日志</button>
                         </div>
                     </div></div>
@@ -1063,36 +1062,20 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
     };
     update_count();
 
-    // Export JSON
-    c.querySelector('#exportLogJson')?.addEventListener('click', async () => {
+    // Export log
+    c.querySelector('#exportLog')?.addEventListener('click', async () => {
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'json' } });
+            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
             if (!r?.success) { alert('导出失败'); return; }
-            const blob = new Blob([r.data], { type: 'application/json' });
+            const blob = new Blob([r.data], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             chrome.downloads.download({
                 url,
-                filename: `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+                filename: `capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`,
                 saveAs: user_config.export_save_as,
             });
             setTimeout(() => URL.revokeObjectURL(url), 5000);
         } catch (e) { logger.error('Export logs error', e); }
-    });
-
-    // Export JSONL
-    c.querySelector('#exportLogJsonl')?.addEventListener('click', async () => {
-        try {
-            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'jsonl' } });
-            if (!r?.success) { alert('导出失败'); return; }
-            const blob = new Blob([r.data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            chrome.downloads.download({
-                url,
-                filename: `capture_all_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`,
-                saveAs: user_config.export_save_as,
-            });
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
-        } catch (e) { logger.error('Export JSONL error', e); }
     });
 
     // Clear logs

@@ -11,7 +11,10 @@ import {
     decode_raw_body,
     encode_form_data,
     extract_request_body,
-    headers_array_to_map
+    headers_array_to_map,
+    find_matching_cdp_request,
+    find_cdp_candidates,
+    _cdp_request_meta_for_test,
 } from '../src/background/network_capture';
 
 // ─── request header redaction ───
@@ -313,5 +316,114 @@ describe('url_redaction_in_network', () => {
     it('returns URL unchanged when redact is disabled', () => {
         const url = 'https://example.com?token=secret';
         expect(redact_url(url, false).url).toBe(url);
+    });
+});
+
+// ─── CDP request matching ───
+
+describe('find_matching_cdp_request', () => {
+    function add_meta(id: string, overrides: Partial<{ url: string; method: string; status_code: number; timestamp: number }> = {}) {
+        _cdp_request_meta_for_test.set(id, {
+            url: overrides.url || 'https://example.com/api',
+            method: overrides.method || 'GET',
+            status_code: overrides.status_code ?? 200,
+            resource_type: 'xhr',
+            response_headers: {},
+            request_headers: {},
+            timestamp: overrides.timestamp || 1700000000000,
+            request_body: null,
+            request_body_status: 'not_enabled',
+        });
+    }
+
+    beforeEach(() => {
+        _cdp_request_meta_for_test.clear();
+    });
+
+    it('matches by URL + method + status + timestamp window', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 200, timestamp: 1700000000000 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBe('cdp_1');
+    });
+
+    it('matches URLs differing only by query string', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api?t=1', method: 'GET', status_code: 200, timestamp: 1700000000000 });
+        const result = find_matching_cdp_request('https://example.com/api?t=2', 'GET', 200, 1700000000000);
+        expect(result).toBe('cdp_1');
+    });
+
+    it('matches when CDP status_code is 0 (response not yet received)', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 0, timestamp: 1700000000000 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBe('cdp_1');
+    });
+
+    it('returns null when method differs', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'POST', status_code: 200, timestamp: 1700000000000 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBeNull();
+    });
+
+    it('returns null when URL base differs', () => {
+        add_meta('cdp_1', { url: 'https://other.com/api', method: 'GET', status_code: 200, timestamp: 1700000000000 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBeNull();
+    });
+
+    it('returns null when timestamp outside 2s window', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 200, timestamp: 1700000005000 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBeNull();
+    });
+
+    it('returns best match by timestamp when multiple candidates', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 200, timestamp: 1700000001000 });
+        add_meta('cdp_2', { url: 'https://example.com/api', method: 'GET', status_code: 200, timestamp: 1700000000500 });
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBe('cdp_2'); // closer timestamp
+    });
+
+    it('returns null when no CDP meta exists', () => {
+        const result = find_matching_cdp_request('https://example.com/api', 'GET', 200, 1700000000000);
+        expect(result).toBeNull();
+    });
+});
+
+describe('find_cdp_candidates', () => {
+    function add_meta(id: string, overrides: Partial<{ url: string; method: string; status_code: number }> = {}) {
+        _cdp_request_meta_for_test.set(id, {
+            url: overrides.url || 'https://example.com/api',
+            method: overrides.method || 'GET',
+            status_code: overrides.status_code ?? 200,
+            resource_type: 'xhr',
+            response_headers: {},
+            request_headers: {},
+            timestamp: 1700000000000,
+            request_body: null,
+            request_body_status: 'not_enabled',
+        });
+    }
+
+    beforeEach(() => {
+        _cdp_request_meta_for_test.clear();
+    });
+
+    it('returns matching candidates by URL base + method', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 200 });
+        add_meta('cdp_2', { url: 'https://example.com/api', method: 'GET', status_code: 200 });
+        const result = find_cdp_candidates('https://example.com/api', 'GET', 200);
+        expect(result).toEqual(['cdp_1', 'cdp_2']);
+    });
+
+    it('includes status_code=0 candidates', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'GET', status_code: 0 });
+        const result = find_cdp_candidates('https://example.com/api', 'GET', 200);
+        expect(result).toEqual(['cdp_1']);
+    });
+
+    it('excludes candidates with different method', () => {
+        add_meta('cdp_1', { url: 'https://example.com/api', method: 'POST', status_code: 200 });
+        const result = find_cdp_candidates('https://example.com/api', 'GET', 200);
+        expect(result).toEqual([]);
     });
 });

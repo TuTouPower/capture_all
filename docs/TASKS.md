@@ -193,6 +193,22 @@
   8. 测试：`tests/export_utils.test.ts`（20 tests） + 更新 `tests/popup_export.test.ts`
 
 
+### ❌ P0.44 Body 大小限制改为可配置（1MB 默认 + 设置 UI）
+- **状态**：未修复 — 2026-06-13
+- **详细文档**：`docs/P0.44_BODY_SIZE_CONFIG.md`
+- **现象**：请求体限制 10KB、响应体限制 50KB，硬编码。上次采集 16 条请求超 50KB 被截断。
+- **修复要点**：
+  1. 默认值改为 1MB
+  2. UserConfig 新增 `max_request_body_bytes` / `max_response_body_bytes`
+  3. 采集代码改为从 config 读取（非全局常量）
+  4. Dashboard 设置页面添加数字输入框
+- **影响文件**：
+  - `src/shared/constants.ts` — 默认值 + DEFAULT_USER_CONFIG
+  - `src/shared/types.ts` — UserConfig
+  - `src/background/network_capture.ts` — 4 处大小检查
+  - `src/dashboard/dashboard.ts` — 设置 UI
+
+
 ### ✅ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
 - **状态**：已修复 — 2026-06-13
 - **根因**：`get_capture_data` 读取 IndexedDB 事件之前未 flush 写入缓冲区。统计计数 (`user_action_count`) 在事件写入时通过 `persist_stats()` 立即持久化到 capture 记录，但事件数据经 `write_events` 进入 per-store 缓冲区后需等 `FLUSH_INTERVAL_MS`（1s）周期 flush 才落盘到 IndexedDB。用户在 1s 窗口内查看详情页时，stats 已更新但事件未落盘，`get_events_by_category('user_action')` 返回空数组，导致 user_action tab 渲染「暂无数据」。

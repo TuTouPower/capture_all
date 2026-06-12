@@ -19,6 +19,8 @@ export interface CaptureRecord {
     config_snapshot: object;
     stats: CaptureStats;
     tags: string[];
+    url?: string;
+    tab_title?: string;
     created_at: string;
     updated_at: string;
 
@@ -500,7 +502,7 @@ export interface RecordConfig {
 }
 
 export type ThemeMode = 'follow-system' | 'light' | 'dark';
-export type SystemTimeTimezone = 'browser' | 'UTC' | 'Asia/Shanghai';
+export type SystemTimeTimezone = 'browser' | 'UTC' | 'UTC+1' | 'UTC+2' | 'UTC+3' | 'UTC+4' | 'UTC+5' | 'UTC+6' | 'UTC+7' | 'UTC+8' | 'UTC+9' | 'UTC+10' | 'UTC+11' | 'UTC+12' | 'UTC-1' | 'UTC-2' | 'UTC-3' | 'UTC-4' | 'UTC-5' | 'UTC-6' | 'UTC-7' | 'UTC-8' | 'UTC-9' | 'UTC-10' | 'UTC-11' | 'UTC-12';
 export type DetailTimeDisplayMode = 'relative' | 'system';
 
 export interface UserConfig {
@@ -514,7 +516,8 @@ export interface UserConfig {
     locale: string;
     system_time_timezone: SystemTimeTimezone;
     detail_time_display_mode: DetailTimeDisplayMode;
-    export_directory: string;
+    export_capture_directory: string;
+    export_log_directory: string;
     export_filename_template: string;
     export_save_as: boolean;
     agent_bridge_enabled: boolean;

@@ -136,6 +136,7 @@ async function handle_message(message: any): Promise<any> {
         case 'app_log_batch': {
             const transport = get_app_log_transport();
             for (const entry of (message.entries || [])) {
+                if (!entry.id) continue;
                 transport.write(entry);
             }
             return { success: true };
@@ -240,6 +241,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const active_tab = tabs[0];
     const start_url = active_tab?.url || '';
+    const tab_title = active_tab?.title || '';
     const tab_id = active_tab?.id ?? 0;
     const window_id = (active_tab as { windowId?: number })?.windowId ?? null;
 
@@ -270,6 +272,8 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         config_snapshot: config,
         stats: create_empty_capture_stats(),
         tags,
+        url: start_url,
+        tab_title,
         created_at: now_iso,
         updated_at: now_iso,
     };
@@ -651,12 +655,15 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 
 async function handle_console_log(event: CaptureEvent): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    const data = event.data as ConsoleEventData;
+    if (!data) return;
+    if (!current_capture_id) {
+        logger.warn('handle_console_log skipped: capture_id is empty');
+        return;
+    }
     try {
-        const data = event.data as ConsoleEventData;
-        if (data) {
-            data.capture_id = current_capture_id ?? undefined;
-            data.event_id = event.event_id;
-        }
+        data.capture_id = current_capture_id;
+        data.event_id = event.event_id;
         await write_console_events([data]);
         current_capture.stats.log_count++;
         await persist_stats();

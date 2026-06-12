@@ -179,6 +179,21 @@
   2. 无测试验证导出 JSON 的 `system_time_timezone` 字段非空
   3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
 
+
+### ❌ P0.40 popup 导出按钮无法选择导出文件夹
+- **状态**：未修复 — 2026-06-12 用户实测发现
+- **现象**：采集完成后在 popup 弹出面板点击「导出」按钮，文件直接下载到默认位置，不弹出「另存为」对话框，用户无法选择导出文件夹。
+- **期望行为**：点击导出按钮应弹出浏览器保存对话框（或提供文件夹选择），让用户自行决定导出文件保存位置。
+- **影响**：用户无法自主管理导出文件位置，所有导出文件落到默认下载目录。
+- **初步判断**：P0.35 修复中 popup 导出改用 `Blob → <a>.click()` 方式触发下载，该方式不支持弹出保存对话框。需改用 `chrome.downloads.download()` API（带 `saveAs: true`）或在导出前提供目录选择。Dashboard 端 `export_session()` 使用 `chrome.downloads.download()` 可弹出对话框，popup 端应保持一致。
+- **修复要点**：
+  1. popup 导出改用 `chrome.downloads.download({ url, saveAs: true })` 触发浏览器原生保存对话框
+  2. 或在 popup 中先询问用户导出格式和位置，再调用 SW 的 export action
+  3. 补测试：验证 popup 导出调用 `chrome.downloads.download` 且 `saveAs` 为 true
+- **影响文件**：
+  - `src/popup/popup.ts` — exportBtn click handler
+  - `tests/popup_export.test.ts` — 导出行为测试
+
 ---
 
 ## ✅ 用户加的bug记录（全部已修复）

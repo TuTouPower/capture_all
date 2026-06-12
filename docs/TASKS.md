@@ -109,6 +109,160 @@
   - `src/background/service_worker.ts` — 初始/重试调用传递 `debugger_attached_tab_id`；`last_tab_urls` 初始化
   - `src/content/network_hook.ts` / `src/content/xhr_fetch_capture.ts` — fallback body 捕获
 
+### ✅ P0.11 CDP 重试成功后 current_capture 元数据未更新
+- **状态**：已修复 — `0f9e1f1`。提取 `update_capture_body_state` 辅助函数，onActivated/onUpdated 两处重试路径调用，失败时也更新
+- **现象**：从 `chrome://extensions/` 启动采集 → CDP attach 失败 → 用户切换到正常网页 → CDP 重试可能成功，但导出 JSON 的 `body_capture_mode` 仍为 `fallback_hook`，`body_capture_failure_reason` 仍为 `cdp_attach_failed`，与实际运行状态脱节。复现文件：`D:\Kar\Code\omni_usage\data\capture_all_session_1781230856919_jlxe8pa.json`
+- **根因**：两处重试路径只打日志，不更新 `current_capture` 的 `body_capture_*` 字段：
+  - `service_worker.ts:738-740` — tab 激活重试（`chrome.tabs.onActivated`）：`start_body_capture()` 返回后，成功时仅 `logger.info('Body capture retry succeeded on tab ...')`，**无** `current_capture.body_capture_mode = result.mode` 等赋值
+  - `service_worker.ts:839-841` — URL 从受限跳正常重试（`chrome.tabs.onUpdated`）：同上，成功时仅打日志
+- **对比初始启动**（`service_worker.ts:377-382`）：
+  ```typescript
+  current_capture.body_capture_mode = result.mode;
+  current_capture.body_capture_status = result.status;
+  current_capture.body_capture_failure_reason = result.failure_reason;
+  current_capture.body_capture_message = result.message;
+  ```
+  初始启动正确更新了这 4 个字段，但两处重试路径完全遗漏。
+- **影响**：
+  - 导出 JSON 的 `capture.body_capture_mode/status/failure_reason/message` 永远反映初始失败状态，无法判断重试是否生效
+  - 用户/调试者看到 `fallback_hook` + `cdp_attach_failed` 会误以为整个采集期间 CDP 从未成功
+  - 无法通过导出数据判断 body capture 实际工作模式
+- **修复要点**：
+  1. 提取 `update_capture_body_state(result: BodyCaptureStartResult)` 辅助函数，封装 4 字段赋值 + `update_capture()`
+  2. Tab 激活重试（line 738）成功时调用 `update_capture_body_state(body_result)`
+  3. URL 变更重试（line 839）成功时调用 `update_capture_body_state(body_result)`
+  4. 失败时也更新（state 可能从之前的部分成功变为新的失败），确保导出数据始终反映最新状态
+- **测试遗漏原因**：E2E CDP 重试测试（`e2e-cdp-retry.spec.ts`）只验证 `start_body_capture` 调用成功，不检查 export JSON 中 `body_capture_mode` 字段是否反映重试后的实际状态
+- **影响文件**：
+  - `src/background/service_worker.ts` — 两处重试路径补充 `current_capture` 更新
+
+### ✅ P0.12 网络请求 response_body 全部为 null — 三层根因叠加
+- **状态**：L1+L2 已修复，L3 为 Chrome 架构限制无法修复
+- **L1 修复**：P0.11 — CDP 重试后元数据更新（`0f9e1f1`）
+- **L2 修复**：fallback hook 路由断层 — `network_hook.ts` 发送 `type: 'network_body_hook'`（替代 `'network_request'`），匹配 SW `handle_event` 路由；同时透传 `response_preview`（`5697410` 后续 commit）
+- **L3 未修复**：`chrome.webRequest.onCompleted` 不含 response body（Chrome 架构限制），script/font/stylesheet 等声明式资源无法通过 content script hook 拦截，CDP 不可用时永远无法获取
+
+### ✅ P0.13 CDP 重试回调不匹配导致事件写入错误表
+- **状态**：已修复 — `0a2cd8a`。4 处回调替换：console retry → handle_console_log，body retry → handle_network_request
+- **现象**：从 chrome:// URL 启动后切换到正常网页时，CDP 重试使用的回调函数与初始启动不同，导致重试后的事件写入错误的数据表，统计计数不递增
+- **根因**：初始启动和重试路径使用了不同的回调函数：
+
+  | 子系统 | 初始启动回调 | retry 回调（onActivated + onUpdated） | 后果 |
+  |--------|------------|--------------------------------------|------|
+  | console | `handle_console_log` | `handle_event` | console 事件写入 `events` 表而非 `console_events` 表，`log_count` 不递增 |
+  | exception | `handle_console_log` | `handle_event` | 异常事件写入 `events` 表而非 `error_events` 表（此处 retry 回调反而比初始路径更合理，异常不应走 `log_count`） |
+  | body capture | `handle_network_request` | `(req) => handle_event(req)` | body 事件写入 `events` 表而非 `network_requests` 表，`request_count` 不递增 |
+
+  共 **4 处回调不匹配**：onActivated console retry (line 708)、onActivated body retry (line 734)、onUpdated console retry (line 809)、onUpdated body retry (line 835)
+- **对比**：`handle_console_log` 内部调用 `write_console_events()` 并递增 `log_count`；`handle_network_request` 调用 `write_network_requests()` 并递增 `request_count`。而 `handle_event` 调用 `write_events()` 并递增 `event_count`。retry 路径用后者，数据落入了错误的 store
+- **特别说明**：此 bug 在 P0.10 的修复（统一 CDP attach）中**未涉及**，P0.10 只修了 debugger 抢占问题，没有修回调不匹配
+- **修复要点**：
+  1. onActivated/onUpdated console retry：`handle_event` → `handle_console_log`
+  2. onActivated/onUpdated body retry：`(req) => handle_event(req)` → `handle_network_request`
+  3. 可选：提取 retry 函数 `retry_console_capture(tab_id)` / `retry_body_capture(tab_id)` 封装正确回调，避免手动写错
+- **测试遗漏原因**：无测试验证 retry 后的数据落在正确的 IndexedDB store 中；无测试对比初始启动和 retry 路径的数据表分布
+- **影响文件**：
+  - `src/background/service_worker.ts` — 4 处回调替换
+
+### ✅ P0.14 build_network_event 中 response_preview 始终为 null
+- **状态**：已修复 — `a7309a6`。CdpBodyResult 加 preview 字段，build_network_event 接收并使用，覆盖 CDP matched + orphan 双路径
+- **现象**：导出 JSON 中所有 `network_requests[].response_preview` 均为 `null`，即使 `truncate_response_body()` 已经生成了前 200 字符的 preview
+- **根因**：`network_capture.ts:478` — `build_network_event` 中 `response_preview: null` 硬编码，未使用 `TruncateBodyResult.response_preview`
+  - `truncate_response_body`（`redaction.ts:90-97`）返回 `{ body, response_preview }`（前 200 字符）
+  - 但在 `network_capture.ts:252` 的 body 截断调用中，只用 `result.body!` 存入 `cdp_body_results`，`result.response_preview` 被丢弃
+  - `build_network_event` 第 478 行直接写死 `response_preview: null`
+- **修复要点**：
+  1. `cdp_body_results` 的 value 类型增加 `preview` 字段
+  2. `build_network_event` 接收 preview 参数，传入 `response_preview`
+  3. fallback hook（`network_hook.ts`）同样适用——已生成 preview（截断时），但未传递到最终 NetworkRequestData
+- **影响文件**：
+  - `src/background/network_capture.ts` — cdp_body_results value 类型 + build_network_event 签名
+  - `src/content/network_hook.ts` — fallback 路径透传 preview
+  - `src/shared/types.ts` — 无需改（`NetworkRequestData.response_preview` 字段已存在，只是从未被填充）
+
+### ✅ P0.15 CDP body 与 webRequest 竞态导致 not_enabled 虚高 + 同请求重复记录
+- **状态**：已修复 — `c98b2a9`。handle_completed 改为延迟写入（1.5s 超时），CDP body 到达时通过 try_resolve_deferred 匹配合并；find_matching_cdp_request 改为支持 status_code=0 + 多候选选最近
+- **现象**：导出 387 条 network_requests 中，`response_body_status=not_enabled` 占 63%（245 条），但 `body_capture_mode=extension_cdp` 的也有 265 条（68%），说明 CDP 明明在运行，大量请求却被标为 not_enabled。同时 `correlation_status=cdp_only` 的记录（≈122 条，32%）正是这些请求的 CDP body 单独写出的第二份记录。复现文件：`D:\Kar\Code\omni_usage\data\capture_all_session_1781231089152_1o34e4b.json`
+- **根因**：`network_capture.ts:494-528` — `handle_completed()` 同步查 CDP body，但 `Network.getResponseBody` 是异步的，webRequest 到达时 body 大概率还没 resolve：
+  1. `webRequest.onCompleted` 触发 → 调用 `find_matching_cdp_request()`（line 508）
+  2. `cdp_body_results` 中找不到 → 立即写 `response_body_status: 'not_enabled'`（line 528）
+  3. 稍后 CDP `Network.getResponseBody` resolve → body 进入 `cdp_body_results`
+  4. 3 秒 orphan timeout 后 → 作为 `cdp_only` 写出第二份记录（line 272-305）
+  5. 同一请求变成两条记录：一条 webRequest metadata (not_enabled) + 一条 CDP body (captured/too_large/…)
+
+  `find_matching_cdp_request()`（line 531-554）另有三个匹配失败点：
+  - **时间戳体系不一致**：CDP meta 用 `Date.now()`（line 208/230），webRequest 用 `details.timeStamp`（Chrome 内部时钟），两者非同一时钟源，可能偏差超出 2s 窗口
+  - **status_code=0 不匹配**：CDP `Network.responseReceived` 可能晚于 `Network.loadingFinished`，此时 `meta.status_code` 还是 0，而 webRequest 有真实 status，匹配失败
+  - **多候选直接放弃**：同 URL + method + status 的并发请求 >1 时，`candidates.length !== 1` 返回 null（line 552-553）
+- **影响**：
+  - 导出数据量虚增（重复记录），实际唯一请求 ≈387-122≈265
+  - `not_enabled` 占比虚高，掩盖真正的 body capture 成功率
+  - `cdp_only` 和 `web_request` 两条记录需手动关联才能拼回完整请求
+- **修复要点**：
+  1. `handle_completed()` 收到 webRequest 时不立即写 not_enabled，改为等待 CDP body（设超时，如 3s），超时后再写
+  2. 或改为：webRequest 先写一条（response_body 暂空），CDP body 到达后 UPDATE 该记录而非 INSERT 新记录
+  3. `find_matching_cdp_request()` 统一时间戳来源（全部用 `Date.now()` 或全部用 Chrome timestamp）
+  4. `find_matching_cdp_request()` status_code=0 时放宽条件（仅匹配 URL + method + 时间窗口，忽略 status）
+  5. 多候选时返回最佳匹配（时间最近者）而非放弃
+- **测试遗漏原因**：
+  - `handle_completed()` 和 `find_matching_cdp_request()` — **零单元测试**
+  - CDP `Network.loadingFinished` → `Network.getResponseBody` 异步链路 — **零测试**
+  - `schedule_orphan_check()` 3 秒延迟逻辑 — **零测试**
+  - `network_capture.test.ts` 只测纯函数（脱敏、body 解析），不测请求生命周期
+  - `network_correlator.test.ts` 测了 `correlate()` 函数级匹配，但 `handle_completed()` 中的实际匹配流程（line 508-528）完全不同且无测试
+  - E2E 测试从不统计 `response_body_status` 分布，无法发现 not_enabled 占比异常
+- **影响文件**：
+  - `src/background/network_capture.ts` — handle_completed + find_matching_cdp_request + schedule_orphan_check
+
+### ✅ P0.16 CDP orphan / bridge 路径构造的 NetworkRequestData 缺少必填字段
+- **状态**：已修复 — `f7e95ee`。4 个 builder 函数返回类型 any → NetworkRequestData，补全全部 30 个必填字段；handle_network_request 新增 normalize_network_request 校验
+- **现象**：导出 387 条中 32%（≈122 条）`body_capture_mode=undefined`，同时还缺 `capture_method`、`capture_id`、`event_id`、`response_preview`、`url_status` 等字段。这些记录恰好对应 `correlation_status=cdp_only` 的数量，是 CDP body 成功捕获但未与 webRequest 匹配的 orphan 记录。复现文件同上 P0.15
+- **根因**：3 个函数返回 `any` 类型，构造不完整对象，绕过 TypeScript 检查：
+  1. `network_correlator.ts:85-108` — `build_cdp_only_request()` 返回 `any`，缺少 `body_capture_mode`、`capture_method`、`capture_id`、`event_id`、`response_preview`、`url_status`、`status_text`、`protocol`、`initiator`、`mime_type`、`request_size_bytes`、`response_size_bytes`、`transfer_size_bytes`、`from_cache`、`cache_status`、`error_text` 等 **17 个字段**
+  2. `body_capture_coordinator.ts:251-274` — `convert_bridge_event_to_request()` 返回 `any`，同样缺 `body_capture_mode`、`capture_method` 等字段
+  3. `network_correlator.ts:57-83` — `merge_matched()` 返回 `any`，同样不完整
+  4. `network_correlator.ts:111-130` — `build_web_request_only_request()` 返回 `any`，缺 `body_capture_mode`、`capture_method`
+  5. `service_worker.ts:629-640` — `handle_network_request()` 只补 `capture_id` + `event_id`，不 normalize 其他缺失字段，直接写入 IndexedDB
+- **为什么 `any` 能通过 review**：类型标注 `NetworkRequestData` 有 30+ 必填字段，如果这 4 个函数返回类型标为 `NetworkRequestData`，TS 编译就会报错。但全部标为 `any`，完全绕过了类型检查
+- **修复要点**：
+  1. `build_cdp_only_request()` 返回类型改为 `NetworkRequestData`，补全所有缺失字段（未获取到的设 null 或合理默认值）
+  2. `convert_bridge_event_to_request()` 同上
+  3. `merge_matched()` 同上
+  4. `build_web_request_only_request()` 同上
+  5. `handle_network_request()` 加 schema normalize：检查必填字段，缺失时补默认值 + warn 日志
+  6. 全局搜索 `): any {` 返回类型，逐一审查是否为数据写入路径
+- **测试遗漏原因**：
+  - `network_correlator.test.ts` 测了 `build_cdp_only_request` 的部分字段（session_id、response_body、correlation_status），但**从不验证 `body_capture_mode` 是否存在**
+  - 无测试验证 `handle_network_request()` 写入前的数据完整性
+  - 无类型级测试（如 vitest `expectTypeOf()` 验证返回值类型 = `NetworkRequestData`）
+  - E2E 导出测试只检查特定字段，不遍历所有记录验证必填字段非 undefined
+- **影响文件**：
+  - `src/background/network_correlator.ts` — build_cdp_only_request / merge_matched / build_web_request_only_request
+  - `src/background/body_capture_coordinator.ts` — convert_bridge_event_to_request
+  - `src/background/service_worker.ts` — handle_network_request normalize
+  - `tests/network_correlator.test.ts` — 补字段完整性断言
+
+### ✅ P0.17 测试文件补充清单（P0.15-P0.16 暴露的测试缺口）
+- **状态**：已补充 — `5697410`。network_capture.test.ts +11 测试（find_matching_cdp_request + find_cdp_candidates），network_correlator.test.ts +4 字段完整性测试；chrome.debugger mock 仍未创建
+- 以下函数/路径完全无测试覆盖，本次问题全部发生在此处：
+  | 函数/路径 | 文件 | 行号 | 缺失后果 |
+  |-----------|------|------|----------|
+  | `handle_completed()` | network_capture.ts | 494-528 | P0.15 竞态 + 重复记录 |
+  | `find_matching_cdp_request()` | network_capture.ts | 531-554 | P0.15 匹配失败 |
+  | `schedule_orphan_check()` | network_capture.ts | 272-305 | P0.15 orphan 延迟写出 |
+  | `handle_cdp_event()` CDP listener | network_capture.ts | 191-270 | P0.15 全链路 |
+  | `build_cdp_only_request()` 字段完整性 | network_correlator.ts | 85-108 | P0.16 |
+  | `convert_bridge_event_to_request()` 字段完整性 | body_capture_coordinator.ts | 251-274 | P0.16 |
+  | `merge_matched()` 字段完整性 | network_correlator.ts | 57-83 | P0.16 |
+  | `build_web_request_only_request()` 字段完整性 | network_correlator.ts | 111-130 | P0.16 |
+  | `handle_network_request()` normalize | service_worker.ts | 629-640 | P0.16 |
+- **额外需要 mock 的能力**：`chrome.debugger`（attach/sendCommand/onEvent）目前零 mock，所有 CDP 链路无法单测。需要创建 `tests/__mocks__/chrome_debugger.ts`
+- **影响文件**：
+  - `tests/network_capture.test.ts` — 补 CDP 链路测试
+  - `tests/network_correlator.test.ts` — 补字段完整性测试
+  - `tests/__mocks__/chrome_debugger.ts` — 新建
+  - `tests/e2e-cdp-capture.spec.ts` — 补 response_body_status 分布统计 + body_capture_mode 非空断言
+
 ---
 
 ## ✅ 用户加的bug记录（全部已修复）

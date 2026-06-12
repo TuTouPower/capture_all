@@ -6,7 +6,7 @@ import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
-import { download_blob, build_capture_filename, build_log_filename } from '../shared/export_utils';
+import { download_blob, build_capture_filename, build_log_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -362,12 +362,14 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         const mime = format === 'html' ? 'text/html' : 'application/json';
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
         const blob = new Blob([content], { type: mime });
+        const { capture_dir } = await load_last_export_dirs();
         const capture_filename = build_capture_filename({
             export_capture_directory: user_config.export_capture_directory,
             export_filename_template: user_config.export_filename_template,
             system_time_timezone: user_config.system_time_timezone,
-        }, id, ext);
-        await download_blob(blob, capture_filename, { save_as: true });
+        }, id, ext, capture_dir);
+        const download_id = await download_blob(blob, capture_filename, { save_as: true });
+        track_export_dir(download_id, 'capture');
     } catch (err) { logger.error('Export error', err); }
 }
 async function del_session(id: string): Promise<void> {
@@ -1121,11 +1123,13 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
             const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
             if (!r?.success) { alert('导出失败'); return; }
             const blob = new Blob([r.data], { type: 'text/x-log' });
+            const { log_dir } = await load_last_export_dirs();
             const log_filename = build_log_filename({
                 export_log_directory: user_config.export_log_directory,
                 system_time_timezone: user_config.system_time_timezone,
-            });
-            await download_blob(blob, log_filename, { save_as: true });
+            }, log_dir);
+            const download_id = await download_blob(blob, log_filename, { save_as: true });
+            track_export_dir(download_id, 'log');
         } catch (e) { logger.error('Export logs error', e); }
     });
 

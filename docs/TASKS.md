@@ -180,6 +180,24 @@
   3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
 
 
+### ✅ P0.40-R1 导出文件夹位置未记住，采集记录/日志目录未分开回填
+- **状态**：已修复 — 2026-06-13
+- **现象**：用户在保存对话框中选择导出目录后，下次导出没有回到上次目录；采集记录导出和日志导出也没有分别记住各自位置。
+- **根因**：`src/shared/export_utils.ts` 已实现 `last_capture_export_dir` / `last_log_export_dir` 两个独立 key、`load_last_export_dirs()`、`track_export_dir()`，但实际入口只调用 `download_blob()`：
+  1. `src/popup/popup.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
+  2. `src/dashboard/dashboard.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
+  3. `src/detail/detail.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
+  4. `src/dashboard/dashboard.ts` 日志导出未读取 `log_dir`，下载完成后未 `track_export_dir(..., 'log')`
+- **为什么测试没发现**：`tests/export_utils.test.ts` 只验证了工具函数自身和入口 `import download_blob`，没有验证实际入口是否调用 `load_last_export_dirs()`、是否把 last dir 传入文件名构建、是否在下载完成后按 `capture`/`log` 分别 track。
+- **修复**：所有采集记录导出入口读取 `capture_dir` 并 track `capture`；日志导出读取 `log_dir` 并 track `log`。补回归测试锁定两个目录必须独立读取和记录。
+- **影响文件**：
+  - `src/shared/export_utils.ts` — 已有工具函数保持不变
+  - `src/popup/popup.ts` — 采集记录导出读取/记录 capture 目录
+  - `src/dashboard/dashboard.ts` — 采集记录导出读取/记录 capture 目录；日志导出读取/记录 log 目录
+  - `src/detail/detail.ts` — 详情页导出读取/记录 capture 目录
+  - `tests/export_utils.test.ts` — 新增入口级回归测试
+
+
 ### ✅ P0.40 popup 导出按钮无法选择导出文件夹（含导出代码碎片化）
 - **状态**：已修复 — 2026-06-13
 - **修复内容**：

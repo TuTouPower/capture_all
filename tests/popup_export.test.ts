@@ -34,8 +34,9 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(popup_src).toMatch(/download_blob\(/);
     });
 
-    it('P0.40: popup export uses build_export_filename for filename', () => {
-        expect(popup_src).toMatch(/build_export_filename\(/);
+    it('P0.40: popup export uses build_capture_filename for filename', () => {
+        expect(popup_src).toMatch(/import.*build_capture_filename.*from.*export_utils/);
+        expect(popup_src).toMatch(/build_capture_filename\(/);
     });
 
     it('P0.40: popup export passes save_as: true', () => {

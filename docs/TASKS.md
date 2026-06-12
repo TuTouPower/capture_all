@@ -1162,3 +1162,50 @@ npm run test:e2e:all    # 全部
 **并发**：4 个网站 spec 同时跑，总耗时 = max(单个)。P4.5-P4.13 在一个网站 spec 通过后并发。
 
 **执行顺序**：P4.5（状态）→ P4.7（停止）→ P4.6（计数）→ P4.8（实时详情）→ P4.1-P4.4（四网站并发）→ P4.9-P4.13（一致性/导出/审计）→ P5 → P6
+
+---
+
+## 测试审计报告 (2026-06-12)
+
+10 组并行审计，检查「测试通过但功能不工作」的脱节模式。
+
+### 审计发现汇总
+
+| 组 | 范围 | 脱节数 | 严重度 |
+|----|------|--------|--------|
+| 1 | popup_layout | 全部 54 测试 | **严重** |
+| 2 | export_settings/system_time | 2 | 高 |
+| 3 | dashboard | 3 + 1 潜伏 bug | 高 |
+| 4 | E2E export | 5 | 高 |
+| 5 | E2E detail tabs | 5/8 tab 未覆盖 | 高 |
+| 6 | settings | 2 | 中 |
+| 7 | network | 6 | **严重** |
+| 8 | E2E capture | 5 | 高 |
+| 9 | agent/bridge | 0 | ✅ 干净 |
+| 10 | 剩余单元测试 | 6 | 高 |
+
+### 关键发现
+
+**G1 popup** — `popup_layout.test.ts` 54 个测试全部是布局常量断言（宽/高/列数），零交互测试。所有按钮的 click handler、chrome.runtime.sendMessage 调用、状态转换逻辑均无测试覆盖。
+
+**G7 network** — `resolve_resource_type()` 仅在 webRequest 路径被调用，CDP 初次存储和 `network_correlator.ts` 三个构建函数（`merge_matched`/`build_cdp_only_request`/`build_web_request_only_request`）全部直接透传原始 type 值，不归一化。测试未覆盖 CDP PascalCase 输入。
+
+**G3 dashboard** — `event_category.ts` 潜伏 bug：`category_for_event_type()` 对 `network_request`/`console_event`/`capture_config_changed` 等会错误落到 `'dom_data'` category（目前因生产者显式设 category 未触发）。
+
+**G2 export** — `export_session()` 硬编码文件名 `capture_all_${id}.${ext}`，`build_export_filename()` 及 `{date}` 模板从未参与实际下载路径。`migrate_iana_timezone()` 测试仅纯函数，不覆盖 `load_user_config()` 完整加载路径。
+
+**G4 E2E export** — 未断言 filename 含 date、未断言 `started_at` 非 UTC、未断言 `system_time_timezone` 非空、未断言 `resource_type` 无 PascalCase、`console_events` 非空用条件跳过。
+
+**G5 E2E detail** — 8 个 tab 中 5 个未验证（user_action/navigation/cookie/error/config），selector 与实际 DOM 不匹配。
+
+**G8 E2E capture** — 停止采集不验证 `success=true` 返回值；CDP 测试不验证 `response_body` 非空；状态测试缺多个元素。
+
+**G10 单元测试** — `session_manager` 测试自测自（不调生产代码）、`console_capture` 测试不触 CDP 监听器、`redaction` 测试的脱敏函数在 `exporter.ts` 中零调用、`tab_events` 不覆盖受限 URL 重试、`ui_strings` 不扫 `session` 残留词、`event_category` 仅覆盖 2/20+ 映射。
+
+### 脱节模式分类
+
+1. **纯函数测试，不知生产调用方**（最常见）：函数被完整测试但无人验证它在真实路径被调用。例：`build_export_filename`、redaction 函数。
+2. **DOM 存在性断言，无交互验证**：断言元素 id/class 存在，不模拟 click、不验证事件副作用。例：popup_layout 全部测试。
+3. **mock 数据与小写/标准值，CDP 实际给 PascalCase**：例：network 测试全用小写输入，CDP 给 `Document`/`Fetch`。
+4. **条件跳过代替强制断言**：`if (length > 0) { expect... }` 掩盖零数据问题。
+

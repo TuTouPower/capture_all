@@ -1,8 +1,18 @@
 import { describe, expect, test } from 'vitest';
-import { add_system_times_to_capture_data, format_system_time, format_system_time_filename } from '../src/shared/system_time';
+import {
+    add_system_times_to_capture_data,
+    format_system_time,
+    format_system_time_filename,
+    parse_utc_offset
+} from '../src/shared/system_time';
+import { migrate_iana_timezone } from '../src/shared/user_config';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, NetworkRequestData } from '../src/shared/types';
 
-const config = { system_time_timezone: 'Asia/Shanghai' as const };
+const config = { system_time_timezone: 'UTC+8' as const };
+const config_utc = { system_time_timezone: 'UTC' as const };
+const config_browser = { system_time_timezone: 'browser' as const };
+const config_utc_plus_1 = { system_time_timezone: 'UTC+1' as const };
+const config_utc_minus_5 = { system_time_timezone: 'UTC-5' as const };
 
 const capture: CaptureRecord = {
     capture_id: 'capture_1',
@@ -17,8 +27,7 @@ const capture: CaptureRecord = {
     tab_id: 1,
     window_id: null,
     config_snapshot: {},
-    stats: { event_count: 1, request_count: 1, log_count: 1, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
-    export_status: 'not_exported',
+    stats: { event_count: 1, user_action_count: 0, nav_count: 1, request_count: 1, log_count: 1, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
     tags: [],
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:01:00.000Z'
@@ -56,9 +65,7 @@ const request: NetworkRequestData = {
     url_status: 'captured',
     status_code: 200,
     request_headers: {},
-    request_headers_status: 'full',
     response_headers: {},
-    response_headers_status: 'full',
     request_body: null,
     request_body_status: 'not_enabled',
     response_body: null,
@@ -66,34 +73,99 @@ const request: NetworkRequestData = {
     duration_ms: 30,
     resource_type: 'fetch',
     start_time_ms: 1704067202000,
-    end_time_ms: 1704067202030,
-    created_at: '2024-01-01T00:00:02.000Z'
+    end_time_ms: 1704067202030
 };
 
-const log = {
+const log: ConsoleEventData & { tab_id: number; relative_time: number; absolute_time: number } = {
+    capture_id: 'capture_1',
     tab_id: 1,
     relative_time: 30,
     absolute_time: 1704067203000,
     level: 'info',
     args_preview: ['ready'],
-    args_status: 'captured',
+    args_status: 'captured' as const,
     stack_trace: null,
     source_url: 'https://example.com',
     line: 1,
     column: 1,
     repeat_count: null,
     related_network_request_id: null
-} satisfies ConsoleEventData & { tab_id: number; relative_time: number; absolute_time: number };
+};
 
-describe('system time formatting', () => {
-    test('formats timestamps in configured Asia/Shanghai timezone', () => {
+// ============================================================
+// parse_utc_offset
+// ============================================================
+describe('parse_utc_offset', () => {
+    test('parses UTC+8 to 480 minutes', () => {
+        expect(parse_utc_offset('UTC+8')).toBe(480);
+    });
+
+    test('parses UTC+1 to 60 minutes', () => {
+        expect(parse_utc_offset('UTC+1')).toBe(60);
+    });
+
+    test('parses UTC-5 to -300 minutes', () => {
+        expect(parse_utc_offset('UTC-5')).toBe(-300);
+    });
+
+    test('parses UTC to 0 minutes', () => {
+        expect(parse_utc_offset('UTC')).toBe(0);
+    });
+
+    test('returns null for browser', () => {
+        expect(parse_utc_offset('browser')).toBeNull();
+    });
+
+    test('parses UTC+0 to 0 minutes', () => {
+        expect(parse_utc_offset('UTC+0')).toBe(0);
+    });
+
+    test('parses UTC-12 to -720 minutes', () => {
+        expect(parse_utc_offset('UTC-12')).toBe(-720);
+    });
+
+    test('parses UTC+12 to 720 minutes', () => {
+        expect(parse_utc_offset('UTC+12')).toBe(720);
+    });
+});
+
+// ============================================================
+// system time formatting — P0.34 UTC offset
+// ============================================================
+describe('system time formatting with UTC offsets', () => {
+    test('formats timestamps in UTC+8 timezone', () => {
         expect(format_system_time(1704067200000, config)).toBe('2024-01-01 08:00:00');
+    });
+
+    test('formats timestamps in UTC+1 timezone', () => {
+        expect(format_system_time(1704067200000, config_utc_plus_1)).toBe('2024-01-01 01:00:00');
+    });
+
+    test('formats timestamps in UTC-5 timezone', () => {
+        expect(format_system_time(1704067200000, config_utc_minus_5)).toBe('2023-12-31 19:00:00');
+    });
+
+    test('formats timestamps in UTC', () => {
+        expect(format_system_time(1704067200000, config_utc)).toBe('2024-01-01 00:00:00');
     });
 
     test('formats filename timestamps in configured timezone', () => {
         expect(format_system_time_filename(1704067200000, config)).toBe('2024-01-01_08-00-00');
     });
 
+    test('filename uses offset time for UTC+8', () => {
+        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config)).toBe('2024-01-01_08-00-00');
+    });
+
+    test('filename uses offset time for UTC-5', () => {
+        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config_utc_minus_5)).toBe('2023-12-31_19-00-00');
+    });
+});
+
+// ============================================================
+// exported data structure — P0.33 human-readable labels
+// ============================================================
+describe('exported capture data with system times', () => {
     test('adds system time fields to all exported record groups', () => {
         const data = add_system_times_to_capture_data({
             capture,
@@ -107,5 +179,137 @@ describe('system time formatting', () => {
         expect(data.events[0].absolute_time_system_time).toBe('2024-01-01 08:00:01');
         expect(data.network_requests[0].absolute_time_system_time).toBe('2024-01-01 08:00:02');
         expect(data.console_events[0].absolute_time_system_time).toBe('2024-01-01 08:00:03');
+    });
+
+    // P0.33: human-readable label fields
+    test('P0.33 capture has start_time_label and end_time_label', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [request],
+            console_events: [log]
+        }, config);
+
+        expect(data.capture.start_time_label).toBeDefined();
+        expect(data.capture.end_time_label).toBeDefined();
+        expect(typeof data.capture.start_time_label).toBe('string');
+        expect(typeof data.capture.end_time_label).toBe('string');
+    });
+
+    test('P0.33 start_time_label does not end with Z (not UTC raw)', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [request],
+            console_events: [log]
+        }, config);
+
+        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+    });
+
+    test('P0.33 end_time_label does not end with Z (not UTC raw)', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [request],
+            console_events: [log]
+        }, config);
+
+        expect(data.capture.end_time_label).not.toMatch(/Z$/);
+    });
+
+    test('P0.33 start_time_system_time does not end with Z', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [request],
+            console_events: [log]
+        }, config);
+
+        expect(data.capture.start_time_system_time).not.toMatch(/Z$/);
+    });
+
+    test('P0.33 absolute_time_system_time does not end with Z for events', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [request],
+            console_events: [log]
+        }, config);
+
+        expect(data.events[0].absolute_time_system_time).not.toMatch(/Z$/);
+    });
+
+    test('P0.33 original UTC fields remain (started_at, ended_at, absolute_time)', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [],
+            console_events: []
+        }, config);
+
+        // Original UTC fields preserved
+        expect(data.capture.started_at).toBe('2024-01-01T00:00:00.000Z');
+        expect(data.capture.ended_at).toBe('2024-01-01T00:01:00.000Z');
+        expect(data.events[0].absolute_time).toBe('2024-01-01T00:00:01.000Z');
+    });
+
+    test('P0.33 time label with UTC config does not end with Z', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [],
+            console_events: []
+        }, config_utc);
+
+        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+    });
+
+    test('P0.33 time label with browser config does not end with Z', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [],
+            console_events: []
+        }, config_browser);
+
+        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+    });
+});
+
+// ============================================================
+// Legacy IANA migration — P0.34
+// ============================================================
+describe('legacy IANA timezone migration', () => {
+    test('old Asia/Shanghai migrates to UTC+8', () => {
+        expect(migrate_iana_timezone('Asia/Shanghai')).toBe('UTC+8');
+    });
+
+    test('old America/New_York migrates to UTC-5', () => {
+        expect(migrate_iana_timezone('America/New_York')).toBe('UTC-5');
+    });
+
+    test('old Asia/Tokyo migrates to UTC+9', () => {
+        expect(migrate_iana_timezone('Asia/Tokyo')).toBe('UTC+9');
+    });
+
+    test('old Europe/London migrates to UTC', () => {
+        expect(migrate_iana_timezone('Europe/London')).toBe('UTC');
+    });
+
+    test('unknown old value falls back to browser', () => {
+        expect(migrate_iana_timezone('Some/Unknown')).toBe('browser');
+    });
+
+    test('already-valid UTC+8 passes through unchanged', () => {
+        expect(migrate_iana_timezone('UTC+8')).toBe('UTC+8');
+    });
+
+    test('already-valid UTC passes through unchanged', () => {
+        expect(migrate_iana_timezone('UTC')).toBe('UTC');
+    });
+
+    test('already-valid browser passes through unchanged', () => {
+        expect(migrate_iana_timezone('browser')).toBe('browser');
     });
 });

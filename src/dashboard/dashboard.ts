@@ -362,9 +362,13 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
         const blob = new Blob([content], { type: mime });
         const url = URL.createObjectURL(blob);
+        const capture_dir = user_config.export_capture_directory || '';
+        const capture_filename = capture_dir
+            ? `${capture_dir}/capture_all_${id}.${ext}`
+            : `capture_all_${id}.${ext}`;
         chrome.downloads.download({
             url,
-            filename: `capture_all_${id}.${ext}`,
+            filename: capture_filename,
             saveAs: user_config.export_save_as,
         });
         setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -964,7 +968,7 @@ function render_settings(): string {
                         <div class="field"><span class="field-lbl">主题</span>${seg('theme', [['follow-system', '跟随系统'], ['light', '浅色'], ['dark', '深色']], cfg.theme)}</div>
                         <div class="field"><span class="field-lbl">时间显示</span>${seg('detail_time_display_mode', [['relative', '相对时间'], ['system', '系统时间']], cfg.detail_time_display_mode)}</div>
                         <div class="field"><span class="field-lbl">系统时区</span>
-                            <select class="input" data-cfg="system_time_timezone"><option value="browser" ${cfg.system_time_timezone === 'browser' ? 'selected' : ''}>跟随浏览器</option><option value="UTC" ${cfg.system_time_timezone === 'UTC' ? 'selected' : ''}>UTC</option><option value="Asia/Shanghai" ${cfg.system_time_timezone === 'Asia/Shanghai' ? 'selected' : ''}>Asia/Shanghai</option></select>
+                            <select class="input" data-cfg="system_time_timezone"><option value="browser" ${cfg.system_time_timezone === 'browser' ? 'selected' : ''}>跟随浏览器</option><option value="UTC" ${cfg.system_time_timezone === 'UTC' ? 'selected' : ''}>UTC</option><option value="UTC+1" ${cfg.system_time_timezone === 'UTC+1' ? 'selected' : ''}>UTC+1</option><option value="UTC+2" ${cfg.system_time_timezone === 'UTC+2' ? 'selected' : ''}>UTC+2</option><option value="UTC+3" ${cfg.system_time_timezone === 'UTC+3' ? 'selected' : ''}>UTC+3</option><option value="UTC+4" ${cfg.system_time_timezone === 'UTC+4' ? 'selected' : ''}>UTC+4</option><option value="UTC+5" ${cfg.system_time_timezone === 'UTC+5' ? 'selected' : ''}>UTC+5</option><option value="UTC+6" ${cfg.system_time_timezone === 'UTC+6' ? 'selected' : ''}>UTC+6</option><option value="UTC+7" ${cfg.system_time_timezone === 'UTC+7' ? 'selected' : ''}>UTC+7</option><option value="UTC+8" ${cfg.system_time_timezone === 'UTC+8' ? 'selected' : ''}>UTC+8</option><option value="UTC+9" ${cfg.system_time_timezone === 'UTC+9' ? 'selected' : ''}>UTC+9</option><option value="UTC+10" ${cfg.system_time_timezone === 'UTC+10' ? 'selected' : ''}>UTC+10</option><option value="UTC+11" ${cfg.system_time_timezone === 'UTC+11' ? 'selected' : ''}>UTC+11</option><option value="UTC+12" ${cfg.system_time_timezone === 'UTC+12' ? 'selected' : ''}>UTC+12</option><option value="UTC-1" ${cfg.system_time_timezone === 'UTC-1' ? 'selected' : ''}>UTC-1</option><option value="UTC-2" ${cfg.system_time_timezone === 'UTC-2' ? 'selected' : ''}>UTC-2</option><option value="UTC-3" ${cfg.system_time_timezone === 'UTC-3' ? 'selected' : ''}>UTC-3</option><option value="UTC-4" ${cfg.system_time_timezone === 'UTC-4' ? 'selected' : ''}>UTC-4</option><option value="UTC-5" ${cfg.system_time_timezone === 'UTC-5' ? 'selected' : ''}>UTC-5</option><option value="UTC-6" ${cfg.system_time_timezone === 'UTC-6' ? 'selected' : ''}>UTC-6</option><option value="UTC-7" ${cfg.system_time_timezone === 'UTC-7' ? 'selected' : ''}>UTC-7</option><option value="UTC-8" ${cfg.system_time_timezone === 'UTC-8' ? 'selected' : ''}>UTC-8</option><option value="UTC-9" ${cfg.system_time_timezone === 'UTC-9' ? 'selected' : ''}>UTC-9</option><option value="UTC-10" ${cfg.system_time_timezone === 'UTC-10' ? 'selected' : ''}>UTC-10</option><option value="UTC-11" ${cfg.system_time_timezone === 'UTC-11' ? 'selected' : ''}>UTC-11</option><option value="UTC-12" ${cfg.system_time_timezone === 'UTC-12' ? 'selected' : ''}>UTC-12</option></select>
                         </div>
                     </div></div>
                 </section>
@@ -988,7 +992,8 @@ function render_settings(): string {
                     <h2>导出</h2>
                     <div class="set-card"><div class="set-grid">
                         <div class="field span2"><span class="field-lbl">文件名模板</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
-                        <div class="field span2"><span class="field-lbl">导出目录</span><input class="input mono" data-cfg="export_directory" value="${esc(cfg.export_directory)}" placeholder="capture-all/exports"></div>
+                        <div class="field span2"><span class="field-lbl">采集导出目录</span><input class="input mono" data-cfg="export_capture_directory" value="${esc(cfg.export_capture_directory)}" placeholder="capture-all/exports"></div>
+                        <div class="field span2"><span class="field-lbl">日志导出目录</span><input class="input mono" data-cfg="export_log_directory" value="${esc(cfg.export_log_directory)}" placeholder="capture-all/logs"></div>
                         <div class="field"><span class="field-lbl">每次询问保存位置</span>${sw('export_save_as', cfg.export_save_as)}</div>
                     </div></div>
                 </section>
@@ -1109,11 +1114,15 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
         try {
             const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
             if (!r?.success) { alert('导出失败'); return; }
-            const blob = new Blob([r.data], { type: 'text/plain' });
+            const blob = new Blob([r.data], { type: 'text/x-log' });
             const url = URL.createObjectURL(blob);
+            const log_dir = user_config.export_log_directory || '';
+            const log_filename = log_dir
+                ? `${log_dir}/capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`
+                : `capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`;
             chrome.downloads.download({
                 url,
-                filename: `capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`,
+                filename: log_filename,
                 saveAs: user_config.export_save_as,
             });
             setTimeout(() => URL.revokeObjectURL(url), 5000);

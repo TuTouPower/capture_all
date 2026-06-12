@@ -195,8 +195,8 @@
   - `tests/popup_export.test.ts` — 导出行为测试
 
 
-### ❌ P0.41 Response Body 采集时序竞态 — web_request 路径 ~98% not_enabled
-- **状态**：未修复 — 2026-06-12 日志分析确认
+### ✅ P0.41 Response Body 采集时序竞态 — web_request 路径 ~98% not_enabled
+- **状态**：已修复 — 2026-06-12（CDP-first 架构重构）
 - **详细文档**：`docs/P0.41_BODY_CAPTURE_RACE.md`
 - **现象**：导出 JSON 中 `web_request` 路径的请求 ~98% 为 `response_body_status: "not_enabled"`，`extension_cdp` 路径正常。
 - **根因**：`find_matching_cdp_request` 匹配成功后从 `cdp_request_meta` 删除条目，导致后续 `find_cdp_candidates` 看到 0 候选 → deferred 条目 `pending_cdp_ids` 为空 → 必然超时 → not_enabled。次要原因：页面加载时 CDP 事件晚于 webRequest，`cdp_request_meta` 初始为空。

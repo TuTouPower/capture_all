@@ -80,6 +80,10 @@ interface CdpBodyResult {
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 export const _cdp_body_results_for_test = cdp_body_results;
 
+// CDP-first: track request IDs that CDP has already emitted as primary records.
+// webRequest handlers skip these to avoid duplicates.
+const cdp_primary_emitted: Set<string> = new Set();
+
 // Orphan CDP body events: entries that haven't been matched by webRequest within timeout
 const ORPHAN_TIMEOUT_MS = 3000;
 
@@ -173,6 +177,7 @@ export function stop_network_capture(): void {
 
     cdp_request_meta.clear();
     cdp_body_results.clear();
+    cdp_primary_emitted.clear();
     on_cdp_body_event = null;
 }
 
@@ -221,6 +226,20 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     if (method === 'Network.requestWillBeSent') {
         const request = params?.request;
         if (request) {
+            // CDP-first: extract request body from postData
+            let req_body: string | null = null;
+            let req_body_status: BodyCaptureStatus = 'not_enabled';
+            if (config.capture_request_body && request.postData) {
+                const byte_len = new TextEncoder().encode(request.postData).length;
+                if (byte_len > MAX_REQUEST_BODY_BYTES) {
+                    req_body = truncate_request_body(request.postData);
+                    req_body_status = 'too_large';
+                } else {
+                    req_body = request.postData;
+                    req_body_status = 'captured';
+                }
+            }
+
             cdp_request_meta.set(req_id, {
                 url: request.url || '',
                 method: request.method || 'GET',
@@ -229,8 +248,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 response_headers: {},
                 request_headers: headers_map_from_cdp(request.headers || {}),
                 timestamp: Date.now(),
-                request_body: null,
-                request_body_status: 'not_enabled'
+                request_body: req_body,
+                request_body_status: req_body_status,
             });
         }
     }
@@ -264,23 +283,49 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             'Network.getResponseBody',
             { requestId: req_id }
         ).then((result: any) => {
+            let body_status: BodyCaptureStatus = 'cdp_failed';
+            let body: string | null = null;
+            let preview: string | null = null;
+
             if (!result || typeof result.body !== 'string') {
-                cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
                 logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result' });
             } else if (result.base64Encoded) {
-                cdp_body_results.set(req_id, { body: null, status: 'unsupported_binary', timestamp: Date.now(), preview: null });
+                body_status = 'unsupported_binary';
             } else {
-                let body: string = result.body;
-                const byte_len = new TextEncoder().encode(body).length;
+                body = result.body;
+                const byte_len = new TextEncoder().encode(body!).length;
                 if (byte_len > MAX_RESPONSE_BODY_BYTES) {
-                    const trunc_result = truncate_response_body(body);
+                    const trunc_result = truncate_response_body(body!);
                     body = trunc_result.body!;
-                    cdp_body_results.set(req_id, { body, status: 'too_large', timestamp: Date.now(), preview: trunc_result.response_preview });
+                    preview = trunc_result.response_preview;
+                    body_status = 'too_large';
                 } else {
-                    const preview = body.slice(0, 200);
-                    cdp_body_results.set(req_id, { body, status: 'captured', timestamp: Date.now(), preview });
+                    preview = body!.slice(0, 200);
+                    body_status = 'captured';
                 }
             }
+
+            const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview };
+            cdp_body_results.set(req_id, body_result);
+
+            // CDP-first: if we have metadata, build and emit the complete record directly
+            const meta = cdp_request_meta.get(req_id);
+            if (meta) {
+                cdp_primary_emitted.add(req_id);
+                send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
+                logger.debug('cdp_primary_emitted', {
+                    url: meta.url?.slice(0, 120),
+                    method: meta.method,
+                    body_status,
+                    body_len: body?.length ?? 0,
+                });
+                // Clean up — no need for orphan check since we already emitted
+                cdp_request_meta.delete(req_id);
+                cdp_body_results.delete(req_id);
+                return;
+            }
+
+            // No metadata yet — fall back to deferred/orphan resolution
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         }).catch((err: any) => {
@@ -480,6 +525,8 @@ export function resolve_resource_type(raw: string): NetworkRequestData['resource
 
 function handle_before_request(details: any): void {
     if (!is_capturing) return;
+    // CDP-first: skip requests on the attached tab — CDP handles them directly
+    if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
 
     const { body, status } = extract_request_body(details);
 
@@ -501,6 +548,7 @@ function handle_before_request(details: any): void {
 
 function handle_before_send_headers(details: any): void {
     if (!is_capturing) return;
+    if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
     const pending = pending_requests.get(details.requestId);
     if (!pending) return;
 
@@ -511,6 +559,7 @@ function handle_before_send_headers(details: any): void {
 
 function handle_headers_received(details: any): void {
     if (!is_capturing) return;
+    if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
     const pending = pending_requests.get(details.requestId);
     if (!pending) return;
 
@@ -580,8 +629,74 @@ function build_network_event(
     return { event, data };
 }
 
+// CDP-first: build complete NetworkRequestData directly from CDP metadata + body.
+// Used for the attached tab where CDP is the primary data source.
+function build_cdp_primary_network_event(
+    meta: CdpRequestMeta,
+    body_result: CdpBodyResult,
+    cdp_request_id: string
+): NetworkEventPayload {
+    const relative_time_ms = meta.timestamp - start_time;
+
+    const redact_q = Boolean(config.redact_data && config.redact_url_query);
+    const redact_hdrs = Boolean(config.redact_data && config.redact_sensitive_headers);
+    const { url } = redact_url(meta.url, redact_q);
+
+    const event = create_base_event({
+        capture_id,
+        category: 'network',
+        type: 'network_request',
+        relative_time_ms,
+        tab_id: dbg_tab_id || current_tab_id,
+        url,
+        source: 'background',
+        severity: 'info',
+    });
+
+    const req_headers = redact_hdrs ? redact_headers(meta.request_headers, true).headers : meta.request_headers;
+    const res_headers = redact_hdrs ? redact_headers(meta.response_headers, true).headers : meta.response_headers;
+
+    const data: NetworkRequestData = {
+        capture_id: event.capture_id,
+        event_id: event.event_id,
+        request_id: cdp_request_id,
+        method: meta.method || 'GET',
+        url,
+        url_status: redact_q ? 'redacted' : 'captured',
+        status_code: meta.status_code || null,
+        status_text: null,
+        protocol: null,
+        resource_type: resolve_resource_type(meta.resource_type),
+        initiator: null,
+        duration_ms: null,
+        start_time_ms: null,
+        end_time_ms: null,
+        request_headers: req_headers,
+        response_headers: res_headers,
+        headers_status: redact_hdrs ? 'redacted' : 'captured',
+        request_body: meta.request_body,
+        request_body_status: meta.request_body_status,
+        response_body: body_result.body,
+        response_preview: body_result.preview,
+        response_body_status: body_result.status,
+        mime_type: null,
+        request_size_bytes: null,
+        response_size_bytes: null,
+        transfer_size_bytes: null,
+        from_cache: null,
+        cache_status: null,
+        error_text: null,
+        capture_method: 'cdp_primary',
+        body_capture_mode: 'extension_cdp',
+    };
+
+    return { event, data };
+}
+
 function handle_completed(details: any): void {
     if (!is_capturing) return;
+    // CDP-first: skip requests on the attached tab — CDP already emitted them
+    if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
 
     const pending = pending_requests.get(details.requestId);
     if (!pending) return;
@@ -751,5 +866,6 @@ export function find_matching_cdp_request(
 
 function handle_error(details: any): void {
     if (!is_capturing) return;
+    if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
     pending_requests.delete(details.requestId);
 }

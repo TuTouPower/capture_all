@@ -26,6 +26,7 @@ import type {
     NetworkRequestData, ConsoleEventData,
     TabSwitchData, TabCreatedData, TabUrlChangeData,
     CaptureStartedData, CaptureStoppedData,
+    BodyCaptureStartResult,
 } from '../shared/types';
 import { DEFAULT_CONFIG } from '../shared/constants';
 
@@ -656,6 +657,15 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
     }
 }
 
+async function update_capture_body_state(result: BodyCaptureStartResult): Promise<void> {
+    if (!current_capture) return;
+    current_capture.body_capture_mode = result.mode;
+    current_capture.body_capture_status = result.status;
+    current_capture.body_capture_failure_reason = result.failure_reason;
+    current_capture.body_capture_message = result.message;
+    await update_capture(current_capture);
+}
+
 // Tab activation listener - send start to new tab's content script
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (!is_capturing) return;
@@ -735,6 +745,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             },
             debugger_attached_tab_id
         );
+        await update_capture_body_state(body_result);
         if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
             logger.info('Body capture retry succeeded on tab ' + activeInfo.tabId);
         }
@@ -836,6 +847,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                 },
                 debugger_attached_tab_id
             );
+            await update_capture_body_state(body_result);
             if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
                 logger.info('Body capture retry succeeded on tab ' + tabId + ' (URL changed)');
             }

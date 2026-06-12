@@ -240,7 +240,7 @@ describe('exported capture data with system times', () => {
         expect(data.events[0].absolute_time_system_time).not.toMatch(/Z$/);
     });
 
-    test('P0.33 original UTC fields remain (started_at, ended_at, absolute_time)', () => {
+    test('P0.33 original UTC values preserved in _utc fields', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -248,10 +248,49 @@ describe('exported capture data with system times', () => {
             console_events: []
         }, config);
 
-        // Original UTC fields preserved
-        expect(data.capture.started_at).toBe('2024-01-01T00:00:00.000Z');
-        expect(data.capture.ended_at).toBe('2024-01-01T00:01:00.000Z');
+        // Original UTC fields preserved in _utc backup
+        expect(data.capture.started_at_utc).toBe('2024-01-01T00:00:00.000Z');
+        expect(data.capture.ended_at_utc).toBe('2024-01-01T00:01:00.000Z');
         expect(data.events[0].absolute_time).toBe('2024-01-01T00:00:01.000Z');
+    });
+
+    test('P0.38 started_at/ended_at use user timezone (not UTC Z)', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [event],
+            network_requests: [],
+            console_events: []
+        }, config);
+
+        // Top-level fields now use formatted timezone, not raw UTC
+        expect(data.capture.started_at).toBe('2024-01-01 08:00:00');
+        expect(data.capture.ended_at).toBe('2024-01-01 08:01:00');
+        expect(data.capture.started_at).not.toMatch(/Z$/);
+        expect(data.capture.ended_at).not.toMatch(/Z$/);
+    });
+
+    test('P0.38 system_time_timezone is written to export data', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [],
+            network_requests: [],
+            console_events: []
+        }, config);
+
+        expect(data.system_time_timezone).toBe('UTC+8');
+        expect(data.capture.system_time_timezone).toBe('UTC+8');
+    });
+
+    test('P0.38 system_time_timezone works with browser config', () => {
+        const data = add_system_times_to_capture_data({
+            capture,
+            events: [],
+            network_requests: [],
+            console_events: []
+        }, config_browser);
+
+        expect(data.system_time_timezone).toBe('browser');
+        expect(data.capture.system_time_timezone).toBe('browser');
     });
 
     test('P0.33 time label with UTC config does not end with Z', () => {

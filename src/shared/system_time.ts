@@ -8,7 +8,15 @@ export interface ExportableCaptureData {
     console_events: ConsoleEventData[];
 }
 
-export type CaptureWithSystemTimes = CaptureRecord & {
+export type CaptureWithSystemTimes = Omit<CaptureRecord, 'started_at' | 'ended_at'> & {
+    /** User-timezone formatted time (replaces original UTC value) */
+    started_at: string;
+    ended_at: string | null;
+    /** Original UTC values preserved for backward compatibility */
+    started_at_utc: string;
+    ended_at_utc: string | null;
+    /** Timezone used for formatting */
+    system_time_timezone: string;
     start_time_system_time: string;
     end_time_system_time: string | null;
     start_time_label: string;
@@ -21,6 +29,7 @@ export type RecordWithSystemTime<T> = T & {
 };
 
 export interface ExportableCaptureDataWithSystemTimes {
+    system_time_timezone: string;
     capture: CaptureWithSystemTimes;
     events: Array<RecordWithSystemTime<CaptureEvent>>;
     network_requests: Array<RecordWithSystemTime<NetworkRequestData>>;
@@ -133,6 +142,7 @@ export function format_system_time_filename(ts: string | number, config: SystemT
 // ============================================================
 export function add_system_times_to_capture_data(data: ExportableCaptureData, config: SystemTimeConfig): ExportableCaptureDataWithSystemTimes {
     return {
+        system_time_timezone: config.system_time_timezone,
         capture: add_capture_system_times(data.capture, config),
         events: data.events.map(event => add_absolute_system_time(event, config)),
         network_requests: data.network_requests.map(request => add_absolute_system_time(request, config)),
@@ -141,12 +151,21 @@ export function add_system_times_to_capture_data(data: ExportableCaptureData, co
 }
 
 export function add_capture_system_times(capture: CaptureRecord, config: SystemTimeConfig): CaptureWithSystemTimes {
+    const { started_at, ended_at, ...rest } = capture;
     return {
-        ...capture,
-        start_time_system_time: format_system_time(capture.started_at, config),
-        end_time_system_time: capture.ended_at === null ? null : format_system_time(capture.ended_at, config),
-        start_time_label: format_time_label(capture.started_at, config),
-        end_time_label: capture.ended_at === null ? null : format_time_label(capture.ended_at, config)
+        ...rest,
+        // Replace top-level times with user-timezone formatted values
+        started_at: format_system_time(started_at, config),
+        ended_at: ended_at === null ? null : format_system_time(ended_at, config),
+        // Preserve original UTC values
+        started_at_utc: started_at,
+        ended_at_utc: ended_at,
+        // Timezone metadata
+        system_time_timezone: config.system_time_timezone,
+        start_time_system_time: format_system_time(started_at, config),
+        end_time_system_time: ended_at === null ? null : format_system_time(ended_at, config),
+        start_time_label: format_time_label(started_at, config),
+        end_time_label: ended_at === null ? null : format_time_label(ended_at, config)
     };
 }
 

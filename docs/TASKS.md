@@ -9,8 +9,8 @@
 
 ## P0 · 功能缺陷（待修复）
 
-### ❌ P0.31-R1 CDP 路径 resource_type 未归一化，大写 CDP 类型混入导出
-- **状态**：未修复 — 2026-06-12 导出数据发现
+### ✅ P0.31-R1 CDP 路径 resource_type 未归一化，大写 CDP 类型混入导出
+- **状态**：已修复 — 2026-06-12
 - **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
 - **现象**：P0.31 修复后导出仍有两套 resource_type 混存：
   - webRequest 路径已归一：`font`/`script`/`stylesheet`/`xhr`（小写，RESOURCE_TYPE_MAP 生效）
@@ -37,8 +37,8 @@
   - `tests/network_capture.test.ts` — CDP 类型归一化测试
 
 
-### ❌ P0.39 CDP retry 跨 tab 假成功：dbg_tab_id guard 不检查 tab_id 匹配
-- **状态**：未修复 — 2026-06-12 日志分析发现
+### ✅ P0.39 CDP retry 跨 tab 假成功：dbg_tab_id guard 不检查 tab_id 匹配
+- **状态**：已修复 — 2026-06-12
 - **复现数据**：`data/capture_all_capture_1781265766247_7vafphp.json` + `data/capture_all_logs_2026-06-12_20-06-14.log`
 - **现象**：从 `chrome://extensions/` 启动采集 → CDP attach 失败（预期）→ 切换到正常网页后 CDP retry 日志显示多次 "Body capture retry succeeded"，但导出 JSON 中 93 条 `network_requests` 全部 `response_body: null`、`cdp: {}`、`response_body_status: not_enabled`，同时 `body_capture_mode` 显示 `extension_cpd`（误导）。
 - **根因**：`src/background/network_capture.ts:187` — `enable_response_body_capture()` 的 guard 条件：
@@ -154,8 +154,8 @@
   4. E2E `e2e-detail-tabs.spec.ts` 只验证 tab 切换/存在，不验证每个 tab 内容区有至少一条数据行
 
 
-### ❌ P0.37 导出文件名不含 date，未使用系统时区
-- **状态**：未修复 — 2026-06-12 用户实测发现
+### ✅ P0.37 导出文件名不含 date，未使用系统时区
+- **状态**：已修复 — 2026-06-12
 - **现象**：导出采集记录文件名格式为 `capture_all_capture_{capture_id}.json`（如 `capture_all_capture_1781265766247_7vafphp.json`），不包含 `{date}` 占位符对应的时间戳。文件名 date 未按用户设置的系统时区格式化。
 - **期望行为**：导出文件名应包含用户设置时区的日期时间，格式如 `capture_all_{capture_id}_2026-06-12_20-02-46.json`（browser/UTC+8 时区）。
 - **影响**：用户无法从文件名获知导出时间，P0.22（文件名用时区时间）实际未生效。
@@ -177,8 +177,8 @@
   4. `export_session()` 的硬编码文件名路径与 `build_export_filename()` 独立存在，两个模块各自有测试但无交叉验证
 
 
-### ❌ P0.38 导出 JSON 顶层时间字段仍为 UTC，system_time_timezone 未写入
-- **状态**：未修复 — 2026-06-12 用户实测发现
+### ✅ P0.38 导出 JSON 顶层时间字段仍为 UTC，system_time_timezone 未写入
+- **状态**：已修复 — 2026-06-12
 - **现象**：导出 JSON 中 `started_at: "2026-06-12T12:02:46.247Z"`、`ended_at: "2026-06-12T12:03:04.157Z"` 仍为 UTC `Z` 格式，P0.33 新增的 `*_time_label`/`*_system_time` 字段虽存在且正确（`20:02:46 (browser)`），但顶层主要时间字段 `started_at`/`ended_at` 用户第一眼看到的就是 UTC，容易误判时区设置未生效。同时 `system_time_timezone` 字段为 `undefined`，未写入导出 JSON，用户无法从导出文件确认当前时区设置。
 - **期望行为**：`started_at`/`ended_at` 等顶层时间字段应直接使用用户设置时区格式化（或至少在显眼位置标注人读时间），`system_time_timezone` 必须写入导出 JSON。
 - **影响**：用户看到 `Z` 时间后判断「跟随浏览器」未生效，P0.22/P0.33 修复实际未覆盖顶层字段。

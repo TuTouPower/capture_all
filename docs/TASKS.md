@@ -181,7 +181,7 @@
   - `src/shared/types.ts` — 无需改（`NetworkRequestData.response_preview` 字段已存在，只是从未被填充）
 
 ### ✅ P0.15 CDP body 与 webRequest 竞态导致 not_enabled 虚高 + 同请求重复记录
-- **状态**：已修复 — `c98b2a9`。handle_completed 改为延迟写入（1.5s 超时），CDP body 到达时通过 try_resolve_deferred 匹配合并；find_matching_cdp_request 改为支持 status_code=0 + 多候选选最近
+- **状态**：部分修复 — `c98b2a9`。延迟写入 + `try_resolve_deferred` 使 body_capture_mode 全部正确且 response_preview 正确填充，但多候选 CDP 响应共享 deferred_key 导致重复残留（详见 P0.15-R1）
 - **现象**：导出 387 条 network_requests 中，`response_body_status=not_enabled` 占 63%（245 条），但 `body_capture_mode=extension_cdp` 的也有 265 条（68%），说明 CDP 明明在运行，大量请求却被标为 not_enabled。同时 `correlation_status=cdp_only` 的记录（≈122 条，32%）正是这些请求的 CDP body 单独写出的第二份记录。复现文件：`D:\Kar\Code\omni_usage\data\capture_all_session_1781231089152_1o34e4b.json`
 - **根因**：`network_capture.ts:494-528` — `handle_completed()` 同步查 CDP body，但 `Network.getResponseBody` 是异步的，webRequest 到达时 body 大概率还没 resolve：
   1. `webRequest.onCompleted` 触发 → 调用 `find_matching_cdp_request()`（line 508）
@@ -213,6 +213,38 @@
   - E2E 测试从不统计 `response_body_status` 分布，无法发现 not_enabled 占比异常
 - **影响文件**：
   - `src/background/network_capture.ts` — handle_completed + find_matching_cdp_request + schedule_orphan_check
+
+### ❌ P0.15-R1 延迟队列多候选竞态 — cdp_only 重复残留
+
+- **状态**：未修复
+- **现象**：P0.15 修复后，录 `D:\Kar\Code\omni_usage\data\capture_all_session_1781254042687_d35v6jz.json`（2026-06-12，19s，198 条）：`body_capture_mode=extension_cdp` 全部正确，`response_preview` 正确填充，必填字段完整（P0.11/P0.14/P0.16 生效）。但仍有 **121 条重复**（198 条 → 77 唯一 URL），分布为：
+  - 98 条 `correlation_status=undefined`（webRequest 路径，`build_network_event` → `send_to_background`）
+  - 100 条 `correlation_status=cdp_only`（CDP orphan 路径，`schedule_orphan_check` → `build_cdp_only_request`）
+  - **0 条 `matched`** — 说明 `try_resolve_deferred` 从未成功匹配
+- **直接根因 — 多候选 CDP 响应共享同一 deferred_key**：
+  `handle_completed` 中 `find_cdp_candidates` 为当前 webRequest 找到的**所有** CDP 候选都建了 `_deferred_cdp_index.set(cdp_id, deferred_key)`。当第一个 CDP body 到达时：
+  1. `try_resolve_deferred(cdp_id_1)` → `_deferred_cdp_index.get(cdp_id_1)` → `deferred_key`
+  2. `deferred_web_requests.get(deferred_key)` → 找到 → 匹配合并 → `deferred_web_requests.delete(deferred_key)` ✅
+  3. `cdp_body_results.delete(cdp_id_1)` → body 已消耗 ✅
+  4. `schedule_orphan_check(cdp_id_1)` → `cdp_body_results.get(cdp_id_1)` → undefined → 跳过 ✅
+  但当**第二个** CDP body（同 URL + method + status 的并发请求）到达时：
+  5. `try_resolve_deferred(cdp_id_2)` → `_deferred_cdp_index.get(cdp_id_2)` → `deferred_key`（相同的！）
+  6. `deferred_web_requests.get(deferred_key)` → **undefined**（步骤 2 已删除）
+  7. `return` — 不做任何事
+  8. `schedule_orphan_check(cdp_id_2)` → `cdp_body_results` 中仍有 body → 3s 后写 `cdp_only` 记录 ← **重复产生**
+  同时，其他候选 CDP 条目也可能因为 `find_cdp_candidates` 未匹配（URL base 不同、status 不匹配等）而没有建立反向索引，它们的 body 全部走 orphan → `cdp_only`。
+- **深层根因 — `find_cdp_candidates` 匹配范围不足**：
+  - 仅匹配 URL base（`split('?')[0]`）完全相同，但 CDP 和 webRequest 可能因重定向、hash fragment、trailing slash 差异导致 URL base 不同
+  - `status_code` 非零时必须相等，但 CDP `Network.responseReceived` 可能晚于 `Network.loadingFinished`，此时 `meta.status_code` 仍为 0
+  - CDP `requestWillBeSent` 和 webRequest `onBeforeRequest` 时序不确定——如果 webRequest 先到且 CDP meta 尚未建立，`find_cdp_candidates` 返回空数组，无反向索引建立
+- **修复要点**：
+  1. **多对一反向索引**：`_deferred_cdp_index: Map<string, Set<string>>`（cdp_id → Set<deferred_key>），不覆盖之前的映射
+  2. **多候选全解析追踪**：deferred 条目增加 `pending_cdp_ids: Set<string>`，只有所有候选 CDP body 都到达（或被超时）后才清理 deferred 条目
+  3. **`try_resolve_deferred` 改为**：匹配到 deferred 后，从 `pending_cdp_ids` 中移除当前 cdp_id；如果 Set 变空，才 emit 并清理 deferred；否则只清理当前 cdp 的 body/meta
+  4. **`find_cdp_candidates` 增强**：CDP meta 缺失时等待（短超时 300ms）再建索引；放宽 URL 匹配（允许 path 尾部差异）
+  5. **测试**：mock 中构造同 URL 2 个 CDP 请求 + 1 个 webRequest，验证仅产生 1 条合并记录
+- **影响文件**：
+  - `src/background/network_capture.ts` — DeferredEntry + try_resolve_deferred + handle_completed + _deferred_cdp_index
 
 ### ✅ P0.16 CDP orphan / bridge 路径构造的 NetworkRequestData 缺少必填字段
 - **状态**：已修复 — `f7e95ee`。4 个 builder 函数返回类型 any → NetworkRequestData，补全全部 30 个必填字段；handle_network_request 新增 normalize_network_request 校验

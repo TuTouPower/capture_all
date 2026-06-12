@@ -74,6 +74,7 @@ interface CdpBodyResult {
     body: string | null;
     status: BodyCaptureStatus;
     timestamp: number;
+    preview: string | null;
 }
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 
@@ -242,29 +243,30 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             { requestId: req_id }
         ).then((result: any) => {
             if (!result || typeof result.body !== 'string') {
-                cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now() });
+                cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
             } else if (result.base64Encoded) {
-                cdp_body_results.set(req_id, { body: null, status: 'unsupported_binary', timestamp: Date.now() });
+                cdp_body_results.set(req_id, { body: null, status: 'unsupported_binary', timestamp: Date.now(), preview: null });
             } else {
                 let body: string = result.body;
                 const byte_len = new TextEncoder().encode(body).length;
                 if (byte_len > MAX_RESPONSE_BODY_BYTES) {
-                    const result = truncate_response_body(body);
-                    body = result.body!;
-                    cdp_body_results.set(req_id, { body, status: 'too_large', timestamp: Date.now() });
+                    const trunc_result = truncate_response_body(body);
+                    body = trunc_result.body!;
+                    cdp_body_results.set(req_id, { body, status: 'too_large', timestamp: Date.now(), preview: trunc_result.response_preview });
                 } else {
-                    cdp_body_results.set(req_id, { body, status: 'captured', timestamp: Date.now() });
+                    const preview = body.slice(0, 200);
+                    cdp_body_results.set(req_id, { body, status: 'captured', timestamp: Date.now(), preview });
                 }
             }
             schedule_orphan_check(req_id);
         }).catch(() => {
-            cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now() });
+            cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
             schedule_orphan_check(req_id);
         });
     }
 
     if (method === 'Network.loadingFailed') {
-        cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now() });
+        cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
         schedule_orphan_check(req_id);
     }
 }
@@ -293,6 +295,7 @@ function schedule_orphan_check(req_id: string): void {
             request_body_status: meta?.request_body_status || 'not_enabled',
             response_body: body_result.body,
             response_body_status: body_result.status,
+            response_preview: body_result.preview,
             request_headers: redact_hdrs ? redact_headers(meta?.request_headers || {}, true).headers : (meta?.request_headers || {}),
             response_headers: redact_hdrs ? redact_headers(meta?.response_headers || {}, true).headers : (meta?.response_headers || {})
         };
@@ -435,7 +438,8 @@ function build_network_event(
     pending: PendingRequest,
     details: any,
     response_body: string | null,
-    response_body_status: BodyCaptureStatus
+    response_body_status: BodyCaptureStatus,
+    response_preview: string | null = null
 ): NetworkEventPayload {
     const relative_time_ms = pending.timestamp - start_time;
 
@@ -475,7 +479,7 @@ function build_network_event(
         request_body: pending.request_body ?? null,
         request_body_status: pending.request_body_status || 'not_enabled',
         response_body,
-        response_preview: null,
+        response_preview,
         response_body_status,
         mime_type: null,
         request_size_bytes: null,
@@ -518,7 +522,7 @@ function handle_completed(details: any): void {
         cdp_request_meta.delete(matched_cdp_id);
         if (body_result) {
             send_to_background(build_network_event(
-                pending, details, body_result.body, body_result.status
+                pending, details, body_result.body, body_result.status, body_result.preview
             ));
             return;
         }

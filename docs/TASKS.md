@@ -568,7 +568,7 @@
   - `tests/e2e-console-errors.spec.ts` / `tests/e2e-capture-local.spec.ts` — console_events 非空断言
 
 ### ✅ P0.31 网络请求 resource type 全部为 unknown
-- **状态**：已修复 — `48fab6e`
+- **状态**：已修复（webRequest 路径）— `48fab6e`。CDP 路径仍未归一化，见 P0.31-R1
 - **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
 - **现象**：导出 JSON 中 193 条 `network_requests` 的 `type` 字段全部为 `"unknown"`。实际请求包括 XHR/Fetch（API 调用）、Script（JS 文件）、Stylesheet（CSS 文件）、Font（字体）、Document（HTML 页面）等多种类型，但无一正确分类。
 - **期望行为**：每条 network request 的 `type` 应反映实际资源类型，如 `xhr`、`fetch`、`script`、`stylesheet`、`font`、`document`、`image`、`media` 等，与 Chrome DevTools Network 面板一致。
@@ -589,6 +589,33 @@
   - `src/background/network_capture.ts` — build_network_event + CDP meta
   - `src/shared/types.ts` — 可能需新增类型映射常量
   - `tests/network_capture.test.ts` — type 字段测试
+
+### ❌ P0.31-R1 CDP 路径 resource_type 未归一化，大写 CDP 类型混入导出
+- **状态**：未修复 — 2026-06-12 导出数据发现
+- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
+- **现象**：P0.31 修复后导出仍有两套 resource_type 混存：
+  - webRequest 路径已归一：`font`/`script`/`stylesheet`/`xhr`（小写，RESOURCE_TYPE_MAP 生效）
+  - CDP 路径未归一：`Font`/`Stylesheet`/`Script`/`Image`/`Media`/`Manifest`/`Fetch`（PascalCase，CDP 原始值）
+  同一导出 JSON 中 `type: "Font"` 和 `type: "font"` 并存，`type: "Fetch"` 和 `type: "xhr"` 并存。
+- **根因**：RESOURCE_TYPE_MAP（line 441）+ `resolve_resource_type()`（line 458）仅在 `build_network_event` 的 webRequest 路径（line 537）被调用。CDP 路径 6 处直接使用原始值，绕过映射：
+  1. `network_capture.ts:219` — `Network.requestWillBeSent` CDP 事件存储 `params?.type || 'other'`（Chrome CDP 返回 PascalCase：`Document`/`Stylesheet`/`Script`/`Font`/`Image`/`Media`/`Fetch`/`Manifest`/`XHR`/`Ping`/`WebSocket`/`Other`）
+  2. `network_capture.ts:241` — `Network.responseReceived` CDP 事件，同上
+  3. `network_capture.ts:348` — `build_cdp_body_event()` 取 `meta?.resource_type || 'other'`（直接透传 CDP meta 原始值）
+  4. `network_correlator.ts:74` — `merge_matched()` 取 `web_meta.resource_type || cdp_event.resource_type`（两边均可能为原始值）
+  5. `network_correlator.ts:120` — `build_cdp_only_request()` 直接 `cdp_event.resource_type as NetworkRequestData['resource_type']`（PascalCase CDP 值强转）
+  6. `network_correlator.ts:163` — `build_web_request_only_request()` 直接 `web_meta.resource_type as NetworkRequestData['resource_type']`（webRequest 原始值强转）
+- **影响**：
+  - 导出 JSON 中 resource_type 字段同义多值，下游按 type 过滤/分组失效
+  - Dashboard 网络列表 type 列显示 `Font`/`font` 两种，用户困惑
+  - 统计分析无法信任 type 字段
+- **修复要点**：
+  1. 在 `CdpRequestMeta` 和 `CdpBodyEvent` 存储 resource_type 时调用 `resolve_resource_type()` 归一化（或添加 CDP 大写→标准小写映射表：`{Document: 'document', Stylesheet: 'stylesheet', Script: 'script', Font: 'font', Image: 'image', Media: 'media', Fetch: 'fetch', Manifest: 'other', XHR: 'xhr', Ping: 'ping', WebSocket: 'websocket', Other: 'other'}`）
+  2. `network_correlator.ts` 中 `build_cdp_only_request`/`build_web_request_only_request`/`merge_matched` 3 处写入前调用 `resolve_resource_type()`
+  3. 补测试：给定 CDP 大写类型字符串，验证输出为归一化小写标准类型
+- **影响文件**：
+  - `src/background/network_capture.ts` — CdpRequestMeta 写入处 + build_cdp_body_event
+  - `src/background/network_correlator.ts` — merge_matched / build_cdp_only_request / build_web_request_only_request
+  - `tests/network_capture.test.ts` — CDP 类型归一化测试
 
 ### ✅ P0.32 采集记录元数据缺失 url 和 tab_title
 - **状态**：已修复 — `48fab6e`

@@ -6,7 +6,6 @@ import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_captur
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
 import { start_dom_capture, stop_dom_capture } from './dom_capture';
 import { start_storage_capture, stop_storage_capture } from './storage_capture';
-import { start_xhr_fetch_capture, stop_xhr_fetch_capture } from './xhr_fetch_capture';
 import { start_network_hook, stop_network_hook } from './network_hook';
 import { DEFAULT_CONFIG } from '../shared/constants';
 import { Logger, MessageLogTransport } from '../shared/logger';
@@ -81,11 +80,10 @@ function start_capture(config: RecordConfig): void {
     start_dom_capture(config, send_event);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     start_storage_capture(send_event as any, capture_id, capture_start_epoch_ms);
-    start_xhr_fetch_capture(send_event);
     start_network_hook(send_event);
 
     logger.debug('All capture modules started', {
-        modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'xhr_fetch', 'network_hook'],
+        modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook'],
         config: {
             capture_network: config.capture_network,
             capture_console: config.capture_console,
@@ -166,7 +164,6 @@ function stop_capture(): void {
     stop_scroll_capture();
     stop_dom_capture();
     stop_storage_capture();
-    stop_xhr_fetch_capture();
     stop_network_hook();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);

@@ -8,7 +8,7 @@ import {
     type CdpBodyEvent,
     type WebRequestMeta
 } from '../src/background/network_correlator';
-import type { NetworkRequest } from '../src/shared/types';
+import type { NetworkRequestData } from '../src/shared/types';
 
 function make_web_meta(overrides: Partial<WebRequestMeta> = {}): WebRequestMeta {
     return {
@@ -203,5 +203,60 @@ describe('build_web_request_only_request', () => {
         expect(result.response_body).toBeNull();
         expect(result.response_body_status).toBe('not_enabled');
         expect(result.correlation_status).toBe('web_request_only');
+    });
+});
+
+// ─── field completeness ───
+
+const REQUIRED_NETWORK_REQUEST_FIELDS: (keyof NetworkRequestData)[] = [
+    'request_id', 'method', 'url', 'url_status', 'status_code', 'status_text',
+    'protocol', 'resource_type', 'initiator', 'duration_ms', 'start_time_ms',
+    'end_time_ms', 'request_headers', 'response_headers', 'headers_status',
+    'request_body', 'request_body_status', 'response_body', 'response_preview',
+    'response_body_status', 'mime_type', 'request_size_bytes', 'response_size_bytes',
+    'transfer_size_bytes', 'from_cache', 'cache_status', 'error_text',
+    'capture_method', 'body_capture_mode',
+];
+
+function assert_required_fields(obj: Record<string, unknown>, label: string): void {
+    for (const field of REQUIRED_NETWORK_REQUEST_FIELDS) {
+        if (field === 'request_headers' || field === 'response_headers') {
+            // These can be null in the type but should be present
+        }
+        expect(obj, `${label}: missing ${field}`).toHaveProperty(field);
+    }
+}
+
+describe('field completeness', () => {
+    it('build_cdp_only_request has all required fields', () => {
+        const cdp = make_cdp_event();
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        assert_required_fields(result as unknown as Record<string, unknown>, 'build_cdp_only_request');
+        expect(result.capture_method).toBe('extension_cdp');
+        expect(result.body_capture_mode).toBe('extension_cdp');
+        expect(result.response_preview).toBe(cdp.response_preview);
+    });
+
+    it('merge_matched has all required fields', () => {
+        const web = make_web_meta();
+        const cdp = make_cdp_event();
+        const result = merge_matched(web, cdp, 'matched');
+        assert_required_fields(result as unknown as Record<string, unknown>, 'merge_matched');
+        expect(result.capture_method).toBe('web_request');
+        expect(result.body_capture_mode).toBe('extension_cdp');
+    });
+
+    it('build_web_request_only_request has all required fields', () => {
+        const web = make_web_meta();
+        const result = build_web_request_only_request(web);
+        assert_required_fields(result as unknown as Record<string, unknown>, 'build_web_request_only_request');
+        expect(result.capture_method).toBe('web_request');
+        expect(result.body_capture_mode).toBe('none');
+    });
+
+    it('build_cdp_only_request has non-null request_id', () => {
+        const cdp = make_cdp_event({ request_id: 'cdp_test_123' });
+        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        expect(result.request_id).toBe('cdp_test_123');
     });
 });

@@ -68,6 +68,7 @@ interface CdpRequestMeta {
     request_body_status: BodyCaptureStatus;
 }
 const cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
+export const _cdp_request_meta_for_test = cdp_request_meta;
 
 // CDP requestId -> body result (after loadingFinished)
 interface CdpBodyResult {
@@ -585,7 +586,7 @@ function handle_completed(details: any): void {
 // Reverse index: CDP request_id -> deferred entry key, for fast resolution
 const _deferred_cdp_index: Map<string, string> = new Map();
 
-function find_cdp_candidates(
+export function find_cdp_candidates(
     url: string,
     method: string,
     status_code: number
@@ -607,7 +608,7 @@ function find_cdp_candidates(
     return candidates;
 }
 
-function find_matching_cdp_request(
+export function find_matching_cdp_request(
     url: string,
     method: string,
     status_code: number,

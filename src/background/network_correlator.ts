@@ -15,6 +15,7 @@ export interface CdpBodyEvent {
     request_body_status: BodyCaptureStatus;
     response_body: string | null;
     response_body_status: BodyCaptureStatus;
+    response_preview: string | null;
     request_headers: Record<string, string>;
     response_headers: Record<string, string>;
 }
@@ -101,6 +102,7 @@ export function build_cdp_only_request(
         request_body_status: cdp_event.request_body_status,
         response_body: cdp_event.response_body,
         response_body_status: cdp_event.response_body_status,
+        response_preview: cdp_event.response_preview,
         duration_ms: 0,
         resource_type: cdp_event.resource_type as NetworkRequest['resource_type'],
         correlation_status: 'cdp_only',

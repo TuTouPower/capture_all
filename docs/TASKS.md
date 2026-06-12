@@ -139,7 +139,7 @@
 ### ✅ P0.12 网络请求 response_body 全部为 null — 三层根因叠加
 - **状态**：L1+L2 已修复，L3 为 Chrome 架构限制无法修复
 - **L1 修复**：P0.11 — CDP 重试后元数据更新（`0f9e1f1`）
-- **L2 修复**：fallback hook 路由断层 — `network_hook.ts` 发送 `type: 'network_body_hook'`（替代 `'network_request'`），匹配 SW `handle_event` 路由；同时透传 `response_preview`（`5697410` 后续 commit）
+- **L2 修复**：fallback hook 路由断层 — `network_hook.ts` 发送 `type: 'network_body_hook'`；xhr_fetch_capture 已停用（避免重复记录）
 - **L3 未修复**：`chrome.webRequest.onCompleted` 不含 response body（Chrome 架构限制），script/font/stylesheet 等声明式资源无法通过 content script hook 拦截，CDP 不可用时永远无法获取
 
 ### ✅ P0.13 CDP 重试回调不匹配导致事件写入错误表
@@ -243,7 +243,7 @@
   - `tests/network_correlator.test.ts` — 补字段完整性断言
 
 ### ✅ P0.17 测试文件补充清单（P0.15-P0.16 暴露的测试缺口）
-- **状态**：已补充 — `5697410`。network_capture.test.ts +11 测试（find_matching_cdp_request + find_cdp_candidates），network_correlator.test.ts +4 字段完整性测试；chrome.debugger mock 仍未创建
+- **状态**：已补充 — `5697410` + 后续。network_capture.test.ts +11 测试、network_correlator.test.ts +4 字段完整性测试、network_cdp.test.ts +6 CDP mock 测试、chrome.debugger mock 已创建
 - 以下函数/路径完全无测试覆盖，本次问题全部发生在此处：
   | 函数/路径 | 文件 | 行号 | 缺失后果 |
   |-----------|------|------|----------|

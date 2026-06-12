@@ -139,7 +139,7 @@
 ### ✅ P0.12 网络请求 response_body 全部为 null — 三层根因叠加
 - **状态**：L1+L2 已修复，L3 为 Chrome 架构限制无法修复
 - **L1 修复**：P0.11 — CDP 重试后元数据更新（`0f9e1f1`）
-- **L2 修复**：fallback hook 路由断层 — `network_hook.ts` 发送 `type: 'network_body_hook'`；xhr_fetch_capture 已停用（避免重复记录）
+- **L2 修复**：fallback hook 路由断层 — `network_hook.ts` 发送 `type: 'network_body_hook'`；`xhr_fetch_capture.ts` 已删除（与 network_hook 重复拦截，不捕获 body）
 - **L3 未修复**：`chrome.webRequest.onCompleted` 不含 response body（Chrome 架构限制），script/font/stylesheet 等声明式资源无法通过 content script hook 拦截，CDP 不可用时永远无法获取
 
 ### ✅ P0.13 CDP 重试回调不匹配导致事件写入错误表

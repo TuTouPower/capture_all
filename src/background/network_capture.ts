@@ -266,6 +266,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
         ).then((result: any) => {
             if (!result || typeof result.body !== 'string') {
                 cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+                logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result' });
             } else if (result.base64Encoded) {
                 cdp_body_results.set(req_id, { body: null, status: 'unsupported_binary', timestamp: Date.now(), preview: null });
             } else {
@@ -282,8 +283,9 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             }
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
-        }).catch(() => {
+        }).catch((err: any) => {
             cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+            logger.debug('get_body_error', { req_id, error: String(err)?.slice(0, 100) });
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         });
@@ -305,6 +307,12 @@ function try_resolve_deferred(cdp_req_id: string): void {
         _deferred_cdp_index.delete(cdp_req_id);
         return;
     }
+
+    logger.debug('deferred_resolving', {
+        cdp_req_id,
+        body_status: body_result.status,
+        deferred_count: deferred_keys.size,
+    });
 
     // Remove this cdp_id from all deferred entries' pending sets.
     // The first entry whose pending set becomes empty wins the body.
@@ -581,6 +589,13 @@ function handle_completed(details: any): void {
 
     // If CDP body capture is not active, emit webRequest-only
     if (!config.capture_response_body || dbg_tab_id === null) {
+        logger.debug('body_not_enabled_immediate', {
+            reason: !config.capture_response_body ? 'config_disabled' : 'no_dbg_tab',
+            url: pending.url?.slice(0, 120),
+            method: pending.method,
+            capture_response_body: config.capture_response_body,
+            dbg_tab_id,
+        });
         send_to_background(build_network_event(pending, details, null, 'not_enabled'));
         return;
     }
@@ -598,11 +613,21 @@ function handle_completed(details: any): void {
         cdp_body_results.delete(matched_cdp_id);
         cdp_request_meta.delete(matched_cdp_id);
         if (body_result) {
+            logger.debug('body_captured', {
+                url: pending.url?.slice(0, 120),
+                method: pending.method,
+                body_status: body_result.status,
+                body_len: body_result.body?.length ?? 0,
+            });
             send_to_background(build_network_event(
                 pending, details, body_result.body, body_result.status, body_result.preview
             ));
             return;
         }
+        logger.debug('cdp_match_found_but_no_result', {
+            url: pending.url?.slice(0, 120),
+            cdp_id: matched_cdp_id,
+        });
     }
 
     // No CDP match found — defer write, wait for CDP body to arrive
@@ -614,6 +639,14 @@ function handle_completed(details: any): void {
         details.statusCode
     );
     const pending_cdp_ids = new Set(candidates);
+    logger.debug('body_deferred', {
+        url: pending.url?.slice(0, 120),
+        method: pending.method,
+        status: details.statusCode,
+        candidate_count: candidates.length,
+        cdp_meta_count: cdp_request_meta.size,
+        dbg_tab_id,
+    });
     const timer = setTimeout(() => {
         deferred_web_requests.delete(deferred_key);
         // Clean up reverse index for all pending CDP candidates
@@ -624,6 +657,15 @@ function handle_completed(details: any): void {
                 if (keys.size === 0) _deferred_cdp_index.delete(cdp_id);
             }
         }
+        logger.debug('body_not_enabled_deferred_timeout', {
+            url: pending.url?.slice(0, 120),
+            method: pending.method,
+            status: details.statusCode,
+            candidate_count: pending_cdp_ids.size,
+            deferred_timeout_ms: DEFERRED_TIMEOUT_MS,
+            cdp_meta_at_timeout: cdp_request_meta.size,
+            dbg_tab_id,
+        });
         send_to_background(build_network_event(pending, details, null, 'not_enabled'));
     }, DEFERRED_TIMEOUT_MS);
     deferred_web_requests.set(deferred_key, { pending, details, timer, pending_cdp_ids });
@@ -676,23 +718,32 @@ export function find_matching_cdp_request(
     const MATCH_WINDOW_MS = 2000;
     let best_candidate: string | null = null;
     let best_time_diff = Infinity;
+    let reject_reasons = { method_miss: 0, status_miss: 0, time_miss: 0, url_miss: 0 };
 
     for (const [cdp_id, meta] of cdp_request_meta) {
-        if (meta.method !== method) continue;
-        // Relaxed status match: allow status_code=0
-        if (meta.status_code !== 0 && meta.status_code !== status_code) continue;
+        if (meta.method !== method) { reject_reasons.method_miss++; continue; }
+        if (meta.status_code !== 0 && meta.status_code !== status_code) { reject_reasons.status_miss++; continue; }
         const time_diff = Math.abs(meta.timestamp - timestamp);
-        if (time_diff > MATCH_WINDOW_MS) continue;
+        if (time_diff > MATCH_WINDOW_MS) { reject_reasons.time_miss++; continue; }
 
         const cdp_base = meta.url.split('?')[0];
         const web_base = url.split('?')[0];
-        if (cdp_base !== web_base) continue;
+        if (cdp_base !== web_base) { reject_reasons.url_miss++; continue; }
 
-        // Return best match (closest timestamp) rather than rejecting multi-candidate
         if (time_diff < best_time_diff) {
             best_time_diff = time_diff;
             best_candidate = cdp_id;
         }
+    }
+
+    if (!best_candidate && cdp_request_meta.size > 0) {
+        logger.debug('cdp_match_miss', {
+            url: url.slice(0, 120),
+            method,
+            status_code,
+            cdp_meta_count: cdp_request_meta.size,
+            ...reject_reasons,
+        });
     }
 
     return best_candidate;

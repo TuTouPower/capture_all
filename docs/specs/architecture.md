@@ -372,7 +372,34 @@ BodyCaptureCoordinator
 **BodyCaptureStatus** (每条请求的 body 状态)：
 `not_enabled` | `captured` | `failed` | `too_large` | `unsupported` | `unsupported_binary` | `opaque_response` | `cdp_failed` | `fallback_unavailable` | `target_not_matched` | `permission_denied` | `partial` | `redacted`
 
-**请求关联策略**：webRequest requestId 与 CDP requestId 不同，使用 `(method, normalized_url, timestamp_window_2s, status_code, resource_type)` 五元组匹配。唯一候选合并，多个候选标记 `ambiguous` 不合并。
+**CDP-first 架构**（P0.41 重构）：
+
+活跃 tab（CDP attached）的网络请求由 CDP 直接采集，不再依赖 webRequest + CDP 关联：
+
+```
+活跃 tab:
+  CDP Network.requestWillBeSent → 记录 url/method/headers/request body/resource_type
+  CDP Network.responseReceived  → 更新 status_code/response_headers
+  CDP Network.loadingFinished   → getResponseBody → 构建完整 NetworkRequestData → emit
+  webRequest                    → 跳过（避免重复）
+
+非活跃 tab:
+  webRequest                    → 创建记录（URL/headers/request body）
+  响应体                        → not_enabled（无法获取）
+```
+
+优势：消除 webRequest ↔ CDP 时序竞态（P0.41 根因），页面加载时 ~98% 请求不再丢失响应体。
+
+**capture_method 值**：
+| 值 | 含义 |
+|---|---|
+| `cdp_primary` | CDP-first：活跃 tab 由 CDP 直接构建完整记录 |
+| `web_request` | webRequest 路径：非活跃 tab，无响应体 |
+| `extension_cdp` | 旧路径（保留兼容）：webRequest + CDP body 关联 |
+| `external_cdp_bridge` | 外部 CDP bridge 提供响应体 |
+| `fallback_hook` | fetch/XHR 拦截 fallback |
+
+**请求关联策略**（仅非活跃 tab）：webRequest requestId 与 CDP requestId 不同，使用 `(method, normalized_url, timestamp_window_2s, status_code, resource_type)` 五元组匹配。活跃 tab 无需关联——CDP 直接构建完整记录。
 
 **CDP 自动重试机制**（`service_worker.ts` + `network_capture.ts`）：
 

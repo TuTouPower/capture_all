@@ -83,9 +83,12 @@ sequenceDiagram
     alt attach 成功
         CDP-->>Coord: success
         Coord->>CDP: Network.enable
-        Note over Coord,CDP: Network.loadingFinished -> getResponseBody
-        CDP-->>Coord: body data
-        Coord->>IDB: 写入 network_request (capture_method=extension_cdp)
+        Note over Coord,CDP: CDP-first: 请求由 CDP 直接采集
+        Note over CDP: Network.requestWillBeSent → 记录 url/headers/body
+        Note over CDP: Network.responseReceived → 记录 status/response headers
+        Note over CDP: Network.loadingFinished → getResponseBody
+        CDP-->>Coord: 完整 NetworkRequestData (capture_method=cdp_primary)
+        Coord->>IDB: 写入 network_request (含响应体)
     else attach 失败 (chrome:// 等受限 URL)
         CDP-->>Coord: "Cannot access a chrome:// URL"
         Coord->>Coord: 降级为 fallback_hook

@@ -731,6 +731,11 @@
 - **影响文件**：
   - `src/popup/popup.ts` — wire_view / render / render_saved
   - `src/background/service_worker.ts` — message handler 注册
+- **测试遗漏原因**：
+  1. `tests/popup_layout.test.ts` 只断言 HTML 中存在 `exportBtn` 元素 id，不对元素执行 click 事件，不模拟 `chrome.runtime.sendMessage` 调用，不验证下载触发器
+  2. 无测试覆盖 popup 与 SW 的 message 往返（`chrome.runtime.sendMessage` 的 action 和参数）
+  3. 无 E2E 测试验证「采集完成 → 点击导出按钮 → 浏览器弹出保存对话框」完整链路
+  4. 对比 dashboard 的 `export_session()`（有完整 await+Blob+download 链路），popup 只 fire-and-forget，无人发现差异因无测试对比两处导出路径
 
 ### ❌ P0.36 采集详情页「用户行为」标签页显示无数据
 - **状态**：未修复 — 2026-06-12 用户实测发现
@@ -749,27 +754,49 @@
 - **影响文件**：
   - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
   - `src/detail/detail.ts` — 独立详情页数据加载
+- **测试遗漏原因**：
+  1. P0.23 修复后测试只验证 `get_capture_data().events` 包含用户行为事件（stats 计数层面），不验证详情页 tab 渲染出实际 DOM 行
+  2. `render_simple_events()` 按 type 白名单 `['mouse_event', 'keyboard_event', 'scroll_event', 'input_event']` 过滤 `detail_events`，无测试验证 content script 上报的实际 type 值在白名单内
+  3. 无测试验证 `detail_events` 变量在 dashboard 加载详情后被正确赋值（含用户行为事件）
+  4. E2E `e2e-detail-tabs.spec.ts` 只验证 tab 切换/存在，不验证每个 tab 内容区有至少一条数据行
 
 ### ❌ P0.37 导出文件名不含 date，未使用系统时区
 - **状态**：未修复 — 2026-06-12 用户实测发现
 - **现象**：导出采集记录文件名格式为 `capture_all_capture_{capture_id}.json`（如 `capture_all_capture_1781265766247_7vafphp.json`），不包含 `{date}` 占位符对应的时间戳。文件名 date 未按用户设置的系统时区格式化。
 - **期望行为**：导出文件名应包含用户设置时区的日期时间，格式如 `capture_all_{capture_id}_2026-06-12_20-02-46.json`（browser/UTC+8 时区）。
 - **影响**：用户无法从文件名获知导出时间，P0.22（文件名用时区时间）实际未生效。
-- **初步判断**：`build_export_filename()` 中 `{date}` 模板替换逻辑可能被绕过，或 `export_filename_template` 默认值不含 `{date}`。也可能是 dashboard 导出调用路径未使用 `build_export_filename()` 而是直接拼接文件名。
+- **根因**：`export_session()`（`src/dashboard/dashboard.ts:368-369`）直接硬编码文件名：
+  ```typescript
+  const capture_filename = capture_dir
+      ? `${capture_dir}/capture_all_${id}.${ext}`
+      : `capture_all_${id}.${ext}`;
+  ```
+  完全不调用 `build_export_filename()`，`{date}` 模板从未参与实际下载路径。`build_export_filename()` 及其测试独立存在但未被实际导出流程使用。
 - **影响文件**：
   - `src/shared/export_settings.ts` — build_export_filename / 模板替换
   - `src/dashboard/dashboard.ts` — 导出入口文件名拼接
   - `src/background/exporter.ts` — SW 端导出文件名
+- **测试遗漏原因**：
+  1. `tests/export_settings.test.ts` 测试了 `build_export_filename()` 函数本身（含 `{date}` 模板替换和时区格式化），但没发现该函数从未被 `export_session()` 实际调用
+  2. `tests/e2e-export.spec.ts` 只验证导出文件可下载/内容可解析，不捕获最终传给 `chrome.downloads.download` 的 `filename` 参数值
+  3. 无集成测试连接「用户配置的 filename_template → 实际下载文件名」完整链路
+  4. `export_session()` 的硬编码文件名路径与 `build_export_filename()` 独立存在，两个模块各自有测试但无交叉验证
 
 ### ❌ P0.38 导出 JSON 顶层时间字段仍为 UTC，system_time_timezone 未写入
 - **状态**：未修复 — 2026-06-12 用户实测发现
 - **现象**：导出 JSON 中 `started_at: "2026-06-12T12:02:46.247Z"`、`ended_at: "2026-06-12T12:03:04.157Z"` 仍为 UTC `Z` 格式，P0.33 新增的 `*_time_label`/`*_system_time` 字段虽存在且正确（`20:02:46 (browser)`），但顶层主要时间字段 `started_at`/`ended_at` 用户第一眼看到的就是 UTC，容易误判时区设置未生效。同时 `system_time_timezone` 字段为 `undefined`，未写入导出 JSON，用户无法从导出文件确认当前时区设置。
 - **期望行为**：`started_at`/`ended_at` 等顶层时间字段应直接使用用户设置时区格式化（或至少在显眼位置标注人读时间），`system_time_timezone` 必须写入导出 JSON。
 - **影响**：用户看到 `Z` 时间后判断「跟随浏览器」未生效，P0.22/P0.33 修复实际未覆盖顶层字段。
-- **初步判断**：`add_system_times_to_capture_data()` 只追加了 `*_system_time` 后缀字段，未替换原有的 `started_at`/`ended_at` 值。`system_time_timezone` 未从 config 传入导出流程。
+- **根因**：
+  1. `add_system_times_to_capture_data()` 只追加 `*_system_time` 后缀字段（如 `start_time_system_time`），不替换原有的 `started_at`/`ended_at` 值
+  2. `system_time_timezone` 未从 `user_config` 传入导出数据流
 - **影响文件**：
   - `src/background/exporter.ts` — add_system_times_to_capture_data
   - `src/shared/system_time.ts` — format_system_time / 时间字段转换
+- **测试遗漏原因**：
+  1. `tests/system_time.test.ts` P0.33 新增测试只断言 `*_time_label` 字段存在且不以 `Z` 结尾，不检查顶层 `started_at`/`ended_at` 是否仍为 UTC
+  2. 无测试验证导出 JSON 的 `system_time_timezone` 字段非空
+  3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
 
 ---
 

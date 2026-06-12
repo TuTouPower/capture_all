@@ -609,7 +609,7 @@
   - `tests/session_manager.test.ts` — url/title 字段验证
 
 ### ✅ P0.33 导出采集记录 JSON 中时间字段容易误读为未跟随浏览器时区
-- **状态**：已修复 — 3e73aaa
+- **状态**：已修复 — f22258b
 - **修复**：导出数据新增强 `start_time_label`/`end_time_label`/`absolute_time_label` 人读字段（含 `UTC±N` 时区标注），原始 UTC 字段（`started_at`/`ended_at`/`absolute_time`）保留为机器字段。新增 8 条 P0.33 断言验证 labels 不包含 `Z` 后缀。
 - **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
 - **现象**：导出 JSON 中 `started_at`、`ended_at`、`created_at`、`updated_at`、`absolute_time` 等字段仍是 UTC ISO 字符串（例如 `2026-06-12T11:03:42.967Z`），用户已设置「跟随浏览器」后仍容易认为导出时间没有按浏览器时区显示。
@@ -634,7 +634,7 @@
   - `tests/system_time.test.ts` / `tests/export_settings.test.ts` — 导出时间字段断言
 
 ### ✅ P0.34 系统时区选项应使用固定 UTC 偏移而不是城市时区
-- **状态**：已修复 — 3e73aaa
+- **状态**：已修复 — f22258b
 - **修复**：`SystemTimeTimezone` 扩展为 browser/UTC/UTC±1..±12。`format_system_time` 手动计算 UTC 偏移时间（`Intl.DateTimeFormat` 不支持 `UTC+8` 等 IANA timeZone）。设置页下拉替换为固定偏移选项，无城市名。新增 `parse_utc_offset` + `migrate_iana_timezone`（含完整 IANA→UTC 偏移映射表）。新增 24 条 P0.34 断言。
 - **现象**：设置页「系统时区」当前选项类似 `跟随浏览器`、`UTC`、`Asia/Shanghai`，暴露 IANA 城市时区，不符合用户预期。
 - **期望行为**：

@@ -32,6 +32,21 @@ import { DEFAULT_CONFIG } from '../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
 
+function serialize_error(error: unknown): Record<string, unknown> {
+    if (error instanceof Error) {
+        return { name: error.name, message: error.message, stack: error.stack };
+    }
+    return { message: String(error) };
+}
+
+async function run_stop_step(name: string, step: () => void | Promise<void>): Promise<void> {
+    try {
+        await step();
+    } catch (error: unknown) {
+        logger.error(`Stop step failed: ${name}`, serialize_error(error));
+    }
+}
+
 // Bind chrome.dbg alias to real chrome.debugger API (debugger is reserved in TS)
 (chrome as any).dbg = (chrome as any).debugger;
 
@@ -63,8 +78,8 @@ setup_keepalive_listener();
 // Message handler
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
     handle_message(message).then(sendResponse).catch(error => {
-        logger.error('Message handler error', error);
-        sendResponse({ success: false, error: error.message });
+        logger.error('Message handler error', serialize_error(error));
+        sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
     });
     return true; // Keep channel open for async response
 });
@@ -83,6 +98,8 @@ async function handle_message(message: any): Promise<any> {
                 capture_id: current_capture_id,
                 current_capture,
                 config: current_config,
+                start_time,
+                tab_id: current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
             };
         case 'get_session_data':
@@ -427,7 +444,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
 async function stop_recording(): Promise<{ success: boolean }> {
     if (!is_capturing) {
-        return { success: false };
+        return { success: true };
     }
 
     is_capturing = false;
@@ -453,31 +470,24 @@ async function stop_recording(): Promise<{ success: boolean }> {
             duration_ms,
             stats: current_capture.stats,
         };
-        await write_events([{ ...stopped_event, data: stopped_data } as any]);
+        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data } as any]));
 
         // Update capture end fields
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        current_capture.status = 'completed';
-        current_capture.ended_at = new Date().toISOString();
-        current_capture.duration_ms = duration_ms;
-        current_capture.end_url = tabs[0]?.url || null;
-        current_capture.updated_at = new Date().toISOString();
-
-        try {
-            await update_capture(current_capture);
-        } catch (err) {
-            logger.error('Failed to update capture', err);
-        }
+        await run_stop_step('update_capture', async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            current_capture!.status = 'completed';
+            current_capture!.ended_at = new Date().toISOString();
+            current_capture!.duration_ms = duration_ms;
+            current_capture!.end_url = tabs[0]?.url || null;
+            current_capture!.updated_at = new Date().toISOString();
+            await update_capture(current_capture!);
+        });
     }
 
-    // Stop keepalive
-    stop_keepalive();
+    await run_stop_step('stop_keepalive', () => stop_keepalive());
+    await run_stop_step('stop_network_capture', () => stop_network_capture());
+    await run_stop_step('clear_cdp_body_handler', () => set_cdp_body_event_handler(null));
 
-    // Stop network capture
-    stop_network_capture();
-    set_cdp_body_event_handler(null);
-
-    // Stop body capture coordinator (cleanup bridge/external CDP)
     const get_bridge_config_for_cleanup = async () => {
         const cfg = await get_user_config_for_bridge();
         return {
@@ -486,29 +496,25 @@ async function stop_recording(): Promise<{ success: boolean }> {
             cdp_ports: []
         };
     };
-    await stop_body_capture_with_cleanup({ get_bridge_config: get_bridge_config_for_cleanup });
+    await run_stop_step('stop_body_capture', () => stop_body_capture_with_cleanup({ get_bridge_config: get_bridge_config_for_cleanup }));
+    await run_stop_step('stop_cookie_capture', () => stop_cookie_capture());
+    await run_stop_step('stop_console_capture', () => stop_console_capture());
+    await run_stop_step('stop_exception_capture', () => stop_exception_capture());
 
-    // Stop cookie capture
-    stop_cookie_capture();
-
-    // Stop console capture
-    await stop_console_capture();
-    await stop_exception_capture();
-
-    // Notify all content scripts to stop
-    const all_tabs = await chrome.tabs.query({});
-    for (const tab of all_tabs) {
-        if (tab.id) {
-            try {
-                await chrome.tabs.sendMessage(tab.id, { action: 'stop' });
-            } catch {
-                // Tab might not have content script
+    await run_stop_step('notify_content_scripts_stop', async () => {
+        const all_tabs = await chrome.tabs.query({});
+        for (const tab of all_tabs) {
+            if (tab.id) {
+                try {
+                    await chrome.tabs.sendMessage(tab.id, { action: 'stop' });
+                } catch {
+                    // Tab might not have content script
+                }
             }
         }
-    }
+    });
 
-    // Flush all buffered data
-    await flush_all();
+    await run_stop_step('flush_all', () => flush_all());
 
     current_capture = null;
     last_active_tab.clear();
@@ -537,8 +543,16 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
 
     // Set capture_id and relative_time_ms from context
     event.capture_id = current_capture_id;
-    if (event.absolute_time && typeof event.absolute_time === 'number') {
-        event.relative_time_ms = event.absolute_time - start_time;
+    if (event.absolute_time) {
+        const absolute_ms = typeof event.absolute_time === 'number'
+            ? event.absolute_time
+            : Date.parse(event.absolute_time);
+        if (Number.isFinite(absolute_ms)) {
+            event.relative_time_ms = absolute_ms - start_time;
+        }
+    }
+    if (typeof event.relative_time_ms !== 'number' || event.relative_time_ms > 10_000_000_000) {
+        event.relative_time_ms = Date.now() - start_time;
     }
 
     try {

@@ -36,12 +36,20 @@ interface StopRecordingState {
     is_capturing: boolean;
 }
 
+async function run_stop_step(step: () => void | Promise<void>): Promise<void> {
+    try {
+        await step();
+    } catch {
+        // stop must keep cleaning up remaining subsystems
+    }
+}
+
 async function stop_recording(
     deps: StopRecordingDeps,
     state: StopRecordingState,
 ): Promise<{ success: boolean }> {
     if (!state.is_capturing) {
-        return { success: false };
+        return { success: true };
     }
 
     state.is_capturing = false;
@@ -56,42 +64,41 @@ async function stop_recording(
             duration_ms,
             stats: { ...deps.current_capture.stats },
         };
-        await deps.write_events([stopped_data]);
+        await run_stop_step(() => deps.write_events([stopped_data]));
 
-        const tabs = await deps.get_active_tab();
-        deps.current_capture.status = 'completed';
-        deps.current_capture.ended_at = new Date(deps.now()).toISOString();
-        deps.current_capture.duration_ms = duration_ms;
-        deps.current_capture.end_url = tabs?.[0]?.url || null;
-        deps.current_capture.updated_at = new Date(deps.now()).toISOString();
-
-        try {
+        await run_stop_step(async () => {
+            const tabs = await deps.get_active_tab();
+            deps.current_capture!.status = 'completed';
+            deps.current_capture!.ended_at = new Date(deps.now()).toISOString();
+            deps.current_capture!.duration_ms = duration_ms;
+            deps.current_capture!.end_url = tabs?.[0]?.url || null;
+            deps.current_capture!.updated_at = new Date(deps.now()).toISOString();
             await deps.update_capture(deps.current_capture);
-        } catch {
-            // 错误静默处理
-        }
+        });
     }
 
-    deps.stop_keepalive();
-    deps.stop_network_capture();
-    deps.set_cdp_body_event_handler(null);
-    await deps.stop_body_capture_with_cleanup({ get_bridge_config: deps.get_bridge_config });
-    deps.stop_cookie_capture();
-    await deps.stop_console_capture();
-    await deps.stop_exception_capture();
+    await run_stop_step(() => deps.stop_keepalive());
+    await run_stop_step(() => deps.stop_network_capture());
+    await run_stop_step(() => deps.set_cdp_body_event_handler(null));
+    await run_stop_step(() => deps.stop_body_capture_with_cleanup({ get_bridge_config: deps.get_bridge_config }));
+    await run_stop_step(() => deps.stop_cookie_capture());
+    await run_stop_step(() => deps.stop_console_capture());
+    await run_stop_step(() => deps.stop_exception_capture());
 
-    const all_tabs = await deps.query_all_tabs();
-    for (const tab of all_tabs) {
-        if (tab.id) {
-            try {
-                await deps.send_message_to_tab(tab.id, { action: 'stop' });
-            } catch {
-                // Tab 可能没有 content script
+    await run_stop_step(async () => {
+        const all_tabs = await deps.query_all_tabs();
+        for (const tab of all_tabs) {
+            if (tab.id) {
+                try {
+                    await deps.send_message_to_tab(tab.id, { action: 'stop' });
+                } catch {
+                    // Tab 可能没有 content script
+                }
             }
         }
-    }
+    });
 
-    await deps.flush_all();
+    await run_stop_step(() => deps.flush_all());
 
     deps.set_current_capture_null();
     deps.clear_last_active_tab();
@@ -289,13 +296,13 @@ describe('stop_capture 消息协议', () => {
 
 describe('stop_recording 核心行为', () => {
     describe('未采集中调用 stop', () => {
-        it('返回 success: false', async () => {
+        it('返回 success: true 表示已处于停止状态', async () => {
             const state: StopRecordingState = { is_capturing: false };
             const deps = create_default_deps({ is_capturing: false });
 
             const result = await stop_recording(deps, state);
 
-            expect(result).toEqual({ success: false });
+            expect(result).toEqual({ success: true });
         });
 
         it('不会写入任何事件', async () => {
@@ -492,7 +499,7 @@ describe('stop_recording 核心行为', () => {
             expect(deps.set_cdp_body_event_handler).toHaveBeenCalledWith(null);
         });
 
-        it('子系统关停不阻止 stop 返回成功', async () => {
+        it('子系统关停失败不阻止 stop 返回成功', async () => {
             deps = create_default_deps({
                 stop_network_capture: vi.fn(() => {
                     throw new Error('network stop error');
@@ -500,9 +507,10 @@ describe('stop_recording 核心行为', () => {
             });
             state = { is_capturing: true };
 
-            // stop_body_capture_with_cleanup 可能抛异常，但这是一个合理的边缘情况
-            // 真实代码中 stop 子系统的异常不阻止流程继续
-            expect(deps.stop_network_capture).toBeDefined();
+            const result = await stop_recording(deps, state);
+
+            expect(result).toEqual({ success: true });
+            expect(deps.flush_all).toHaveBeenCalled();
         });
     });
 
@@ -571,18 +579,18 @@ describe('stop_recording 核心行为', () => {
             expect(call_order).toEqual(['broadcast', 'flush_all']);
         });
 
-        it('flush_all 即使前序步骤失败也执行', async () => {
+        it('flush_all 失败仍返回 success: true', async () => {
             const state: StopRecordingState = { is_capturing: true };
             const deps = create_default_deps({
-                update_capture: vi.fn(async () => {
-                    throw new Error('update failed');
+                flush_all: vi.fn(async () => {
+                    throw new Error('flush failed');
                 }),
-                flush_all: vi.fn(async () => {}),
             });
 
-            await stop_recording(deps, state);
+            const result = await stop_recording(deps, state);
 
-            expect(deps.flush_all).toHaveBeenCalled();
+            expect(result).toEqual({ success: true });
+            expect(deps.clear_last_active_tab).toHaveBeenCalled();
         });
     });
 
@@ -612,7 +620,7 @@ describe('stop_recording 核心行为', () => {
     });
 
     describe('多次 stop 调用', () => {
-        it('第一次成功，第二次返回 false', async () => {
+        it('第一次成功，第二次也返回 success true', async () => {
             const state: StopRecordingState = { is_capturing: true };
             const deps = create_default_deps();
 
@@ -620,7 +628,7 @@ describe('stop_recording 核心行为', () => {
             expect(first).toEqual({ success: true });
 
             const second = await stop_recording(deps, state);
-            expect(second).toEqual({ success: false });
+            expect(second).toEqual({ success: true });
         });
 
         it('第二次 stop 不重复写入事件', async () => {

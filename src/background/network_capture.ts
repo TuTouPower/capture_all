@@ -81,6 +81,15 @@ const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 // Orphan CDP body events: entries that haven't been matched by webRequest within timeout
 const ORPHAN_TIMEOUT_MS = 3000;
 
+// Deferred webRequest writes: webRequest arrived but CDP body hasn't yet
+const DEFERRED_TIMEOUT_MS = 1500;
+interface DeferredEntry {
+    pending: PendingRequest;
+    details: any;
+    timer: ReturnType<typeof setTimeout>;
+}
+const deferred_web_requests: Map<string, DeferredEntry> = new Map();
+
 // Callback for external consumers (only used for orphan CDP events)
 let on_cdp_body_event: ((event: CdpBodyEvent) => void) | null = null;
 
@@ -258,17 +267,41 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                     cdp_body_results.set(req_id, { body, status: 'captured', timestamp: Date.now(), preview });
                 }
             }
+            try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         }).catch(() => {
             cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+            try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         });
     }
 
     if (method === 'Network.loadingFailed') {
         cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+        try_resolve_deferred(req_id);
         schedule_orphan_check(req_id);
     }
+}
+
+function try_resolve_deferred(cdp_req_id: string): void {
+    const deferred_key = _deferred_cdp_index.get(cdp_req_id);
+    if (!deferred_key) return;
+    _deferred_cdp_index.delete(cdp_req_id);
+
+    const entry = deferred_web_requests.get(deferred_key);
+    if (!entry) return;
+
+    const body_result = cdp_body_results.get(cdp_req_id);
+    if (!body_result) return;
+
+    // Resolve: emit merged, clean up both sides
+    clearTimeout(entry.timer);
+    deferred_web_requests.delete(deferred_key);
+    cdp_body_results.delete(cdp_req_id);
+    cdp_request_meta.delete(cdp_req_id);
+    send_to_background(build_network_event(
+        entry.pending, entry.details, body_result.body, body_result.status, body_result.preview
+    ));
 }
 
 function schedule_orphan_check(req_id: string): void {
@@ -528,8 +561,50 @@ function handle_completed(details: any): void {
         }
     }
 
-    // No CDP match found — emit with not_enabled (CDP body may arrive later via event path)
-    send_to_background(build_network_event(pending, details, null, 'not_enabled'));
+    // No CDP match found — defer write, wait for CDP body to arrive
+    // This avoids the race where webRequest completes before CDP body is resolved
+    const deferred_key = `deferred_${details.requestId}`;
+    const timer = setTimeout(() => {
+        deferred_web_requests.delete(deferred_key);
+        send_to_background(build_network_event(pending, details, null, 'not_enabled'));
+    }, DEFERRED_TIMEOUT_MS);
+    deferred_web_requests.set(deferred_key, { pending, details, timer });
+
+    // Store a reverse-lookup from CDP request candidates to deferred entries
+    // for fast resolution when CDP body arrives
+    const candidates = find_cdp_candidates(
+        pending.url || '',
+        pending.method || 'GET',
+        details.statusCode
+    );
+    for (const cdp_id of candidates) {
+        _deferred_cdp_index.set(cdp_id, deferred_key);
+    }
+}
+
+// Reverse index: CDP request_id -> deferred entry key, for fast resolution
+const _deferred_cdp_index: Map<string, string> = new Map();
+
+function find_cdp_candidates(
+    url: string,
+    method: string,
+    status_code: number
+): string[] {
+    const candidates: string[] = [];
+    const base_url = url.split('?')[0];
+
+    for (const [cdp_id, meta] of cdp_request_meta) {
+        if (meta.method !== method) continue;
+        // Relaxed status match: allow status_code=0 (CDP response not yet received)
+        if (meta.status_code !== 0 && meta.status_code !== status_code) continue;
+
+        const cdp_base = meta.url.split('?')[0];
+        if (base_url !== cdp_base) continue;
+
+        candidates.push(cdp_id);
+    }
+
+    return candidates;
 }
 
 function find_matching_cdp_request(
@@ -539,22 +614,28 @@ function find_matching_cdp_request(
     timestamp: number
 ): string | null {
     const MATCH_WINDOW_MS = 2000;
-    const candidates: string[] = [];
+    let best_candidate: string | null = null;
+    let best_time_diff = Infinity;
 
     for (const [cdp_id, meta] of cdp_request_meta) {
         if (meta.method !== method) continue;
-        if (meta.status_code !== status_code) continue;
-        if (Math.abs(meta.timestamp - timestamp) > MATCH_WINDOW_MS) continue;
+        // Relaxed status match: allow status_code=0
+        if (meta.status_code !== 0 && meta.status_code !== status_code) continue;
+        const time_diff = Math.abs(meta.timestamp - timestamp);
+        if (time_diff > MATCH_WINDOW_MS) continue;
 
-        const cdp_url = meta.url;
-        const url_match = url === cdp_url || url.split('?')[0] === cdp_url.split('?')[0];
-        if (!url_match) continue;
+        const cdp_base = meta.url.split('?')[0];
+        const web_base = url.split('?')[0];
+        if (cdp_base !== web_base) continue;
 
-        candidates.push(cdp_id);
+        // Return best match (closest timestamp) rather than rejecting multi-candidate
+        if (time_diff < best_time_diff) {
+            best_time_diff = time_diff;
+            best_candidate = cdp_id;
+        }
     }
 
-    if (candidates.length === 1) return candidates[0];
-    return null;
+    return best_candidate;
 }
 
 function handle_error(details: any): void {

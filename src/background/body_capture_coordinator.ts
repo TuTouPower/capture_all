@@ -9,7 +9,7 @@ import type {
     BodyCaptureRuntimeStatus,
     BodyCaptureFailureReason,
     BodyCaptureStartResult,
-    NetworkRequest,
+    NetworkRequestData,
     RecordConfig
 } from '../shared/types';
 import {
@@ -27,7 +27,7 @@ import {
 export interface CoordinatorDeps {
     get_active_tab_url: () => Promise<string | null>;
     get_bridge_config: () => Promise<ExternalCdpBridgeConfig>;
-    on_network_request: (request: NetworkRequest) => void;
+    on_network_request: (request: NetworkRequestData) => void;
 }
 
 let coordinator_state: {
@@ -251,25 +251,45 @@ async function try_external_cdp_bridge(
 function convert_bridge_event_to_request(
     evt: BridgeBodyEvent,
     session_id: string
-): any {
+): NetworkRequestData {
     return {
         session_id,
+        capture_id: undefined,
+        event_id: undefined,
+        request_id: evt.request_id || `bridge_${Date.now().toString(36)}`,
+        method: evt.method || 'GET',
+        url: evt.url || '',
+        url_status: 'captured',
+        status_code: evt.status_code || 0,
+        status_text: null,
+        protocol: null,
+        resource_type: (evt.resource_type || 'other') as NetworkRequestData['resource_type'],
+        initiator: null,
+        duration_ms: 0,
+        start_time_ms: null,
+        end_time_ms: null,
         relative_time: evt.timestamp,
         absolute_time: evt.timestamp,
         tab_id: evt.tab_id || 0,
-        method: evt.method || 'GET',
-        url: evt.url || '',
-        status_code: evt.status_code || 0,
         request_headers: evt.request_headers || {},
         response_headers: evt.response_headers || {},
+        headers_status: 'captured',
         request_body: evt.request_body ?? null,
         request_body_status: evt.request_body_status || 'not_enabled',
         response_body: evt.response_body ?? null,
+        response_preview: null,
         response_body_status: evt.response_body_status || 'failed',
-        duration_ms: 0,
-        resource_type: (evt.resource_type || 'other') as NetworkRequest['resource_type'],
+        mime_type: null,
+        request_size_bytes: null,
+        response_size_bytes: null,
+        transfer_size_bytes: null,
+        from_cache: null,
+        cache_status: null,
+        error_text: null,
+        capture_method: 'external_cdp_bridge',
+        body_capture_mode: 'external_cdp_bridge',
         correlation_status: 'cdp_only',
-        cdp_request_id: evt.request_id
+        cdp_request_id: evt.request_id,
     };
 }
 

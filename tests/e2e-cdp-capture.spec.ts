@@ -166,8 +166,7 @@ test.describe('CDP Capture - recording with body capture', () => {
         // body_capture_mode should be set (not undefined)
         // In extension context without bridge, typical values: 'extension_cdp' or 'fallback_hook'
         const mode = session_data.session.body_capture_mode;
-        expect(mode).toBeDefined();
-        expect(mode).not.toBe('none');
+        expect(['extension_cdp', 'fallback_hook', 'external_cdp_bridge']).toContain(mode);
 
         // Verify some network requests were captured
         const network_requests = session_data.network_requests || [];

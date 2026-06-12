@@ -140,8 +140,7 @@ test.describe('采集中实时详情 P4.8 — 验证内容实时增长', () => {
         await detail_page.waitForTimeout(1000);
         const con_rows_final = detail_page.locator('.con-row:not(.con-head)');
         const con_count_final = await con_rows_final.count();
-        // 控制台日志取决于页面行为，至少验证 Tab 区域渲染正常
-        expect(con_count_final, '控制台Tab应有日志').toBeGreaterThanOrEqual(0);
+        expect(con_count_final, '控制台Tab应有日志').toBeGreaterThan(0);
         const console_html = await detail_page.locator('.con-table').first().innerHTML().catch(() => '');
         expect(console_html.length, '控制台Tab应正常渲染').toBeGreaterThan(20);
 

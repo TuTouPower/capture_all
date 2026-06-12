@@ -105,9 +105,7 @@ test.describe.serial('CDP 重试验证', () => {
 
         // Check body capture mode in the capture record
         const body_mode = data.capture?.body_capture_mode;
-        expect(body_mode, 'body_capture_mode 应存在').toBeDefined();
-        // If CDP worked, body_mode should be extension_cdp, not fallback_hook
-        // In headless mode, fallback_hook is acceptable
+        expect(['extension_cdp', 'fallback_hook', 'external_cdp_bridge']).toContain(body_mode);
     });
 
     test('场景B — 同标签 URL 跳转后 CDP 恢复', async () => {

@@ -241,6 +241,56 @@
 
 ---
 
+---
+
+## 测试策略改进 (2026-06-13)
+
+> 详细文档：`docs/TEST_STRATEGY.md`
+> 起因：P0.36/P0.38/P0.39/P0.40/P0.41/P0.43 共 6 个 bug 均为用户发现而非测试发现。当前 542 个测试几乎全是孤立单元测试（mock 一切），缺少跨模块协作验证。
+
+### ✅ T0.1 回归快照测试
+
+- **目的**：每个已修复 P0 bug 一个断言，防复发
+- **文件**：`tests/regression_smoke.test.ts`
+- **测试项**：
+  - P0.31: 导出 JSON 中 resource_type 全小写
+  - P0.38: started_at 不含 'Z'，system_time_timezone 非空
+  - P0.39: enable_response_body_capture(1) 后 enable_response_body_capture(2) 触发 detach+re-attach
+  - P0.40: 三个导出入口均 import download_blob from export_utils
+  - P0.41: not_enabled 占比 < 50%
+  - P0.43: stats.user_action_count === events.filter(user_action).length
+
+### ❌ T0.2 数据管道测试
+
+- **目的**：验证「写入 → flush → 读取」闭环一致性，stats 计数与 event 数组长度匹配
+- **文件**：`tests/pipeline_consistency.test.ts`
+
+### ❌ T0.3 导出闭环测试
+
+- **目的**：导入真实导出 JSON，验证字段完备（时区、resource_type、capture_method、body_status 分布）
+- **文件**：`tests/export_integrity.test.ts`
+
+### ❌ T0.4 渲染数据一致性测试
+
+- **目的**：stats 数字 vs UI 渲染行数，确保每个 tab 都有数据行
+- **文件**：`tests/detail_render_consistency.test.ts`
+
+### ❌ T0.5 入口去重审计测试
+
+- **目的**：扩展 P0.40 修复的 import 检查模式到所有共享函数（redaction、build_export_filename 等）
+- **文件**：`tests/entry_unification.test.ts`
+
+### ❌ T0.6 E2E 断言收紧
+
+- **目的**：去掉条件跳过，改为强制断言
+- **影响文件**：`tests/e2e-export.spec.ts`、`tests/e2e-detail-tabs.spec.ts`、`tests/e2e-cdp-retry.spec.ts` 等
+- **具体**：
+  - `if (data.console_events.length > 0)` → 强制 `expect(data.console_events.length).toBeGreaterThanOrEqual(0)`
+  - 导出验证：`expect(body_capture_mode).not.toBe('extension_cdp')` → 改为检查 `not_enabled` 占比
+  - detail tab：每个 tab 断言至少有一行数据
+
+---
+
 ## 测试审计报告 (2026-06-12)
 
 10 组并行审计，检查「测试通过但功能不工作」的脱节模式。

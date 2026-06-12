@@ -47,6 +47,9 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
 // Check if recording is already active when content script loads
 chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
     if (response?.is_capturing && !is_capturing) {
+        capture_id = response.capture_id ?? '';
+        capture_start_epoch_ms = response.start_time ?? Date.now();
+        tab_id = response.tab_id ?? 0;
         logger.info('Recording already active, starting capture');
         start_capture(response.config || DEFAULT_CONFIG);
     }

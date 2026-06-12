@@ -63,6 +63,37 @@ function build_tab_url_change_data(
     return { tab_id, url, title };
 }
 
+function build_content_page_event(capture_start_epoch_ms: number, now_ms: number): { relative_time_ms: number } {
+    return { relative_time_ms: now_ms - capture_start_epoch_ms };
+}
+
+function apply_active_capture_status(
+    state: { capture_id: string; capture_start_epoch_ms: number; tab_id: number },
+    response: { capture_id?: string; start_time?: number; tab_id?: number }
+): void {
+    state.capture_id = response.capture_id ?? '';
+    state.capture_start_epoch_ms = response.start_time ?? 0;
+    state.tab_id = response.tab_id ?? 0;
+}
+
+describe('content_script_active_capture_context', () => {
+    it('uses start_time from get_status so relative_time_ms is not epoch', () => {
+        const state = { capture_id: '', capture_start_epoch_ms: 0, tab_id: 0 };
+
+        apply_active_capture_status(state, {
+            capture_id: 'capture_123',
+            start_time: 1781258248327,
+            tab_id: 7,
+        });
+        const event = build_content_page_event(state.capture_start_epoch_ms, 1781258254133);
+
+        expect(state.capture_id).toBe('capture_123');
+        expect(state.tab_id).toBe(7);
+        expect(event.relative_time_ms).toBe(5806);
+        expect(event.relative_time_ms).toBeLessThan(10_000_000_000);
+    });
+});
+
 // ─── tab_created event structure ───
 
 describe('tab_created_event', () => {

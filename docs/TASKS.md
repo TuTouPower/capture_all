@@ -263,6 +263,224 @@
   - `tests/__mocks__/chrome_debugger.ts` — 新建
   - `tests/e2e-cdp-capture.spec.ts` — 补 response_body_status 分布统计 + body_capture_mode 非空断言
 
+### ✅ P0.18 导出事件 relative_time_ms 混入 epoch 时间戳
+- **状态**：已修复 — content script 响应式启动从 `get_status` 继承 `capture_id/start_time/tab_id`；SW 写入前归一 ISO/epoch `absolute_time`，防止 13 位 epoch 写入 `relative_time_ms`。
+- **复现文件**：`data/capture_all_session_1781258248327_wifgs4c.json`
+- **现象**：导出 JSON 可解析，`capture.status=completed`，`network_requests=191`，`body_capture_status=active`，但 `events[].relative_time_ms` 部分记录不是相对采集开始的毫秒数，而是 epoch 毫秒：
+  - 正常：`tab_url_change` 为 `5535` / `7709` / `11395` / `12890`
+  - 异常：`dom_ready` / `page_load` 出现 `1781258254133`、`1781258259855`、`1781258259856`
+- **期望行为**：所有 `relative_time_ms` 必须满足 `0 <= relative_time_ms <= capture.duration_ms + 少量容差`；本次采集 duration 为 `15195ms`，不应出现 13 位 epoch 时间。
+- **影响**：
+  - Dashboard 时间线排序/比例尺可能异常
+  - 导出数据下游分析会把页面加载事件误判为远未来事件
+  - `absolute_time` 正常时，`relative_time_ms` 与 `absolute_time - started_at` 不一致，破坏时间字段不变量
+- **初步判断**：某些导航事件构造路径把 `Date.now()` 或事件绝对时间直接写入 `relative_time_ms`，而不是减去 `current_capture.started_at/start_time_ms`。`tab_url_change` 路径正常，`content_script` 上报的 `dom_ready/page_load` 路径异常概率高。
+- **测试遗漏原因**：现有 E2E 只验证 timeline 有事件/计数，不校验 `relative_time_ms` 范围，也不校验 `absolute_time - capture.started_at ≈ relative_time_ms`。
+- **修复要点**：
+  1. 查所有构造 `relative_time_ms` 的路径，统一使用采集开始时间计算相对毫秒
+  2. 对 content script 上报事件与 SW 生成事件建立同一时间基准
+  3. 写入前增加 normalize/断言：若 `relative_time_ms` 大于 `duration_ms` 明显过多，按 `absolute_time - started_at` 修正或拒绝写入
+  4. 补单元测试：给定 `started_at` + `absolute_time`，验证导出事件 `relative_time_ms` 为相对值
+  5. 补 E2E/导出测试：遍历 `events`，断言所有 `relative_time_ms` 在采集窗口内
+- **影响文件**：
+  - `src/background/service_worker.ts` — 事件接收/normalize/写入路径
+  - `src/content/content_script.ts` 或相关 content capture 模块 — `dom_ready/page_load` 上报路径
+  - `tests/e2e-export-content.spec.ts` / `tests/e2e-consistency.spec.ts` — 增加时间不变量验证
+
+### ✅ P0.19 停止采集返回 success=false 但 UI 强制完成
+- **状态**：已修复 — `stop_capture` 改为幂等 success；停止清理步骤逐项容错并继续 flush；`Message handler error` 日志展开 `Error.name/message/stack`，避免导出 `{}`。
+- **复现文件**：`data/capture_all_logs_2026-06-12T09-58-31-230Z.json`
+- **现象**：采集停止时日志出现：
+  - `2026-06-12T09:57:43.521Z info popup Stopping capture`
+  - `2026-06-12T09:57:43.523Z info background/cookie Cookie capture stopped`
+  - `2026-06-12T09:57:43.523Z info background/console Console capture stopped`
+  - `2026-06-12T09:57:43.523Z info background/network Network capture stopped`
+  - `2026-06-12T09:57:43.525Z info background/exception Exception capture stopped`
+  - `2026-06-12T09:57:43.527Z info content/script Content capture stopped`
+  - `2026-06-12T09:57:43.532Z error background/sw Message handler error {}`
+  - `2026-06-12T09:57:43.532Z warn popup stop returned success=false, forcing state transition {}`
+- **期望行为**：所有子系统停止成功时，`stop_capture` 应返回 `success=true`；popup 不应依赖强制状态切换兜底完成正常流程。
+- **影响**：
+  - 用户看到 UI 已完成，但内部协议认为停止失败
+  - 日志导出存在 error/warn，无法区分真实停止失败和已成功但返回值错误
+  - 后续如果某个子系统真的停止失败，当前兜底可能掩盖问题
+- **已确认正常项**：导出主体仍生成，`capture.status=completed`，dashboard 详情加载到 `events=205`（`14 events + 191 network_requests`）。因此这是停止返回路径/错误处理问题，不是数据完全丢失问题。
+- **相关可接受日志**：同次启动有两条 `Failed to send start to tab ...`，发生在通知 3 个 tab 时，只有当前目标 tab 成功。其它 tab 可能是不可注入/已关闭/受限页，若不影响当前采集，可降级或细化日志，不作为本条主问题。
+- **初步判断**：`stop_capture` 清理子系统后，某个后续消息响应或状态更新抛错；`logger.error('Message handler error', error)` 导出的 `details` 为空，导致根因不可见。
+- **测试遗漏原因**：P0.2 只验证“停止按钮能让 UI 完成”，但没有断言 SW 返回 `success=true`，也没有断言运行日志无 `Message handler error` / `stop returned success=false`。
+- **修复要点**：
+  1. 建立最小复现：运行一次 start → stop，断言 `stop_capture` response 为 `success=true`
+  2. 修复 `Message handler error` 的日志 details，至少导出 `message/name/stack`，避免 `{}`
+  3. 定位 stop handler 在所有子系统 stopped 后仍抛错的位置
+  4. 只在真正失败时返回 `success=false`；已成功完成状态更新时必须返回 `success=true`
+  5. popup 保留兜底但不应在正常路径触发 warn
+  6. 补 E2E/日志测试：停止后导出日志不含 `Message handler error`，popup 不出现 `stop returned success=false`
+- **影响文件**：
+  - `src/background/service_worker.ts` — message handler / stop_capture 返回路径 / error details
+  - `src/popup/popup.ts` — stop 返回值处理与 warn 触发条件
+  - `tests/e2e-stop.spec.ts` / `tests/e2e-logging.spec.ts` — 增加停止协议与日志断言
+
+### ✅ P0.20 运行日志导出不应让用户选择 JSON/JSONL，应统一为 .log
+- **状态**：已修复 — 诊断日志 UI 合并为单一「导出运行日志」入口；`export_app_logs()` 输出人可读 `.log` 文本；下载文件名固定 `.log`。
+- **现象**：当前诊断日志设置页允许用户选择/触发 JSON、JSONL 两种运行日志导出格式，导出文件示例为 `capture_all_logs_2026-06-12T09-58-31-230Z.json`。
+- **期望行为**：
+  - 运行日志导出统一使用 `.log` 格式
+  - 不向用户暴露 JSON / JSONL 格式选择
+  - UI 文案只保留一个「导出运行日志」入口
+  - 文件扩展名固定为 `.log`
+  - 日志内容应适合人直接阅读：每行包含时间、级别、模块、消息、必要 details
+- **影响**：
+  - 当前 JSON/JSONL 选择增加用户决策成本
+  - `.json` 文件更像数据交换格式，不符合“运行日志”直觉
+  - 后续排障希望用户直接上传/查看 `.log`，避免格式分歧
+- **修复要点**：
+  1. Dashboard 诊断日志设置页移除 JSON / JSONL 两个导出按钮或格式选择
+  2. 统一调用运行日志导出时传 `format: 'log'` 或移除 format 参数
+  3. `export_app_logs()` 新增/改为 `.log` 文本格式输出
+  4. 下载文件名从 `capture_all_logs_*.json/jsonl` 改为 `capture_all_logs_*.log`
+  5. 保留内部结构化日志存储，不影响 IndexedDB `app_logs` schema
+  6. 更新 E2E：只断言存在单一导出入口，下载文件名为 `.log`，内容包含 `[level] [module] message` 等可读文本
+- **测试遗漏原因**：现有 `tests/e2e-logging.spec.ts` 验证 JSON/JSONL 导出存在，未覆盖产品期望“运行日志只有一种 .log 格式”。
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — 诊断日志导出 UI / handler
+  - `src/background/exporter.ts` — `export_app_logs` 输出格式与文件名
+  - `src/background/service_worker.ts` — `export_app_logs` action 参数处理
+  - `tests/e2e-logging.spec.ts` — 更新运行日志导出断言
+
+### ✅ P0.21 用户可见命名不应使用 session，应统一为 capture / 采集记录
+- **状态**：已修复 — 新建采集记录 id 前缀改为 `capture_`；导出模板测试改用 `{capture_id}`；运行日志/采集导出文件名不再生成 `session`。
+- **现象**：代码、导出文件名、协议参数、示例和文档中仍大量使用 `session` 表示“单次采集记录”，例如：
+  - 导出文件：`capture_all_session_1781258248327_wifgs4c.json`
+  - 记录 id：`session_1781258248327_wifgs4c`
+  - API/测试/文档中出现 `session_id`、`export_session`、`session.export`
+- **期望行为**：
+  - 产品和用户可见概念统一为“采集记录”
+  - 英文统一使用 `capture` / `capture record`
+  - 用户可见文件名不再出现 `session`
+  - 新记录 id 前缀从 `session_...` 改为 `capture_...`
+  - 用户可见参数/导出字段如必须展示，应使用 `capture_id`，不使用 `session_id`
+- **范围说明**：
+  - 用户可见：UI 文案、导出文件名、导出内容字段、MCP/Agent 对外协议、README/docs/specs、测试 fixture 中可见样例，必须改
+  - 内部实现：若短期迁移成本高，可先保留内部兼容别名，但不得泄露到用户可见输出
+  - 兼容读取：旧数据中 `session_...` id 应能继续读取/展示，但新建数据必须使用 `capture_...`
+- **影响**：
+  - `session` 容易被理解成浏览器会话/登录会话，不符合 Capture All 的产品心智
+  - 导出文件名和记录 id 与产品核心动词 `capture` 不一致
+  - 后续文档、MCP 工具和用户反馈会继续混用概念
+- **修复要点**：
+  1. 全局审计用户可见 `session`：UI、导出文件名、导出 JSON 字段、MCP tool/action、文档、测试断言
+  2. 新建采集记录 id 生成逻辑：`session_...` → `capture_...`
+  3. 导出文件名模板：`capture_all_session_{...}` → `capture_all_capture_{...}` 或更简洁 `capture_all_{capture_id}_{date}`，不得含 `session`
+  4. 对外 action/tool/参数：`session_id` → `capture_id`，`export_session` → `export_capture`；必要时保留旧名兼容但标记 deprecated 且不在 UI 展示
+  5. 导出 JSON 顶层字段若含 `capture_id` 保持；不得新增/继续输出 `session_id`
+  6. 更新所有测试，确保新建记录 id 前缀为 `capture_`，导出文件名不含 `session`
+- **测试遗漏原因**：现有测试只验证导出成功和内容结构，没有断言用户可见命名禁用词；需要新增字符串审计测试，禁止 UI/导出文件名/新 id 出现 `session`。
+- **影响文件**：
+  - `src/background/service_worker.ts` / `src/background/exporter.ts` / `src/background/storage.ts` — id 生成、导出命名、对外字段
+  - `src/agent/**` — MCP/Agent 对外 tool/action/参数命名
+  - `src/dashboard/dashboard.ts` / `src/popup/popup.ts` — UI 文案和下载文件名
+  - `tests/**` — `session_id` fixture、导出文件名、MCP 协议断言
+  - `docs/**` — 规格和任务文档中的用户可见命名
+
+### ✅ P0.22 所有用户可见 date 必须使用用户设置的时区
+- **状态**：已修复 — 新增 `format_system_time_filename()`；导出采集记录和运行日志文件名统一使用用户设置时区，避免 UTC `Z` 文件名。
+- **现象**：导出采集记录文件名中的 date 使用了默认/UTC 时间，而不是用户设置的时区时间。运行日志导出文件示例也使用 `2026-06-12T09-58-31-230Z` 这种 UTC `Z` 时间。
+- **期望行为**：
+  - 所有用户可见 date/time 都必须使用用户设置的时区
+  - 导出采集记录文件名中的 `{date}` 使用用户设置时区格式化
+  - 运行日志 `.log` 文件名、导出报告标题、Dashboard/Popup 可见时间、HTML 导出中的时间，也统一使用用户设置时区
+  - 内部存储仍可保留 UTC/epoch，显示和文件名层统一格式化
+- **影响**：
+  - 用户按本地时间查找导出文件时会错位
+  - 同一条采集记录在 UI、文件名、导出内容中可能显示不同日期
+  - UTC `Z` 文件名对普通用户不直观
+- **修复要点**：
+  1. 找到用户设置中的时区字段/默认值，定义唯一的 display datetime formatter
+  2. 所有用户可见时间入口统一调用该 formatter，不允许直接 `new Date().toISOString()` 生成展示/文件名
+  3. 导出文件名 `{date}` 使用用户设置时区，并使用文件名安全格式（例如 `YYYY-MM-DD_HH-mm-ss`）
+  4. 运行日志文件名改 `.log` 时同步使用用户时区
+  5. 导出 JSON 内部机器字段可继续 UTC，但面向人阅读的 `exported_at_label` / HTML / log 文本必须是用户时区
+  6. 补测试：设置固定时区后导出，断言文件名 date 与该时区一致，不是 UTC `Z`
+- **测试遗漏原因**：现有导出测试只校验文件存在/内容结构，未设置非 UTC 时区，也未断言文件名和 UI 时间格式。
+- **影响文件**：
+  - `src/shared/system_time.ts` 或新增共享时间格式化模块 — 用户时区格式化
+  - `src/background/exporter.ts` — 采集记录/日志导出文件名与报告时间
+  - `src/dashboard/dashboard.ts` / `src/popup/popup.ts` — 用户可见时间
+  - `tests/e2e-export-content.spec.ts` / `tests/e2e-logging.spec.ts` / `tests/system_time.test.ts` — 时区断言
+
+### ✅ P0.23 采集记录详情「用户行为」标签页为空
+- **状态**：已修复 — 2026-06-12 统一用户行为独立计数与事件分类兜底
+- **现象**：采集记录详情中明明统计显示采到了 `23` 个用户行为，但点击「用户行为」标签页后内容区域为空，看不到任何用户行为明细。
+- **期望行为**：
+  - 「用户行为」标签页必须展示已采集到的全部用户行为明细
+  - 计数显示多少条，列表至少能看到对应数量或可分页/可滚动查看
+  - 每条用户行为应显示时间、类型、页面/元素摘要、必要 data
+- **影响**：
+  - 用户无法查看最核心的行为采集结果
+  - 统计数字与详情内容矛盾，降低可信度
+  - E2E 只验证有计数，不代表详情页可用
+- **初步判断**：详情页用户行为 tab 的数据源/过滤条件可能只取了错误 category/type，或渲染函数没有处理 `user_action` 数据；也可能 all_events 合并后有数据但 tab 读取了另一个空数组。
+- **修复要点**：
+  1. 用复现导出或 IndexedDB 数据确认 23 条用户行为实际落在哪个 store/category
+  2. 检查详情页用户行为 tab 的过滤条件和渲染入口
+  3. 修复为空的渲染路径，保证 stats 与 tab 内容口径一致
+  4. 空态只在真实无数据时显示，不能吞掉已有数据
+  5. 补 E2E：采集用户点击/滚动/输入后，详情页「用户行为」tab 可见对应明细
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
+  - `src/dashboard/dashboard-pages.css` — 用户行为列表展示样式
+  - `tests/e2e-detail-tabs.spec.ts` / `tests/e2e-capture-local.spec.ts` — 用户行为明细断言
+
+### ✅ P0.24 详情页时间线和网络请求侧面板不可拖拽调整宽度
+- **状态**：已修复 — 2026-06-12 时间线 rail 与网络详情分栏均支持拖拽并记忆宽度
+- **现象**：采集记录详情的「时间线」和「网络请求」标签页左侧/侧面板宽度固定，用户无法拖拽调整宽度。
+- **期望行为**：
+  - 时间线侧面板可拖拽调整宽度
+  - 网络请求列表侧面板可拖拽调整宽度
+  - 拖拽时右侧详情区域自适应填满剩余空间
+  - 宽度应有合理 min/max，避免拖到不可用
+  - 如已支持本地设置，宽度可记忆；若没有，至少当前页面会话内有效
+- **影响**：
+  - 请求 URL、时间线摘要较长时无法阅读
+  - 大屏空间不能充分利用
+  - 右侧详情和左侧列表的布局关系不清晰
+- **修复要点**：
+  1. 抽出可复用 split-pane 布局或在两个 tab 内实现一致拖拽条
+  2. 左侧 pane 设置 min/max width，右侧 `min-width: 0` 并占满剩余空间
+  3. 拖拽期间禁用文本选择，结束后恢复
+  4. 支持键盘/无障碍基础行为，至少保证不破坏现有点击选择
+  5. 补 E2E：拖拽分隔条后，左 pane 宽度变化，右 pane 仍可见
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — split-pane 事件绑定/状态
+  - `src/dashboard/dashboard-pages.css` — split-pane 布局和拖拽条
+  - `tests/e2e-detail-tabs.spec.ts` — 拖拽宽度断言
+
+### ✅ P0.25 网络请求详情布局错误：右侧为空，应左列表右详情并占满空间
+- **状态**：已修复 — 2026-06-12 网络 tab 改为左列表右详情，默认选中首条请求
+- **现象**：网络请求标签页当前侧面板显示请求列表，但中间/右侧请求详细信息区域为空或没有正确占满空间。用户期望右侧展示选中请求的完整详细记录。
+- **期望行为**：
+  - 网络请求 tab 使用明确左右分栏
+  - 左侧：网络请求列表，显示全部请求，可滚动，可选中
+  - 右侧：选中请求的详细记录，占满剩余空间
+  - 默认选中第一条请求，避免右侧初始为空
+  - 点击不同请求时，右侧详情同步更新
+  - 详情应包含 method、url、status、resource_type、headers、request/response body、body_capture_status 等关键字段
+- **影响**：
+  - 用户看到请求列表但无法查看详情，网络采集价值大幅下降
+  - 空白右侧浪费空间，像功能未完成
+  - 与用户心理模型不一致：列表应该驱动详情面板
+- **修复要点**：
+  1. 检查网络请求 tab 当前 DOM 结构，明确左列表和右详情容器
+  2. 默认选中第一条 network request 并渲染详情
+  3. 点击列表项时更新 selected request 和右侧详情
+  4. 右侧详情容器使用 `flex: 1; min-width: 0; overflow: auto` 填满剩余空间
+  5. 与 P0.24 侧栏拖拽联动，拖拽只改变左列表宽度，右详情自动占满
+  6. 补 E2E：网络 tab 有请求时右侧非空；点击第二条后详情内容变化
+- **影响文件**：
+  - `src/dashboard/dashboard.ts` — 网络请求选择态与详情渲染
+  - `src/dashboard/dashboard-pages.css` — 网络分栏布局
+  - `tests/e2e-detail-tabs.spec.ts` / `tests/e2e-network.spec.ts` — 网络详情交互断言
+
 ---
 
 ## ✅ 用户加的bug记录（全部已修复）

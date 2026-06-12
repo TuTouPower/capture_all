@@ -15,6 +15,10 @@ import {
     find_matching_cdp_request,
     find_cdp_candidates,
     _cdp_request_meta_for_test,
+    _cdp_body_results_for_test,
+    _deferred_web_requests_for_test,
+    _deferred_cdp_index_for_test,
+    _try_resolve_deferred_for_test,
 } from '../src/background/network_capture';
 
 // ─── request header redaction ───
@@ -425,5 +429,107 @@ describe('find_cdp_candidates', () => {
         add_meta('cdp_1', { url: 'https://example.com/api', method: 'POST', status_code: 200 });
         const result = find_cdp_candidates('https://example.com/api', 'GET', 200);
         expect(result).toEqual([]);
+    });
+});
+
+// ─── P0.15-R1: multi-candidate deferred queue race condition ───
+
+describe('deferred queue multi-candidate resolution', () => {
+    beforeEach(() => {
+        _cdp_request_meta_for_test.clear();
+        _cdp_body_results_for_test.clear();
+        _deferred_web_requests_for_test.clear();
+        _deferred_cdp_index_for_test.clear();
+    });
+
+    it('_deferred_cdp_index stores Set values (not single strings)', () => {
+        const key_set = new Set(['dk_1', 'dk_2']);
+        _deferred_cdp_index_for_test.set('cdp_shared', key_set);
+
+        const retrieved = _deferred_cdp_index_for_test.get('cdp_shared');
+        expect(retrieved).toBeInstanceOf(Set);
+        expect(retrieved!.size).toBe(2);
+        expect(retrieved!.has('dk_1')).toBe(true);
+        expect(retrieved!.has('dk_2')).toBe(true);
+    });
+
+    it('DeferredEntry includes pending_cdp_ids Set', () => {
+        _deferred_web_requests_for_test.set('dk_1', {
+            pending: {
+                cdp_request_id: 'req_a', tab_id: 1, method: 'GET', url: '/a',
+                timestamp: 1700000000000, request_headers: {}, response_headers: {},
+                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
+            },
+            details: { statusCode: 200, timeStamp: 1700000000000, requestId: 'req_a' },
+            timer: null as any,
+            pending_cdp_ids: new Set(['cdp_1', 'cdp_2']),
+        });
+
+        const entry = _deferred_web_requests_for_test.get('dk_1')!;
+        expect(entry.pending_cdp_ids.size).toBe(2);
+        expect(entry.pending_cdp_ids.has('cdp_1')).toBe(true);
+        entry.pending_cdp_ids.delete('cdp_1');
+        expect(entry.pending_cdp_ids.size).toBe(1);
+    });
+
+    it('try_resolve_deferred is a no-op when reverse index has no entry for cdp_id', () => {
+        // cdp_id not in reverse index → should not throw
+        expect(() => _try_resolve_deferred_for_test('unknown_cdp')).not.toThrow();
+    });
+
+    it('try_resolve_deferred cleans up when body result is missing', () => {
+        const reverse_set = new Set(['dk_1']);
+        _deferred_cdp_index_for_test.set('cdp_no_body', reverse_set);
+
+        _deferred_web_requests_for_test.set('dk_1', {
+            pending: {
+                cdp_request_id: 'req_x', tab_id: 1, method: 'GET', url: '/x',
+                timestamp: 1, request_headers: {}, response_headers: {},
+                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
+            },
+            details: { statusCode: 200, timeStamp: 1, requestId: 'req_x' },
+            timer: null as any,
+            pending_cdp_ids: new Set(['cdp_no_body']),
+        });
+
+        // No body result set → should clean up reverse index and body map
+        _try_resolve_deferred_for_test('cdp_no_body');
+
+        expect(_deferred_cdp_index_for_test.has('cdp_no_body')).toBe(false);
+        // Entry still exists (pending not empty)
+        expect(_deferred_web_requests_for_test.has('dk_1')).toBe(true);
+    });
+
+    it('multiple deferred entries can share one CDP candidate via Set', () => {
+        // Two different webRequest deferred entries both list cdp_shared as candidate
+        _deferred_web_requests_for_test.set('dk_a', {
+            pending: {
+                cdp_request_id: 'a', tab_id: 1, method: 'GET', url: '/a',
+                timestamp: 1, request_headers: {}, response_headers: {},
+                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
+            },
+            details: { statusCode: 200, timeStamp: 1, requestId: 'a' },
+            timer: null as any,
+            pending_cdp_ids: new Set(['cdp_shared']),
+        });
+        _deferred_web_requests_for_test.set('dk_b', {
+            pending: {
+                cdp_request_id: 'b', tab_id: 1, method: 'GET', url: '/b',
+                timestamp: 1, request_headers: {}, response_headers: {},
+                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
+            },
+            details: { statusCode: 200, timeStamp: 1, requestId: 'b' },
+            timer: null as any,
+            pending_cdp_ids: new Set(['cdp_shared']),
+        });
+
+        // Reverse index set has both deferred keys
+        const key_set = new Set(['dk_a', 'dk_b']);
+        _deferred_cdp_index_for_test.set('cdp_shared', key_set);
+
+        const retrieved = _deferred_cdp_index_for_test.get('cdp_shared')!;
+        expect(retrieved.size).toBe(2);
+        expect(retrieved.has('dk_a')).toBe(true);
+        expect(retrieved.has('dk_b')).toBe(true);
     });
 });

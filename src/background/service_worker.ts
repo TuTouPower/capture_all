@@ -179,6 +179,11 @@ async function get_capture_data(capture_id: string): Promise<any> {
     const capture = await get_capture(capture_id);
     if (!capture) return { success: false, error: 'Capture not found' };
 
+    // P0.43: flush all write buffers before reading, so that stats (persisted
+    // immediately via persist_stats) and events (buffered, flushed periodically
+    // every FLUSH_INTERVAL_MS) are consistent for the caller.
+    await flush_all();
+
     const [user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
         get_events_by_category(capture_id, 'navigation', 0, 100000),

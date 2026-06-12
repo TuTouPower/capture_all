@@ -193,22 +193,14 @@
   8. 测试：`tests/export_utils.test.ts`（20 tests） + 更新 `tests/popup_export.test.ts`
 
 
-### ❌ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
-- **状态**：未修复 — 2026-06-13 用户实测发现
-- **现象**：采集记录详情页统计数据明确显示采集到了 11 条用户行为事件，但点击「用户行为」标签页后内容区域显示「暂无数据」，看不到任何用户行为明细。
-- **期望行为**：「用户行为」标签页必须展示已采集到的全部用户行为明细，计数与列表内容一致。
-- **影响**：用户无法查看核心行为采集结果，统计数字与详情内容矛盾。P0.36 修复后可能仍有未被覆盖的路径。
-- **初步判断**：
-  1. 可能和 P0.36 相关但不同路径——P0.36 修的是 `detail.ts` 独立详情页，但 dashboard 内嵌详情 tab 可能使用不同渲染函数
-  2. dashboard 内嵌详情页的用户行为 tab 过滤条件可能使用了错误的 category/type 值
-  3. 渲染函数可能在某一个数组中查找，但用户行为事件可能落在其他数据源
-- **修复要点**：
-  1. 确认 dashboard 详情页用户行为 tab 使用的过滤条件和数据源
-  2. 对比 stats 计数使用的查询函数和实际渲染使用的查询函数是否一致
-  3. 确认 P0.36 修复是否同时覆盖了 `detail.ts` 和 `dashboard.ts` 两个详情入口
+### ✅ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
+- **状态**：已修复 — 2026-06-13
+- **根因**：`get_capture_data` 读取 IndexedDB 事件之前未 flush 写入缓冲区。统计计数 (`user_action_count`) 在事件写入时通过 `persist_stats()` 立即持久化到 capture 记录，但事件数据经 `write_events` 进入 per-store 缓冲区后需等 `FLUSH_INTERVAL_MS`（1s）周期 flush 才落盘到 IndexedDB。用户在 1s 窗口内查看详情页时，stats 已更新但事件未落盘，`get_events_by_category('user_action')` 返回空数组，导致 user_action tab 渲染「暂无数据」。
+- **现象**：采集记录详情页统计数据明确显示采集到了多条用户行为事件，但点击「用户行为」标签页后内容区域显示「暂无数据」。
+- **修复**：`get_capture_data` 在并行查询前先 `await flush_all()`，确保所有缓冲区事件落盘后再读取。dashboard 和独立详情页共享同一数据加载路径（均调用 `get_capture_data`），一处修复覆盖两个入口。
 - **影响文件**：
-  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
-  - `src/detail/detail.ts` — 独立详情页数据加载
+  - `src/background/service_worker.ts` — `get_capture_data` 前置 flush_all
+  - `tests/p043_flush_before_read.test.ts` — 新增单测覆盖
 
 
 ### ✅ P0.41 Response Body 采集时序竞态 — web_request 路径 ~98% not_enabled

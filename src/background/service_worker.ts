@@ -627,11 +627,22 @@ async function handle_fallback_body_event(data: any): Promise<void> {
     await handle_network_request(request);
 }
 
+function normalize_network_request(request: NetworkRequestData): void {
+    if (!request.request_id) request.request_id = `nr_${Date.now().toString(36)}`;
+    if (request.url_status === undefined) request.url_status = 'captured';
+    if (request.headers_status === undefined) request.headers_status = 'captured';
+    if (request.request_body_status === undefined) request.request_body_status = 'not_enabled';
+    if (request.response_body_status === undefined) request.response_body_status = 'not_enabled';
+    if (request.capture_method === undefined) request.capture_method = 'web_request';
+    if (request.body_capture_mode === undefined) request.body_capture_mode = 'none';
+}
+
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
     const request: NetworkRequestData = 'event' in payload ? (payload as { data: NetworkRequestData }).data : (payload as NetworkRequestData);
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
     if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    normalize_network_request(request);
     try {
         await write_network_requests([request]);
         current_capture.stats.request_count++;

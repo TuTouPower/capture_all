@@ -8,7 +8,7 @@ const config = { system_time_timezone: 'Asia/Shanghai' as const };
 describe('export settings', () => {
     test('builds filename from capture tokens and configured timezone', () => {
         const filename = build_export_filename({
-            export_directory: '',
+            export_capture_directory: '',
             export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
             ...config,
         }, 'capture_1', 'json', now);
@@ -19,7 +19,7 @@ describe('export settings', () => {
 
     test('prefixes configured download subdirectory', () => {
         const filename = build_export_filename({
-            export_directory: 'record-all/exports',
+            export_capture_directory: 'record-all/exports',
             export_filename_template: '{capture_id}.{ext}',
             ...config,
         }, 'capture_1', 'har', now);
@@ -29,7 +29,7 @@ describe('export settings', () => {
 
     test('removes absolute and parent path segments from download paths', () => {
         const filename = build_export_filename({
-            export_directory: '/safe/../exports',
+            export_capture_directory: '/safe/../exports',
             export_filename_template: '../{capture_id}',
             ...config,
         }, 'capture_1', 'html', now);
@@ -46,10 +46,10 @@ describe('export settings', () => {
         const ids = ['capture_1', 'abc-123', 'test_capture'];
         const exts: Array<'json' | 'jsonl' | 'html' | 'har'> = ['json', 'jsonl', 'html', 'har'];
         const configs = [
-            { export_directory: '', export_filename_template: 'capture_all_{capture_id}_{date}.{ext}', ...config },
-            { export_directory: 'exports', export_filename_template: '{capture_id}.{ext}', ...config },
-            { export_directory: 'data/records', export_filename_template: 'capture_{capture_id}.{ext}', ...config },
-            { export_directory: '/abs/../safe', export_filename_template: '../{capture_id}_{date}', ...config },
+            { export_capture_directory: '', export_filename_template: 'capture_all_{capture_id}_{date}.{ext}', ...config },
+            { export_capture_directory: 'exports', export_filename_template: '{capture_id}.{ext}', ...config },
+            { export_capture_directory: 'data/records', export_filename_template: 'capture_{capture_id}.{ext}', ...config },
+            { export_capture_directory: '/abs/../safe', export_filename_template: '../{capture_id}_{date}', ...config },
         ];
 
         for (const config of configs) {
@@ -65,5 +65,27 @@ describe('export settings', () => {
                 }
             }
         }
+    });
+
+    test('capture and log export directories are independent', () => {
+        // P0.27: 两类导出位置分别记录，互不覆盖
+        const capture_cfg = {
+            export_capture_directory: 'capture-exports',
+            export_filename_template: '{capture_id}.{ext}',
+            ...config,
+        };
+        const log_cfg = {
+            export_capture_directory: 'log-exports',
+            export_filename_template: 'logs_{date}.log',
+            ...config,
+        };
+
+        const cap = build_export_filename(capture_cfg, 'cap_1', 'json', now);
+        const log = build_export_filename(log_cfg, 'cap_1', 'json', now);
+
+        expect(cap).toContain('capture-exports/');
+        expect(cap).not.toContain('log-exports/');
+        expect(log).toContain('log-exports/');
+        expect(log).not.toContain('capture-exports/');
     });
 });

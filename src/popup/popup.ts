@@ -211,6 +211,9 @@ function render_saved(): string {
                 <a class="actbtn act-ghost" id="openDetailBtn">
                     ${ICON.ext}<span>${t('openDetail')}</span>
                 </a>
+                <button class="actbtn act-ghost" id="exportBtn">
+                    ${ICON.download}<span>导出</span>
+                </button>
                 <button class="actbtn act-ghost" id="newBtn">
                     ${ICON.refresh}<span>${t('newCapture')}</span>
                 </button>
@@ -246,6 +249,11 @@ function wire_view(): void {
     });
     view.querySelector('#openDetailBtn')?.addEventListener('click', () => {
         if (finished_capture) open_dashboard(`?session=${finished_capture.capture_id}&page=detail`);
+    });
+    view.querySelector('#exportBtn')?.addEventListener('click', () => {
+        if (finished_capture) {
+            chrome.runtime.sendMessage({ action: 'export_json', session_id: finished_capture.capture_id });
+        }
     });
     view.querySelector('#viewAll')?.addEventListener('click', () => open_dashboard());
     view.querySelectorAll('.recent-row').forEach((row) => {

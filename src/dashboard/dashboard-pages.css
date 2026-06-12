@@ -37,6 +37,7 @@
   appearance: none; text-align: left; cursor: pointer; font-family: var(--font-sans);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 13px 14px; display: flex; flex-direction: column; gap: 8px;
+  color: var(--ink);
   transition: border-color .15s, box-shadow .15s, transform .10s, background .15s, opacity .15s;
 }
 .dt-metric:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }

@@ -125,6 +125,14 @@ describe('truncate_request_body', () => {
         expect(result!.length).toBeLessThan(big_body.length);
         expect(result).toContain('[TRUNCATED]');
     });
+
+    it('uses custom byte limit', () => {
+        const body = 'a'.repeat(20);
+        const result = truncate_request_body(body, 10);
+
+        expect(result).toContain('...[TRUNCATED]');
+        expect(result!.length).toBeGreaterThan(10);
+    });
 });
 
 describe('truncate_response_body', () => {
@@ -138,6 +146,14 @@ describe('truncate_response_body', () => {
         expect(result.body).not.toBeNull();
         expect(result.body!.length).toBeLessThan(big_body.length);
         expect(result.body).toContain('[TRUNCATED]');
+    });
+
+    it('uses custom byte limit while keeping preview', () => {
+        const body = 'b'.repeat(20);
+        const result = truncate_response_body(body, 10);
+
+        expect(result.body).toContain('...[TRUNCATED]');
+        expect(result.response_preview).toBe(body);
     });
 });
 

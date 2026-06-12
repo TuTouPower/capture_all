@@ -220,7 +220,8 @@ async function try_external_cdp_bridge(
             detect_result.cdp_port!,
             session_id,
             tab_url,
-            config.redact_data
+            config.redact_data,
+            config.max_response_body_bytes
         );
         if (!start_result.success || !start_result.session_key) {
             return null;

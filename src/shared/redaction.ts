@@ -82,16 +82,16 @@ export function redact_password(value: string, input_type?: string, enabled: boo
     return value;
 }
 
-export function truncate_request_body(body: string | null): string | null {
+export function truncate_request_body(body: string | null, max_bytes = MAX_REQUEST_BODY_BYTES): string | null {
     if (!body) return null;
-    return truncate(body, MAX_REQUEST_BODY_BYTES, true);
+    return truncate(body, max_bytes, true);
 }
 
-export function truncate_response_body(body: string | null): TruncateBodyResult {
+export function truncate_response_body(body: string | null, max_bytes = MAX_RESPONSE_BODY_BYTES): TruncateBodyResult {
     if (!body) return { body: null, response_preview: null };
     const preview = body.slice(0, RESPONSE_PREVIEW_LENGTH);
     return {
-        body: truncate(body, MAX_RESPONSE_BODY_BYTES, true),
+        body: truncate(body, max_bytes, true),
         response_preview: preview,
     };
 }

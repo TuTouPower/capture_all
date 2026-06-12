@@ -114,7 +114,7 @@ describe('start_external_cdp', () => {
         });
         globalThis.fetch = fetch_mock;
 
-        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false);
+        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false, 1048576);
 
         expect(result.success).toBe(true);
         expect(result.session_key).toBe('sk-abc123');
@@ -132,7 +132,7 @@ describe('start_external_cdp', () => {
             session_id: 'session-1',
             tab_url: 'https://example.com',
             redact_data: false,
-            max_response_body_bytes: 50 * 1024
+            max_response_body_bytes: 1048576
         });
     });
 
@@ -142,7 +142,7 @@ describe('start_external_cdp', () => {
             json: async () => ({ ok: false, error: { code: 'SESSION_ALREADY_EXISTS' } })
         });
 
-        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', true);
+        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', true, 1048576);
         expect(result.success).toBe(false);
         expect(result.error).toBe('SESSION_ALREADY_EXISTS');
     });
@@ -150,7 +150,7 @@ describe('start_external_cdp', () => {
     it('returns bridge_unavailable on network error', async () => {
         globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
 
-        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false);
+        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false, 1048576);
         expect(result.success).toBe(false);
         expect(result.error).toBe('bridge_unavailable');
     });
@@ -161,7 +161,7 @@ describe('start_external_cdp', () => {
             json: async () => ({ ok: false })
         });
 
-        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false);
+        const result = await start_external_cdp(MOCK_CONFIG, 9222, 'session-1', 'https://example.com', false, 1048576);
         expect(result.success).toBe(false);
         expect(result.error).toBe('cdp_start_failed');
     });
@@ -173,7 +173,7 @@ describe('start_external_cdp', () => {
         });
         globalThis.fetch = fetch_mock;
 
-        await start_external_cdp(MOCK_CONFIG, 9222, 'session-2', 'https://example.com/page', true);
+        await start_external_cdp(MOCK_CONFIG, 9222, 'session-2', 'https://example.com/page', true, 1048576);
 
         const body = JSON.parse((fetch_mock.mock.calls[0] as [string, RequestInit])[1].body as string);
         expect(body.redact_data).toBe(true);

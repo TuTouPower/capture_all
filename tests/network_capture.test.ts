@@ -11,6 +11,7 @@ import {
     decode_raw_body,
     encode_form_data,
     extract_request_body,
+    build_cdp_body_result,
     headers_array_to_map,
     find_matching_cdp_request,
     find_cdp_candidates,
@@ -189,6 +190,20 @@ describe('request_body_truncation', () => {
         expect(result.body).toContain('[TRUNCATED]');
     });
 
+    it('extract_request_body uses configured byte limit', () => {
+        const body = 'z'.repeat(20);
+        const details = {
+            requestBody: {
+                raw: [{ bytes: new TextEncoder().encode(body).buffer }]
+            }
+        };
+
+        const result = extract_request_body(details, true, 10);
+
+        expect(result.status).toBe('too_large');
+        expect(result.body).toContain('[TRUNCATED]');
+    });
+
     it('extract_request_body marks small body as captured', () => {
         const details = {
             requestBody: {
@@ -205,6 +220,18 @@ describe('request_body_truncation', () => {
         const result = extract_request_body(details, false);
         expect(result.status).toBe('not_enabled');
         expect(result.body).toBeNull();
+    });
+});
+
+describe('response_body_truncation', () => {
+    it('build_cdp_body_result uses configured byte limit', () => {
+        const body = 'r'.repeat(20);
+
+        const result = build_cdp_body_result(body, 10);
+
+        expect(result.status).toBe('too_large');
+        expect(result.body).toContain('[TRUNCATED]');
+        expect(result.preview).toBe(body);
     });
 });
 

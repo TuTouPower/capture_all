@@ -413,8 +413,10 @@ function detail_metrics(): { icon: string; lbl: string; val: string; color: stri
 }
 
 const DT_TABS: [string, string][] = [
-    ['overview', '概览'], ['timeline', '时间线'], ['network', '网络'],
-    ['console', '控制台'], ['evidence', '证据'], ['storage', '存储'], ['config', '本次配置'],
+    ['overview', '概览'], ['timeline', '时间线'], ['user_action', '用户行为'],
+    ['navigation', '页面导航'], ['network', '网络请求'], ['console', '控制台'],
+    ['error', '错误异常'], ['storage', 'Storage'], ['cookie', 'Cookie'],
+    ['config', '本次配置'],
 ];
 
 function render_detail(): string {
@@ -468,8 +470,11 @@ function render_detail_tab(showInsp: boolean): string {
         return `<div class="dt-body" data-insp="${show_net_insp ? 1 : 0}"><div class="dt-list">${render_net_table()}</div>${show_net_insp ? render_net_inspector() : ''}</div>`;
     }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
-    if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change', 'cookie_change'], ['时间', '类型', 'Key / 名称', '详情', '来源'])}</div>`;
-    if (dt_tab === 'evidence') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event', 'dom_mutation'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
+    if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
+    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], ['时间', '类型', '事件', 'URL / 来源', '详情', '来源'])}</div>`;
+    if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'unhandled_rejection', 'resource_error', 'network_failed', 'capture_error'], ['时间', '类型', '错误消息', '堆栈', '来源'])}</div>`;
+    if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change'], ['时间', '类型', 'Key', '详情', '来源'])}</div>`;
+    if (dt_tab === 'cookie') return `<div class="simple-pad scroll">${render_simple_events(['cookie_change'], ['时间', '类型', '名称', '详情', '来源'])}</div>`;
     // timeline
     return `<div class="dt-body" data-insp="${showInsp ? 1 : 0}">
         ${render_dt_rail()}

@@ -42,22 +42,11 @@ export function parse_utc_offset(tz: SystemTimeTimezone | string): number | null
     return sign * hours * 60;
 }
 
-// ============================================================
-// format_offset — human-readable UTC offset label
-// ============================================================
-function format_offset(tz: SystemTimeTimezone | string): string {
-    if (tz === 'browser') return 'browser';
-    if (tz === 'UTC') return 'UTC';
-    const match = /^UTC([+-]\d{1,2})$/.exec(tz);
-    if (!match) return tz;
-    return `UTC${match[1]}`;
-}
-
 // Cache the DateTimeFormat for browser/UTC paths
 let _cached_locale_formatter: Intl.DateTimeFormat | null = null;
 let _cached_locale_cfg_id = '';
 
-function get_locale_formatter(user_offset_minutes: number | null, user_tz: string): Intl.DateTimeFormat {
+function get_locale_formatter(_user_offset_minutes: number | null, user_tz: string): Intl.DateTimeFormat {
     // For browser path, use no timeZone option
     // For UTC, use 'UTC' which IS a valid IANA timeZone
     const id = user_tz;

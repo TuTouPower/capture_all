@@ -1,5 +1,6 @@
 // tests/network_cdp.test.ts
 // CDP body capture unit tests using chrome.debugger mock.
+import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mock_chrome_debugger } from './__mocks__/chrome_debugger';
 
@@ -50,6 +51,8 @@ function make_cfg(overrides: Partial<{
     redact_data: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
+    max_request_body_bytes: number;
+    max_response_body_bytes: number;
 }> = {}) {
     return {
         redact_sensitive_headers: false,
@@ -57,6 +60,8 @@ function make_cfg(overrides: Partial<{
         redact_data: false,
         capture_request_body: false,
         capture_response_body: true,
+        max_request_body_bytes: 1024 * 1024,
+        max_response_body_bytes: 1024 * 1024,
         ...overrides,
     };
 }

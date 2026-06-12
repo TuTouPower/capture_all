@@ -168,7 +168,7 @@ const PAGE_SCRIPT = `(function() {
     XMLHttpRequest.prototype.open = function(method, url) {
         this.__capture_all_hook = { method: method, url: url };
 
-        // Preserve original fetch wrapper (may already be patched by xhr_fetch_capture)
+        // xhr_fetch_capture is no longer started; network_hook is the sole fetch/XHR interceptor
         // by wrapping the readystatechange handler
         return orig_open.apply(this, arguments);
     };

@@ -1,12 +1,13 @@
 // shared/export_settings.ts
 import type { UserConfig } from './types';
+import { format_system_time_filename } from './system_time';
 
 type ExportExtension = 'json' | 'jsonl' | 'html' | 'har';
 
-type ExportConfig = Pick<UserConfig, 'export_directory' | 'export_filename_template'>;
+type ExportConfig = Pick<UserConfig, 'export_directory' | 'export_filename_template' | 'system_time_timezone'>;
 
 export function build_export_filename(config: ExportConfig, capture_id: string, extension: ExportExtension, now = new Date()): string {
-    const date = now.toISOString().slice(0, 10);
+    const date = format_system_time_filename(now.getTime(), config);
     const base_name = config.export_filename_template
         .split('{capture_id}').join(capture_id)
         .split('{session_id}').join(capture_id)

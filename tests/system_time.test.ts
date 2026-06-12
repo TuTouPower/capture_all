@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { add_system_times_to_capture_data, format_system_time } from '../src/shared/system_time';
+import { add_system_times_to_capture_data, format_system_time, format_system_time_filename } from '../src/shared/system_time';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, NetworkRequestData } from '../src/shared/types';
 
 const config = { system_time_timezone: 'Asia/Shanghai' as const };
@@ -88,6 +88,10 @@ const log = {
 describe('system time formatting', () => {
     test('formats timestamps in configured Asia/Shanghai timezone', () => {
         expect(format_system_time(1704067200000, config)).toBe('2024-01-01 08:00:00');
+    });
+
+    test('formats filename timestamps in configured timezone', () => {
+        expect(format_system_time_filename(1704067200000, config)).toBe('2024-01-01_08-00-00');
     });
 
     test('adds system time fields to all exported record groups', () => {

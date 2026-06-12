@@ -140,7 +140,7 @@ async function handle_message(message: any): Promise<any> {
         }
         case 'export_app_logs': {
             try {
-                const content = await export_app_logs(message.options || { format: 'json' });
+                const content = await export_app_logs(message.options || {});
                 return { success: true, data: content };
             } catch (e) {
                 return { success: false, error: e instanceof Error ? e.message : String(e) };

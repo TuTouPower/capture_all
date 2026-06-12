@@ -6,3 +6,4 @@ artifacts/
 *.zip
 .DS_Store
 data/capture_all*.json
+data/logs/

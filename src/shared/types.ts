@@ -30,6 +30,7 @@ export interface CaptureRecord {
 
 export interface CaptureStats {
     event_count: number;
+    user_action_count: number;
     nav_count: number;
     request_count: number;
     log_count: number;

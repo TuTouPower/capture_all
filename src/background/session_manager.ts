@@ -3,6 +3,7 @@ import type { Session, RecordConfig } from '../shared/types';
 import { create_session, update_session, list_sessions, delete_session, get_session, get_session_size, check_storage_limit, flush_all } from './storage';
 import { start_keepalive, stop_keepalive } from './keepalive';
 import { DEFAULT_CONFIG } from '../shared/constants';
+import { create_empty_capture_stats } from '../shared/capture_stats';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 
@@ -30,15 +31,7 @@ export async function start_session(config: RecordConfig = DEFAULT_CONFIG): Prom
         tab_id: 0,
         window_id: null,
         config_snapshot: config,
-        stats: {
-            event_count: 0,
-            nav_count: 0,
-            request_count: 0,
-            log_count: 0,
-            error_count: 0,
-            storage_change_count: 0,
-            cookie_change_count: 0
-        },
+        stats: create_empty_capture_stats(),
         tags: [],
         created_at: now_iso,
         updated_at: now_iso,

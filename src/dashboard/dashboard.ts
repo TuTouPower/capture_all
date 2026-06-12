@@ -402,7 +402,7 @@ function detail_metrics(): { icon: string; lbl: string; val: string; color: stri
         return { delta: txt, dTone: txt.startsWith('-') ? 'red' : 'green' };
     };
     return [
-        { icon: 'ui', lbl: '用户行为', val: num(st?.event_count || 0), color: 'var(--src-user)', filter: 'user', ...d(st?.event_count || 0, ps?.event_count) },
+        { icon: 'ui', lbl: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', filter: 'user', ...d(st?.user_action_count || 0, ps?.user_action_count) },
         { icon: 'nav', lbl: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav', ...d(st?.nav_count || 0, ps?.nav_count) },
         { icon: 'net', lbl: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network', ...d(st?.request_count || 0, ps?.request_count) },
         { icon: 'console', lbl: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console', ...d(st?.log_count || 0, ps?.log_count) },
@@ -740,7 +740,7 @@ function render_dt_overview(): string {
                 <div class="ov-panel-hd" style="margin-top:6px">七标签概览</div>
                 <div class="dti-related" style="margin-top:4px">
                     ${[
-                        { label: '用户行为', val: num(st?.event_count || 0), color: 'var(--src-user)', icon: 'ui' },
+                        { label: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', icon: 'ui' },
                         { label: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', icon: 'nav' },
                         { label: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', icon: 'net' },
                         { label: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', icon: 'console' },

@@ -5,17 +5,17 @@ import type { CaptureStats, CategoryKey } from '../src/shared/types';
 
 // TAG_LABEL 用 Record<keyof CaptureStats, string> 约束 ——
 // 若 CaptureStats 增删字段，此行编译失败，防止标签映射与类型脱节。
-const TAG_LABEL: Record<keyof CaptureStats, string> = {
-    event_count: '用户行为',
+const TAG_LABEL = {
+    user_action_count: '用户行为',
     nav_count: '页面导航',
     request_count: '网络请求',
     log_count: '控制台',
     error_count: '错误异常',
     storage_change_count: 'Storage',
     cookie_change_count: 'Cookie',
-};
+} satisfies Record<Exclude<keyof CaptureStats, 'event_count'>, string>;
 
-const VISIBLE_STAT_KEYS = Object.keys(TAG_LABEL) as (keyof CaptureStats)[];
+const VISIBLE_STAT_KEYS = Object.keys(TAG_LABEL) as (keyof typeof TAG_LABEL)[];
 
 // CategoryKey 中不应展示为数据标签的类别
 const HIDDEN_CATEGORIES: CategoryKey[] = ['dom_data', 'capture_lifecycle'];
@@ -23,6 +23,7 @@ const HIDDEN_CATEGORIES: CategoryKey[] = ['dom_data', 'capture_lifecycle'];
 function zero_stats(): CaptureStats {
     return {
         event_count: 0,
+        user_action_count: 0,
         nav_count: 0,
         request_count: 0,
         log_count: 0,
@@ -70,7 +71,8 @@ describe('label_counts — 从 CaptureStats 计算各标签计数', () => {
 
     it('非零 stats → 各位置正确映射', () => {
         const stats: CaptureStats = {
-            event_count: 5,
+            event_count: 99,
+            user_action_count: 5,
             nav_count: 3,
             request_count: 10,
             log_count: 2,
@@ -94,6 +96,7 @@ describe('label_counts — 从 CaptureStats 计算各标签计数', () => {
     it('label_counts 长度恒为 7', () => {
         const stats: CaptureStats = {
             event_count: 999,
+            user_action_count: 111,
             nav_count: 888,
             request_count: 777,
             log_count: 666,
@@ -105,9 +108,10 @@ describe('label_counts — 从 CaptureStats 计算各标签计数', () => {
         expect(counts).toHaveLength(7);
     });
 
-    it('label_counts 总和 = CaptureStats 所有字段之和', () => {
+    it('label_counts 总和不包含 event_count 总事件数', () => {
         const stats: CaptureStats = {
-            event_count: 5,
+            event_count: 99,
+            user_action_count: 5,
             nav_count: 3,
             request_count: 10,
             log_count: 2,
@@ -116,8 +120,7 @@ describe('label_counts — 从 CaptureStats 计算各标签计数', () => {
             cookie_change_count: 7,
         };
         const counts = VISIBLE_STAT_KEYS.map((k) => stats[k]);
-        const sum = (Object.values(stats) as number[]).reduce((a, b) => a + b, 0);
-        expect(counts.reduce((a, b) => a + b, 0)).toBe(sum);
+        expect(counts.reduce((a, b) => a + b, 0)).toBe(32);
     });
 });
 

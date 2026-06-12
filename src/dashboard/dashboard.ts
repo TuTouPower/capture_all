@@ -110,8 +110,8 @@ function event_kind(e: RecordEvent): string {
     }
 }
 const KIND_LABEL: Record<string, string> = {
-    user: '用户', nav: '导航', network: '网络', console: '控制台',
-    error: '错误', storage: '存储', cookie: 'Cookie', dom: 'DOM', session: '生命周期',
+    user: '用户行为', nav: '页面导航', network: '网络请求', console: '控制台',
+    error: '错误异常', storage: 'Storage', cookie: 'Cookie', dom: 'DOM', session: '生命周期',
 };
 function rel_time(ms: number): string {
     const s = Math.floor(ms / 1000), mss = Math.floor(ms % 1000);
@@ -488,12 +488,12 @@ function render_dt_rail(): string {
     for (const e of detail_events) { const k = event_kind(e); counts[k] = (counts[k] || 0) + 1; }
     const quick: [string, string, string, string][] = [
         ['all', 'navCaptures', '全部', 'var(--ink-2)'],
-        ['error', 'err', '错误', 'var(--src-error)'],
-        ['user', 'ui', '用户操作', 'var(--src-user)'],
+        ['error', 'err', '错误异常', 'var(--src-error)'],
+        ['user', 'ui', '用户行为', 'var(--src-user)'],
         ['network', 'net', '网络请求', 'var(--src-network)'],
         ['console', 'console', '控制台', 'var(--src-console)'],
         ['nav', 'nav', '页面导航', 'var(--src-nav)'],
-        ['storage', 'storage', '存储', 'var(--src-storage)'],
+        ['storage', 'storage', 'Storage', 'var(--src-storage)'],
         ['cookie', 'cookie', 'Cookie', 'var(--src-cookie)'],
         ['dom', 'dom', 'DOM', 'var(--src-dom)'],
     ];

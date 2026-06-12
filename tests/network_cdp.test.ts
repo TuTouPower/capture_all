@@ -43,6 +43,24 @@ import {
     enable_response_body_capture,
 } from '../src/background/network_capture';
 
+// Helper to create a standard capture config
+function make_cfg(overrides: Partial<{
+    redact_sensitive_headers: boolean;
+    redact_url_query: boolean;
+    redact_data: boolean;
+    capture_request_body: boolean;
+    capture_response_body: boolean;
+}> = {}) {
+    return {
+        redact_sensitive_headers: false,
+        redact_url_query: false,
+        redact_data: false,
+        capture_request_body: false,
+        capture_response_body: true,
+        ...overrides,
+    };
+}
+
 describe('enable_response_body_capture', () => {
     beforeEach(() => {
         // Stop any previous capture first (uses mock counters), then reset mock
@@ -252,5 +270,310 @@ describe('enable_response_body_capture', () => {
         const get_body_call = calls.find(c => c.command === 'Network.getResponseBody');
         expect(get_body_call).toBeDefined();
         expect(get_body_call!.params.requestId).toBe('req_body_test');
+    });
+});
+
+describe('CDP-first: primary record emission', () => {
+    let emitted: any[] = [];
+
+    beforeEach(() => {
+        try { stop_network_capture(); } catch { /* not started yet */ }
+        mock_chrome_debugger.reset();
+        vi.clearAllMocks();
+        emitted = [];
+    });
+
+    async function setup_capture(cfg_overrides: Record<string, any> = {}) {
+        start_network_capture(
+            'test_capture',
+            1700000000000,
+            make_cfg(cfg_overrides),
+            1,
+            (payload: any) => { emitted.push(payload); }
+        );
+        await enable_response_body_capture(1, false);
+    }
+
+    it('emits cdp_primary record on loadingFinished with matching meta', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: '{"ok":true}',
+            base64Encoded: false,
+        });
+        await setup_capture();
+
+        // CDP requestWillBeSent → stores meta
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_1',
+                request: { url: 'https://example.com/api', method: 'GET', headers: {} },
+                type: 'Fetch',
+            }
+        );
+
+        // CDP loadingFinished → should build and emit complete record
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_1' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.capture_method).toBe('cdp_primary');
+        expect(emitted[0].data.response_body).toBe('{"ok":true}');
+        expect(emitted[0].data.response_body_status).toBe('captured');
+        expect(emitted[0].data.url).toBe('https://example.com/api');
+        expect(emitted[0].data.method).toBe('GET');
+        expect(emitted[0].data.resource_type).toBe('fetch');
+    });
+
+    it('captures request body from CDP postData', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'ok',
+            base64Encoded: false,
+        });
+        await setup_capture({ capture_request_body: true });
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_post',
+                request: {
+                    url: 'https://example.com/submit',
+                    method: 'POST',
+                    headers: {},
+                    postData: '{"name":"test"}',
+                },
+                type: 'Fetch',
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_post' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.request_body).toBe('{"name":"test"}');
+        expect(emitted[0].data.request_body_status).toBe('captured');
+    });
+
+    it('handles binary response as unsupported_binary', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'base64data',
+            base64Encoded: true,
+        });
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_bin',
+                request: { url: 'https://example.com/img.png', method: 'GET', headers: {} },
+                type: 'Image',
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_bin' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.response_body_status).toBe('unsupported_binary');
+        expect(emitted[0].data.response_body).toBeNull();
+    });
+
+    it('handles getResponseBody failure as cdp_failed', async () => {
+        mock_chrome_debugger.set_command_error('Network.getResponseBody', new Error('No resource'));
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_fail',
+                request: { url: 'https://example.com/missing', method: 'GET', headers: {} },
+                type: 'Document',
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_fail' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.response_body_status).toBe('cdp_failed');
+    });
+
+    it('normalizes CDP PascalCase resource_type to lowercase', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'ok',
+            base64Encoded: false,
+        });
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_type',
+                request: { url: 'https://example.com/style.css', method: 'GET', headers: {} },
+                type: 'Stylesheet',
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_type' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.resource_type).toBe('stylesheet');
+    });
+
+    it('updates status_code from Network.responseReceived', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'not found',
+            base64Encoded: false,
+        });
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_status',
+                request: { url: 'https://example.com/404', method: 'GET', headers: {} },
+                type: 'Document',
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.responseReceived',
+            {
+                requestId: 'cdp_status',
+                response: { status: 404, headers: { 'content-type': 'text/html' } },
+            }
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_status' }
+        );
+
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.status_code).toBe(404);
+    });
+});
+
+describe('CDP-first: webRequest skips attached tab', () => {
+    let emitted: any[] = [];
+
+    beforeEach(() => {
+        try { stop_network_capture(); } catch { /* not started yet */ }
+        mock_chrome_debugger.reset();
+        vi.clearAllMocks();
+        emitted = [];
+    });
+
+    it('webRequest handle_completed skips request from attached tab', async () => {
+        start_network_capture(
+            'test_capture',
+            1700000000000,
+            make_cfg(),
+            1,
+            (payload: any) => { emitted.push(payload); }
+        );
+        await enable_response_body_capture(1, false);
+
+        const beforeReqCalls = (chrome.webRequest.onBeforeRequest.addListener as any).mock.calls;
+        const completedCalls = (chrome.webRequest.onCompleted.addListener as any).mock.calls;
+        const handle_before_request = beforeReqCalls[beforeReqCalls.length - 1][0];
+        const handle_completed = completedCalls[completedCalls.length - 1][0];
+
+        // beforeRequest from attached tab — creates pending (no skip in beforeRequest for this test)
+        handle_before_request({
+            requestId: 'wr_skip',
+            tabId: 1,
+            url: 'https://example.com',
+            method: 'GET',
+            type: 'main_frame',
+            timeStamp: 1700000000500,
+        });
+
+        // Complete from attached tab (tabId=1) — should be skipped by CDP-first guard
+        handle_completed({
+            requestId: 'wr_skip',
+            tabId: 1,
+            statusCode: 200,
+            timeStamp: 1700000001000,
+        });
+
+        // No pending was created for attached tab (skipped in beforeRequest), so nothing to emit
+        expect(emitted).toHaveLength(0);
+    });
+
+    it('webRequest handle_completed emits for non-attached tab', async () => {
+        start_network_capture(
+            'test_capture',
+            1700000000000,
+            make_cfg(),
+            1,
+            (payload: any) => { emitted.push(payload); }
+        );
+        await enable_response_body_capture(1, false);
+
+        const beforeReqCalls = (chrome.webRequest.onBeforeRequest.addListener as any).mock.calls;
+        const completedCalls = (chrome.webRequest.onCompleted.addListener as any).mock.calls;
+        const handle_before_request = beforeReqCalls[beforeReqCalls.length - 1][0];
+        const handle_completed = completedCalls[completedCalls.length - 1][0];
+
+        // Create pending entry from non-attached tab (tabId=99)
+        handle_before_request({
+            requestId: 'wr_other',
+            tabId: 99,
+            url: 'https://other.com',
+            method: 'GET',
+            type: 'main_frame',
+            timeStamp: 1700000000500,
+        });
+
+        // Complete from non-attached tab
+        handle_completed({
+            requestId: 'wr_other',
+            tabId: 99,
+            statusCode: 200,
+            timeStamp: 1700000001000,
+        });
+
+        // Deferred path: wait for 1500ms timeout
+        await new Promise(r => setTimeout(r, 1600));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.capture_method).toBe('web_request');
+        expect(emitted[0].data.response_body_status).toBe('not_enabled');
     });
 });

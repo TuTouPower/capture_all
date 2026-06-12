@@ -54,6 +54,7 @@ interface PendingRequest {
     resource_type: string;
 }
 const pending_requests: Map<string, PendingRequest> = new Map();
+export const _pending_requests_for_test = pending_requests;
 
 // CDP requestId -> metadata collected before loadingFinished
 interface CdpRequestMeta {
@@ -329,8 +330,20 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         }).catch((err: any) => {
-            cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+            const fail_result: CdpBodyResult = { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null };
+            cdp_body_results.set(req_id, fail_result);
             logger.debug('get_body_error', { req_id, error: String(err)?.slice(0, 100) });
+
+            // CDP-first: emit even on failure (status will be cdp_failed)
+            const meta = cdp_request_meta.get(req_id);
+            if (meta) {
+                cdp_primary_emitted.add(req_id);
+                send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id));
+                cdp_request_meta.delete(req_id);
+                cdp_body_results.delete(req_id);
+                return;
+            }
+
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         });

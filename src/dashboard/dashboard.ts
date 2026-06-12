@@ -5,8 +5,8 @@ import { init_locale, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
-import { format_system_time, format_system_time_filename } from '../shared/system_time';
-import { build_export_filename } from '../shared/export_settings';
+import { format_system_time } from '../shared/system_time';
+import { download_blob, build_capture_filename, build_log_filename } from '../shared/export_utils';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -362,18 +362,12 @@ async function export_session(id: string, format: string = 'json'): Promise<void
         const mime = format === 'html' ? 'text/html' : 'application/json';
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
         const blob = new Blob([content], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const capture_filename = build_export_filename({
+        const capture_filename = build_capture_filename({
             export_capture_directory: user_config.export_capture_directory,
             export_filename_template: user_config.export_filename_template,
             system_time_timezone: user_config.system_time_timezone,
         }, id, ext);
-        chrome.downloads.download({
-            url,
-            filename: capture_filename,
-            saveAs: user_config.export_save_as,
-        });
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        await download_blob(blob, capture_filename, { save_as: true });
     } catch (err) { logger.error('Export error', err); }
 }
 async function del_session(id: string): Promise<void> {
@@ -1117,17 +1111,11 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
             const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
             if (!r?.success) { alert('导出失败'); return; }
             const blob = new Blob([r.data], { type: 'text/x-log' });
-            const url = URL.createObjectURL(blob);
-            const log_dir = user_config.export_log_directory || '';
-            const log_filename = log_dir
-                ? `${log_dir}/capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`
-                : `capture_all_logs_${format_system_time_filename(Date.now(), user_config)}.log`;
-            chrome.downloads.download({
-                url,
-                filename: log_filename,
-                saveAs: user_config.export_save_as,
+            const log_filename = build_log_filename({
+                export_log_directory: user_config.export_log_directory,
+                system_time_timezone: user_config.system_time_timezone,
             });
-            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            await download_blob(blob, log_filename, { save_as: true });
         } catch (e) { logger.error('Export logs error', e); }
     });
 

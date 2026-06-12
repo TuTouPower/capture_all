@@ -1,18 +1,19 @@
 // shared/chrome.d.ts
 declare namespace chrome {
-    namespace runtime {
-        const id: string;
-        function sendMessage(message: any): Promise<any>;
-        function getURL(path: string): string;
-        function getManifest(): { version: string; [key: string]: unknown };
-        const onMessage: {
+    const runtime: {
+        id: string;
+        lastError?: { message: string };
+        sendMessage(message: any): Promise<any>;
+        getURL(path: string): string;
+        getManifest(): { version: string; [key: string]: unknown };
+        onMessage: {
             addListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;
             removeListener(callback: (message: any, sender: any, sendResponse: (response: any) => void) => boolean): void;
         };
-        const onInstalled: {
+        onInstalled: {
             addListener(callback: () => void): void;
         };
-    }
+    };
 
     namespace tabs {
         function create(options: { url: string }): Promise<any>;
@@ -82,6 +83,11 @@ declare namespace chrome {
 
     namespace downloads {
         function download(options: { url: string; filename: string; saveAs?: boolean }): Promise<number>;
+        function search(query: { id?: number; filename?: string }): Promise<Array<{ id: number; filename: string; state: string }>>;
+        const onChanged: {
+            addListener(callback: (delta: { id: number; state?: { current: string } }) => void): void;
+            removeListener(callback: (delta: { id: number; state?: { current: string } }) => void): void;
+        };
     }
 
     namespace scripting {

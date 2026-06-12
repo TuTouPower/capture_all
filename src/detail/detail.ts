@@ -5,6 +5,7 @@ import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { build_export_filename } from '../shared/export_settings';
+import { download_blob } from '../shared/export_utils';
 import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
@@ -313,9 +314,8 @@ async function export_har(): Promise<void> {
 
 function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): void {
     const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
     const filename = build_export_filename(user_config, session_id, extension);
-    chrome.downloads.download({ url, filename, saveAs: user_config.export_save_as });
+    download_blob(blob, filename, { save_as: true });
 }
 
 // Helpers

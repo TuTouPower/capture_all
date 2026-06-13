@@ -9,6 +9,7 @@ import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
+import { generate_capture_id } from '../shared/id';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import type { CaptureConfig } from '../shared/types';
@@ -98,8 +99,8 @@ const CAPTURE: CaptureSource[] = [
     { key: 'mask',                 i18n: 'capMask',    icon: 'shield',  tone: 'green',  stat: null },
 ];
 
-function escape_html(s: string): string {
-    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+function escape_html(s: unknown): string {
+    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
 function fmt_num(n: number): string {
@@ -215,7 +216,7 @@ function render_saved(): string {
                     ${ICON.ext}<span>${t('openDetail')}</span>
                 </a>
                 <button class="actbtn act-ghost" id="exportBtn">
-                    ${ICON.download}<span>导出</span>
+                    ${ICON.download}<span>${t('exportLabel')}</span>
                 </button>
                 <button class="actbtn act-ghost" id="newBtn">
                     ${ICON.refresh}<span>${t('newCapture')}</span>
@@ -295,7 +296,7 @@ function wire_view(): void {
                 finished_capture.capture_id,
                 'zip',
             );
-            await download_blob(blob, filename, { save_as: true });
+            await download_blob(blob, filename);
         } catch (e) {
             logger.error('Export message failed', e);
             alert(`${t('error')}: ${e}`);
@@ -354,7 +355,7 @@ function get_capture_config(): CaptureConfig {
 async function start_capture(): Promise<void> {
     if (!is_extension) { state = 'capturing'; render(); return; }
     const config = get_capture_config();
-    const capture_id = `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const capture_id = generate_capture_id();
     logger.info('Starting capture', { capture_id });
     try {
         const response = await chrome.runtime.sendMessage({ action: 'start', capture_id: capture_id, config });
@@ -366,7 +367,6 @@ async function start_capture(): Promise<void> {
             capture_id,
             name: 'Capture ' + new Date().toLocaleString(),
             status: 'capturing',
-            mode: 'standard',
             started_at: new Date().toISOString(),
             ended_at: null,
             duration_ms: 0,

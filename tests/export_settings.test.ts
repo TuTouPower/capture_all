@@ -13,7 +13,8 @@ describe('export settings', () => {
             ...config,
         }, 'capture_1', 'json', now);
 
-        expect(filename).toBe('capture_all_capture_1_2024-02-03_12-05-06.json');
+        // P0.60: date 格式从 YYYY-MM-DD_HH-MM-SS 改为 YYYYMMDD_HHMMSS
+        expect(filename).toBe('capture_all_capture_1_20240203_120506.json');
         expect(filename).not.toContain('session');
     });
 
@@ -69,7 +70,7 @@ describe('export settings', () => {
 
     test('P0.37: default template produces filename containing date', () => {
         // 模拟 export_session() 使用 DEFAULT_USER_CONFIG 的 export_filename_template
-        // 默认模板为 'capture_all_{capture_id}_{date}.{ext}'
+        // P0.60: 默认模板改为 'capture_{date}.{ext}'，此测试用旧模板验证向后兼容
         const default_template_cfg = {
             export_capture_directory: '',
             export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
@@ -77,7 +78,8 @@ describe('export settings', () => {
         };
         const filename = build_export_filename(default_template_cfg, '1781265766247_7vafphp', 'json', now);
 
-        expect(filename).toContain('2024-02-03');
+        // P0.60: compact date format
+        expect(filename).toContain('20240203');
         expect(filename).toContain('capture_all_1781265766247_7vafphp');
         expect(filename).toMatch(/\.json$/);
         expect(filename).not.toMatch(/^capture_all_1781265766247_7vafphp\.json$/);

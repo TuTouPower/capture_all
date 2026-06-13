@@ -7,6 +7,10 @@
 // 路径——无法回填为下次的建议路径，回填必然失败并覆盖用户配置目录。
 // 导出目录唯一来源为用户配置（export_capture_directory / export_log_directory）；
 // saveAs 对话框由 Chrome 自身记忆上次文件夹。
+//
+// P0.61: saveAs 由 filename 是否含子目录自动决定：
+//   - 含 '/' → saveAs: false（用户已配目录，直接存，不弹框）
+//   - 不含 '/' → saveAs: true（无目录，弹框让 Chrome 记忆保存位置）
 
 import { build_export_filename } from './export_settings';
 import type { UserConfig } from './types';
@@ -14,18 +18,19 @@ import { format_system_time_filename } from './system_time';
 
 /**
  * 统一的下载入口。所有导出最终调用此函数。
+ * P0.61: saveAs 自动由 filename 是否含子目录决定，不再接受外部 opts。
  * @returns download_id
  */
 export async function download_blob(
     blob: Blob,
     filename: string,
-    opts?: { save_as?: boolean },
 ): Promise<number> {
+    const has_dir = filename.includes('/');
     const url = URL.createObjectURL(blob);
     const download_id = await chrome.downloads.download({
         url,
         filename,
-        saveAs: opts?.save_as ?? true,
+        saveAs: !has_dir,
     });
     // 延迟释放 blob URL，确保下载引擎已读取完毕
     setTimeout(() => URL.revokeObjectURL(url), 5000);

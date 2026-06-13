@@ -99,9 +99,19 @@ export const REQUIRED_LABELS = [
     '用户行为', '页面导航', '网络请求', '控制台', '错误异常', 'Storage', 'Cookie',
 ];
 
+// Popup mcard 用 data-key 标识（与 i18n locale 无关）。
+// dashboard 硬编码中文 label → 用 REQUIRED_LABELS；
+// popup mcard 通过 i18n 渲染 → 用 REQUIRED_KEYS + data-key selector。
+export const REQUIRED_KEYS = [
+    'event_count', 'nav_count', 'request_count', 'log_count',
+    'error_count', 'storage_change_count', 'cookie_change_count',
+] as const;
+
 export const FORBIDDEN_STRINGS = [
-    '深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制', '记录',
+    '深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制',
 ];
+// 注：'记录' 作为普通名词合法使用（如"采集记录"指 capture list），
+// CLAUDE.md 禁止的是作为动词/产品术语的 '录制'。'记录' 不属于禁词。
 
 export interface CaptureDataResult {
     success: boolean;
@@ -111,9 +121,16 @@ export interface CaptureDataResult {
 }
 
 /**
- * Call get_capture_data via chrome.runtime.sendMessage from an extension page.
- * Lists sessions, picks the latest, and fetches its data.
- * Must be called from a popup or dashboard page (extension context).
+ * Verify capture data via export_json (P0.47 design).
+ *
+ * SW `get_capture_data` deliberately returns only capture metadata to avoid
+ * the 64MB sendMessage limit (see tests/sw_action_contract.test.ts). Full
+ * event data lives in IndexedDB and is consumed via `read_capture_snapshot`
+ * (page-context direct read) or `export_json` (SW-serialized snapshot).
+ *
+ * This helper picks the latest capture and asks the SW to export_json it,
+ * then parses the JSON to expose { capture, events, network_requests,
+ * console_events } — matching what the dashboard / detail pages consume.
  */
 export async function verify_capture_data(page: Page): Promise<CaptureDataResult> {
     return await page.evaluate(async () => {
@@ -125,11 +142,23 @@ export async function verify_capture_data(page: Page): Promise<CaptureDataResult
                 return { success: false, error: 'No captures found' };
             }
             const latest = captures[captures.length - 1];
-            const data = await (chrome.runtime.sendMessage({
-                action: 'get_capture_data',
+            const export_result = await (chrome.runtime.sendMessage({
+                action: 'export_json',
                 capture_id: latest.capture_id,
-            }) as Promise<CaptureDataResult>);
-            return data;
+            }) as Promise<{ success: boolean; json?: string; error?: string }>);
+            if (!export_result.success || !export_result.json) {
+                return { success: false, error: export_result.error || 'export_json failed' };
+            }
+            const parsed = JSON.parse(export_result.json) as {
+                capture?: unknown;
+                events?: Array<Record<string, unknown>>;
+                network_requests?: Array<Record<string, unknown>>;
+            };
+            return {
+                success: true,
+                events: parsed.events ?? [],
+                network_requests: parsed.network_requests ?? [],
+            };
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'sendMessage failed';
             return { success: false, error: msg };

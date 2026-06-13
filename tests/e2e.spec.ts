@@ -1,7 +1,10 @@
 // tests/e2e.spec.ts
+// Headless basic smoke tests (no extension loaded, just static HTML render).
+// detail.html 已删除（死代码，用户实际通过 dashboard ?page=detail 访问）。
+// dashboard / detail tab 完整测试在 e2e-ext project（加载真实扩展）覆盖。
 import { test, expect, chromium } from '@playwright/test';
 
-const SERVE_URL = 'http://localhost:4174';
+const SERVE_URL = 'http://127.0.0.1:4174';
 
 let browser: Awaited<ReturnType<typeof chromium.launch>>;
 let context: Awaited<ReturnType<typeof browser.newContext>>;
@@ -23,42 +26,6 @@ test.describe('Record All UI', () => {
 
         await expect(page.locator('#startBtn')).toBeVisible();
         await expect(page.locator('#startBtn')).toHaveText(/Start Capture|开始采集/);
-
-        await page.close();
-    });
-
-    test('detail page loads with tabs', async () => {
-        const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/src/detail/detail.html?session=test123`);
-        await page.waitForLoadState('domcontentloaded');
-
-        await expect(page.locator('.tab-btn[data-tab="timeline"]')).toBeVisible();
-        await expect(page.locator('.tab-btn[data-tab="network"]')).toBeVisible();
-        await expect(page.locator('.tab-btn[data-tab="console"]')).toBeVisible();
-        await expect(page.locator('.tab-btn[data-tab="events"]')).toBeVisible();
-
-        await expect(page.locator('#exportJsonBtn')).toBeVisible();
-        await expect(page.locator('#exportHtmlBtn')).toBeVisible();
-
-        await page.close();
-    });
-
-    test('detail page tab switching works', async () => {
-        const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/src/detail/detail.html?session=test123`);
-        await page.waitForLoadState('domcontentloaded');
-
-        await expect(page.locator('#timeline-tab')).toHaveClass(/active/);
-
-        await page.locator('.tab-btn[data-tab="network"]').click();
-        await expect(page.locator('#network-tab')).toHaveClass(/active/);
-        await expect(page.locator('#timeline-tab')).not.toHaveClass(/active/);
-
-        await page.locator('.tab-btn[data-tab="console"]').click();
-        await expect(page.locator('#console-tab')).toHaveClass(/active/);
-
-        await page.locator('.tab-btn[data-tab="events"]').click();
-        await expect(page.locator('#events-tab')).toHaveClass(/active/);
 
         await page.close();
     });

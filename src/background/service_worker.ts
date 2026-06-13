@@ -25,7 +25,7 @@ import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../shared/user_config';
 import type {
     UserConfig, CaptureConfig, CaptureEvent, CaptureRecord,
-    NetworkRequestData, ConsoleEventData,
+    NetworkRequestData, ConsoleEventData, WsFrameData,
     TabSwitchData, TabCreatedData, TabUrlChangeData,
     CaptureStartedData, CaptureStoppedData,
     BodyCaptureStartResult,
@@ -227,7 +227,6 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
         capture_id: capture_id,
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
-        mode: 'standard',
         started_at: now_iso,
         ended_at: null,
         duration_ms: 0,
@@ -259,7 +258,6 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
     // Write capture_lifecycle.capture_started event
     const started_data: CaptureStartedData = {
         capture_id: capture_id,
-        mode: 'standard',
         config_snapshot: config,
         start_url,
         trigger: 'popup',
@@ -613,9 +611,27 @@ function normalize_network_request(request: NetworkRequestData): void {
     if (request.body_capture_mode === undefined) request.body_capture_mode = 'none';
 }
 
-async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData } | NetworkRequestData): Promise<void> {
+async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
-    const request: NetworkRequestData = 'event' in payload ? (payload as { data: NetworkRequestData }).data : (payload as NetworkRequestData);
+
+    const event = 'event' in payload ? (payload as { event: CaptureEvent; data: NetworkRequestData | WsFrameData }).event : null;
+    const data = 'event' in payload ? (payload as { data: NetworkRequestData | WsFrameData }).data : (payload as NetworkRequestData);
+
+    if (event?.type === 'ws_frame') {
+        const frame = data as WsFrameData;
+        if (!event.capture_id) event.capture_id = current_capture_id ?? '';
+        event.data = frame;
+        try {
+            await write_events([event]);
+            current_capture.stats.event_count = (current_capture.stats.event_count || 0) + 1;
+            await persist_stats();
+        } catch (err) {
+            logger.error('Failed to write ws_frame event', err);
+        }
+        return;
+    }
+
+    const request = data as NetworkRequestData;
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
     if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     normalize_network_request(request);

@@ -12,28 +12,16 @@ export type CaptureWithSystemTimes = Omit<CaptureRecord, 'started_at' | 'ended_a
     /** User-timezone formatted time (replaces original UTC value) */
     started_at: string;
     ended_at: string | null;
-    /** Original UTC values preserved for backward compatibility */
-    started_at_utc: string;
-    ended_at_utc: string | null;
     /** Timezone used for formatting */
     system_time_timezone: string;
-    start_time_system_time: string;
-    end_time_system_time: string | null;
-    start_time_label: string;
-    end_time_label: string | null;
-};
-
-export type WithSystemTime<T> = T & {
-    absolute_time_system_time: string;
-    absolute_time_label: string;
 };
 
 export interface ExportableCaptureDataWithSystemTimes {
     system_time_timezone: string;
     capture: CaptureWithSystemTimes;
-    events: Array<WithSystemTime<CaptureEvent>>;
-    network_requests: Array<WithSystemTime<NetworkRequestData>>;
-    console_events: Array<WithSystemTime<ConsoleEventData>>;
+    events: CaptureEvent[];
+    network_requests: NetworkRequestData[];
+    console_events: ConsoleEventData[];
 }
 
 type SystemTimeConfig = Pick<UserConfig, 'system_time_timezone'>;
@@ -120,21 +108,10 @@ export function format_system_time(ts: string | number, config: SystemTimeConfig
 }
 
 // ============================================================
-// format_time_label — human-readable label w/ timezone info
-// ============================================================
-export function format_time_label(ts: string | number, config: SystemTimeConfig): string {
-    const formatted = format_system_time(ts, config);
-    const tz = config.system_time_timezone;
-    if (tz === 'browser') return `${formatted} (browser)`;
-    if (tz === 'UTC') return `${formatted} (UTC)`;
-    return `${formatted} (${tz})`;
-}
-
-// ============================================================
 // format_system_time_filename
 // ============================================================
 export function format_system_time_filename(ts: string | number, config: SystemTimeConfig): string {
-    return format_system_time(ts, config).replace(' ', '_').replace(/:/g, '-');
+    return format_system_time(ts, config).replace(/[-: ]/g, '').replace(/^(.{8})(.{6})$/, '$1_$2');
 }
 
 // ============================================================
@@ -154,32 +131,17 @@ export function add_capture_system_times(capture: CaptureRecord, config: SystemT
     const { started_at, ended_at, ...rest } = capture;
     return {
         ...rest,
-        // Replace top-level times with user-timezone formatted values
         started_at: format_system_time(started_at, config),
         ended_at: ended_at === null ? null : format_system_time(ended_at, config),
-        // Preserve original UTC values
-        started_at_utc: started_at,
-        ended_at_utc: ended_at,
-        // Timezone metadata
         system_time_timezone: config.system_time_timezone,
-        start_time_system_time: format_system_time(started_at, config),
-        end_time_system_time: ended_at === null ? null : format_system_time(ended_at, config),
-        start_time_label: format_time_label(started_at, config),
-        end_time_label: ended_at === null ? null : format_time_label(ended_at, config)
     };
 }
 
-export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig): WithSystemTime<T> {
-    const absolute_time = (record as Record<string, unknown>).absolute_time;
-    let absolute_time_system_time = '';
-    let absolute_time_label = '';
+export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig): T {
+    const rec = record as Record<string, unknown>;
+    const absolute_time = rec.absolute_time;
     if (typeof absolute_time === 'string' || typeof absolute_time === 'number') {
-        absolute_time_system_time = format_system_time(absolute_time, config);
-        absolute_time_label = format_time_label(absolute_time, config);
+        return { ...rec, absolute_time: format_system_time(absolute_time, config) } as T;
     }
-    return {
-        ...record,
-        absolute_time_system_time,
-        absolute_time_label
-    };
+    return record;
 }

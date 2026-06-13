@@ -11,7 +11,6 @@ export default defineConfig({
                 background: 'src/background/service_worker.ts',
                 content: 'src/content/content_script.ts',
                 popup: 'src/popup/popup.html',
-                detail: 'src/detail/detail.html',
                 dashboard: 'src/dashboard/dashboard.html',
                 devtools: 'src/devtools/devtools.html',
                 devtools_panel: 'src/devtools/devtools_panel.html'

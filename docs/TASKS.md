@@ -1,549 +1,11 @@
 # Capture All — TASKS.md
 
 > 基准：`docs/design/caputue-all/project/record-all/` (commit `f7fe756`)
+> 已完成任务（✅）归档至 `docs/archive/completed_tasks_2026-06-13.md`
 
 ---
-
-## P0 · 功能缺陷
-
 
 ## P0 · 功能缺陷（待修复）
-
-### ⛔ P0.56 导出时间字段仍为 UNIX 时间戳（P0.51 假修复，仅追加未替换）
-- **状态**：待修复 — 2026-06-13
-- **现象**：导出采集记录（ZIP 的 `network.jsonl`/`events.jsonl`，以及 JSON 导出）中时间字段仍是 UNIX 时间戳数字（如 `1781328968343`），不是用户设置时区的人类可读时间。
-- **根因（P0.51 假修复）**：P0.51 标记「已修复」，但实现只是**追加**了一个平行字段，原始 UNIX 字段原封未动：
-  1. `src/shared/system_time.ts:24` `add_absolute_system_time`：`...obj` 保留原 `absolute_time`(UNIX 数字)，只新增 `absolute_time_system_time` 字符串。
-  2. `src/shared/archive_builder.ts:248-253` network 请求：保留 `start_time_ms`/`end_time_ms`(UNIX)，旁边加 `start_time_system_time`；且 network 请求无 `absolute_time` 字段，`add_absolute_system_time(req)` 直接原样返回，等于没格式化。
-  3. JSON 导出同为「追加」模式，同样问题。
-- **要求（方案 A — 直接替换）**：
-  1. 原始时间字段（`absolute_time`/`start_time_ms`/`end_time_ms`/`timestamp` 等）直接替换为格式化字符串 `YYYY-MM-DD HH:mm:ss`（按 `system_time_timezone`），导出中**彻底不保留 UNIX 数字**，不保留 `*_raw`。
-  2. ZIP（`network.jsonl`/`events.jsonl`）与 JSON 导出行为一致，统一走替换。
-  3. network 请求的 `start_time_ms`/`end_time_ms` 也要替换，不能因无 `absolute_time` 字段而被跳过。
-- **测试**：补回归测试——导入真实导出 JSON/JSONL，断言所有时间字段为格式化字符串、且不存在任何纯数字 UNIX 时间字段。
-- **教训**：P0.51 核验时只确认「调了格式化函数」就判真，未区分**替换 vs 追加**。标 ✅ 前须按 TEST_STRATEGY §6 逐项验证实际产物。
-
-### ✅ P0.46 导出入口与 SW action 契约断裂，测试只做源码审计导致漏检
-- **状态**：已修复 — 2026-06-13
-- **触发日志**：`data/` 新日志中出现 `Export failed "Unknown action"`
-- **现象**：无法正常导出采集记录。popup 上的导出与采集记录面板里的导出报错不一致。
-- **直接根因**：导出入口发送的 message action 与 `src/background/service_worker.ts` 注册的 action 不一致。真实问题中 UI 侧发送 `action: 'get_capture_data'`，但 SW 只处理：
-  ```typescript
-  case 'get_session_data':
-      return get_capture_data(message.session_id);
-  ```
-  `get_capture_data` 是 SW 内部函数名，不是公开 message action。发到 SW 后落入 default，返回 `{ success: false, error: 'Unknown action' }`。
-- **为什么 popup 和采集记录面板报错不一样**：
-  1. popup 路径先在 message routing 层失败，收到 `Unknown action`，所以提示导出失败/未知 action
-  2. dashboard/detail 路径可能走旧的 `get_session_data` 或其他导出 action，进入后续数据组装/ZIP 构建/响应字段读取阶段，失败点不同，错误文案也不同
-  3. 三个导出入口（popup/dashboard/detail）各自硬编码 action 和响应读取字段，没有共享契约，错误不会统一
-- **测试为什么没有发现**：
-  1. `tests/popup_export.test.ts` 主要是 `readFileSync + toMatch` 源码正则，只验证源码里出现 `action: 'get_session_data'`、`download_blob`、`build_capture_filename` 等字符串，不触发真实 click handler，不捕获实际 `chrome.runtime.sendMessage` 参数
-  2. `tests/archive_entry.test.ts`、`tests/entry_unification.test.ts` 只验证入口 import 了 `build_archive` / `download_blob`，不验证运行时是否调用、不验证 action 是否被 SW 处理
-  3. `tests/export_utils.test.ts` 只测 `download_blob()`、文件名等工具函数；P0.40/P0.45/P0.53 入口统一部分仍是源码正则审计
-  4. `tests/live_data_queries.test.ts` 在测试文件里重新实现了 `get_capture_data()`，直接调 mock 存储层，完全绕过 `service_worker.ts` 的 `handle_message` switch
-  5. `tests/export_integrity.test.ts` 使用手写 fixture，不来自真实 `get_session_data -> build_archive -> download_blob` 链路
-  6. `tests/e2e-export.spec.ts` / `tests/e2e-export-content.spec.ts` 主要覆盖 dashboard 的 JSON/HAR/HTML 等导出，不覆盖 popup ZIP 导出按钮
-  7. `tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` 的断言文案写成 `get_capture_data 应成功`，但实际 action 应为 `get_session_data`，文案本身会误导排查
-- **高风险测试反模式**：
-  1. **源码正则审计替代行为测试**：字符串存在不等于该字符串在正确 handler 中被使用
-  2. **纯函数测试断链**：`build_archive()`、`download_blob()` 都可通过，但 UI 入口拿不到数据仍会失败
-  3. **mock 过宽**：`chrome.runtime.sendMessage` 或模拟函数不校验 action，任何 action 都可返回 success
-  4. **测试自测自**：测试复制生产逻辑，未调用真实 SW 路由
-  5. **硬编码 fixture**：导出数据结构由测试手写，无法发现真实返回字段漂移
-- **需要改什么**：
-  1. 把 popup/dashboard/detail 所有 ZIP 完整包导出入口统一为发送 `action: 'get_session_data'`
-  2. 不要把内部函数名 `get_capture_data` 当 message action 使用
-  3. 增加 UI action 集合与 SW handler 集合的契约测试：UI 发出的每个 action 必须被 `service_worker.ts` 处理
-  4. 增加 `get_session_data` 返回形状测试：返回值必须满足 `build_archive()` 需要的数据结构
-  5. 增加 popup 导出行为测试：点击完成态 `#exportBtn` 后实际发送 `get_session_data`，拿到数据后调用 `build_archive()` 和 `download_blob()`
-  6. 增加 dashboard/detail ZIP 导出行为测试：确认 action、response 字段、ZIP 构建输入一致
-  7. 修正 E2E 断言文案：`get_capture_data 应成功` → `get_session_data 应成功`
-  8. 逐步替换导出相关 `readFileSync + toMatch` 测试为行为测试；保留源码审计只能作为补充，不能作为主保护
-- **怎么改（最小路径）**：
-  1. 新增 `tests/sw_action_contract.test.ts`
-     - 从 `src/popup/popup.ts`、`src/dashboard/dashboard.ts`、`src/detail/detail.ts` 提取 `chrome.runtime.sendMessage({ action: '...' })`
-     - 从 `src/background/service_worker.ts` 提取 `case '...'`
-     - 断言 UI action 集合是 SW case 集合子集
-     - 断言不存在 `get_capture_data` 作为 UI action
-  2. 新增/改造 `tests/popup_export.test.ts`
-     - mock `chrome.runtime.sendMessage`
-     - 构造 finished capture 状态
-     - 触发 `#exportBtn.click()`
-     - 断言第一条 message 为 `{ action: 'get_session_data', session_id: finished_capture.capture_id }`
-     - mock 成功响应后断言 `download_blob()` 被调用，文件名为 `.zip`
-  3. 新增 `tests/export_action_response_contract.test.ts`
-     - 覆盖 `get_session_data` 返回 `success`、`capture/session`、`events`、`network_requests`、`console_events/console_logs`、`error_events`、`storage_changes`、`cookie_changes`
-     - 覆盖 `export_json` 返回 `json`、`export_jsonl` 返回 `jsonl`、`export_html` 返回 `html`、`export_har` 返回 `har`
-     - 断言前端读取字段与 SW 返回字段完全一致
-  4. 改 E2E：新增 `tests/e2e-popup-export.spec.ts`
-     - start capture → stop capture → popup 完成态点击导出 → 监听下载 → 验证 `.zip` 文件存在且可解包
-     - ZIP 至少包含 `capture.json`/`README`/`network_requests.jsonl`（按当前 archive_builder 实际产物命名断言）
-  5. 修正现有误导文案：`tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` 中 `get_capture_data 应成功` 改为 `get_session_data 应成功`
-- **验收标准**：
-  1. `npm test -- tests/sw_action_contract.test.ts tests/popup_export.test.ts tests/export_action_response_contract.test.ts` 通过
-  2. `npm run test:e2e -- --project=e2e-p0 tests/e2e-popup-export.spec.ts` 通过
-  3. 手动从 popup、dashboard、detail 三处导出同一采集记录，三处都成功下载 ZIP
-  4. 任意 UI action 改成未注册字符串时，契约测试必须失败
-  5. 任意 SW 导出响应字段改名时，对应前端契约测试必须失败
-- **影响文件**：
-  - `src/popup/popup.ts` — ZIP 导出 action 与 response 读取
-  - `src/dashboard/dashboard.ts` — ZIP 导出 action 与 response 读取
-  - `src/detail/detail.ts` — ZIP 导出 action 与 response 读取
-  - `src/background/service_worker.ts` — action 注册与导出响应字段
-  - `tests/popup_export.test.ts` — 从源码正则改为行为测试
-  - `tests/sw_action_contract.test.ts` — 新增 action 集合契约测试
-  - `tests/export_action_response_contract.test.ts` — 新增响应字段契约测试
-  - `tests/e2e-popup-export.spec.ts` — 新增 popup ZIP 导出 E2E
-  - `tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` — 修正断言文案
-
-### ✅ P0.47 sendMessage 超 64MB 崩溃 + 架构修复
-- **状态**：已修复 — 2026-06-13
-- **触发日志**：`data/capture_all_logs_2026-06-13_13-38-23.log` 中大量 `Message exceeded maximum allowed size of 64MiB`
-- **现象**：采集含图片后，popup 导出无反应、dashboard 详情页黑屏、所有依赖 `get_capture_data` 的功能全挂。
-- **根因**：P0.45 让采集层保存二进制 body（base64），`get_capture_data` 把全量数据（含 base64 body + 7 类事件）通过 `sendMessage` 传给页面，超过 Chrome 64MB 限制。不只是 body 问题——长时间采集（事件多）也会超。
-- **架构修复**：`get_capture_data` 改为只返回元数据（capture record + stats），页面侧直连 IndexedDB 读取详情（`read_capture_snapshot()`）。SW flush 后页面直接读 DB，不经过 sendMessage。
-- **测试为什么没发现**：
-  1. `tests/live_data_queries.test.ts` 自己重写了 `get_capture_data()` 直接读 IndexedDB，完全绕过 `sendMessage`，测不到大小限制
-  2. 所有测试 fixture 只有几条事件/请求，不可能触发 64MB 限制
-  3. 没有测试验证 `get_capture_data` 响应是否只含元数据（不含 events/network/bodies）
-  4. 没有测试验证 sendMessage 响应大小是否在安全范围内
-- **需要补的测试**（待实现）：
-  1. `tests/sw_response_contract.test.ts` — SW 响应契约：
-     - 断言 `get_capture_data` 响应不含 `events`/`network_requests`/`console_logs` 字段
-     - 断言响应只含 `success` 和 `capture`（元数据）
-     - 估算响应大小 < 10KB
-     - 对 `list_captures`、`get_status` 也验证大小安全
-  2. `tests/capture_data_reader.test.ts` — 页面侧直读：
-     - 验证 `read_capture_snapshot` 返回完整数据（events、network、console）
-     - 构造大数据场景（1000+ 条事件），验证读取正确
-  3. `tests/archive_builder.test.ts` 补充：
-     - 验证大数据场景（1000+ 请求）ZIP 生成不超时
-  4. 若有人把 `get_capture_data` 改回返回全量数据，契约测试必须失败
-- **影响文件**：
-  - `src/background/service_worker.ts` — `get_capture_data` 改为轻量返回
-  - `src/shared/capture_data_reader.ts` — 新建，页面侧直读
-  - `src/popup/popup.ts` / `src/dashboard/dashboard.ts` / `src/detail/detail.ts` — 改用直读
-
-### ✅ P0.48 跨域 PUT/POST 上传内容未抓取（cdp_failed）
-- **状态**：已修复 — 2026-06-13
-- **复现数据**：`chatgpt_web_reverse/data/capture_all_capture_1781328968343_uzvscx9_2026-06-13_14-00-33.zip`
-- **现象**：用户在 ChatGPT 上传文件（张屿川照片.png 981KB、代码.txt 3.4KB、clean_temp.bat 307B），files/library API 响应正确记录了文件列表和元数据，但上传到 oaiusercontent 的 PUT 请求 body 未被抓取，`response_body_status: cdp_failed`。
-- **具体证据**：
-  - `POST https://chatgpt.com/backend-api/files` — 200，`response_body_status: captured`（返回 upload_url）
-  - `POST https://chatgpt.com/backend-api/files/library` — 200，`response_body_status: captured`（返回文件列表，含 file_name/file_size/mime_type）
-  - `PUT https://sdmntprwestus3.oaiusercontent.com/files/.../raw` — 201，`response_body_status: cdp_failed`（上传内容丢失）
-  - `OPTIONS https://sdmntprwestus3.oaiusercontent.com/files/.../raw` — 200，`response_body_status: cdp_failed`（CORS 预检也失败）
-- **根因分析**：
-  - CDP `Network.getResponseBody` 对跨域请求（oaiusercontent.com 与 chatgpt.com 不同 origin）可能返回错误
-  - PUT 请求的 request body 是二进制文件内容，CDP 的 `Network.requestWillBeSent` 对 FormData/multipart 上传的 `postData` 可能为空或不完整
-  - OPTIONS 预检请求通常无 body，CDP 返回错误属于预期行为（但状态应为 `not_enabled` 而非 `cdp_failed`）
-  - 现有代码对 `cdp_failed` 不做区分——OPTIONS 无 body 的正常失败和真正的 body 获取失败用同一个状态
-- **影响**：
-  - 上传到 GPT 的文件内容无法在导出中还原
-  - 用户上传的图片、文档、代码等关键证据丢失
-  - 只能从 files/library 元数据知道"上传了什么"，无法知道"内容是什么"
-- **修复要点**：
-  1. 区分 `cdp_failed` 的原因：OPTIONS/HEAD 等无 body 方法应标 `not_enabled` 而非 `cdp_failed`
-  2. 对 PUT/POST 的 request body（上传内容）：尝试从 `Network.requestWillBeSent` 的 `postData` 或 `request.postDataEntries` 获取
-  3. 对跨域响应 body：检查 `Network.getResponseBody` 错误码，若为 `-32000`（No resource）则标 `not_enabled`（资源已释放），其他错误保留 `cdp_failed`
-  4. 考虑在 `Network.loadingFinished` 时立即获取 body，减少"资源已释放"的超时窗口
-  5. 补测试：模拟跨域 PUT 请求，验证 request body 采集和状态标记
-- **影响文件**：
-  - `src/background/network_capture.ts` — loadingFinished 处理、request body 提取、状态区分
-  - `tests/network_cdp.test.ts` — 跨域 PUT 测试用例
-
-### ✅ P0.49 ZIP 导出 network.jsonl 缺失 mime_type
-- **状态**：已修复 — 2026-06-13
-- **复现数据**：同 P0.48
-- **现象**：导出 ZIP 中 `network.jsonl` 的所有请求 `mime_type` 字段为 `null`，即使 response headers 中有 `content-type`。
-- **具体证据**：
-  - manifest 显示 3 张图片、343 个 body 文件
-  - `network.jsonl` 中 estuary/content 请求（PNG 2.7MB）：`mime_type: null`，但 body 文件已正确保存为 `bodies/response/230772.1173.bin`
-  - `file` 命令确认该文件是 `PNG image data, 1448 x 1086, 8-bit/color RGB`
-  - 所有 882 条网络请求的 `mime_type` 均为 `null`
-- **根因分析**：
-  - `NetworkRequestData` 接口有 `mime_type: string | null` 字段
-  - CDP `Network.responseReceived` 事件的 `response.headers` 包含 `content-type`
-  - `src/background/network_capture.ts` 在 `Network.responseReceived` handler 中提取 headers，但可能未正确写入 `mime_type` 字段
-  - webRequest 路径的 `onHeadersReceived` 也能获取 content-type，但同样可能未传递到最终数据
-  - `archive_builder.ts` 的 `ext_for_mime()` 函数依赖 `mime_type` 推断扩展名——当 mime 为 null 时所有文件都变成 `.bin`
-- **影响**：
-  - ZIP 中所有 body 文件扩展名为 `.bin`，无法通过扩展名识别文件类型
-  - 需要用 `file` 命令或手动检查才能确定实际格式
-  - 图片无法双击打开（系统不知道 .bin 是 PNG）
-  - `ext_for_mime()` 推断逻辑形同虚设
-- **修复要点**：
-  1. `Network.responseReceived` handler 中从 `params.response.headers` 提取 `content-type` 写入 `mime_type`
-  2. webRequest `onHeadersReceived` handler 中从 `details.responseHeaders` 提取 content-type 写入 `mime_type`
-  3. CDP path 的 `build_cdp_primary_network_event` 和 `build_cdp_body_event` 确保传递 `mime_type`
-  4. `network_correlator.ts` 的 `merge_matched`/`build_cdp_only_request`/`build_web_request_only_request` 确保 `mime_type` 不丢失
-  5. body_routing 的 `ext_for_mime()` 从网络请求的 response headers 提取 content-type 作为兜底
-  6. 补测试：验证 CDP responseReceived 后 `mime_type` 非空；验证 ZIP 中图片文件扩展名为 `.png`/`.jpg` 而非 `.bin`
-- **影响文件**：
-  - `src/background/network_capture.ts` — responseReceived handler、build_cdp_primary_network_event、build_cdp_body_event
-  - `src/background/network_correlator.ts` — merge_matched、build_cdp_only_request、build_web_request_only_request
-  - `src/shared/archive_builder.ts` — body 文件扩展名推断兜底
-  - `tests/network_cdp.test.ts` — mime_type 写入测试
-  - `tests/archive_builder.test.ts` — 扩展名推断测试
-
-### ✅ P0.50 MCP 桥接默认开启，用户未配置也自动启动
-- **状态**：已修复 — 2026-06-13
-- **现象**：扩展安装后 MCP 桥接默认开启，即使用户未配置 token/URL 也自动启动 bridge client，产生不必要的连接尝试和日志。
-- **期望行为**：MCP 桥接应默认关闭，用户在设置页主动开启后才启动。
-- **影响**：未使用 MCP 功能的用户也会看到 bridge 相关日志和错误，干扰排查。
-
-### ✅ P0.51 导出 ZIP 时间字段仍为 UNIX 时间戳，未使用用户设置时区
-- **状态**：已修复 — 2026-06-13
-- **复现数据**：`capture_all_capture_1781328968343_uzvscx9_2026-06-13_14-00-33.zip`
-- **现象**：导出 ZIP 中 `network.jsonl` 和 `events.jsonl` 的时间字段仍为 UNIX 时间戳（数字），不是用户在设置中选择的时区格式化时间。文件名中的日期正确（`2026-06-13_14-00-33`），但 JSON 内的时间字段没有格式化。
-- **期望行为**：所有时间字段应按用户设置的 `system_time_timezone` 格式化为人类可读时间（如 `2026-06-13 14:00:33`），与 JSON 导出的行为一致。
-- **历史修复参考**：P0.33/P0.38 修复了 JSON 导出的时间格式化（`add_system_times_to_capture_data`、`add_absolute_system_time`），但 ZIP 导出的 `archive_builder.ts` 可能未调用这些函数，或调用时传入的 timezone 参数不对。
-- **影响**：用户打开 network.jsonl 看到的是 `1781328968343` 而不是 `2026-06-13 14:00:33 (UTC+8)`，需要自行换算，违背"采集包直接可读"的设计目标。
-
-### ✅ P0.52 运行日志改用文件大小限制，默认 100MB
-- **状态**：已修复 — 2026-06-13
-- **现象**：当前运行日志用条目数量限制存储，不合理。应改为文件大小限制。
-- **要求**：
-  1. 日志最大存储改为文件大小限制，默认 100MB
-  2. 设置页去掉"最大储存条数"输入框和"当前日志数"显示
-  3. 设置页新增"最大日志大小"输入框（单位 MB，默认 100）
-  4. 设置页新增"当前日志大小"显示（实际占用 MB）
-  5. "最大日志大小"和"日志级别"放到同一行，有间距，不重叠
-
-### ✅ P0.53 导出目录仍未记住（采集记录/日志分开）
-- **状态**：已修复 — 2026-06-13
-- **现象**：导出采集记录和导出运行日志时，保存对话框没有回到上次选择的目录；修改"采集导出目录"配置也不生效，永远是默认目录。
-- **根因**：`last_dir` 回填机制从设计上跑不通。`chrome.downloads.search()` 返回磁盘**绝对路径**（如 `<USER_HOME>/Downloads/exports`），被 `track_export_dir()` 持久化；但 `chrome.downloads.download({filename})` 只接受**相对 Downloads 根**的相对路径。下次导出 `build_capture_filename` 用 `last_dir || config` —— stale 绝对路径既覆盖了用户配置目录，经 `normalize_download_path` 剥掉前导 `/` 后又被 Chrome 判为非法 → 回退默认目录。P0.40-R1 接入 `load_last_export_dirs`/`track_export_dir` 反而引入了这条覆盖链。
-- **修复**：移除整套 `last_dir` 持久化机制（`load_last_export_dirs`/`save_last_export_dir`/`track_export_dir`/`extract_dir_from_filename` 及两个 storage key）。导出目录唯一来源为用户配置（`export_capture_directory`/`export_log_directory`）；`saveAs` 对话框由 Chrome 自身记忆上次文件夹。`build_capture_filename`/`build_log_filename` 去掉 `last_dir` 参数。
-- **测试**：`tests/export_utils.test.ts` 改为验证「目录来自配置」「config 空时扁平文件名」「三入口不再引用 `load_last_export_dirs`/`track_export_dir`」「export_utils 不再导出持久化辅助函数」。
-
-### ✅ P0.54 采集记录面板列精简 + 7 种数据标签统计
-- **状态**：已修复 — 2026-06-13
-- **现象**：采集记录总面板有多余列（页面URL、标签、导出状态），且统计只显示部分数据（事件数、请求数、错误数），不是完整的 7 种数据标签。
-- **要求**：
-  1. 去掉"页面URL"列
-  2. 去掉"标签"列
-  3. 去掉"导出状态"列
-  4. 统计列改为 7 种标准数据标签：用户行为数、页面导航数、网络请求数、控制台数、错误异常数、Storage 数、Cookie 数
-  5. 列名使用标准数据标签名称（与 popup 7 标签一致）
-
-### ✅ P0.55 采集记录占用空间统计不含二进制文件
-- **状态**：已修复 — 2026-06-13
-- **现象**：采集记录面板显示的占用空间大小只统计了 IndexedDB 中的结构化数据，没有包含 ZIP 导出时 `bodies/` 目录下的二进制文件大小。P0.45 让采集层保存了 base64 二进制 body，这些数据在 IndexedDB 中占用空间，但当前统计函数 `est_bytes()` 用固定系数估算，不反映真实大小。
-- **要求**：占用空间统计应包含二进制 body 的实际字节数（从 `response_body_bytes`/`request_body_bytes` 字段累加），不用固定系数估算。
-
-### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
-- **状态**：已实现 — 2026-06-13
-- **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`
-- **实施计划**：`docs/superpowers/plans/2026-06-13-zip-archive-export.md`
-- **审阅**：`docs/review.md`
-- **现象**：CDP 返回 base64Encoded 的图片/字体等二进制响应被标 unsupported_binary、body 置 null；单 JSON 承载大二进制导致导出内存爆且 grep 受污染。
-- **修复**：
-  1. 采集层保存二进制为 base64（不再丢弃），记录 `response_body_encoding`/`response_body_bytes`/`request_body_mime`，`too_large` 时保留 encoding 元数据
-  2. 新增 ZIP 完整包导出：页面侧 `archive_builder` 组装（`src/shared/archive_builder.ts`），走已有 `get_capture_data` 通道，`fflate.zipSync` 打包，bodies/ 独立文件 + jsonl 引用 + README
-  3. body 上限统一为采集上限(100MB)+内联阈值(32KB)，取代原 1MB 双上限
-  4. popup/dashboard/detail 三个入口均接入 ZIP 导出
-  5. 采用子代理驱动开发（subagent-driven），9 个独立 task，TDD 红绿重构
-- **影响文件**：network_capture.ts、archive_builder.ts、body_routing.ts、hash.ts、types.ts、constants.ts、redaction.ts、external_cdp_bridge_client.ts、body_capture_coordinator.ts、service_worker.ts、cdp_handler.ts、network_hook.ts、popup/dashboard/detail、export_utils.ts、export_settings.ts、设置 UI
-
-### ✅ P0.31-R1 CDP 路径 resource_type 未归一化，大写 CDP 类型混入导出
-- **状态**：已修复 — 2026-06-12
-- **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`
-- **现象**：P0.31 修复后导出仍有两套 resource_type 混存：
-  - webRequest 路径已归一：`font`/`script`/`stylesheet`/`xhr`（小写，RESOURCE_TYPE_MAP 生效）
-  - CDP 路径未归一：`Font`/`Stylesheet`/`Script`/`Image`/`Media`/`Manifest`/`Fetch`（PascalCase，CDP 原始值）
-  同一导出 JSON 中 `type: "Font"` 和 `type: "font"` 并存，`type: "Fetch"` 和 `type: "xhr"` 并存。
-- **根因**：RESOURCE_TYPE_MAP（line 441）+ `resolve_resource_type()`（line 458）仅在 `build_network_event` 的 webRequest 路径（line 537）被调用。CDP 路径 6 处直接使用原始值，绕过映射：
-  1. `network_capture.ts:219` — `Network.requestWillBeSent` CDP 事件存储 `params?.type || 'other'`（Chrome CDP 返回 PascalCase：`Document`/`Stylesheet`/`Script`/`Font`/`Image`/`Media`/`Fetch`/`Manifest`/`XHR`/`Ping`/`WebSocket`/`Other`）
-  2. `network_capture.ts:241` — `Network.responseReceived` CDP 事件，同上
-  3. `network_capture.ts:348` — `build_cdp_body_event()` 取 `meta?.resource_type || 'other'`（直接透传 CDP meta 原始值）
-  4. `network_correlator.ts:74` — `merge_matched()` 取 `web_meta.resource_type || cdp_event.resource_type`（两边均可能为原始值）
-  5. `network_correlator.ts:120` — `build_cdp_only_request()` 直接 `cdp_event.resource_type as NetworkRequestData['resource_type']`（PascalCase CDP 值强转）
-  6. `network_correlator.ts:163` — `build_web_request_only_request()` 直接 `web_meta.resource_type as NetworkRequestData['resource_type']`（webRequest 原始值强转）
-- **影响**：
-  - 导出 JSON 中 resource_type 字段同义多值，下游按 type 过滤/分组失效
-  - Dashboard 网络列表 type 列显示 `Font`/`font` 两种，用户困惑
-  - 统计分析无法信任 type 字段
-- **修复要点**：
-  1. 在 `CdpRequestMeta` 和 `CdpBodyEvent` 存储 resource_type 时调用 `resolve_resource_type()` 归一化（或添加 CDP 大写→标准小写映射表：`{Document: 'document', Stylesheet: 'stylesheet', Script: 'script', Font: 'font', Image: 'image', Media: 'media', Fetch: 'fetch', Manifest: 'other', XHR: 'xhr', Ping: 'ping', WebSocket: 'websocket', Other: 'other'}`）
-  2. `network_correlator.ts` 中 `build_cdp_only_request`/`build_web_request_only_request`/`merge_matched` 3 处写入前调用 `resolve_resource_type()`
-  3. 补测试：给定 CDP 大写类型字符串，验证输出为归一化小写标准类型
-- **影响文件**：
-  - `src/background/network_capture.ts` — CdpRequestMeta 写入处 + build_cdp_body_event
-  - `src/background/network_correlator.ts` — merge_matched / build_cdp_only_request / build_web_request_only_request
-  - `tests/network_capture.test.ts` — CDP 类型归一化测试
-
-
-### ✅ P0.39 CDP retry 跨 tab 假成功：dbg_tab_id guard 不检查 tab_id 匹配
-- **状态**：已修复 — 2026-06-12
-- **复现数据**：`data/capture_all_capture_1781265766247_7vafphp.json` + `data/capture_all_logs_2026-06-12_20-06-14.log`
-- **现象**：从 `chrome://extensions/` 启动采集 → CDP attach 失败（预期）→ 切换到正常网页后 CDP retry 日志显示多次 "Body capture retry succeeded"，但导出 JSON 中 93 条 `network_requests` 全部 `response_body: null`、`cdp: {}`、`response_body_status: not_enabled`，同时 `body_capture_mode` 显示 `extension_cpd`（误导）。
-- **根因**：`src/background/network_capture.ts:187` — `enable_response_body_capture()` 的 guard 条件：
-
-  ```typescript
-  if (dbg_tab_id !== null) return { success: true };  // ← 不检查 dbg_tab_id === tab_id
-  ```
-
-  **完整链路**：
-  1. 初始 CDP attach 失败（chrome:// URL），`dbg_tab_id = null`
-  2. Tab 切换到 **1793063486**（中间 tab）→ retry 成功，`dbg_tab_id = 1793063486`
-  3. Tab 切换到 **1793063493**（chrome://newtab/，仍受限）→ retry 调用 `enable_response_body_capture(1793063493)`，第 187 行 `dbg_tab_id !== null` 为 true，直接返回 `{ success: true }`，**没有实际 attach 到新 tab**
-  4. Tab 1793063493 URL 变为 `https://opencode.ai/`（正常 URL）→ retry 同样被第 187 行短路，返回假成功
-  5. CDP `Network.*` 事件只来自 tab 1793063486，webRequest 事件来自 tab 1793063493（用户实际浏览的 tab），`find_matching_cdp_request()` 永远匹配不到 → 所有请求 `response_body_status: not_enabled`
-
-  日志证据（20:02:47 → 20:02:56）：
-  ```
-  20:02:47 CDP body capture enabled {"tab_id":1793063486,"already_attached":true}  ← 唯一一次真正 attach
-  20:02:50 Body capture retry succeeded on tab 1793063478    ← 假成功（dbg 粘在 1793063486）
-  20:02:51 Body capture retry succeeded on tab 1793063493    ← 假成功（dbg 粘在 1793063486）
-  20:02:56 Body capture retry succeeded on tab 1793063493 (URL changed)  ← 假成功（dbg 粘在 1793063486）
-  ```
-  只有 tab 1793063486 触发了真正的 "CDP body capture enabled"，其他 3 次 retry 全部假成功。
-
-- **加重因素**：`body_capture_mode` 由 `config.capture_response_body` 静态决定（`network_capture.ts:560`），不反映 CDP 实际工作状态，retry 假成功后 `body_capture_coordinator` 的 `coordinator_state.mode` 也被覆盖为 `extension_cdp`，日志和元数据都显示正常但实际 body 全空。
-
-- **为什么 P0.10 修复未能防止此 bug**：P0.10 修复了三系统 CDP 抢占问题（统一 attach），并增加了 tab 切换/URL 跳转时的 retry 路径。但 `enable_response_body_capture` 的 guard 条件从一开始就没有考虑「CDP 已 attach 到其他 tab」的情况。P0.10 的 retry 路径依赖 `enable_response_body_capture` 返回 success，但该函数对跨 tab 调用始终返回 success，retry 路径无法感知失败。
-
-- **测试为什么没发现**（三层遗漏）：
-
-  **L1 — 单元测试把 bug 当正确行为**（`tests/network_cdp.test.ts:91-99`）：
-  ```typescript
-  it('returns success when already attached', async () => {
-      // tab 1 attach 成功
-      await enable_response_body_capture(1, false);
-      expect(mock_chrome_debugger.attach_count).toBe(1);
-      // tab 2 调用 → 期望 success + 不 re-attach
-      const result = await enable_response_body_capture(2, false);
-      expect(result.success).toBe(true);           // ← 明确验证了这个 bug
-      expect(mock_chrome_debugger.attach_count).toBe(1);  // ← 验证没有 re-attach
-  });
-  ```
-  测试用例把「dbg 在 tab 1 但对 tab 2 返回 success」当作**期望行为**来验证，因为当时的设计假设是「一个采集周期只监听一个 tab」。P0.10 引入多 tab retry 后，这个假设被打破，但测试没有更新。
-
-  **L2 — E2E CDP retry 测试不验证 body 内容**（`tests/e2e-cdp-retry.spec.ts`）：
-  - 只验证 `body_capture_mode` 存在（line 108），不检查 `network_requests[].response_body` 非空
-  - `console_events` 用 `if (data.console_events.length > 0)` 条件跳过（line 99），零数据不算失败
-  - 单 tab 场景（chrome://extensions → test-page.html）只有一个 tab 切换，CDP 粘在正确的 tab 上时碰巧能工作；多 tab 切换场景（用户实际使用：chrome://extensions/ → 多个中间 tab → opencode.ai）才会触发此 bug
-
-  **L3 — 无多 tab 切换 retry 测试**：所有 CDP retry 测试只模拟「一个受限 tab → 一个正常 tab」的线性切换。真实场景中 Service Worker 为所有已打开的 tab 各触发一次 `tabs.onActivated` retry，导致多次 `start_body_capture` 调用顺序竞争：先成功的 tab 锁定 `dbg_tab_id`，后续 tab 的 retry 全部假成功。
-
-- **文档关于自动 re-attach 的说明**：
-  - P0.10 任务描述记录了 CDP 抢占问题和统一 attach 修复，但未描述 `dbg_tab_id` guard 的行为约束
-  - Commit `fbd3046`（标签页切换时重试 CDP attach）和 `031e912`（同标签页 URL 跳转时也重试 CDP attach）的 message 描述了 retry 触发条件，未提及 `enable_response_body_capture` 的复用限制
-  - `docs/E2E_GAP.md:185-200` 记录了 CDP retry E2E 的测试场景，只覆盖单 tab 切换
-  - **没有文档描述 `enable_response_body_capture` 的 `dbg_tab_id` guard 行为和跨 tab 调用的局限性**
-  - 2026-06-12 已在 `docs/specs/architecture.md` §2.7 和 `docs/specs/data_flow.md` §3 写入 CDP retry 机制（触发条件、重试流程、关键状态变量、已知约束）
-
-- **修复要点**：
-  1. `enable_response_body_capture` line 187 guard 改为 `if (dbg_tab_id === tab_id) return { success: true }`；或当 `dbg_tab_id !== tab_id` 时先 detach 旧 tab 再 attach 新 tab
-  2. 对应的 `body_capture_coordinator.start_body_capture` 应能区分「已在目标 tab attach」和「在其他 tab attach」两种情况
-  3. 补单元测试：`enable_response_body_capture(1)` 成功后，`enable_response_body_capture(2)` 应触发 detach(1) + attach(2)，而非直接返回 success（除非 tab_id 匹配）
-  4. 补 E2E：多 tab 场景（受限 tab → 中间 tab A → 目标 tab B），验证目标 tab B 的 `network_requests[].response_body` 非空
-  5. 补 E2E：验证 `dbg_tab_id` 始终等于当前活跃 tab
-
-- **影响文件**：
-  - `src/background/network_capture.ts` — `enable_response_body_capture` line 187 guard
-  - `tests/network_cdp.test.ts` — "returns success when already attached" 用例重写
-  - `tests/e2e-cdp-retry.spec.ts` — 增加 response_body 非空断言 + 多 tab 场景
-
-
-### ✅ P0.35 采集完成态导出按钮点击无反应
-- **状态**：已修复 — 2026-06-12
-- **现象**：popup 采集完成状态显示「导出」按钮（P0.26 新增），但点击后无任何反应，不触发下载、不弹出保存对话框、控制台无报错。
-- **期望行为**：点击「导出」按钮应直接触发采集数据导出（默认 JSON 格式），弹出浏览器保存对话框。
-- **影响**：P0.26 按钮拆分为无效改动，用户仍必须进入详情页才能导出。
-- **初步判断**：`wire_view()` 中 `exportBtn` 的 click 事件绑定可能未正确注册，或事件处理函数中 `chrome.runtime.sendMessage` 调用方式有误（handler 不存在/action 名不匹配/权限不足）。`render_saved()` 每次状态切换重新 innerHTML 赋值，`wire_view()` 之后绑定可能被覆盖或过早调用。也可能是 `wire_view()` 只在首次调用，后续 `render()` 更新 innerHTML 后未重新绑定 `exportBtn` 事件。
-- **修复要点**：
-  1. 跟踪 `wire_view()` 调用时机 vs `render_saved()` innerHTML 替换时机
-  2. 确认 `exportBtn` click handler 中 message action 在 SW 中已注册
-  3. 补测试：完成态点击 exportBtn 触发 chrome.runtime.sendMessage
-- **影响文件**：
-  - `src/popup/popup.ts` — wire_view / render / render_saved
-  - `src/background/service_worker.ts` — message handler 注册
-- **测试遗漏原因**：
-  1. `tests/popup_layout.test.ts` 只断言 HTML 中存在 `exportBtn` 元素 id，不对元素执行 click 事件，不模拟 `chrome.runtime.sendMessage` 调用，不验证下载触发器
-  2. 无测试覆盖 popup 与 SW 的 message 往返（`chrome.runtime.sendMessage` 的 action 和参数）
-  3. 无 E2E 测试验证「采集完成 → 点击导出按钮 → 浏览器弹出保存对话框」完整链路
-  4. 对比 dashboard 的 `export_session()`（有完整 await+Blob+download 链路），popup 只 fire-and-forget，无人发现差异因无测试对比两处导出路径
-
-
-### ✅ P0.36 采集详情页「用户行为」标签页显示无数据
-- **状态**：已修复 — 2026-06-12
-- **根因**：`detail.ts` 的 `render_events()` 使用了错误的 type 白名单 `['mouse_event', 'keyboard_event', 'scroll_event', 'dom_mutation']`，其中 `dom_mutation` 不是实际事件类型，而 content script 上报的 `input_event` 缺失。同时 `storage.ts` 未实现周期性 flush，少量事件可能滞留内存 buffer 未写入 IndexedDB。
-- **修复内容**：
-  1. `src/detail/detail.ts` 行 205：白名单修正为 `['mouse_event', 'keyboard_event', 'scroll_event', 'input_event']`
-  2. `src/detail/detail.ts` 行 348：`get_event_detail()` 的 `dom_mutation` case 替换为 `input_event`
-  3. `src/background/storage.ts`：新增 `start_periodic_flush()` / `stop_periodic_flush()`，利用已定义的 `FLUSH_INTERVAL_MS`（1s）周期性 flush 缓冲区
-  4. `src/background/service_worker.ts`：采集开始时调用 `start_periodic_flush()`，停止时调用 `stop_periodic_flush()`
-
-
-### ✅ P0.37 导出文件名不含 date，未使用系统时区
-- **状态**：已修复 — 2026-06-12
-- **现象**：导出采集记录文件名格式为 `capture_all_capture_{capture_id}.json`（如 `capture_all_capture_1781265766247_7vafphp.json`），不包含 `{date}` 占位符对应的时间戳。文件名 date 未按用户设置的系统时区格式化。
-- **期望行为**：导出文件名应包含用户设置时区的日期时间，格式如 `capture_all_{capture_id}_2026-06-12_20-02-46.json`（browser/UTC+8 时区）。
-- **影响**：用户无法从文件名获知导出时间，P0.22（文件名用时区时间）实际未生效。
-- **根因**：`export_session()`（`src/dashboard/dashboard.ts:368-369`）直接硬编码文件名：
-  ```typescript
-  const capture_filename = capture_dir
-      ? `${capture_dir}/capture_all_${id}.${ext}`
-      : `capture_all_${id}.${ext}`;
-  ```
-  完全不调用 `build_export_filename()`，`{date}` 模板从未参与实际下载路径。`build_export_filename()` 及其测试独立存在但未被实际导出流程使用。
-- **影响文件**：
-  - `src/shared/export_settings.ts` — build_export_filename / 模板替换
-  - `src/dashboard/dashboard.ts` — 导出入口文件名拼接
-  - `src/background/exporter.ts` — SW 端导出文件名
-- **测试遗漏原因**：
-  1. `tests/export_settings.test.ts` 测试了 `build_export_filename()` 函数本身（含 `{date}` 模板替换和时区格式化），但没发现该函数从未被 `export_session()` 实际调用
-  2. `tests/e2e-export.spec.ts` 只验证导出文件可下载/内容可解析，不捕获最终传给 `chrome.downloads.download` 的 `filename` 参数值
-  3. 无集成测试连接「用户配置的 filename_template → 实际下载文件名」完整链路
-  4. `export_session()` 的硬编码文件名路径与 `build_export_filename()` 独立存在，两个模块各自有测试但无交叉验证
-
-
-### ✅ P0.38 导出 JSON 顶层时间字段仍为 UTC，system_time_timezone 未写入
-- **状态**：已修复 — 2026-06-12
-- **现象**：导出 JSON 中 `started_at: "2026-06-12T12:02:46.247Z"`、`ended_at: "2026-06-12T12:03:04.157Z"` 仍为 UTC `Z` 格式，P0.33 新增的 `*_time_label`/`*_system_time` 字段虽存在且正确（`20:02:46 (browser)`），但顶层主要时间字段 `started_at`/`ended_at` 用户第一眼看到的就是 UTC，容易误判时区设置未生效。同时 `system_time_timezone` 字段为 `undefined`，未写入导出 JSON，用户无法从导出文件确认当前时区设置。
-- **期望行为**：`started_at`/`ended_at` 等顶层时间字段应直接使用用户设置时区格式化（或至少在显眼位置标注人读时间），`system_time_timezone` 必须写入导出 JSON。
-- **影响**：用户看到 `Z` 时间后判断「跟随浏览器」未生效，P0.22/P0.33 修复实际未覆盖顶层字段。
-- **根因**：
-  1. `add_system_times_to_capture_data()` 只追加 `*_system_time` 后缀字段（如 `start_time_system_time`），不替换原有的 `started_at`/`ended_at` 值
-  2. `system_time_timezone` 未从 `user_config` 传入导出数据流
-- **影响文件**：
-  - `src/background/exporter.ts` — add_system_times_to_capture_data
-  - `src/shared/system_time.ts` — format_system_time / 时间字段转换
-- **测试遗漏原因**：
-  1. `tests/system_time.test.ts` P0.33 新增测试只断言 `*_time_label` 字段存在且不以 `Z` 结尾，不检查顶层 `started_at`/`ended_at` 是否仍为 UTC
-  2. 无测试验证导出 JSON 的 `system_time_timezone` 字段非空
-  3. `add_system_times_to_capture_data()` 的测试（如果有）只验证追加字段的存在性，不验证原始字段被替换
-
-
-### ✅ P0.40-R1 导出文件夹位置未记住，采集记录/日志目录未分开回填
-- **状态**：已修复 — 2026-06-13
-- **现象**：用户在保存对话框中选择导出目录后，下次导出没有回到上次目录；采集记录导出和日志导出也没有分别记住各自位置。
-- **根因**：`src/shared/export_utils.ts` 已实现 `last_capture_export_dir` / `last_log_export_dir` 两个独立 key、`load_last_export_dirs()`、`track_export_dir()`，但实际入口只调用 `download_blob()`：
-  1. `src/popup/popup.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
-  2. `src/dashboard/dashboard.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
-  3. `src/detail/detail.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
-  4. `src/dashboard/dashboard.ts` 日志导出未读取 `log_dir`，下载完成后未 `track_export_dir(..., 'log')`
-- **为什么测试没发现**：`tests/export_utils.test.ts` 只验证了工具函数自身和入口 `import download_blob`，没有验证实际入口是否调用 `load_last_export_dirs()`、是否把 last dir 传入文件名构建、是否在下载完成后按 `capture`/`log` 分别 track。
-- **修复**：所有采集记录导出入口读取 `capture_dir` 并 track `capture`；日志导出读取 `log_dir` 并 track `log`。补回归测试锁定两个目录必须独立读取和记录。
-- **影响文件**：
-  - `src/shared/export_utils.ts` — 已有工具函数保持不变
-  - `src/popup/popup.ts` — 采集记录导出读取/记录 capture 目录
-  - `src/dashboard/dashboard.ts` — 采集记录导出读取/记录 capture 目录；日志导出读取/记录 log 目录
-  - `src/detail/detail.ts` — 详情页导出读取/记录 capture 目录
-  - `tests/export_utils.test.ts` — 新增入口级回归测试
-
-
-### ✅ P0.40 popup 导出按钮无法选择导出文件夹（含导出代码碎片化）
-- **状态**：已修复 — 2026-06-13
-- **修复内容**：
-  1. 创建 `src/shared/export_utils.ts` 统一导出模块：`download_blob()` + `build_capture_filename()` + `build_log_filename()` + 目录持久化
-  2. popup exportBtn → 改用 `download_blob(blob, filename, { save_as: true })` + `build_export_filename()`，统一 `chrome.downloads.download` 路径
-  3. dashboard `export_session()` → 改用 `download_blob()` + `build_capture_filename()`
-  4. dashboard 日志导出 → 改用 `download_blob()` + `build_log_filename()`
-  5. detail `download_export()` → 改用 `download_blob()`
-  6. `chrome.storage.local` 中分别存储 `last_capture_export_dir` / `last_log_export_dir`，下载完成后通过 `track_export_dir()` 自动提取并持久化
-  7. `chrome.d.ts` 补充 `downloads.search`、`downloads.onChanged`、`runtime.lastError` 类型声明
-  8. 测试：`tests/export_utils.test.ts`（20 tests） + 更新 `tests/popup_export.test.ts`
-
-
-### ✅ P0.44 Body 大小限制改为可配置（1MB 默认 + 设置 UI）
-- **状态**：已修复 — 2026-06-13
-- **详细文档**：`docs/P0.44_BODY_SIZE_CONFIG.md`
-- **现象**：请求体限制 10KB、响应体限制 50KB，硬编码。上次采集 16 条请求超 50KB 被截断。
-- **修复要点**：
-  1. 默认值改为 1MB
-  2. UserConfig 新增 `max_request_body_bytes` / `max_response_body_bytes`
-  3. 采集代码改为从 config 读取（非全局常量）
-  4. Dashboard 设置页面添加数字输入框
-- **影响文件**：
-  - `src/shared/constants.ts` — 默认值 + DEFAULT_USER_CONFIG
-  - `src/shared/types.ts` — UserConfig
-  - `src/background/network_capture.ts` — 4 处大小检查
-  - `src/dashboard/dashboard.ts` — 设置 UI
-
-
-### ✅ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
-- **状态**：已修复 — 2026-06-13
-- **根因**：`get_capture_data` 读取 IndexedDB 事件之前未 flush 写入缓冲区。统计计数 (`user_action_count`) 在事件写入时通过 `persist_stats()` 立即持久化到 capture 记录，但事件数据经 `write_events` 进入 per-store 缓冲区后需等 `FLUSH_INTERVAL_MS`（1s）周期 flush 才落盘到 IndexedDB。用户在 1s 窗口内查看详情页时，stats 已更新但事件未落盘，`get_events_by_category('user_action')` 返回空数组，导致 user_action tab 渲染「暂无数据」。
-- **现象**：采集记录详情页统计数据明确显示采集到了多条用户行为事件，但点击「用户行为」标签页后内容区域显示「暂无数据」。
-- **修复**：`get_capture_data` 在并行查询前先 `await flush_all()`，确保所有缓冲区事件落盘后再读取。dashboard 和独立详情页共享同一数据加载路径（均调用 `get_capture_data`），一处修复覆盖两个入口。
-- **影响文件**：
-  - `src/background/service_worker.ts` — `get_capture_data` 前置 flush_all
-  - `tests/p043_flush_before_read.test.ts` — 新增单测覆盖
-
-
-### ✅ P0.41 Response Body 采集时序竞态 — web_request 路径 ~98% not_enabled
-- **状态**：已修复 — 2026-06-12（CDP-first 架构重构）
-- **详细文档**：`docs/P0.41_BODY_CAPTURE_RACE.md`
-- **现象**：导出 JSON 中 `web_request` 路径的请求 ~98% 为 `response_body_status: "not_enabled"`，`extension_cdp` 路径正常。
-- **根因**：`find_matching_cdp_request` 匹配成功后从 `cdp_request_meta` 删除条目，导致后续 `find_cdp_candidates` 看到 0 候选 → deferred 条目 `pending_cdp_ids` 为空 → 必然超时 → not_enabled。次要原因：页面加载时 CDP 事件晚于 webRequest，`cdp_request_meta` 初始为空。
-- **修复要点**：
-  1. `find_matching_cdp_request` 匹配到但无 body 时，不删除 `cdp_request_meta` 条目，将该 CDP ID 传入 deferred `pending_cdp_ids`
-  2. 或将删除操作延迟到 body 确认可用后
-  3. 补测试：deferred 条目在 `find_matching_cdp_request` 匹配后仍有候选
-- **影响文件**：
-  - `src/background/network_capture.ts` — handle_completed / find_matching_cdp_request / find_cdp_candidates
-  - `tests/network_cdp.test.ts` — deferred 匹配测试
-
----
-
-## ✅ 用户加的bug记录（全部已修复）
-
-以下 bug 都要找原因为什么测试没有发现，测试有问题就补测试，文档有问题就改文档，最后才是改代码解决 bug。我要的是这次错了修正后以后不再犯。
-
-
----
-
----
-
-## 测试策略改进 (2026-06-13)
-
-> 详细文档：`docs/TEST_STRATEGY.md`
-> 起因：P0.36/P0.38/P0.39/P0.40/P0.41/P0.43 共 6 个 bug 均为用户发现而非测试发现。当前 542 个测试几乎全是孤立单元测试（mock 一切），缺少跨模块协作验证。
-
-### ✅ T0.1 回归快照测试
-
-- **目的**：每个已修复 P0 bug 一个断言，防复发
-- **文件**：`tests/regression_smoke.test.ts`
-- **测试项**：
-  - P0.31: 导出 JSON 中 resource_type 全小写
-  - P0.38: started_at 不含 'Z'，system_time_timezone 非空
-  - P0.39: enable_response_body_capture(1) 后 enable_response_body_capture(2) 触发 detach+re-attach
-  - P0.40: 三个导出入口均 import download_blob from export_utils
-  - P0.41: not_enabled 占比 < 50%
-  - P0.43: stats.user_action_count === events.filter(user_action).length
-
-### ✅ T0.2 数据管道测试
-
-- **目的**：验证「写入 → flush → 读取」闭环一致性，stats 计数与 event 数组长度匹配
-- **文件**：`tests/pipeline_consistency.test.ts`
-
-### ✅ T0.3 导出闭环测试
-
-- **目的**：导入真实导出 JSON，验证字段完备（时区、resource_type、capture_method、body_status 分布）
-- **文件**：`tests/export_integrity.test.ts`
-
-### ✅ T0.4 渲染数据一致性测试
-
-- **目的**：stats 数字 vs UI 渲染行数，确保每个 tab 都有数据行
-- **文件**：`tests/detail_render_consistency.test.ts`
-
-### ✅ T0.5 入口去重审计测试
-
-- **目的**：扩展 P0.40 修复的 import 检查模式到所有共享函数（redaction、build_export_filename 等）
-- **文件**：`tests/entry_unification.test.ts`
-
-### ✅ T0.6 E2E 断言收紧
-
-- **目的**：去掉条件跳过，改为强制断言
-- **影响文件**：`tests/e2e-export.spec.ts`、`tests/e2e-detail-tabs.spec.ts`、`tests/e2e-cdp-retry.spec.ts` 等
-- **具体**：
-  - `if (data.console_events.length > 0)` → 强制 `expect(data.console_events.length).toBeGreaterThanOrEqual(0)`
-  - 导出验证：`expect(body_capture_mode).not.toBe('extension_cdp')` → 改为检查 `not_enabled` 占比
-  - detail tab：每个 tab 断言至少有一行数据
 
 ---
 
@@ -591,3 +53,559 @@
 3. **mock 数据与小写/标准值，CDP 实际给 PascalCase**：例：network 测试全用小写输入，CDP 给 `Document`/`Fetch`。
 4. **条件跳过代替强制断言**：`if (length > 0) { expect... }` 掩盖零数据问题。
 
+---
+
+# 已知 Bug 根因分析、TDD 修复与防复发记录
+
+记录日期：2026-06-14
+
+## 总结
+
+- 已分析的已知 bug 数量：5（BUG-001 ~ BUG-005）
+- 已修复的 bug 数量：5
+- 部分修复的 bug 数量：0
+- 未修复或需要人工确认的问题：0（连带问题已记录，独立立项）
+- 是否存在共同根因：是（局部）
+- 共同根因说明：
+  - BUG-001 / BUG-002 都在归档导出层（archive_builder），一个是「字段过滤缺失」、一个是「jsonl 末尾换行符缺失」，共同暴露归档出口缺少契约测试与字段白名单。
+  - BUG-003 / BUG-004 都涉及「子模块对采集开始事件不可达」：BUG-003 是 CDP 子目标 lifecycle 漏处理 Runtime 域，BUG-004 是 content_script 对 SW 采集开始消息一次性订阅错过。两者均表现为「标签开启但 0 数据」。
+- 主要测试缺口：
+  - 归档层无「counts 与 jsonl 行数一致」「字段不含已删概念」的契约测试。
+  - console_capture 测试为纯函数副本，未触真实 CDP 事件链路。
+  - content_script 不可直接 import，导致其与 SW 的时序无单测覆盖。
+  - network_capture 无「自身 origin / Bridge URL 应排除」的边界规则测试。
+- 主要文档或需求问题：
+  - jsonl 行终止符规范未在 docs/specs/data_model.md 显式约定。
+  - content_script ↔ SW 时序在 docs/specs/data_flow.md 描述较薄。
+  - CDP 子目标 lifecycle 架构约束未文档化。
+- 已增加的防复发措施：
+  - archive_builder 新增 jsonl 末尾换行符契约测试 + mode 字段过滤契约测试。
+  - console_capture 重写为真实 CDP 事件链路测试（主目标/子目标/非 console 三路径）。
+  - content_script 新增静态源码契约测试 + poll_capture_status 独立模块单测。
+  - network_capture 新增 is_self_origin_url 7 用例。
+  - 5 个 bug 均补充反向回归断言。
+- 已运行的验证命令：
+  - `npx tsc --noEmit` — 无错误
+  - `npm test`（vitest 全量） — 654/654 PASS
+  - `npm run build` — 成功，输出 artifacts/dist/
+- 失败或跳过的验证命令：
+  - E2E（npm run test:e2e）— 需宿主 Chrome（Windows）环境，本会话未运行；子代理已用单测+契约测试覆盖核心路径。
+- 剩余风险：
+  - BUG-003 连带：exception_capture 存在同类子目标 Runtime.enable 缺口（未修，独立立项）。
+  - BUG-002 连带：stats.request_count vs counts.network、stats.event_count vs counts.events 口径偏差（未修，独立立项）。
+  - BUG-001 连带：agent_mcp_client.test.ts 仍传 `mode: 'standard'` 作为 MCP start_recording 参数（测透传语义，service_worker 已不消费，MCP 接口层清理独立立项）。
+  - BUG-004 连带：SW 端 chrome.tabs.sendMessage 失败未重试（建议加 2~3 次短延迟重试，与 content_script 轮询形成双保险）。
+  - 真实 ChatGPT 环境 CDP / content_script 行为需 E2E 验证。
+
+## Bug 详情
+
+### BUG-001：manifest mode:standard 脏数据
+
+#### 负责子代理
+
+BUG-001 子代理
+
+#### 状态
+
+已修复
+
+#### Bug 现象
+
+导出的采集归档 manifest.json 中 `capture` 对象包含 `"mode": "standard"` 字段，违反 CLAUDE.md「已删除概念：模式切换/标准采集」。
+
+#### 触发条件
+
+任意一次采集完成后导出 ZIP 归档，解压检查 manifest.json。
+
+#### 影响范围
+
+所有导出归档的 manifest.json。字段为纯死数据，无业务消费，但污染导出产物、违反产品术语约定、可能误导下游消费者（如 AI Agent）认为存在模式切换功能。
+
+#### 涉及文件
+
+- 源码文件：src/shared/types.ts、src/background/service_worker.ts、src/background/session_manager.ts、src/popup/popup.ts、src/shared/archive_builder.ts
+- 测试文件：tests/archive_builder.test.ts、tests/e2e-capture-local.spec.ts、tests/e2e-capture-baidu.spec.ts、tests/system_time.test.ts、tests/agent_data_queries.test.ts、tests/session_manager.test.ts、tests/stop_capture.test.ts
+- 文档文件：无（CLAUDE.md 已有约定，本次无需补充）
+
+#### 代码根因分析
+
+- 相关调用链：service_worker/popup 构造 CaptureRecord（写入 mode:'standard'）→ 存 IndexedDB → archive_builder.build_archive 读取 → `capture: capture_with_times` 整对象序列化进 manifest.capture
+- 直接原因：CaptureRecord 和 CaptureStartedData 类型保留了 `mode: 'standard'` 死字段，4 个构造点照写，archive_builder 无过滤直接序列化
+- 深层原因：模式切换功能删除时，类型字段和写入点未同步清理；archive_builder 作为导出出口无字段白名单/黑名单机制
+- 错误状态如何产生：字段在类型层存活，运行时被写入并随数据流自然流入导出层
+- 是否存在同类代码模式：是。archive_builder 对 capture 对象无字段过滤，任何上游残留字段都会漏出
+- 是否发现相关连带问题：未发现 depth/density 等其他已删概念残留（grep 确认 dom_capture.ts 的 depth 是 DOM 路径深度，不同概念）
+
+#### 为什么现有测试没有发现
+
+- archive_builder.test.ts 的 build_archive 测试只断言 `manifest.format` 和 `manifest.counts.network`，从未断言 `manifest.capture` 的字段内容
+- make_capture 工厂用 `as CaptureRecord` 绕过类型检查，构造的对象本身不含 mode，测试时 manifest 自然干净，无法暴露生产路径的脏数据
+- e2e-capture-local.spec.ts:165 和 e2e-capture-baidu.spec.ts:78 反而**正向断言** `mode === 'standard'`，把 bug 当预期固化
+- session_manager.test.ts、stop_capture.test.ts 等 mock 对象主动写入 mode，进一步强化字段合法性
+- 根因：无「废弃字段不应流入导出」的契约测试，且测试 mock 与生产代码同步保留了死字段
+
+#### 测试处理方式
+
+新增并修改测试
+
+说明：新增 archive_builder 契约测试（验证历史脏数据 mode 被过滤）；修改 2 个 E2E 断言为反向回归（mode 应 undefined）；清理 5 个测试文件的 mock 残留 mode 引用。
+
+#### 文档和需求分析
+
+- 文档是否定义了正确行为：是。CLAUDE.md 明确「已删除概念：模式切换/标准采集/密度」
+- 代码是否违反文档：是。类型与写入点保留 mode 字段
+- 测试是否体现文档要求：否。测试反向固化了 bug
+- 文档是否存在缺失、错误或歧义：无
+- 是否需要补充文档：否
+- 本次是否已补充文档：否
+
+#### 问题归因
+
+多方共同问题
+
+原因说明：功能删除时类型/写入点清理不彻底（实现问题）+ 测试反向固化 bug 且无导出契约测试（测试设计问题）+ 导出层无字段过滤防御（架构问题）。
+
+#### TDD 修复记录
+
+- 修复前失败测试：build_archive > strips deprecated mode field from manifest.capture
+- 测试文件：tests/archive_builder.test.ts
+- 测试名称：strips deprecated mode field from manifest.capture
+- 测试输入：含 `mode: 'standard'` 的脏 capture 对象（模拟历史 IndexedDB 数据）
+- 期望断言：`expect(manifest.capture.mode).toBeUndefined()`
+- 修复前失败原因：archive_builder 原样序列化 capture 对象，mode 流入 manifest
+- 修改的源码文件：src/shared/types.ts（删 2 处字段）、src/background/service_worker.ts（删 2 处写入）、src/background/session_manager.ts（删 1 处）、src/popup/popup.ts（删 1 处）、src/shared/archive_builder.ts（增防御过滤）
+- 最小修复说明：删除类型定义 + 4 个写入点 + 归档层防御过滤
+- 回归测试：strips deprecated mode field from manifest.capture（archive_builder）、e2e-capture-local/baidu 的 mode 反向断言
+- 修复后测试结果：相关单测 97 PASS 0 FAIL；tsc 无错误；全量 npm test 654/654 PASS
+
+#### 防复发措施
+
+- 测试层面：archive_builder 增字段级契约测试；E2E 反向断言 mode 不存在；模式可复用于未来废弃字段
+- 代码层面：archive_builder 导出层增防御过滤，阻断上游残留流入产物
+- 文档层面：CLAUDE.md 已有约定，代码现已对齐
+- CI / 工具链层面：tsc strict 兜底捕获新代码对已删字段的引用
+- 其他措施：建议后续 archive_builder 引入 capture 字段白名单（架构改进，独立任务）
+
+#### 验证结果
+
+- 已运行命令：npx vitest run tests/archive_builder.test.ts tests/system_time.test.ts tests/agent_data_queries.test.ts tests/session_manager.test.ts tests/stop_capture.test.ts（97 PASS）；npx tsc --noEmit（无错误）；npm test 全量（654 PASS）；npm run build（成功）
+- 结果：全部通过
+- 未运行命令及原因：E2E（需宿主 Chrome，本会话未运行）
+- 失败命令及原因：无
+- 剩余风险：agent_mcp_client.test.ts 仍传 `mode: 'standard'` 作为 MCP start_recording 参数（测透传语义，service_worker 已不消费，无功能影响，MCP 接口层清理独立任务）；历史已导出的 ZIP 归档仍含 mode（无法回溯修复，仅影响旧产物）
+
+### BUG-002：manifest counts 计数 +1 偏差
+
+#### 负责子代理
+
+BUG-002 子代理
+
+#### 状态
+
+已修复
+
+#### Bug 现象
+
+导出归档 manifest.json 中 counts.network/counts.events 用标准工具（wc -l）核对，比 jsonl 实际行数多 1。实测 counts.network=476，但 `wc -l network.jsonl` = 475；counts.events=459，`wc -l events.jsonl` = 458。
+
+#### 触发条件
+
+任何含 ≥1 条 network 或 event 的归档导出。
+
+#### 影响范围
+
+所有归档 zip 的 jsonl 文件（network.jsonl / events.jsonl / console.jsonl）。下游用 `wc -l`、`grep -c`、文本编辑器计行数的消费者都会少算 1 行，误判数据丢失。
+
+#### 涉及文件
+
+- 源码文件：src/shared/archive_builder.ts
+- 测试文件：tests/archive_builder.test.ts
+- 文档文件：无（建议后续在 docs/specs/data_model.md 注明 jsonl 行终止符规范）
+
+#### 代码根因分析
+
+- 相关调用链：`build_archive` → `network_lines.join('\n')` → `strToU8` → ZIP 写入；同时 `counts.network = network_requests.length` 直接取数组长度
+- 直接原因：`Array.prototype.join('\n')` 对 N 个元素的数组只插入 N-1 个分隔符，**末尾不加换行符**。N 行 JSON 数据实际只有 N-1 个 `\n` 字节
+- 深层原因：违反 POSIX 文本规范（每行应以 \n 结尾）。`wc -l` 按 `\n` 字节数计行，所以少算最后一行。counts 用数组长度（正确），但 jsonl 文件不符合规范（错误），二者表面看是 +1 偏差，实则是 jsonl 缺末尾换行符
+- 错误状态如何产生：`build_archive` 直接 `strToU8(network_lines.join('\n'))`，未追加末尾 `\n`
+- 是否存在同类代码模式：是。`events.jsonl`、`console.jsonl` 同样使用 `join('\n')`，三处一并修复
+- 是否发现相关连带问题：是，但不在本次修复范围 —
+  1. `stats.request_count`（452）与 `counts.network`（476）偏差 24 条，因 stats 仅统计 http 请求，counts.network 含 24 条 `capture_method=unknown`（疑似 WS/streaming 混入），两套口径
+  2. `stats.event_count`（481）与 `counts.events`（459）偏差 22，同样是 stats 实时计数器 vs 归档数组两套口径
+
+#### 为什么现有测试没有发现
+
+`tests/archive_builder.test.ts` 既有 `produces valid zip` 测试只断言 `manifest.counts.network === 1`（数组长度，与 mock 一致），**从未验证 jsonl 文件本身的行数**。测试没有「counts 与 jsonl 文件行数一致」的契约断言，所以 join 缺末尾换行符的问题不会被捕获。
+
+#### 测试处理方式
+
+新增测试
+
+说明：新增 `build_archive — jsonl 末尾换行符契约` describe 块（3 个测试），用 wc -l 语义（按 \n 字节计数）验证 counts.network/counts.events 与对应 jsonl 行数一致，并覆盖空文件边界。
+
+#### 文档和需求分析
+
+- 文档是否定义了正确行为：未显式定义，但 POSIX 文本规范是事实标准，counts 与 jsonl 行数一致是隐含契约
+- 代码是否违反文档：是（违反 POSIX 文本规范）
+- 测试是否体现文档要求：修复后是（新增契约测试）
+- 文档是否存在缺失、错误或歧义：是 — 未明确 jsonl 行终止符要求
+- 是否需要补充文档：建议后续在 docs/specs/data_model.md 注明「jsonl 每行以 \n 结尾，含最后一行」
+- 本次是否已补充文档：否
+
+#### 问题归因
+
+实现疏漏（off-by-one 在文件级，非循环级）
+
+原因说明：开发者用 `join('\n')` 拼接 jsonl 时未考虑 POSIX 行终止符规范，漏掉末尾换行符。counts 用数组长度（正确），但 jsonl 文件实际可被标准工具识别的行数少 1，造成「counts 比 jsonl 行数多 1」的表面现象。
+
+#### TDD 修复记录
+
+- 修复前失败测试：
+  1. `network.jsonl 行数 = manifest.counts.network（末尾换行符存在）` — expected 2 to be 3
+  2. `events.jsonl 行数 = manifest.counts.events` — expected 1 to be 2
+- 测试文件：tests/archive_builder.test.ts
+- 测试名称：见上
+- 测试输入：network=[req1,req2,req3]（3 条），events=[e1,e2]（2 条），空 console
+- 期望断言：jsonl 中 `\n` 字节数 == manifest.counts.<category>
+- 修复前失败原因：`join('\n')` 对 N 元素数组只产生 N-1 个 `\n`
+- 修改的源码文件：src/shared/archive_builder.ts
+- 最小修复说明：将 `strToU8(network_lines.join('\n'))` 改为对非空数组追加 `'\n'`，空数组返回空字符串（保持 0 字节）。events/console 同改
+- 回归测试：`空 jsonl（0 条）保持为空文件，不追加换行符`
+- 修复后测试结果：archive_builder 10/10 PASS；全量 npm test 654/654 PASS；tsc 无错误
+
+#### 防复发措施
+
+- 测试层面：新增 jsonl 行数契约测试，覆盖 network/events/console 三类及空文件边界
+- 代码层面：注释明确 POSIX 文本规范要求，空数组分支显式返回空字符串避免误加 \n
+- 文档层面：建议后续在 data_model spec 注明 jsonl 行终止符规范
+- CI / 工具链层面：建议 e2e-export 后续增加 `wc -l` 校验 counts 一致性断言
+- 其他措施：连带问题（stats vs counts 口径偏差）建议单独立项统一
+
+#### 验证结果
+
+- 已运行命令：npx vitest run tests/archive_builder.test.ts（10 PASS）；npx tsc --noEmit（无错误）；npm test 全量（654 PASS）；npm run build（成功）
+- 结果：通过
+- 未运行命令及原因：E2E（需宿主 Chrome）
+- 失败命令及原因：无
+- 剩余风险：连带问题（stats.request_count vs counts.network、stats.event_count vs counts.events 的口径偏差）未修，建议主代理评估是否单独立项
+
+### BUG-003：console 采集启用但 0 条
+
+#### 负责子代理
+
+BUG-003 子代理
+
+#### 状态
+
+已修复
+
+#### Bug 现象
+
+配置 `capture_console: true`，但导出归档中 `console.jsonl` 完全空（0 行），`stats.log_count = 0`。ChatGPT（chatgpt.com）正常使用必然有 console 输出。同次采集 network.jsonl 有 475 行、events.jsonl 有 458 行（cookie/navigation 正常），证明 background 基础链路 OK。
+
+#### 触发条件
+
+- 目标站点为重 SPA（ChatGPT 等），大量 console 输出来自 worker / iframe / OOPIF 子目标上下文
+- `capture_network` + `capture_response_body` 启用，触发 network_capture 调用 `Target.setAutoAttach({autoAttach:true, waitForDebuggerOnStart:true, flatten:true})`
+- `capture_console` 启用
+
+#### 影响范围
+
+所有启用 console 采集的重 SPA 站点。console.jsonl 完全空，stats.log_count = 0，7 大数据标签中「控制台」标签 0 数据。不影响 network/events/cookie/storage。
+
+#### 涉及文件
+
+- 源码文件：src/background/console_capture.ts（核心修复）、src/background/cdp_event_router.ts（复用，未改）
+- 测试文件：tests/console_capture.test.ts（重写）、tests/__mocks__/chrome_debugger.ts（mock 增量）
+- 文档文件：本段
+
+#### 代码根因分析
+
+- 相关调用链：
+  1. `service_worker.start_capture` → `chrome.dbg.attach` 主 tab → `start_console_capture`（仅对主 tab 发 `Runtime.enable`）
+  2. 之后 `enable_response_body_capture` → `Target.setAutoAttach({flatten:true})` → worker/iframe 子目标自动 attach
+  3. network_capture 的 `handle_cdp_event` 处理 `Target.attachedToTarget`，对子 session 发 `Network.enable` + `Runtime.runIfWaitingForDebugger`，但**不发 `Runtime.enable`**
+  4. console_capture 的 `handle_debugger_event` 只过滤 `Runtime.consoleAPICalled`，不处理子目标 lifecycle
+- 直接原因：子目标（worker/iframe/OOPIF）的 Runtime 域从未被 enable，`Runtime.consoleAPICalled` 事件不会从这些上下文发出。ChatGPT 大量 console 输出来自 worker/iframe，导致 0 事件
+- 深层原因：console_capture 与 network_capture 对子目标 lifecycle 处理不对齐。network_capture 有完整 `Target.attachedToTarget`/`detachedFromTarget` 分支并启用 Network 域，console_capture 完全没有对应分支，未启用 Runtime 域
+- 错误状态如何产生：CDP 事件链路本身无错误（log 显示 "Console capture started" + "CDP debugger attached" 成功），但子目标 Runtime 域静默未启用，事件源永不触发，表现为 0 条而非报错
+- 是否存在同类代码模式：exception_capture.ts 同样只对主 tab 发 `Runtime.enable`，理论上 `Runtime.exceptionThrown` 也存在子目标遗漏风险
+- 是否发现相关连带问题：是 — exception_capture 的子目标 exception 捕获存在相同缺口（本次未修，独立立项）
+
+#### 为什么现有测试没有发现
+
+`tests/console_capture.test.ts` 修复前是 P0.30 的纯逻辑副本：定义一个 `handle_console_log_safe` 函数，仅测 `capture_id` 是否为空、data 是否 null/undefined。完全没有测真实 CDP `Runtime.consoleAPICalled` 事件链路，没有测 `Target.attachedToTarget` 子目标处理，没有测子目标 Runtime.enable 是否发送。测试假设事件会到达，但从未验证到达条件（Runtime 域启用）。
+
+#### 测试处理方式
+
+新增并修改测试
+
+说明：完全重写 `tests/console_capture.test.ts`。保留 1 个原 P0.30 capture_id 回归测试（改为走真实 start_console_capture 链路），新增 4 个 BUG-003 测试覆盖主目标转发、子目标 Runtime.enable、子目标 console 转发、非 console 事件忽略。使用 `mock_chrome_debugger` 的 `emit_event` 模拟真实 CDP 事件分发。
+
+#### 文档和需求分析
+
+- 文档是否定义了正确行为：是 — 7 大数据标签包含「控制台」，PRD/SPEC 要求 capture_console=true 时采集 console 事件
+- 代码是否违反文档：是 — 启用采集但实际 0 条
+- 测试是否体现文档要求：修复前否（纯逻辑副本），修复后是（真实事件链路）
+- 文档是否存在缺失、错误或歧义：文档未明确「console 采集必须覆盖子目标（worker/iframe）上下文」这一 CDP 架构约束
+- 是否需要补充文档：建议补充 CDP 子目标 lifecycle 架构说明
+- 本次是否已补充文档：否（约束记录在本 TASKS.md 段落）
+
+#### 问题归因
+
+代码实现缺陷（子目标 lifecycle 处理遗漏）
+
+原因说明：console_capture 模块在引入 network_capture 的 `Target.setAutoAttach({flatten:true})` 后，未同步实现子目标 Runtime 域启用逻辑。两模块对子目标 lifecycle 处理不对齐，console_capture 静默漏掉子目标 Runtime.enable，导致 worker/iframe 上下文的 console 事件永不触发。
+
+#### TDD 修复记录
+
+- 修复前失败测试：`enables Runtime on auto-attached sub-target so worker console events fire`
+- 测试文件：tests/console_capture.test.ts
+- 测试名称：`BUG-003: console capture must emit event on Runtime.consoleAPICalled enables Runtime on auto-attached sub-target so worker console events fire`
+- 测试输入：emit `Target.attachedToTarget` 事件（sessionId='child-session-abc'），然后断言 `send_command_calls` 中存在 `command==='Runtime.enable' && sessionId==='child-session-abc'` 的记录
+- 期望断言：`sub_target_runtime_enable.length >= 1`
+- 修复前失败原因：`AssertionError: expected 0 to be greater than or equal to 1`（console_capture 修复前从不向子 session 发 Runtime.enable）
+- 修改的源码文件：src/background/console_capture.ts
+- 最小修复说明：`handle_debugger_event` 新增 `Target.attachedToTarget`/`Target.detachedFromTarget` 分支。attach 时 `register_session(child_session)` + 对子 session 发 `Runtime.enable`；detach 时 `unregister_session`。导入共享 `cdp_event_router` 的 register/unregister
+- 回归测试：
+  - `forwards a main-target consoleAPICalled event to sender`（主链路不退化）
+  - `forwards consoleAPICalled from a sub-target session (worker/iframe)`
+  - `ignores non-console CDP events`
+  - `network_cdp.test.ts` 全 20 测试（验证 mock 增量向后兼容）
+- 修复后测试结果：console_capture 5/5 PASS，network_cdp 20/20 PASS，tsc 无错误，全量 npm test 654/654 PASS
+
+#### 防复发措施
+
+- 测试层面：新增真实 CDP 事件链路单测，覆盖主目标/子目标/非 console 三路径；mock 增量记录 sessionId，后续子目标命令可断言
+- 代码层面：console_capture 与 network_capture 共享 cdp_event_router session 注册表，子目标 lifecycle 处理模式对齐
+- 文档层面：记录 CDP 架构约束 — 任何依赖 CDP Runtime/Network 域的子系统都必须处理 auto-attach 子目标
+- CI / 工具链层面：现有 `npm test` 已覆盖，无需额外配置
+- 其他措施：建议后续修复 exception_capture 的同类子目标缺口（连带问题）
+
+#### 验证结果
+
+- 已运行命令：npx vitest run tests/console_capture.test.ts（5 PASS）；npx vitest run tests/network_cdp.test.ts（20 PASS）；npx tsc --noEmit（无错误）；npm test 全量（654 PASS）；npm run build（成功）
+- 结果：全部通过
+- 未运行命令及原因：E2E（需宿主 Chrome）
+- 失败命令及原因：无
+- 剩余风险：exception_capture 存在同类子目标 Runtime.enable 缺口（本次未修，超出 BUG-003 范围）；真实 ChatGPT 环境 CDP 行为需 E2E 验证
+
+### BUG-004：user_action/storage 0 事件
+
+#### 负责子代理
+
+BUG-004 子代理
+
+#### 状态
+
+已修复
+
+#### Bug 现象
+
+采集标签包含「用户行为」「Storage」，且 config 开启 `event_count_enabled=true`、`storage_change_count_enabled=true`、`capture_input_values=true`、`mouse_precision='clicks_scroll_drag'`，但导出数据中 `user_action_count=0`、`storage_change_count=0`。实测归档（capture_1781363043195_v38buk8）：events.jsonl 458 行，仅 navigation 10 + cookie 449，无 user_action 无 storage。
+
+#### 触发条件
+
+1. 用户先打开目标页面（如 chatgpt.com），content_script 加载完成
+2. 此时 SW 未在采集，content_script 加载时执行 `get_status` → `is_capturing=false` → fallback 退出
+3. 用户随后开始采集，SW 给所有 tab 发 `sendMessage({action:'start'})`
+4. 因目标 tab 的 content_script 已经过了主动检查阶段，且 Chrome 此刻报 `Could not establish connection. Receiving end does not exist.`，start 消息丢失
+5. 整个采集期间目标 tab 上无 mouse/keyboard/scroll/dom/storage 任何事件
+
+#### 影响范围
+
+- 用户行为采集（click/scroll/input/drag/keyboard）完全失效
+- Storage 变更采集（localStorage/sessionStorage setItem/removeItem/clear）完全失效
+- 实测：整个 2 分钟 chatgpt.com 采集期间 0 条事件
+- network/cookie/console 不受影响（这些走 background CDP / chrome.cookies，不依赖 content_script）
+
+#### 涉及文件
+
+- 源码文件：
+  - src/content/content_script.ts（fallback 改为轮询）
+  - src/shared/poll_capture_status.ts（新增，可注入轮询工具）
+- 测试文件：
+  - tests/poll_capture_status.test.ts（新增，6 测）
+  - tests/content_script_uses_poll.test.ts（新增，3 测契约）
+- 文档文件：无（建议后续在 docs/specs/data_flow.md 增补 content_script ↔ SW 时序）
+
+#### 代码根因分析
+
+- 相关调用链：
+  - `chrome.tabs.sendMessage(tab.id, {action:'start'})` (service_worker.ts:387) → chatgpt.com tab content_script onMessage → **失败：Receiving end does not exist**
+  - `chrome.tabs.sendMessage(tab.id, {action:'start'})` (service_worker.ts:709, tab 切换时重试) → 同样失败
+  - content_script.ts 加载时 `chrome.runtime.sendMessage({action:'get_status'})` → 当时 `is_capturing=false` → 不启动 → 之后无重试
+- 直接原因：content_script.ts 加载时只调用一次 `get_status`，若 SW 未采集就退出，之后 SW 开始采集时无法通知到该 tab
+- 深层原因：
+  1. Chrome MV3 content_script 与 SW 的双向消息没有"采集开始"的可靠广播机制（sendMessage 是点对点，需要接收方已就绪）
+  2. `chrome.tabs.sendMessage` 在 content_script 上下文未 ready 时报 "Receiving end does not exist"，SW 端 catch 后只 warn 不重试
+  3. content_script 的 fallback 是一次性 poll，不是持续 poll，错过了 SW 后续的状态变化
+- 错误状态如何产生：SW 发 start 失败 → 该 tab 不进入采集态 → 用户在该 tab 上的所有交互事件无人订阅转发 → events.jsonl 中该 tab 来源事件为 0
+- 是否存在同类代码模式：所有依赖"SW → content_script 一次性消息触发"的链路都有类似风险
+- 是否发现相关连带问题：
+  - SW 端 `chrome.tabs.sendMessage` 失败后未重试（service_worker.ts:395-397、474-477）。建议未来加 2~3 次短延迟重试
+  - content_script 没有"被 SW 主动 ping 检测存活"的机制
+
+#### 为什么现有测试没有发现
+
+- `tests/tab_events.test.ts` 测的是纯函数（navigation 去重、事件构造），未覆盖 content_script 与 SW 的真实消息时序
+- `tests/p036_user_action_filter.test.ts` 测的是 event_type → category 映射常量一致性，不涉及采集启动链路
+- 全仓没有针对 "content_script 加载时序 vs SW 采集开始时序" 的集成测试
+- content_script.ts 顶层执行 `chrome.runtime.onMessage.addListener`，node 环境无法直接 import，阻碍了模块级单测
+
+#### 测试处理方式
+
+新增测试
+
+说明：新增 2 个测试文件共 9 个测试用例。`poll_capture_status.test.ts` 用依赖注入（mock get_status/setInterval/clearInterval）隔离浏览器 API；`content_script_uses_poll.test.ts` 用静态源码扫描（fs.readFileSync）规避 content_script 不能直接 import 的问题，做契约级回归防御。
+
+#### 文档和需求分析
+
+- 文档是否定义了正确行为：是。CLAUDE.md / PRD 要求 7 数据标签全部生效，「用户行为」/「Storage」是核心标签
+- 代码是否违反文档：是。content_script 的 fallback 实现导致用户已开启的标签实际不工作
+- 测试是否体现文档要求：之前没有，本次新增
+- 文档是否存在缺失、错误或歧义：docs/specs/data_flow.md 对 content_script ↔ SW 时序的描述较薄
+- 是否需要补充文档：建议在 docs/specs/data_flow.md 增补"content_script 加载 → start_status_poll 轮询"链路
+- 本次是否已补充文档：否
+
+#### 问题归因
+
+代码实现缺陷（content_script 状态同步不可靠）
+
+原因说明：content_script 加载时的一次性 get_status 是"开环"设计——假设 SW 在 content_script 加载瞬间已经处于最终状态。实际 SW 采集开始是用户后续操作，时序错配导致 content_script 永远不知道采集已开始。修复改为"闭环"轮询。
+
+#### TDD 修复记录
+
+- 修复前失败测试：`tests/content_script_uses_poll.test.ts > content_script source integrates start_status_poll (regression guard)`
+- 测试文件：tests/content_script_uses_poll.test.ts
+- 测试名称：`BUG-004 contract: content_script uses status polling > content_script source integrates start_status_poll (regression guard)`
+- 测试输入：将 `src/content/content_script.ts` 临时回退到旧"一次性 get_status"实现，运行契约测试
+- 期望断言：源码匹配 `/start_status_poll\s*\(\s*\{/`（必须实际调用轮询）
+- 修复前失败原因：旧实现无此调用，正则不匹配
+- 修改的源码文件：
+  - src/shared/poll_capture_status.ts（新增）
+  - src/content/content_script.ts（接入轮询）
+- 最小修复说明：抽出 `start_status_poll` 工具模块（依赖注入），content_script 加载时启动轮询替代一次性 get_status；stop_capture 时停止轮询
+- 回归测试：
+  - `REGRESSION BUG-004: when first get_status returns not_capturing, keeps polling and fires on_active once SW starts`
+  - `REGRESSION BUG-004: get_status rejection does not break the polling loop`
+  - `REGRESSION BUG-004: content_script stop_capture calls stop_status_poll`
+- 修复后测试结果：新增 9 测全 PASS；全量 npm test 654/654 PASS；tsc 无错误
+
+#### 防复发措施
+
+- 测试层面：契约测试静态扫描 content_script.ts 源码，强制 `start_status_poll` 调用 + stop_capture 清理 + 禁用旧 fallback 模式；poll 模块自身有完整单测覆盖正常/reject/stop 路径
+- 代码层面：轮询逻辑抽到独立模块，依赖注入便于复用与测试；5 分钟最大轮询上限防泄漏；stop_status_poll 在采集结束时清理
+- 文档层面：源码内嵌详细注释（根因 + 修复思路），指向测试文件
+- CI / 工具链层面：依赖现有 vitest + tsc gate
+- 其他措施：建议主代理后续在 SW 端 `chrome.tabs.sendMessage` 失败时加 2~3 次短延迟重试，与 content_script 轮询形成双保险
+
+#### 验证结果
+
+- 已运行命令：npx vitest run tests/poll_capture_status.test.ts tests/content_script_uses_poll.test.ts（9 PASS）；npx vitest run 含相关模块（41 PASS）；npx tsc --noEmit（无错误）；npm test 全量（654 PASS）；npm run build（成功）
+- 结果：全部通过
+- 未运行命令及原因：E2E（需真实 Chrome 扩展环境）
+- 失败命令及原因：无
+- 剩余风险：
+  - 轮询有 2 秒间隔，最坏情况下采集开始后 2 秒 content_script 才同步启动，可能丢失最初 2 秒的用户行为（可接受）
+  - 若 tab 完全冻结（Chrome 节能），setInterval 不执行，仍无法补救——但此时页面也无法产生用户事件，无影响
+  - SW 端 sendMessage 失败未重试，仍可能延迟首次同步
+
+### BUG-005：Bridge 自身 URL 未排除致 cdp_failed
+
+#### 负责子代理
+
+BUG-005 子代理
+
+#### 状态
+
+已修复
+
+#### Bug 现象
+
+119 个 response_body_status=cdp_failed，其中 117 个 URL 为 `http://127.0.0.1:9777/log`（项目自身 Bridge 日志上报端点），2 个为 text/event-stream（SSE，预期失败可接受）。
+
+#### 触发条件
+
+开启采集后，扩展自身组件（Bridge 客户端轮询、日志上报等）向本地 Bridge（127.0.0.1:<port>）发起 HTTP 请求时，这些请求被 webRequest 与 CDP 一并捕获并尝试采集 response body。
+
+#### 影响范围
+
+- 117 个无效 cdp_failed 计数，污染 capture stats
+- body_capture_status 统计失真
+- 不影响正常外部 URL 采集
+
+#### 涉及文件
+
+- 源码文件：src/background/network_capture.ts
+- 测试文件：tests/network_capture.test.ts
+- 文档文件：无
+
+#### 代码根因分析
+
+- 相关调用链：webRequest `handle_before_request`（`<all_urls>` 注册）→ `pending_requests.set`；CDP `Network.requestWillBeSent` → `cdp_request_meta.set` → `Network.loadingFinished` → `Network.getResponseBody` 失败 → `cdp_failed`
+- 直接原因：两个采集入口均无 URL origin 过滤，Bridge 的 `http://127.0.0.1:<port>/log` 等请求被当作普通网络请求采集
+- 深层原因：webRequest 以 `<all_urls>` 注册且无 URL filter；CDP 事件入口未区分请求来源 origin
+- 错误状态如何产生：Bridge 是本地 HTTP 服务，其响应生命周期与 CDP getResponseBody 时序不匹配，CDP 返回 -32000（No resource）或无 body，因 method 非 OPTIONS/HEAD 被标记为 cdp_failed
+- 是否存在同类代码模式：是——webRequest 全部 5 个 handler 与 CDP 全部事件均无 origin 过滤
+- 是否发现相关连带问题：chrome-extension:// 内部跳转同样会被采集（已在同一修复中覆盖）
+
+#### 为什么现有测试没有发现
+
+现有测试均为纯函数（redaction、truncation、body parsing、CDP 匹配）或直接操作内部 Map 的集成测试，从未构造指向 127.0.0.1/localhost/chrome-extension 的请求 URL 验证「自身 origin 应被排除」这一采集边界规则。测试缺口是「采集入口 URL 过滤」这条横切规则完全没有被测覆盖。
+
+#### 测试处理方式
+
+新增测试
+
+说明：新增 `is_self_origin_url (BUG-005)` describe block（7 用例），锁定过滤函数行为。
+
+#### 文档和需求分析
+
+- 文档是否定义了正确行为：是——CLAUDE.md 明确「Bridge 仅绑定 127.0.0.1」，隐含 Bridge 流量属自身内部流量不应采集
+- 代码是否违反文档：是——采集入口未尊重 Bridge origin 边界
+- 测试是否体现文档要求：修复前否，现已补齐
+- 文档是否存在缺失、错误或歧义：否
+- 是否需要补充文档：否
+- 本次是否已补充文档：否
+
+#### 问题归因
+
+设计遗漏（采集入口缺少 origin 边界过滤）
+
+原因说明：网络采集模块以「采集一切」为默认（`<all_urls>`），但未考虑扩展自身与本地 Bridge 的请求属于内部基础设施流量，既无业务价值又会因 CDP 时序问题产生噪声失败。缺少一个统一的 origin 边界判定函数。
+
+#### TDD 修复记录
+
+- 修复前失败测试：`is_self_origin_url is not a function`
+- 测试文件：tests/network_capture.test.ts
+- 测试名称：`is_self_origin_url (BUG-005) > excludes 127.0.0.1 bridge log endpoint`（及同 block 其余 6 个）
+- 测试输入：`'http://127.0.0.1:9777/log'`、`'http://127.0.0.1:17831/extension/heartbeat'`、`'http://localhost:9777/log'`、`'chrome-extension://abc123/options.html'`、`'https://example.com/api/data'` 等
+- 期望断言：自身 origin URL 返回 true，外部 URL 返回 false
+- 修复前失败原因：函数未导出，TypeError
+- 修改的源码文件：src/background/network_capture.ts
+- 最小修复说明：新增导出 `is_self_origin_url`（按 hostname 判定 127.0.0.1/localhost + chrome-extension 前缀）；在 `handle_before_request` 与 `Network.requestWillBeSent` 入口调用，命中即 return 不采集
+- 回归测试：7 个用例覆盖各端口/origin 组合及误杀防护
+- 修复后测试结果：network_capture 92/92 PASS，network_cdp+correlator 51/51 PASS，tsc 无错误，全量 npm test 654/654 PASS
+
+#### 防复发措施
+
+- 测试层面：`is_self_origin_url` 单测锁定行为；未来若放松过滤（误放行 127.0.0.1）测试即红
+- 代码层面：过滤位于两个入口最早处，Bridge URL 永不进入内部数据结构；端口按 host 排除不硬编码
+- 文档层面：CLAUDE.md 已有 Bridge 127.0.0.1 约定，无需补充
+- CI / 工具链层面：依赖现有 vitest + tsc 闸门
+- 其他措施：设计上建议未来若引入更多自身端点（如 devtools page），同样会被 hostname 规则覆盖
+
+#### 验证结果
+
+- 已运行命令：
+  - npx vitest run tests/network_capture.test.ts -t "is_self_origin_url" → 7 PASS
+  - npx vitest run tests/network_capture.test.ts → 92 PASS
+  - npx vitest run tests/network_cdp.test.ts tests/network_correlator.test.ts → 51 PASS
+  - npx tsc --noEmit → 无错误
+  - npm test 全量 → 654 PASS
+  - npm run build → 成功
+- 结果：全部通过
+- 未运行命令及原因：E2E（需宿主 Chrome）
+- 失败命令及原因：无
+- 剩余风险：2 个 SSE（text/event-stream）cdp_failed 属预期失败（流式响应无法一次性 getResponseBody），不在本 bug 范围；若未来 Bridge 改用非 localhost host（如 0.0.0.0），需扩展 hostname 判定

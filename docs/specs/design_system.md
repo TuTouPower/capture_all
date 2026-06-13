@@ -60,7 +60,7 @@
 | HTML | 自包含报告 | XSS 安全转义 (`</script>` -> `<\/script>`) |
 | HAR | 网络归档格式 | Chrome DevTools / Fiddler 可识别 |
 
-**导出设置**：目录为 Chrome Downloads 相对目录；文件名模板 `capture_all_{capture_id}_{date}.{ext}`；HTML 导出安全转义所有动态内容。
+**导出设置**：目录为 Chrome Downloads 相对目录；文件名模板 `capture_{date}.{ext}`（P0.60：紧凑日期 YYYYMMDD_HHMMSS，不含 capture_id；用户自定义模板仍可用 `{capture_id}`）；HTML 导出安全转义所有动态内容。P0.61：配置导出目录时直接保存不弹框；未配置时弹保存对话框让 Chrome 记忆保存位置。
 
 ---
 
@@ -136,7 +136,7 @@ DEFAULT_USER_CONFIG = {
     system_time_timezone: 'browser',
     detail_time_display_mode: 'system',
     export_directory: '',
-    export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
+    export_filename_template: 'capture_{date}.{ext}',  // P0.60 新默认模板
     export_save_as: true,
     agent_bridge_enabled: false,
     agent_bridge_url: 'http://127.0.0.1:17831',

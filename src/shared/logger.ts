@@ -40,13 +40,24 @@ export class Logger {
     private write(level: LogLevel, message: string, details?: unknown): void {
         if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[_global_level]) return;
 
+        // Error 对象直接进 IndexedDB 会丢 message/stack（structured clone 只保留 enumerable props）
+        // 转成 plain object，否则日志只显示 {}
+        let safe_details = details;
+        if (details instanceof Error) {
+            safe_details = {
+                name: details.name,
+                message: details.message,
+                stack: details.stack,
+            };
+        }
+
         const entry: AppLogEntry = {
             id: generate_log_id(),
             timestamp: Date.now(),
             level,
             module: this.module,
             message,
-            details,
+            details: safe_details,
             stack: level === 'error'
                 ? new Error().stack?.split('\n').slice(2).join('\n')
                 : undefined,

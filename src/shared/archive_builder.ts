@@ -248,10 +248,10 @@ export async function build_archive(
     const network_with_times = network_requests.map((r) => {
         const enriched: Record<string, unknown> = add_absolute_system_time(r, time_config) as unknown as Record<string, unknown>;
         if (typeof r.start_time_ms === 'number') {
-            enriched.start_time_system_time = format_system_time(r.start_time_ms, time_config);
+            enriched.start_time_ms = format_system_time(r.start_time_ms, time_config);
         }
         if (typeof r.end_time_ms === 'number') {
-            enriched.end_time_system_time = format_system_time(r.end_time_ms, time_config);
+            enriched.end_time_ms = format_system_time(r.end_time_ms, time_config);
         }
         return enriched as unknown as NetworkRequestData;
     });
@@ -308,13 +308,16 @@ export async function build_archive(
     };
 
     // manifest
+    // BUG-001: 剥离已废弃的 mode 字段（历史 IndexedDB 数据可能残留），
+    // 防止「已删除概念：模式切换/标准采集」流入归档。
+    const { mode: _deprecated_mode, ...capture_without_mode } = capture_with_times as Record<string, unknown>;
     const manifest = {
         format: 'capture_all_archive',
         version: 1,
         capture_id: capture.capture_id,
         created_at: new Date().toISOString(),
         counts,
-        capture: capture_with_times,
+        capture: capture_without_mode,
     };
 
     // README
@@ -326,13 +329,26 @@ export async function build_archive(
     });
 
     // 组装 ZIP 文件
+    // BUG-002: jsonl 文件每行必须以 \n 结尾（POSIX 文本规范）。
+    // 仅 join('\n') 会让最后一行缺末尾换行符，导致 wc -l / grep -c 等
+    // 标准工具计行数比实际少 1，与 manifest.counts 不一致。
+    // 空数组保持为空文件（0 字节），不追加换行符。
     const files: Record<string, Uint8Array> = {};
+    const network_content = network_lines.length > 0
+        ? network_lines.join('\n') + '\n'
+        : '';
+    const events_content = event_lines.length > 0
+        ? event_lines.join('\n') + '\n'
+        : '';
+    const console_content = console_lines.length > 0
+        ? console_lines.join('\n') + '\n'
+        : '';
 
     files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
     files['README.md'] = strToU8(readme);
-    files['network.jsonl'] = strToU8(network_lines.join('\n'));
-    files['events.jsonl'] = strToU8(event_lines.join('\n'));
-    files['console.jsonl'] = strToU8(console_lines.join('\n'));
+    files['network.jsonl'] = strToU8(network_content);
+    files['events.jsonl'] = strToU8(events_content);
+    files['console.jsonl'] = strToU8(console_content);
 
     // 空目录占位（保持结构稳定）
     files['bodies/request/.gitkeep'] = new Uint8Array(0);

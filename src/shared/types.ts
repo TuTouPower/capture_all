@@ -8,7 +8,6 @@ export interface CaptureRecord {
     capture_id: string;
     name: string;
     status: 'capturing' | 'completed';
-    mode: 'standard';
     started_at: string;           // ISO string
     ended_at: string | null;
     duration_ms: number;
@@ -98,6 +97,7 @@ export type EventType =
     | 'dom_ready'
     // network
     | 'network_request'
+    | 'ws_frame'
     // console
     | 'console_event'
     // error
@@ -278,13 +278,31 @@ export interface NetworkRequestData {
     from_cache: boolean | null;
     cache_status: 'memory_cache' | 'disk_cache' | 'none' | null;
     error_text: string | null;
-    capture_method: 'web_request' | 'cdp_primary' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
+    capture_method: 'web_request' | 'cdp_primary' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook' | 'cdp_websocket' | 'cdp_stream';
     body_capture_mode: BodyCaptureMode;
     tab_id?: number;
     relative_time?: number;
     absolute_time?: number;
     correlation_status?: NetworkCorrelationStatus;
     cdp_request_id?: string;
+    ws_connection_id?: string;
+    ws_status?: 'connecting' | 'open' | 'closed' | 'error';
+    stream_mode?: 'none' | 'sse' | 'chunked';
+}
+
+export interface WsFrameData {
+    ws_connection_id: string;
+    direction: 'sent' | 'received' | 'error';
+    opcode: number | null;
+    payload: string | null;
+    payload_encoding: 'utf8' | 'base64' | null;
+    payload_bytes: number | null;
+    payload_status: BodyCaptureStatus;
+    mask: boolean | null;
+    error_message: string | null;
+    url: string;
+    tab_id?: number;
+    session_id?: string | null;
 }
 
 // ============================================================
@@ -405,7 +423,6 @@ export interface CookieChangeData {
 
 export interface CaptureStartedData {
     capture_id: string;
-    mode: 'standard';
     config_snapshot: object;
     start_url: string;
     trigger: 'popup' | 'main_panel' | 'shortcut';
@@ -462,6 +479,7 @@ export type BodyCaptureStatus =
     | 'target_not_matched'
     | 'permission_denied'
     | 'partial'
+    | 'streaming'
     | 'redacted';
 
 export type BodyCaptureMode = 'none' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';

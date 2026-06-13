@@ -95,6 +95,7 @@ graph LR
     NAV --> dom_ready
 
     NET --> network_request
+    NET --> ws_frame
 
     CON --> console_event
 

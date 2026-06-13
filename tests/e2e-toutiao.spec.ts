@@ -1,6 +1,6 @@
 // tests/e2e-toutiao.spec.ts — 完整采集流程 on toutiao.com
 import { test, expect } from '@playwright/test';
-import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_LABELS, verify_capture_data } from './e2e-helpers';
+import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_KEYS, verify_capture_data } from './e2e-helpers';
 
 test.describe('Toutiao 采集流程', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;
@@ -99,10 +99,10 @@ test.describe('Toutiao 采集流程', () => {
         await popup.waitForTimeout(1500);
         await expect(popup.locator('.act-done')).toBeVisible();
 
-        // 验证标签卡片全部存在
-        for (const label of REQUIRED_LABELS) {
+        // 验证标签卡片全部存在（用 data-key，避免依赖 i18n locale）
+        for (const key of REQUIRED_KEYS) {
             await expect(
-                popup.locator('.mcard', { hasText: label }),
+                popup.locator(`.mcard[data-key="${key}"]`),
             ).toBeVisible();
         }
 

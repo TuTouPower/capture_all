@@ -5,6 +5,7 @@ import { sha256_hex } from './hash';
 import {
     add_absolute_system_time,
     add_capture_system_times,
+    format_system_time,
 } from './system_time';
 import type {
     CaptureRecord,
@@ -244,9 +245,16 @@ export async function build_archive(
     const events_with_times = events.map((e) =>
         add_absolute_system_time(e, time_config),
     );
-    const network_with_times = network_requests.map((r) =>
-        add_absolute_system_time(r, time_config),
-    );
+    const network_with_times = network_requests.map((r) => {
+        const enriched: Record<string, unknown> = add_absolute_system_time(r, time_config) as unknown as Record<string, unknown>;
+        if (typeof r.start_time_ms === 'number') {
+            enriched.start_time_system_time = format_system_time(r.start_time_ms, time_config);
+        }
+        if (typeof r.end_time_ms === 'number') {
+            enriched.end_time_system_time = format_system_time(r.end_time_ms, time_config);
+        }
+        return enriched as unknown as NetworkRequestData;
+    });
     const console_with_times = console_events.map((c) =>
         add_absolute_system_time(c, time_config),
     );

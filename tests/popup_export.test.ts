@@ -23,9 +23,9 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(export_section![0]).toMatch(/await\s+chrome\.runtime\.sendMessage/);
     });
 
-    it('exportBtn sends action "get_capture_data" with session_id (ZIP archive export)', () => {
+    it('exportBtn sends action "get_capture_data" with capture_id (ZIP archive export)', () => {
         expect(popup_src).toMatch(/action:\s*'get_capture_data'/);
-        expect(popup_src).toMatch(/session_id:\s*finished_capture\.capture_id/);
+        expect(popup_src).toMatch(/capture_id:\s*finished_capture\.capture_id/);
     });
 
     // P0.40: popup 导出改用 download_blob（统一 chrome.downloads.download 路径）
@@ -61,6 +61,6 @@ describe('P0.35/P0.40 export button wiring', () => {
 
     it('service worker handles export_json action', () => {
         expect(sw_src).toMatch(/case\s+'export_json'/);
-        expect(sw_src).toMatch(/await\s+export_json\(message\.session_id\)/);
+        expect(sw_src).toMatch(/await\s+export_json\(message\.capture_id\)/);
     });
 });

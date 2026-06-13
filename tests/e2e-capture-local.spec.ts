@@ -139,7 +139,7 @@ test.describe.serial('本地页面全开采集 — 字段结构 + 精确内容',
             try {
                 return await chrome.runtime.sendMessage({
                     action: 'export_json',
-                    session_id: id,
+                    capture_id: id,
                 }) as { success: boolean; json?: string };
             } catch {
                 return { success: false, json: undefined };

@@ -144,14 +144,14 @@ test.describe('CDP Capture - recording with body capture', () => {
         const session_data = await popup.evaluate(async () => {
             try {
                 const sessions = await (chrome.runtime.sendMessage({
-                    action: 'list_sessions',
+                    action: 'list_captures',
                 }) as Promise<Array<{ capture_id: string }>>);
                 if (!Array.isArray(sessions) || sessions.length === 0) {
                     return { error: 'No sessions found' };
                 }
                 const latest = sessions[sessions.length - 1];
                 const data = await (chrome.runtime.sendMessage({
-                    action: 'get_session_data',
+                    action: 'get_capture_data',
                     session_id: latest.capture_id,
                 }) as Promise<any>);
                 return data;
@@ -161,11 +161,11 @@ test.describe('CDP Capture - recording with body capture', () => {
         });
 
         expect(session_data.success).toBe(true);
-        expect(session_data.session).toBeDefined();
+        expect(session_data.capture).toBeDefined();
 
         // body_capture_mode should be set (not undefined)
         // In extension context without bridge, typical values: 'extension_cdp' or 'fallback_hook'
-        const mode = session_data.session.body_capture_mode;
+        const mode = session_data.capture.body_capture_mode;
         expect(['extension_cdp', 'fallback_hook', 'external_cdp_bridge']).toContain(mode);
 
         // Verify some network requests were captured
@@ -240,7 +240,7 @@ test.describe('CDP Capture - recording with body capture', () => {
         const export_result = await popup.evaluate(async () => {
             try {
                 const sessions = await (chrome.runtime.sendMessage({
-                    action: 'list_sessions',
+                    action: 'list_captures',
                 }) as Promise<Array<{ capture_id: string }>>);
                 if (!Array.isArray(sessions) || sessions.length === 0) {
                     return { error: 'No sessions found' };

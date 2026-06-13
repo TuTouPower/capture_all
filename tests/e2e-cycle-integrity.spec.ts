@@ -98,7 +98,7 @@ test.describe.serial('多轮采集数据隔离', () => {
 
         // ── 获取所有 sessions ──
         const sessions: SessionInfo[] = await popup.evaluate(() =>
-            chrome.runtime.sendMessage({ action: 'list_sessions' })
+            chrome.runtime.sendMessage({ action: 'list_captures' })
         );
 
         expect(sessions, '至少应有 3 个 session').toBeDefined();
@@ -120,7 +120,7 @@ test.describe.serial('多轮采集数据隔离', () => {
         const exports: ExportResult[] = [];
         for (const session of recent) {
             const result: ExportResult = await popup.evaluate(
-                (sid) => chrome.runtime.sendMessage({ action: 'export_json', session_id: sid }),
+                (sid) => chrome.runtime.sendMessage({ action: 'export_json', capture_id: sid }),
                 session.capture_id
             );
             exports.push(result);
@@ -200,7 +200,7 @@ test.describe.serial('多轮采集数据隔离', () => {
 
         // 通过 sendMessage 导出 JSON，验证数据有效
         const result: ExportResult = await popup.evaluate(() =>
-            chrome.runtime.sendMessage({ action: 'list_sessions' })
+            chrome.runtime.sendMessage({ action: 'list_captures' })
                 .then((sessions: SessionInfo[]) => {
                     if (sessions && sessions.length > 0) {
                         const latest = sessions[sessions.length - 1];

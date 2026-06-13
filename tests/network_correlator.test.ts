@@ -185,9 +185,9 @@ describe('merge_matched', () => {
 describe('build_cdp_only_request', () => {
     it('creates a request with cdp_only status', () => {
         const cdp = make_cdp_event({ response_body: 'cdp body' });
-        const result = build_cdp_only_request(cdp, 'session_x', 1700000000000);
+        const result = build_cdp_only_request(cdp, 'capture_x', 1700000000000);
 
-        expect(result.session_id).toBe('session_x');
+        expect(result.capture_id).toBe('capture_x');
         expect(result.response_body).toBe('cdp body');
         expect(result.correlation_status).toBe('cdp_only');
         expect(result.cdp_request_id).toBe('cdp_123');

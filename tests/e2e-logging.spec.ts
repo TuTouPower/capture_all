@@ -236,9 +236,9 @@ test.describe('日志系统', () => {
         const export_result = await detail.evaluate(async () => {
             return new Promise((resolve) => {
                 const url = new URL(window.location.href);
-                const session_id = url.searchParams.get('session') || '';
+                const capture_id = url.searchParams.get('capture') || '';
                 chrome.runtime.sendMessage(
-                    { action: 'export_json', session_id },
+                    { action: 'export_json', capture_id },
                     (resp) => resolve(resp),
                 );
             });

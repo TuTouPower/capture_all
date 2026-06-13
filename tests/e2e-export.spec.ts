@@ -77,7 +77,7 @@ test.describe('导出四格式', () => {
             try {
                 const r = await (chrome.runtime.sendMessage({
                     action: 'export_json',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; json?: string }>);
                 return r;
             } catch {
@@ -120,7 +120,7 @@ test.describe('导出四格式', () => {
             try {
                 const r = await (chrome.runtime.sendMessage({
                     action: 'export_jsonl',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; jsonl?: string }>);
                 return r;
             } catch {
@@ -158,7 +158,7 @@ test.describe('导出四格式', () => {
             try {
                 const r = await (chrome.runtime.sendMessage({
                     action: 'export_har',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; har?: string }>);
                 return r;
             } catch {
@@ -203,7 +203,7 @@ test.describe('导出四格式', () => {
             try {
                 const r = await (chrome.runtime.sendMessage({
                     action: 'export_html',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; html?: string }>);
                 return r;
             } catch {

@@ -77,5 +77,18 @@ export default defineConfig({
                 },
             },
         },
+        {
+            name: 'e2e-streaming',
+            testMatch: 'e2e-{websocket-capture,streaming-capture}.spec.ts',
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check', '--disable-gpu'],
+                },
+            },
+        },
     ],
 });

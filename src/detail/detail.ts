@@ -6,6 +6,7 @@ import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
+import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
@@ -52,7 +53,7 @@ async function load_capture_data(): Promise<void> {
 
     try {
         const response = await chrome.runtime.sendMessage({
-            action: 'get_session_data',
+            action: 'get_capture_data',
             capture_id
         });
 
@@ -63,9 +64,17 @@ async function load_capture_data(): Promise<void> {
         }
 
         capture_data = response.capture;
-        events = response.events || [];
-        network_requests = response.network_requests || [];
-        console_logs = response.console_logs || [];
+
+        const snapshot = await read_capture_snapshot(capture_id);
+        events = [
+            ...snapshot.user_events,
+            ...snapshot.nav_events,
+            ...snapshot.error_events,
+            ...snapshot.storage_changes,
+            ...snapshot.cookie_changes,
+        ];
+        network_requests = snapshot.network_requests;
+        console_logs = snapshot.console_events;
 
         render_overview();
         render_timeline();
@@ -316,31 +325,38 @@ async function export_har(): Promise<void> {
 async function export_archive_zip(): Promise<void> {
     if (!is_extension) return;
 
-    const response = await chrome.runtime.sendMessage({
-        action: 'get_capture_data',
-        capture_id
-    });
+    const snapshot = await read_capture_snapshot(capture_id);
+    if (!snapshot.capture) return;
 
-    if (response.success) {
-        const archive = await build_archive(response, {
-            inline_text_max_bytes: user_config.inline_text_max_bytes,
+    const archive = await build_archive({
+        capture: snapshot.capture,
+        events: [
+            ...snapshot.user_events,
+            ...snapshot.nav_events,
+            ...snapshot.error_events,
+            ...snapshot.storage_changes,
+            ...snapshot.cookie_changes,
+        ],
+        network_requests: snapshot.network_requests,
+        console_events: snapshot.console_events,
+    }, {
+        inline_text_max_bytes: user_config.inline_text_max_bytes,
+        system_time_timezone: user_config.system_time_timezone,
+    });
+    const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
+    const { capture_dir } = await load_last_export_dirs();
+    const filename = build_capture_filename(
+        {
+            export_capture_directory: user_config.export_capture_directory,
+            export_filename_template: user_config.export_filename_template,
             system_time_timezone: user_config.system_time_timezone,
-        });
-        const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
-        const { capture_dir } = await load_last_export_dirs();
-        const filename = build_capture_filename(
-            {
-                export_capture_directory: user_config.export_capture_directory,
-                export_filename_template: user_config.export_filename_template,
-                system_time_timezone: user_config.system_time_timezone,
-            },
-            capture_id,
-            'zip',
-            capture_dir,
-        );
-        const download_id = await download_blob(blob, filename, { save_as: true });
-        track_export_dir(download_id, 'capture');
-    }
+        },
+        capture_id,
+        'zip',
+        capture_dir,
+    );
+    const download_id = await download_blob(blob, filename, { save_as: true });
+    track_export_dir(download_id, 'capture');
 }
 
 async function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): Promise<void> {

@@ -70,8 +70,10 @@ chrome.runtime.onInstalled.addListener(async () => {
     const config = await load_user_config();
     Logger.set_level(config.log_level);
     logger.info('Extension installed');
-    start_agent_bridge();
-    logger.info('Agent bridge started');
+    if (config.agent_bridge_enabled) {
+        start_agent_bridge();
+        logger.info('Agent bridge started');
+    }
 });
 
 // Setup keepalive listener
@@ -121,7 +123,10 @@ async function handle_message(message: any): Promise<any> {
             return { success: true, har: await export_har(message.capture_id) };
         case 'restart_bridge':
             stop_bridge_client();
-            start_agent_bridge();
+            {
+                const cfg = await load_user_config();
+                if (cfg.agent_bridge_enabled) start_agent_bridge();
+            }
             return { success: true };
         case 'test_bridge_fetch':
             try {
@@ -153,9 +158,9 @@ async function handle_message(message: any): Promise<any> {
             await get_app_log_transport().clear();
             return { success: true };
         }
-        case 'get_app_log_count': {
-            const count = await get_app_log_transport().count();
-            return { success: true, count };
+        case 'get_app_log_size': {
+            const size_bytes = await get_app_log_transport().get_total_size_bytes();
+            return { success: true, size_bytes };
         }
         case 'set_log_level': {
             if (message.level) {
@@ -617,6 +622,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
     try {
         await write_network_requests([request]);
         current_capture.stats.request_count++;
+        current_capture.stats.total_body_bytes += (request.response_body_bytes || 0) + (request.request_body_bytes || 0);
         await persist_stats();
     } catch (err) {
         logger.error('Failed to write network request', err);

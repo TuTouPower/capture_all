@@ -20,6 +20,7 @@ export function create_empty_capture_stats(): CaptureStats {
         error_count: 0,
         storage_change_count: 0,
         cookie_change_count: 0,
+        total_body_bytes: 0,
     };
 }
 

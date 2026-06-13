@@ -375,7 +375,7 @@ async function start_capture(): Promise<void> {
             duration_ms: 0,
             start_url: '', end_url: null, tab_id: 0, window_id: null,
             config_snapshot: config,
-            stats: { event_count: 0, user_action_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            stats: { event_count: 0, user_action_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0, total_body_bytes: 0 },
             tags: build_tags(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

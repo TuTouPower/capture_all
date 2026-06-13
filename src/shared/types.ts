@@ -39,6 +39,7 @@ export interface CaptureStats {
     error_count: number;
     storage_change_count: number;
     cookie_change_count: number;
+    total_body_bytes: number;
 }
 
 // ============================================================
@@ -533,7 +534,7 @@ export interface UserConfig {
     agent_bridge_token: string;
     agent_bridge_poll_interval_ms: number;
     log_level: LogLevel;
-    log_max_entries: number;
+    log_max_size_mb: number;
 }
 
 // ============================================================

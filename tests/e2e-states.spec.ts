@@ -62,10 +62,10 @@ test.describe.serial('Popup 三状态', () => {
         const timer_text = await timer.textContent();
         expect(timer_text).toMatch(/\d{2}:\d{2}:\d{2}/);
 
-        // 操作区高度 108px
+        // 操作区高度 88px (popup.css .action { height: 88px })
         const action = popup.locator('.action');
         const action_height = await action.evaluate(el => el.getBoundingClientRect().height);
-        expect(action_height).toBe(108);
+        expect(action_height).toBe(88);
 
         // 停止采集以便下一个测试
         await popup.locator('#stopBtn').click();
@@ -92,10 +92,10 @@ test.describe.serial('Popup 三状态', () => {
         await expect(popup.locator('#openDetailBtn')).toBeVisible();
         await expect(popup.locator('#newBtn')).toBeVisible();
 
-        // 操作区高度 108px
+        // 操作区高度 88px (popup.css .action { height: 88px })
         const action = popup.locator('.action');
         const action_height = await action.evaluate(el => el.getBoundingClientRect().height);
-        expect(action_height).toBe(108);
+        expect(action_height).toBe(88);
 
         await popup.close();
     });

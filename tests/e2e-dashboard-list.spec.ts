@@ -35,8 +35,8 @@ test.describe('Dashboard 空态 P4.11', () => {
         await popup.waitForTimeout(300);
 
         const body_text = await popup.innerText('body');
-        // recent_empty 占位 — i18n key noSessions
-        expect(body_text).toContain('暂无采集');
+        // recent_empty 占位 — i18n key noCaptures，默认 locale='en'
+        expect(body_text).toContain('No captures yet');
 
         await popup.close();
     });

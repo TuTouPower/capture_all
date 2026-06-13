@@ -266,4 +266,28 @@ describe('WebSocket capture', () => {
         expect(frames[0].data.payload_encoding).toBe('base64');
         expect(frames[0].data.payload).toBe(b64);
     });
+
+    it('preserves empty-string payload (opcode 1 text frame keepalive)', async () => {
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketCreated',
+            { requestId: 'ws_1', url: 'wss://echo.example.com/ws' },
+        );
+
+        // 空字符串是合法 payload（心跳/keepalive 文本帧），不能被 || null 吞掉
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketFrameReceived',
+            { requestId: 'ws_1', timestamp: 1000, response: { opcode: 1, mask: false, payloadData: '' } },
+        );
+
+        const frames = emitted.filter(e => e.event?.type === 'ws_frame');
+        expect(frames).toHaveLength(1);
+        expect(frames[0].data.payload).toBe('');
+        expect(frames[0].data.payload_bytes).toBe(0);
+        expect(frames[0].data.payload_status).toBe('captured');
+        expect(frames[0].data.payload_encoding).toBe('utf8');
+    });
 });

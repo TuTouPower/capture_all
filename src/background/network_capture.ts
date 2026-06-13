@@ -352,7 +352,8 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
 
 function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: any): void {
     const resp = params?.response || {};
-    const raw_payload = resp.payloadData || null;
+    // 仅拦截 undefined（CDP 控制帧不携带 payloadData），保留空字符串（合法 payload）
+    const raw_payload = resp.payloadData === undefined ? null : resp.payloadData;
     const is_binary = resp.opcode === 2;
     let payload: string | null = null;
     let payload_encoding: 'utf8' | 'base64' | null = null;

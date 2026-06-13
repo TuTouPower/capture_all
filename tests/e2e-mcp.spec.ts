@@ -59,7 +59,7 @@ test.beforeAll(async () => {
                 detail_time_display_mode: 'system',
                 export_capture_directory: '',
                 export_log_directory: '',
-                export_filename_template: 'record_all_{session_id}_{date}.{ext}',
+                export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
                 export_save_as: true,
                 agent_bridge_enabled: true,
                 agent_bridge_url: cfg.url,
@@ -102,7 +102,7 @@ test.beforeAll(async () => {
                     'Authorization': `Bearer ${cfg.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ version: 'test', active_session_id: null })
+                body: JSON.stringify({ version: 'test', active_capture_id: null })
             });
             return { status: res.status, body: await res.text() };
         } catch (e: any) {
@@ -159,16 +159,16 @@ test.describe('MCP Bridge E2E', () => {
     test('MCP: recording.start', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'e2e_start', type: 'recording.start',
-            payload: { session_id: 'e2e_session_1' }, created_at: Date.now()
+            payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
-        expect(data.data).toHaveProperty('session_id', 'e2e_session_1');
+        expect(data.data).toHaveProperty('capture_id', 'e2e_session_1');
     });
 
     test('MCP: sources.list', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'e2e_sources', type: 'sources.list',
-            payload: { session_id: 'e2e_session_1' }, created_at: Date.now()
+            payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
     });
@@ -176,7 +176,7 @@ test.describe('MCP Bridge E2E', () => {
     test('MCP: session.get_all_data', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'e2e_alldata', type: 'session.get_all_data',
-            payload: { session_id: 'e2e_session_1' }, created_at: Date.now()
+            payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
         expect(data.data).toHaveProperty('session');
@@ -185,7 +185,7 @@ test.describe('MCP Bridge E2E', () => {
     test('MCP: session.export json', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'e2e_export', type: 'session.export',
-            payload: { session_id: 'e2e_session_1', format: 'json' }, created_at: Date.now()
+            payload: { capture_id: 'e2e_capture_1', format: 'json' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
         expect(data.data).toHaveProperty('format', 'json');
@@ -203,7 +203,7 @@ test.describe('MCP Bridge E2E', () => {
     test('MCP: sessions.get returns details', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'e2e_get', type: 'sessions.get',
-            payload: { session_id: 'e2e_session_1' }, created_at: Date.now()
+            payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
         expect(data.data).toHaveProperty('id', 'e2e_session_1');

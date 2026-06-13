@@ -357,7 +357,7 @@ test.describe.serial('主题 + i18n', () => {
         expect(session_id).toBeTruthy();
         await popup.close();
 
-        const detail_url = `chrome-extension://${fix.extension_id}/src/detail/detail.html?session=${session_id}`;
+        const detail_url = `chrome-extension://${fix.extension_id}/src/detail/detail.html?capture=${session_id}`;
 
         // 切换到中文 → 打开详情页验证中文标签
         const d_zh = await fix.context.newPage();

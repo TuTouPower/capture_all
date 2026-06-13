@@ -118,16 +118,16 @@ export interface CaptureDataResult {
 export async function verify_capture_data(page: Page): Promise<CaptureDataResult> {
     return await page.evaluate(async () => {
         try {
-            const sessions = await (chrome.runtime.sendMessage({
-                action: 'list_sessions',
+            const captures = await (chrome.runtime.sendMessage({
+                action: 'list_captures',
             }) as Promise<Array<{ capture_id: string }>>);
-            if (!Array.isArray(sessions) || sessions.length === 0) {
-                return { success: false, error: 'No sessions found' };
+            if (!Array.isArray(captures) || captures.length === 0) {
+                return { success: false, error: 'No captures found' };
             }
-            const latest = sessions[sessions.length - 1];
+            const latest = captures[captures.length - 1];
             const data = await (chrome.runtime.sendMessage({
-                action: 'get_session_data',
-                session_id: latest.capture_id,
+                action: 'get_capture_data',
+                capture_id: latest.capture_id,
             }) as Promise<CaptureDataResult>);
             return data;
         } catch (e: unknown) {

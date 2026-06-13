@@ -81,7 +81,7 @@ test.describe.serial('CDP 重试验证', () => {
         const export_result = await dashboard.evaluate(async (id) => {
             try {
                 return await chrome.runtime.sendMessage({
-                    action: 'export_json', session_id: id
+                    action: 'export_json', capture_id: id
                 }) as { success: boolean; json?: string };
             } catch { return { success: false, json: undefined }; }
         }, capture_id);
@@ -148,7 +148,7 @@ test.describe.serial('CDP 重试验证', () => {
         const export_result = await dashboard.evaluate(async (id) => {
             try {
                 return await chrome.runtime.sendMessage({
-                    action: 'export_json', session_id: id
+                    action: 'export_json', capture_id: id
                 }) as { success: boolean; json?: string };
             } catch { return { success: false, json: undefined }; }
         }, capture_id);

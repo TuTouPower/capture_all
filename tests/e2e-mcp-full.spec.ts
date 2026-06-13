@@ -56,7 +56,7 @@ test.beforeAll(async () => {
                 detail_time_display_mode: 'system',
                 export_capture_directory: '',
                 export_log_directory: '',
-                export_filename_template: 'capture_all_{session_id}_{date}.{ext}',
+                export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
                 export_save_as: true,
                 agent_bridge_enabled: true,
                 agent_bridge_url: cfg.url,
@@ -121,7 +121,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_start',
             type: 'recording.start',
-            payload: { session_id: 'e2e_full_session_1' },
+            payload: { capture_id: 'e2e_full_capture_1' },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);

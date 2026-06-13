@@ -99,7 +99,7 @@ test.describe.serial('导出内容正确性', () => {
             try {
                 return await (chrome.runtime.sendMessage({
                     action: 'export_json',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; json?: string }>);
             } catch {
                 return { success: false, json: undefined };
@@ -187,7 +187,7 @@ test.describe.serial('导出内容正确性', () => {
             try {
                 return await (chrome.runtime.sendMessage({
                     action: 'export_har',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; har?: string }>);
             } catch {
                 return { success: false, har: undefined };
@@ -259,7 +259,7 @@ test.describe.serial('导出内容正确性', () => {
             try {
                 return await (chrome.runtime.sendMessage({
                     action: 'export_html',
-                    session_id: id,
+                    capture_id: id,
                 }) as Promise<{ success: boolean; html?: string }>);
             } catch {
                 return { success: false, html: undefined };

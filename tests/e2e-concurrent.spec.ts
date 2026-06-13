@@ -26,7 +26,7 @@ async function export_via_dashboard(
         try {
             return await (chrome.runtime.sendMessage({
                 action: 'export_json',
-                session_id: id,
+                capture_id: id,
             }) as Promise<ExportResult>);
         } catch {
             return { success: false, json: undefined };
@@ -39,7 +39,7 @@ async function export_via_dashboard(
 async function get_latest_capture_id(page: Awaited<ReturnType<typeof open_popup>>): Promise<string> {
     return await page.evaluate(async () => {
         const sessions = await (chrome.runtime.sendMessage({
-            action: 'list_sessions',
+            action: 'list_captures',
         }) as Promise<Array<{ capture_id: string }>>);
         if (!sessions || sessions.length === 0) return '';
         return sessions[sessions.length - 1].capture_id;

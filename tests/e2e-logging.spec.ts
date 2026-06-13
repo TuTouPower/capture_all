@@ -287,8 +287,8 @@ test.describe('日志系统', () => {
         await set_log_level(dash, 'debug');
         await dash.waitForTimeout(300);
 
-        const max_input = dash.locator('[data-cfg="log_max_entries"]');
-        await max_input.fill('20');
+        const max_input = dash.locator('[data-cfg="log_max_size_mb"]');
+        await max_input.fill('50');
         await max_input.dispatchEvent('change');
         await dash.waitForTimeout(300);
 
@@ -343,9 +343,9 @@ test.describe('日志系统', () => {
         await expect(dash.locator('#exportLogJson')).toBeVisible();
         await expect(dash.locator('#exportLogJsonl')).toBeVisible();
         await expect(dash.locator('#clearLogs')).toBeVisible();
-        await expect(dash.locator('#logCount')).toBeVisible();
+        await expect(dash.locator('#logSize')).toBeVisible();
         await expect(
-            dash.locator('[data-cfg="log_max_entries"]'),
+            dash.locator('[data-cfg="log_max_size_mb"]'),
         ).toBeVisible();
         await expect(dash.locator('[data-seg="log_level"]')).toBeVisible();
 

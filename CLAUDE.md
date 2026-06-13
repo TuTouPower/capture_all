@@ -67,4 +67,5 @@ tests/
 - 主色 `#3b82f6`（蓝），字体 IBM Plex Sans + Mono
 - 7 数据标签：用户行为/页面导航/网络请求/控制台/错误异常/Storage/Cookie
 - 已删除概念：深度采集/标准采集/模式切换/密度/当前采集中卡片
+- 术语统一：英文用 `capture`，中文用"采集"。禁止使用 `session`/`record`/`录制`/`记录` 作为产品术语。类型名：`CaptureRecord`/`CaptureEvent`/`CaptureConfig`。单次采集标识：`capture_id`。MCP 命令：`capture.start`/`captures.list`/`data.list` 等。
 - Bridge 仅绑定 `127.0.0.1`，token 由用户提供，禁止硬编码

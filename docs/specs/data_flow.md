@@ -49,19 +49,19 @@ sequenceDiagram
     participant Query as Data Queries
     participant IDB as IndexedDB
 
-    Agent->>MCP: list_sessions()
-    MCP->>Bridge: POST /mcp/command { type: "sessions.list" }
+    Agent->>MCP: list_captures()
+    MCP->>Bridge: POST /mcp/command { type: "captures.list" }
     Bridge->>Bridge: 写入命令队列
 
     Client->>Bridge: GET /extension/command (轮询)
-    Bridge-->>Client: 返回 sessions.list 命令
+    Bridge-->>Client: 返回 captures.list 命令
     Client->>Query: list_captures()
     Query->>IDB: 查询 captures store
     IDB-->>Query: 返回列表
     Query-->>Client: CaptureRecord[]
     Client->>Bridge: POST /extension/result { data: [...] }
     Bridge-->>MCP: 返回结果
-    MCP-->>Agent: session 列表
+    MCP-->>Agent: capture 列表
 ```
 
 ## 3. 响应体捕获流程

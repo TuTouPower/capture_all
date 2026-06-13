@@ -69,7 +69,7 @@
 ### 3.1 脱敏配置
 
 ```typescript
-// 默认 RecordConfig
+// 默认 CaptureConfig
 redact_sensitive_headers: true   // 默认开启 header 脱敏
 redact_url_query: true           // 默认开启 URL 脱敏
 redact_data: true                // 默认开启数据脱敏
@@ -93,7 +93,7 @@ capture_response_body: false     // 默认不捕获响应体
 - 数据本地优先，不默认上传
 - HTML 导出必须转义动态内容
 - Bridge 仅绑定 `127.0.0.1`
-- 不提供删除 session / 清空数据 MCP 能力
+- 不提供删除采集 / 清空数据 MCP 能力
 - 禁止硬编码 secret/token/弱口令
 - Agent bridge token 由用户提供
 
@@ -104,7 +104,7 @@ capture_response_body: false     // 默认不捕获响应体
 ### 4.1 默认采集配置
 
 ```typescript
-DEFAULT_CONFIG: RecordConfig = {
+DEFAULT_CONFIG: CaptureConfig = {
     capture_mode: 'basic',
     mouse_precision: 'clicks_scroll_drag',
     capture_console: false,

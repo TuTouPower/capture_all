@@ -83,6 +83,34 @@
   - `tests/e2e-popup-export.spec.ts` — 新增 popup ZIP 导出 E2E
   - `tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` — 修正断言文案
 
+### ✅ P0.47 sendMessage 超 64MB 崩溃 + 架构修复
+- **状态**：已修复 — 2026-06-13
+- **触发日志**：`data/capture_all_logs_2026-06-13_13-38-23.log` 中大量 `Message exceeded maximum allowed size of 64MiB`
+- **现象**：采集含图片后，popup 导出无反应、dashboard 详情页黑屏、所有依赖 `get_capture_data` 的功能全挂。
+- **根因**：P0.45 让采集层保存二进制 body（base64），`get_capture_data` 把全量数据（含 base64 body + 7 类事件）通过 `sendMessage` 传给页面，超过 Chrome 64MB 限制。不只是 body 问题——长时间采集（事件多）也会超。
+- **架构修复**：`get_capture_data` 改为只返回元数据（capture record + stats），页面侧直连 IndexedDB 读取详情（`read_capture_snapshot()`）。SW flush 后页面直接读 DB，不经过 sendMessage。
+- **测试为什么没发现**：
+  1. `tests/live_data_queries.test.ts` 自己重写了 `get_capture_data()` 直接读 IndexedDB，完全绕过 `sendMessage`，测不到大小限制
+  2. 所有测试 fixture 只有几条事件/请求，不可能触发 64MB 限制
+  3. 没有测试验证 `get_capture_data` 响应是否只含元数据（不含 events/network/bodies）
+  4. 没有测试验证 sendMessage 响应大小是否在安全范围内
+- **需要补的测试**（待实现）：
+  1. `tests/sw_response_contract.test.ts` — SW 响应契约：
+     - 断言 `get_capture_data` 响应不含 `events`/`network_requests`/`console_logs` 字段
+     - 断言响应只含 `success` 和 `capture`（元数据）
+     - 估算响应大小 < 10KB
+     - 对 `list_captures`、`get_status` 也验证大小安全
+  2. `tests/capture_data_reader.test.ts` — 页面侧直读：
+     - 验证 `read_capture_snapshot` 返回完整数据（events、network、console）
+     - 构造大数据场景（1000+ 条事件），验证读取正确
+  3. `tests/archive_builder.test.ts` 补充：
+     - 验证大数据场景（1000+ 请求）ZIP 生成不超时
+  4. 若有人把 `get_capture_data` 改回返回全量数据，契约测试必须失败
+- **影响文件**：
+  - `src/background/service_worker.ts` — `get_capture_data` 改为轻量返回
+  - `src/shared/capture_data_reader.ts` — 新建，页面侧直读
+  - `src/popup/popup.ts` / `src/dashboard/dashboard.ts` / `src/detail/detail.ts` — 改用直读
+
 ### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
 - **状态**：已实现 — 2026-06-13
 - **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`

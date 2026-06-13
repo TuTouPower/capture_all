@@ -7,6 +7,7 @@ import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename, build_log_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
+import { build_archive } from '../shared/archive_builder';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -352,9 +353,27 @@ function wire_captures(): void {
     });
 }
 
-async function export_session(id: string, format: string = 'json'): Promise<void> {
+async function export_session(id: string, format: string = 'archive'): Promise<void> {
     if (!is_extension) return;
     try {
+        if (format === 'archive') {
+            const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', session_id: id });
+            if (!r?.success) { alert('导出失败'); return; }
+            const archive = await build_archive(r, {
+                inline_text_max_bytes: user_config.inline_text_max_bytes,
+                system_time_timezone: user_config.system_time_timezone,
+            });
+            const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
+            const { capture_dir } = await load_last_export_dirs();
+            const capture_filename = build_capture_filename({
+                export_capture_directory: user_config.export_capture_directory,
+                export_filename_template: user_config.export_filename_template,
+                system_time_timezone: user_config.system_time_timezone,
+            }, id, 'zip', capture_dir);
+            const download_id = await download_blob(blob, capture_filename, { save_as: true });
+            track_export_dir(download_id, 'capture');
+            return;
+        }
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
         const r = await chrome.runtime.sendMessage({ action, session_id: id });
         if (!r?.success) { alert('导出失败'); return; }
@@ -446,7 +465,7 @@ function render_detail(): string {
             </div>
             <div class="dt-head-r">
                 <select id="dtExportFmt" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);margin-right:6px">
-                    <option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
+                    <option value="archive">ZIP 完整包</option><option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
                 </select>
                 <button class="btn" data-dexport="1"><span>${I.export}</span>导出</button>
                 <button class="btn" data-open-url="1"><span>${I.ext}</span>打开原页面</button>

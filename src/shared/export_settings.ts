@@ -2,7 +2,7 @@
 import type { UserConfig } from './types';
 import { format_system_time_filename } from './system_time';
 
-type ExportExtension = 'json' | 'jsonl' | 'html' | 'har';
+type ExportExtension = 'json' | 'jsonl' | 'html' | 'har' | 'zip';
 
 type ExportConfig = Pick<UserConfig, 'export_capture_directory' | 'export_filename_template' | 'system_time_timezone'>;
 

@@ -5,6 +5,7 @@ import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
+import { build_archive } from '../shared/archive_builder';
 import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
@@ -257,6 +258,7 @@ function setup_export(): void {
     document.getElementById('exportJsonlBtn')!.addEventListener('click', export_jsonl);
     document.getElementById('exportHtmlBtn')!.addEventListener('click', export_html);
     document.getElementById('exportHarBtn')!.addEventListener('click', export_har);
+    document.getElementById('exportArchiveBtn')?.addEventListener('click', export_archive_zip);
 }
 
 async function export_json(): Promise<void> {
@@ -308,6 +310,36 @@ async function export_har(): Promise<void> {
 
     if (response.success) {
         await download_export(response.har, 'application/json', 'har');
+    }
+}
+
+async function export_archive_zip(): Promise<void> {
+    if (!is_extension) return;
+
+    const response = await chrome.runtime.sendMessage({
+        action: 'get_capture_data',
+        session_id
+    });
+
+    if (response.success) {
+        const archive = await build_archive(response, {
+            inline_text_max_bytes: user_config.inline_text_max_bytes,
+            system_time_timezone: user_config.system_time_timezone,
+        });
+        const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
+        const { capture_dir } = await load_last_export_dirs();
+        const filename = build_capture_filename(
+            {
+                export_capture_directory: user_config.export_capture_directory,
+                export_filename_template: user_config.export_filename_template,
+                system_time_timezone: user_config.system_time_timezone,
+            },
+            session_id,
+            'zip',
+            capture_dir,
+        );
+        const download_id = await download_blob(blob, filename, { save_as: true });
+        track_export_dir(download_id, 'capture');
     }
 }
 

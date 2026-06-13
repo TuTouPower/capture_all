@@ -100,7 +100,7 @@ export function build_capture_filename(
         | 'system_time_timezone'
     >,
     capture_id: string,
-    extension: 'json' | 'jsonl' | 'html' | 'har',
+    extension: 'json' | 'jsonl' | 'html' | 'har' | 'zip',
     last_dir?: string,
 ): string {
     const dir = last_dir || config.export_capture_directory;

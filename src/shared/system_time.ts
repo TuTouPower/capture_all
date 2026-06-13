@@ -111,7 +111,7 @@ export function format_system_time(ts: string | number, config: SystemTimeConfig
 // format_system_time_filename
 // ============================================================
 export function format_system_time_filename(ts: string | number, config: SystemTimeConfig): string {
-    return format_system_time(ts, config).replace(' ', '_').replace(/:/g, '-');
+    return format_system_time(ts, config).replace(/[-: ]/g, '').replace(/^(.{8})(.{6})$/, '$1_$2');
 }
 
 // ============================================================

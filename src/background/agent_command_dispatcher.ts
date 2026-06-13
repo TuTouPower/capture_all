@@ -11,6 +11,7 @@ import {
     type AgentDataSource
 } from './agent_data_queries';
 import { DEFAULT_CONFIG } from '../shared/constants';
+import { generate_capture_id } from '../shared/id';
 import type { CaptureConfig } from '../shared/types';
 
 export interface AgentRuntimeHandlers {
@@ -88,9 +89,7 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
 async function start_capture(payload: Record<string, unknown>, handlers: AgentRuntimeHandlers): Promise<unknown> {
     const capture_id = typeof payload.capture_id === 'string'
         ? payload.capture_id
-        : typeof payload.capture_id === 'string'
-            ? payload.capture_id
-            : `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        : generate_capture_id();
     const config = is_capture_config(payload.config) ? payload.config : DEFAULT_CONFIG;
     const result = await handlers.start_capture(capture_id, config);
 

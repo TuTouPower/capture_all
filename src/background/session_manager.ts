@@ -4,6 +4,7 @@ import { create_capture, update_capture, list_captures, delete_capture, get_capt
 import { start_keepalive, stop_keepalive } from './keepalive';
 import { DEFAULT_CONFIG } from '../shared/constants';
 import { create_empty_capture_stats } from '../shared/capture_stats';
+import { generate_capture_id } from '../shared/id';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 
@@ -99,10 +100,6 @@ export async function get_capture_by_id(id: string): Promise<CaptureRecord | nul
 
 export function get_capture_bytes(id: string): number {
     return get_capture_size(id);
-}
-
-function generate_capture_id(): string {
-    return `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function start_storage_monitoring(capture_id: string): void {

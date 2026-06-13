@@ -9,6 +9,7 @@ import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
+import { generate_capture_id } from '../shared/id';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import type { CaptureConfig } from '../shared/types';
@@ -295,7 +296,7 @@ function wire_view(): void {
                 finished_capture.capture_id,
                 'zip',
             );
-            await download_blob(blob, filename, { save_as: true });
+            await download_blob(blob, filename);
         } catch (e) {
             logger.error('Export message failed', e);
             alert(`${t('error')}: ${e}`);
@@ -354,7 +355,7 @@ function get_capture_config(): CaptureConfig {
 async function start_capture(): Promise<void> {
     if (!is_extension) { state = 'capturing'; render(); return; }
     const config = get_capture_config();
-    const capture_id = `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const capture_id = generate_capture_id();
     logger.info('Starting capture', { capture_id });
     try {
         const response = await chrome.runtime.sendMessage({ action: 'start', capture_id: capture_id, config });

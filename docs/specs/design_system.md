@@ -60,7 +60,7 @@
 | HTML | 自包含报告 | XSS 安全转义 (`</script>` -> `<\/script>`) |
 | HAR | 网络归档格式 | Chrome DevTools / Fiddler 可识别 |
 
-**导出设置**：目录为 Chrome Downloads 相对目录；文件名模板 `capture_all_{capture_id}_{date}.{ext}`；HTML 导出安全转义所有动态内容。
+**导出设置**：目录为 Chrome Downloads 相对目录；文件名模板 `capture_all_{capture_id}_{date}.{ext}`；HTML 导出安全转义所有动态内容。P0.61：配置导出目录时直接保存不弹框；未配置时弹保存对话框让 Chrome 记忆保存位置。
 
 ---
 

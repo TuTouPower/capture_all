@@ -62,12 +62,13 @@ function capture_name(s: CaptureRecord): string {
     return s.name || `${format_system_time(s.started_at, user_config)} 的采集`;
 }
 
-// estimated on-disk size from stats (real storage size is not tracked per capture)
+// estimated on-disk size from stats + binary body bytes
 function est_bytes(s: CaptureRecord): number {
     const st = s.stats;
     if (!st) return 0;
     return st.event_count * 120 + st.request_count * 450 + st.log_count * 160
-        + st.storage_change_count * 90 + st.cookie_change_count * 80;
+        + st.storage_change_count * 90 + st.cookie_change_count * 80
+        + (st.total_body_bytes || 0);
 }
 function fmt_size(bytes: number): string {
     if (bytes <= 0) return '0 B';
@@ -266,21 +267,23 @@ function render_captures(): string {
         return `<tr data-open="${id}" data-sel="${selected.has(s.capture_id) ? 1 : 0}">
             <td class="col-chk" data-stop="1"><input type="checkbox" class="ck" data-chk="${id}" ${selected.has(s.capture_id) ? 'checked' : ''}></td>
             <td><span class="cap-name">${s.status === 'capturing' ? '<span class="recdot" title="采集中"></span>' : ''}<b>${esc(capture_name(s))}</b></span></td>
-            <td><span class="cap-url mono" title="${esc(s.start_url)}">${esc(strip_proto(s.start_url) || '—')}</span></td>
             <td><span class="cap-time mono">${esc(format_system_time(s.started_at, user_config))}</span></td>
             <td><span class="cap-dur mono">${capture_dur(s)}</span></td>
-            <td class="col-num mono">${num(s.stats?.event_count || 0)}</td>
+            <td class="col-num mono">${num(s.stats?.user_action_count || 0)}</td>
+            <td class="col-num mono">${num(s.stats?.nav_count || 0)}</td>
             <td class="col-num mono">${num(s.stats?.request_count || 0)}</td>
+            <td class="col-num mono">${num(s.stats?.log_count || 0)}</td>
             <td class="col-num"><span class="cap-errs mono" data-bad="${(s.stats?.error_count || 0) > 0 ? 1 : 0}">${num(s.stats?.error_count || 0)}</span></td>
+            <td class="col-num mono">${num(s.stats?.storage_change_count || 0)}</td>
+            <td class="col-num mono">${num(s.stats?.cookie_change_count || 0)}</td>
             <td class="col-num mono">${fmt_size(est_bytes(s))}</td>
-            <td>${(s.tags && s.tags[0]) ? `<span class="chip-tag">${esc(s.tags[0])}</span>` : '<span class="cap-time">—</span>'}</td>
             <td class="col-act" data-stop="1"><span class="rowact">
                 <button class="ibtn" title="导出" data-export="${id}">${I.download}</button>
                 <button class="ibtn" title="删除" data-del="${id}">${I.trash}</button>
             </span></td>
         </tr>`;
     }).join('');
-    const empty = `<tr><td colspan="12" style="text-align:center;color:var(--ink-4);padding:40px">暂无采集记录</td></tr>`;
+    const empty = `<tr><td colspan="13" style="text-align:center;color:var(--ink-4);padding:40px">暂无采集记录</td></tr>`;
     return `<div class="page">
         <div class="pg-head">
             <div class="pg-title"><h1>采集记录</h1><p>管理和查看所有已完成的采集记录，支持导出、归档和标签管理。</p></div>
@@ -310,9 +313,12 @@ function render_captures(): string {
             <table class="cap-table">
                 <thead><tr>
                     <th class="col-chk"><input type="checkbox" class="ck" id="capAll"></th>
-                    <th>采集名称</th><th>页面 / URL</th><th>时间</th><th>时长</th>
-                    <th class="col-num">事件数</th><th class="col-num">请求数</th><th class="col-num">错误数</th>
-                    <th class="col-num">大小</th><th>导出状态</th><th>标签</th><th class="col-act">操作</th>
+                    <th>采集名称</th><th>时间</th><th>时长</th>
+                    <th class="col-num">用户行为</th><th class="col-num">页面导航</th>
+                    <th class="col-num">网络请求</th><th class="col-num">控制台</th>
+                    <th class="col-num">错误异常</th><th class="col-num">Storage</th>
+                    <th class="col-num">Cookie</th>
+                    <th class="col-num">大小</th><th class="col-act">操作</th>
                 </tr></thead>
                 <tbody>${rows || empty}</tbody>
             </table>
@@ -1040,8 +1046,8 @@ function render_settings(): string {
                     <h2>诊断日志</h2>
                     <div class="set-card"><div class="set-grid">
                         <div class="field"><span class="field-lbl">日志级别</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
-                        <div class="field"><span class="field-lbl">最大储存条数</span><input class="input mono" type="number" data-cfg="log_max_entries" value="${esc(String(cfg.log_max_entries))}" min="100" max="100000" step="100"><span style="font-size:12px;color:var(--ink-3)">超出后自动删除最旧记录</span></div>
-                        <div class="field"><span class="field-lbl">当前日志数</span><span id="logCount" class="mono" style="font-weight:600">—</span></div>
+                        <div class="field"><span class="field-lbl">最大日志大小 (MB)</span><input class="input mono" type="number" data-cfg="log_max_size_mb" value="${esc(String(cfg.log_max_size_mb))}" min="1" max="1024" step="1"></div>
+                        <div class="field"><span class="field-lbl">当前日志大小</span><span id="logSize" class="mono" style="font-weight:600">—</span></div>
                         <div class="field span2" style="display:flex;gap:8px">
                             <button class="btn sm" id="exportLog"><span>${I.export}</span>导出运行日志</button>
                             <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>清除所有日志</button>
@@ -1133,7 +1139,7 @@ function wire_settings(): void {
             if (name === 'locale') { set_locale(v as Locale); await persist({ locale: v as Locale }); }
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
-            else if (name === 'log_max_entries') await persist({ [name]: Number(v) } as Partial<UserConfig>);
+            else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.max_body_capture_bytes) } as Partial<UserConfig>);
             else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.inline_text_max_bytes) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
@@ -1143,18 +1149,23 @@ function wire_settings(): void {
 }
 
 async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
-    // Load current log count
-    const update_count = async () => {
-        const el = c.querySelector('#logCount');
+    // Load current log size
+    const update_size = async () => {
+        const el = c.querySelector('#logSize');
         if (!el) return;
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'get_app_log_count' });
-            el.textContent = r?.count != null ? `${r.count.toLocaleString('en-US')} 条` : '—';
+            const r = await chrome.runtime.sendMessage({ action: 'get_app_log_size' });
+            if (r?.size_bytes != null) {
+                const mb = (r.size_bytes / (1024 * 1024)).toFixed(1);
+                el.textContent = `${mb} MB`;
+            } else {
+                el.textContent = '—';
+            }
         } catch {
             el.textContent = '—';
         }
     };
-    update_count();
+    update_size();
 
     // Export log
     c.querySelector('#exportLog')?.addEventListener('click', async () => {
@@ -1177,7 +1188,7 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
         if (!confirm('确定清空所有诊断日志？此操作不可撤销。')) return;
         try {
             await chrome.runtime.sendMessage({ action: 'clear_app_logs' });
-            update_count();
+            update_size();
         } catch (e) { logger.error('Clear logs error', e); }
     });
 }

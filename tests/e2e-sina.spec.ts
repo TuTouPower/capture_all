@@ -1,6 +1,6 @@
 // tests/e2e-sina.spec.ts — 完整采集流程 on sina.com.cn
 import { test, expect } from '@playwright/test';
-import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_LABELS, verify_capture_data } from './e2e-helpers';
+import { launch_extension, open_popup, open_site, TEST_SITES, REQUIRED_KEYS, verify_capture_data } from './e2e-helpers';
 
 test.describe('Sina 采集流程', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;
@@ -45,10 +45,10 @@ test.describe('Sina 采集流程', () => {
         const has_count = await cards_with_count.count();
         expect(has_count, 'sina.com.cn 加载+滚动+点击后至少一个标签计数 > 0').toBeGreaterThan(0);
 
-        // 7 个标签全部存在
-        for (const label of REQUIRED_LABELS) {
+        // 7 个标签全部存在（用 data-key，避免依赖 i18n locale）
+        for (const key of REQUIRED_KEYS) {
             await expect(
-                popup.locator('.mcard', { hasText: label }),
+                popup.locator(`.mcard[data-key="${key}"]`),
             ).toBeVisible();
         }
 

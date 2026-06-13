@@ -39,8 +39,8 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(popup_src).toMatch(/build_capture_filename\(/);
     });
 
-    it('P0.40: popup export passes save_as: true', () => {
-        expect(popup_src).toMatch(/save_as:\s*true/);
+    it('P0.61: popup export no longer passes save_as (auto-detected from filename)', () => {
+        expect(popup_src).not.toMatch(/save_as/);
     });
 
     it('exportBtn still checks resp.success before downloading', () => {

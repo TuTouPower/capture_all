@@ -31,23 +31,36 @@ afterEach(() => {
 
 const tz_config = { system_time_timezone: 'UTC+8' as const };
 
+// P0.61: saveAs 由 filename 是否含子目录自动决定，opts.save_as 不再参与。
+// - filename 含 '/' → saveAs: false（直接存，不弹框）
+// - filename 不含 '/' → saveAs: true（弹框让 Chrome 记忆）
 describe('download_blob', () => {
-    it('calls chrome.downloads.download with saveAs true by default', async () => {
-        const blob = new Blob(['test'], { type: 'text/plain' });
-        await download_blob(blob, 'test/file.txt');
+    it('P0.61: saveAs=false when filename has subdirectory (captures/foo.zip)', async () => {
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await download_blob(blob, 'captures/foo.zip');
         expect(mock_download).toHaveBeenCalledWith({
             url: 'blob:mock-url',
-            filename: 'test/file.txt',
+            filename: 'captures/foo.zip',
+            saveAs: false,
+        });
+    });
+
+    it('P0.61: saveAs=true when filename has no subdirectory (foo.zip)', async () => {
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await download_blob(blob, 'foo.zip');
+        expect(mock_download).toHaveBeenCalledWith({
+            url: 'blob:mock-url',
+            filename: 'foo.zip',
             saveAs: true,
         });
     });
 
-    it('respects save_as option when false', async () => {
-        const blob = new Blob(['test'], { type: 'text/plain' });
-        await download_blob(blob, 'test/file.txt', { save_as: false });
+    it('P0.61: saveAs=false when filename has deeper subdirectory (logs/bar.log)', async () => {
+        const blob = new Blob(['log data'], { type: 'text/plain' });
+        await download_blob(blob, 'logs/bar.log');
         expect(mock_download).toHaveBeenCalledWith({
             url: 'blob:mock-url',
-            filename: 'test/file.txt',
+            filename: 'logs/bar.log',
             saveAs: false,
         });
     });
@@ -55,14 +68,14 @@ describe('download_blob', () => {
     it('returns download_id from chrome.downloads.download', async () => {
         mock_download.mockResolvedValue(99);
         const blob = new Blob(['test'], { type: 'text/plain' });
-        const id = await download_blob(blob, 'test/file.txt');
+        const id = await download_blob(blob, 'cap_1.json');
         expect(id).toBe(99);
     });
 
     it('creates and revokes blob URL', async () => {
         vi.useFakeTimers();
         const blob = new Blob(['test'], { type: 'text/plain' });
-        const promise = download_blob(blob, 'test/file.txt');
+        const promise = download_blob(blob, 'cap_1.json');
         await promise;
         expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
         vi.advanceTimersByTime(5000);

@@ -353,7 +353,7 @@ async function export_archive_zip(): Promise<void> {
         capture_id,
         'zip',
     );
-    await download_blob(blob, filename, { save_as: true });
+    await download_blob(blob, filename);
 }
 
 async function download_export(content: string, type: string, extension: 'json' | 'jsonl' | 'html' | 'har'): Promise<void> {
@@ -367,7 +367,7 @@ async function download_export(content: string, type: string, extension: 'json' 
         capture_id,
         extension,
     );
-    await download_blob(blob, filename, { save_as: true });
+    await download_blob(blob, filename);
 }
 
 // Helpers

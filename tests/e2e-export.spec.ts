@@ -283,8 +283,9 @@ test.describe('导出四格式', () => {
         expect(calls.length, 'chrome.downloads.download 应被调用 1 次').toBe(1);
         const call = calls[0];
 
-        // saveAs 应匹配默认 user_config.export_save_as (true)
-        expect(call.saveAs, 'saveAs 应为 true（匹配 user_config.export_save_as 默认值）').toBe(true);
+        // P0.61: saveAs 由 filename 是否含子目录决定。默认 export_capture_directory 为空，
+        // filename 无 '/' → saveAs: true（弹框让 Chrome 记忆保存位置）
+        expect(call.saveAs, 'saveAs 应为 true（无子目录 → 弹框）').toBe(true);
 
         // 文件名应包含 capture_id
         expect(call.filename, '文件名应包含 capture_id').toContain(capture_id);

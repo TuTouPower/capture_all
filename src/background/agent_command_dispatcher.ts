@@ -2,12 +2,12 @@ import type { AgentCommand, AgentCommandResult, AgentError, AgentErrorCode } fro
 import { list_captures as storage_list_captures, get_capture } from './storage';
 import { export_har, export_html, export_json, export_jsonl } from './exporter';
 import {
-    get_record_from_session_data,
-    get_timeline_from_session_data,
-    get_timeline_item_from_session_data,
-    list_data_sources_from_session_data,
-    list_records_from_session_data,
-    load_agent_session_data,
+    get_entry_from_capture_data,
+    get_timeline_from_capture_data,
+    get_timeline_item_from_capture_data,
+    list_data_sources_from_capture_data,
+    list_entries_from_capture_data,
+    load_agent_capture_data,
     type AgentDataSource
 } from './agent_data_queries';
 import { DEFAULT_CONFIG } from '../shared/constants';
@@ -39,18 +39,18 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
     const payload = command.payload as Record<string, unknown>;
 
     switch (command.type) {
-        case 'recording.start':
+        case 'capture.start':
             return start_capture(payload, handlers);
-        case 'recording.stop':
+        case 'capture.stop':
             return stop_capture(handlers);
-        case 'sessions.list':
+        case 'captures.list':
             return list_captures(payload);
-        case 'sessions.get':
+        case 'captures.get':
             return get_capture_metadata(get_required_capture_id(payload));
         case 'sources.list':
-            return list_data_sources_from_session_data(await load_agent_session_data(get_required_capture_id(payload)));
-        case 'records.list':
-            return list_records_from_session_data(await load_agent_session_data(get_required_capture_id(payload)), {
+            return list_data_sources_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)));
+        case 'data.list':
+            return list_entries_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
                 source: get_required_string(payload, 'source') as AgentDataSource,
                 offset: get_optional_number(payload, 'offset'),
                 limit: get_optional_number(payload, 'limit'),
@@ -58,14 +58,14 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
                 end_time: get_optional_number(payload, 'end_time'),
                 order: get_order(payload)
             });
-        case 'records.get':
-            return get_record_from_session_data(
-                await load_agent_session_data(get_required_capture_id(payload)),
+        case 'data.get':
+            return get_entry_from_capture_data(
+                await load_agent_capture_data(get_required_capture_id(payload)),
                 get_required_string(payload, 'source') as AgentDataSource,
                 get_required_string(payload, 'record_id')
             );
         case 'timeline.list':
-            return get_timeline_from_session_data(await load_agent_session_data(get_required_capture_id(payload)), {
+            return get_timeline_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
                 sources: get_optional_sources(payload),
                 offset: get_optional_number(payload, 'offset'),
                 limit: get_optional_number(payload, 'limit'),
@@ -74,13 +74,13 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
                 order: get_order(payload)
             });
         case 'timeline.get':
-            return get_timeline_item_from_session_data(
-                await load_agent_session_data(get_required_capture_id(payload)),
+            return get_timeline_item_from_capture_data(
+                await load_agent_capture_data(get_required_capture_id(payload)),
                 get_required_string(payload, 'item_id')
             );
-        case 'session.get_all_data':
-            return load_agent_session_data(get_required_capture_id(payload));
-        case 'session.export':
+        case 'capture.get_all_data':
+            return load_agent_capture_data(get_required_capture_id(payload));
+        case 'capture.export':
             return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'));
     }
 }

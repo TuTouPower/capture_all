@@ -390,7 +390,7 @@ export async function load_user_config(): Promise<UserConfig> {
                     await chrome.storage.local.set({ [STORAGE_KEY]: merged });
                 } catch {
                     // Best-effort migration; if persistence fails, the in-memory
-                    // value is still correct for this session
+                    // value is still correct for this capture
                 }
             }
         }

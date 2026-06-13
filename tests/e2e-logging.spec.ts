@@ -261,14 +261,14 @@ test.describe('日志系统', () => {
                         '';
                     expect(msg).not.toContain('Capture All:');
                     expect(msg).not.toContain('background/sw');
-                    expect(msg).not.toContain('background/session');
+                    expect(msg).not.toContain('background/capture');
                 }
             }
 
             // JSON 字符串级检查：不含扩展内部模块标签
             const json_str = JSON.stringify(data);
             expect(json_str).not.toContain('"module":"background/sw"');
-            expect(json_str).not.toContain('"module":"background/session"');
+            expect(json_str).not.toContain('"module":"background/capture"');
             expect(json_str).not.toContain('"module":"popup"');
             expect(json_str).not.toContain('"module":"dashboard"');
         }

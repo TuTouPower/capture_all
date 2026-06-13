@@ -1,5 +1,5 @@
 // background/cookie_capture.ts
-// Records cookie name, domain, path, cause — never the cookie value (privacy).
+// Captures cookie name, domain, path, cause — never the cookie value (privacy).
 // Uses chrome.cookies.onChanged (service-worker context).
 
 import type { CaptureEvent, CookieChangeData } from '../shared/types';

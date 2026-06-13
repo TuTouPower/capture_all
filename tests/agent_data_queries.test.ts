@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
-    get_record_from_session_data,
-    get_timeline_from_session_data,
-    get_timeline_item_from_session_data,
-    list_data_sources_from_session_data,
-    list_records_from_session_data,
-    load_agent_session_data,
+    get_entry_from_capture_data,
+    get_timeline_from_capture_data,
+    get_timeline_item_from_capture_data,
+    list_data_sources_from_capture_data,
+    list_entries_from_capture_data,
+    load_agent_capture_data,
     type AgentSessionData
 } from '../src/background/agent_data_queries';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../src/shared/types';
@@ -172,7 +172,7 @@ const data: AgentSessionData = {
 
 describe('agent data queries', () => {
     test('summarizes available data sources', () => {
-        expect(list_data_sources_from_session_data(data)).toEqual([
+        expect(list_data_sources_from_capture_data(data)).toEqual([
             {
                 source: 'user_action_events',
                 count: 1,
@@ -207,7 +207,7 @@ describe('agent data queries', () => {
     });
 
     test('lists records with pagination and stable ids', () => {
-        expect(list_records_from_session_data(data, {
+        expect(list_entries_from_capture_data(data, {
             source: 'navigation_events',
             offset: 0,
             limit: 1,
@@ -228,7 +228,7 @@ describe('agent data queries', () => {
     });
 
     test('filters records by time and desc order', () => {
-        expect(get_timeline_from_session_data(data, {
+        expect(get_timeline_from_capture_data(data, {
             sources: ['user_action_events', 'navigation_events'],
             start_time: 10,
             end_time: 30,
@@ -237,7 +237,7 @@ describe('agent data queries', () => {
     });
 
     test('returns complete record details', () => {
-        expect(get_record_from_session_data(data, 'network_requests', 'network_requests:request_1')).toEqual({
+        expect(get_entry_from_capture_data(data, 'network_requests', 'network_requests:request_1')).toEqual({
             record_id: 'network_requests:request_1',
             source: 'network_requests',
             data: network_requests[0]
@@ -245,15 +245,15 @@ describe('agent data queries', () => {
     });
 
     test('merges timeline records across sources', () => {
-        expect(get_timeline_from_session_data(data, { limit: 3 }).records.map(record => record.record_id)).toEqual([
+        expect(get_timeline_from_capture_data(data, { limit: 3 }).records.map(record => record.record_id)).toEqual([
             'user_action_events:mouse_1',
             'network_requests:request_1',
             'navigation_events:page_load_1'
         ]);
     });
 
-    test('get_timeline_item_from_session_data delegates to get_record_from_session_data', () => {
-        const result = get_timeline_item_from_session_data(data, 'network_requests:request_1');
+    test('get_timeline_item_from_capture_data delegates to get_entry_from_capture_data', () => {
+        const result = get_timeline_item_from_capture_data(data, 'network_requests:request_1');
         expect(result).toEqual({
             record_id: 'network_requests:request_1',
             source: 'network_requests',
@@ -261,14 +261,14 @@ describe('agent data queries', () => {
         });
     });
 
-    test('get_timeline_item_from_session_data throws for unknown record', () => {
-        expect(() => get_timeline_item_from_session_data(data, 'network_requests:r_nonexistent')).toThrow(
+    test('get_timeline_item_from_capture_data throws for unknown record', () => {
+        expect(() => get_timeline_item_from_capture_data(data, 'network_requests:r_nonexistent')).toThrow(
             'RECORD_NOT_FOUND'
         );
     });
 });
 
-describe('load_agent_session_data', () => {
+describe('load_agent_capture_data', () => {
     test('loads all 7 data sources and wraps capture', async () => {
         const mock_capture: CaptureRecord = {
             capture_id: 'cap-1',
@@ -298,7 +298,7 @@ describe('load_agent_session_data', () => {
         vi.mocked(get_storage_changes).mockResolvedValue([]);
         vi.mocked(get_cookie_changes).mockResolvedValue([]);
 
-        const result = await load_agent_session_data('cap-1');
+        const result = await load_agent_capture_data('cap-1');
 
         expect(result.capture).toEqual(mock_capture);
         expect(result.sources).toEqual({
@@ -324,7 +324,7 @@ describe('load_agent_session_data', () => {
     test('throws SESSION_NOT_FOUND when capture is missing', async () => {
         vi.mocked(get_capture).mockResolvedValue(null);
 
-        await expect(load_agent_session_data('cap-missing')).rejects.toThrow('SESSION_NOT_FOUND');
+        await expect(load_agent_capture_data('cap-missing')).rejects.toThrow('SESSION_NOT_FOUND');
     });
 
     test('loads non-empty data sources', async () => {
@@ -417,7 +417,7 @@ describe('load_agent_session_data', () => {
         vi.mocked(get_storage_changes).mockResolvedValue([storage_change]);
         vi.mocked(get_cookie_changes).mockResolvedValue([cookie_change]);
 
-        const result = await load_agent_session_data('cap-2');
+        const result = await load_agent_capture_data('cap-2');
 
         expect(result.capture).toBe(mock_capture);
         expect(result.sources.user_action_events).toEqual([]);

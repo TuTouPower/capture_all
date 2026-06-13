@@ -1,15 +1,15 @@
 export const AGENT_COMMAND_TYPES = [
-    'recording.start',
-    'recording.stop',
-    'sessions.list',
-    'sessions.get',
+    'capture.start',
+    'capture.stop',
+    'captures.list',
+    'captures.get',
     'sources.list',
-    'records.list',
-    'records.get',
+    'data.list',
+    'data.get',
     'timeline.list',
     'timeline.get',
-    'session.get_all_data',
-    'session.export',
+    'capture.get_all_data',
+    'capture.export',
 ] as const;
 
 export type AgentCommandType = (typeof AGENT_COMMAND_TYPES)[number];
@@ -105,7 +105,7 @@ export interface AgentStatus {
     bridge_url: string;
     extension_online: boolean;
     extension_version: string | null;
-    active_session_id: string | null;
+    active_capture_id: string | null;
     pending_commands: number;
 }
 

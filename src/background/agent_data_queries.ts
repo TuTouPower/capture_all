@@ -21,7 +21,7 @@ export type AgentDataSource =
 
 type AgentRecord = CaptureEvent | NetworkRequestData | ConsoleEventData | RuntimeExceptionData | StorageChangeData | CookieChangeData;
 
-export interface AgentSessionData {
+export interface AgentCaptureData {
     capture: CaptureRecord;
     sources: Record<AgentDataSource, AgentRecord[]>;
 }
@@ -50,7 +50,7 @@ const ALL_SOURCES: AgentDataSource[] = [
 ];
 const FULL_DATA_LIMIT = 100000;
 
-export async function load_agent_session_data(capture_id: string): Promise<AgentSessionData> {
+export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);
     if (!capture) {
         throw new Error('SESSION_NOT_FOUND');
@@ -80,13 +80,13 @@ export async function load_agent_session_data(capture_id: string): Promise<Agent
     };
 }
 
-export function list_data_sources_from_session_data(data: AgentSessionData): AgentDataSourceSummary[] {
+export function list_data_sources_from_capture_data(data: AgentCaptureData): AgentDataSourceSummary[] {
     return ALL_SOURCES
         .map(source => summarize_source(source, data.sources[source]))
         .filter(summary => summary.count > 0);
 }
 
-export function list_records_from_session_data(data: AgentSessionData, query: ListRecordsQuery): AgentRecordListResult {
+export function list_entries_from_capture_data(data: AgentCaptureData, query: ListRecordsQuery): AgentRecordListResult {
     const records = get_source_records(data, query.source);
     const filtered = filter_and_sort_records(records, query);
     const offset = query.offset ?? 0;
@@ -98,8 +98,8 @@ export function list_records_from_session_data(data: AgentSessionData, query: Li
     };
 }
 
-export function get_record_from_session_data(
-    data: AgentSessionData,
+export function get_entry_from_capture_data(
+    data: AgentCaptureData,
     source: AgentDataSource,
     record_id: string
 ): AgentRecordDetail<AgentRecord> {
@@ -116,7 +116,7 @@ export function get_record_from_session_data(
     return { record_id, source, data: record };
 }
 
-export function get_timeline_from_session_data(data: AgentSessionData, query: TimelineQuery = {}): AgentRecordListResult {
+export function get_timeline_from_capture_data(data: AgentCaptureData, query: TimelineQuery = {}): AgentRecordListResult {
     const sources = query.sources ?? ALL_SOURCES;
     const records = sources.flatMap(source => get_source_records(data, source).map(record => ({ source, record })));
     const filtered = records
@@ -131,9 +131,9 @@ export function get_timeline_from_session_data(data: AgentSessionData, query: Ti
     };
 }
 
-export function get_timeline_item_from_session_data(data: AgentSessionData, item_id: string): AgentRecordDetail<AgentRecord> {
+export function get_timeline_item_from_capture_data(data: AgentCaptureData, item_id: string): AgentRecordDetail<AgentRecord> {
     const parsed = parse_record_id(item_id);
-    return get_record_from_session_data(data, parsed.source as AgentDataSource, item_id);
+    return get_entry_from_capture_data(data, parsed.source as AgentDataSource, item_id);
 }
 
 function get_record_sort_key(record: AgentRecord): number {
@@ -158,7 +158,7 @@ function summarize_source(source: AgentDataSource, records: AgentRecord[]): Agen
     };
 }
 
-function get_source_records(data: AgentSessionData, source: AgentDataSource): AgentRecord[] {
+function get_source_records(data: AgentCaptureData, source: AgentDataSource): AgentRecord[] {
     if (!ALL_SOURCES.includes(source)) {
         throw new Error('SOURCE_NOT_FOUND');
     }

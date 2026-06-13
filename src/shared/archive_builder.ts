@@ -180,7 +180,7 @@ This archive contains exported capture data.
 
 - \`manifest.json\` — archive metadata
 - \`README.md\` — this file
-- \`network.jsonl\` — network request records
+- \`network.jsonl\` — network requests
 - \`events.jsonl\` — page events (user actions, navigation, storage, etc.)
 - \`console.jsonl\` — console log entries
 - \`bodies/inline/\` — inline body references

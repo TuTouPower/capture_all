@@ -58,14 +58,14 @@ describe('BridgeMcpClient', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
-        const command_response = client.send_command('sessions.get', { session_id: 'session-1' }, 5000);
+        const command_response = client.send_command('captures.get', { session_id: 'session-1' }, 5000);
         const command = await take_next_command(server.url);
 
         expect(command).toMatchObject({
-            type: 'sessions.get',
+            type: 'captures.get',
             payload: { session_id: 'session-1' },
         });
 
@@ -93,7 +93,7 @@ describe('BridgeMcpClient', () => {
         const server = await start_test_server();
         const client = new BridgeMcpClient(server.url, token);
 
-        await expect(client.send_command('sessions.list', {})).rejects.toThrow('EXTENSION_OFFLINE: Extension is offline');
+        await expect(client.send_command('captures.list', {})).rejects.toThrow('EXTENSION_OFFLINE: Extension is offline');
     });
 });
 
@@ -136,7 +136,7 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -146,7 +146,7 @@ describe('execute_mcp_tool', () => {
         const command = await take_next_command(server.url);
 
         expect(command).toMatchObject({
-            type: 'recording.start',
+            type: 'capture.start',
             payload: { url: 'https://example.com', mode: 'standard' },
         });
 
@@ -170,14 +170,14 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, { name: 'list_sessions' });
         const command = await take_next_command(server.url);
 
         expect(command).toMatchObject({
-            type: 'sessions.list',
+            type: 'captures.list',
             payload: {},
         });
 
@@ -202,7 +202,7 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -237,7 +237,7 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -272,7 +272,7 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -282,7 +282,7 @@ describe('execute_mcp_tool', () => {
         const command = await take_next_command(server.url);
 
         expect(command).toMatchObject({
-            type: 'session.export',
+            type: 'capture.export',
             payload: { session_id: 'sess-1', format: 'json' },
         });
 

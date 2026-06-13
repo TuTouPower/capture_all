@@ -120,7 +120,7 @@ test.describe('MCP Agent 全流程', () => {
     test('MCP: recording.start 开始采集', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_start',
-            type: 'recording.start',
+            type: 'capture.start',
             payload: { capture_id: 'e2e_full_capture_1' },
             created_at: Date.now(),
         });
@@ -196,7 +196,7 @@ test.describe('MCP Agent 全流程', () => {
     test('MCP: records.list 按 source 分类查询（console）', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_records_console',
-            type: 'records.list',
+            type: 'data.list',
             payload: {
                 session_id: active_capture_id,
                 source: 'console_events',
@@ -214,7 +214,7 @@ test.describe('MCP Agent 全流程', () => {
     test('MCP: records.list 按 source 分类查询（navigation）', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_records_nav',
-            type: 'records.list',
+            type: 'data.list',
             payload: {
                 session_id: active_capture_id,
                 source: 'navigation_events',
@@ -229,10 +229,10 @@ test.describe('MCP Agent 全流程', () => {
         expect(data.data.records.length).toBeGreaterThan(0);
     });
 
-    test('MCP: session.get_all_data 返回会话 + 7 源且关键源非空', async () => {
+    test('MCP: capture.get_all_data 返回会话 + 7 源且关键源非空', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_alldata',
-            type: 'session.get_all_data',
+            type: 'capture.get_all_data',
             payload: { session_id: active_capture_id },
             created_at: Date.now(),
         });
@@ -252,20 +252,20 @@ test.describe('MCP Agent 全流程', () => {
         expect(net_requests.length).toBeGreaterThan(0);
     });
 
-    test('MCP: session.export 导出 JSON', async () => {
+    test('MCP: capture.export 导出 JSON', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_export_json',
-            type: 'session.export',
+            type: 'capture.export',
             payload: { session_id: active_capture_id, format: 'json' },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
     });
 
-    test('MCP: session.export 导出 HAR', async () => {
+    test('MCP: capture.export 导出 HAR', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_export_har',
-            type: 'session.export',
+            type: 'capture.export',
             payload: { session_id: active_capture_id, format: 'har' },
             created_at: Date.now(),
         });
@@ -275,7 +275,7 @@ test.describe('MCP Agent 全流程', () => {
     test('MCP: 注入文本出现在采集数据中 — 闭合回环', async () => {
         const all_data = await bridge_post('/mcp/command', {
             command_id: 'full_loop',
-            type: 'session.get_all_data',
+            type: 'capture.get_all_data',
             payload: { session_id: active_capture_id },
             created_at: Date.now(),
         });
@@ -319,10 +319,10 @@ test.describe('MCP Agent 全流程', () => {
         expect(found).toBe(true);
     });
 
-    test('MCP: sessions.list 列出会话', async () => {
+    test('MCP: captures.list 列出会话', async () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_sessions',
-            type: 'sessions.list',
+            type: 'captures.list',
             payload: {},
             created_at: Date.now(),
         });
@@ -335,7 +335,7 @@ test.describe('MCP Agent 全流程', () => {
         const { data: status } = await bridge_get('/mcp/status');
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_stop2',
-            type: 'recording.stop',
+            type: 'capture.stop',
             payload: {},
             created_at: Date.now(),
         });
@@ -363,7 +363,7 @@ test.describe('MCP Agent 全流程', () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 command_id: 'noauth2',
-                type: 'sessions.list',
+                type: 'captures.list',
                 payload: {},
                 created_at: Date.now(),
             }),

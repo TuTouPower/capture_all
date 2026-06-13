@@ -1,6 +1,6 @@
 // background/network_capture.ts
 // Network capture with CDP response body support.
-// webRequest records headers/status/timing/request body.
+// webRequest captures headers/status/timing/request body.
 // CDP (chrome.dbg) captures response bodies via Network.getResponseBody
 // triggered on Network.loadingFinished.
 //
@@ -92,7 +92,7 @@ interface CdpBodyResult {
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 export const _cdp_body_results_for_test = cdp_body_results;
 
-// CDP-first: track request IDs that CDP has already emitted as primary records.
+// CDP-first: track request IDs that CDP has already emitted as primary entries.
 // webRequest handlers skip these to avoid duplicates.
 const cdp_primary_emitted: Set<string> = new Set();
 
@@ -338,7 +338,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview, encoding, byte_size };
             cdp_body_results.set(req_id, body_result);
 
-            // CDP-first: if we have metadata, build and emit the complete record directly
+            // CDP-first: if we have metadata, build and emit the complete entry directly
             const meta = cdp_request_meta.get(req_id);
             if (meta) {
                 cdp_primary_emitted.add(req_id);

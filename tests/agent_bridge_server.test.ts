@@ -128,7 +128,7 @@ describe('bridge server', () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/mcp/command`, {
             method: 'POST',
-            body: JSON.stringify({ type: 'sessions.list', payload: {} }),
+            body: JSON.stringify({ type: 'captures.list', payload: {} }),
         });
 
         expect(response.status).toBe(401);
@@ -157,7 +157,7 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1'.repeat(1024 * 1024), active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1'.repeat(1024 * 1024), active_capture_id: null }),
         });
 
         expect(response.status).toBe(413);
@@ -176,7 +176,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const response = await fetch(`${server.url}/mcp/command`, {
@@ -200,7 +200,7 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/mcp/command`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'sessions.list', payload: {} }),
+            body: JSON.stringify({ type: 'captures.list', payload: {} }),
         });
 
         expect(response.status).toBe(503);
@@ -219,13 +219,13 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const command_response = fetch(`${server.url}/mcp/command`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'sessions.list', payload: {} }),
+            body: JSON.stringify({ type: 'captures.list', payload: {} }),
         });
 
         const command = await take_next_command(server.url);
@@ -262,14 +262,14 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         // Fire 3 concurrent POSTs using separate TCP connections (agent:false).
         // Each handler enqueues a command then awaits the result, so all three
         // are pending simultaneously.
-        const p1 = post_command(server.url, { type: 'sessions.list', payload: { index: 0 } });
-        const p2 = post_command(server.url, { type: 'sessions.get', payload: { index: 1 } });
+        const p1 = post_command(server.url, { type: 'captures.list', payload: { index: 0 } });
+        const p2 = post_command(server.url, { type: 'captures.get', payload: { index: 1 } });
         const p3 = post_command(server.url, { type: 'sources.list', payload: { index: 2 } });
 
         // Wait for server to process all 3 enqueues
@@ -316,11 +316,11 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_session_id: null }),
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
         });
 
         // Fire a request that will be enqueued but never resolved
-        const req = post_command(server.url, { type: 'sessions.list', payload: {} });
+        const req = post_command(server.url, { type: 'captures.list', payload: {} });
 
         // Dequeue the command via raw http (bypasses fetch pool)
         const command = await dequeue_command(server.url);

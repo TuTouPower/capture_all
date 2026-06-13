@@ -561,8 +561,8 @@
   3. `{ 'transfer-encoding': 'chunked', 'content-type': 'text/event-stream' }` → true
   4. `{ 'content-type': 'text/event-stream' }`（无 transfer-encoding）→ true
 
-### ⚠️ T3 stream_buffer.test.ts — 缺并发 append 安全测试
-- **状态**：待补 — 2026-06-13
+### ✅ T3 stream_buffer.test.ts — 缺并发 append 安全测试
+- **状态**：已补 — 2026-06-13
 - **缺口**：7 个测试全部是串行调用 `append`，未验证多 request 并发写入场景。虽然 `create_stream_buffer` 内部用 Map 隔离 request_id，但无测试证明：
   1. 两个不同 request_id 同时 append 不互相干扰
   2. 同一 request_id 在 flush 期间被再次 append 不丢数据
@@ -571,8 +571,8 @@
   1. 两个 request_id 交替 append → 各自独立 flush，数据不混
   2. flush 回调中再次 append 同一 request_id → 新数据正确累积
 
-### ⚠️ T4 network_cdp.test.ts — 缺 header 边界场景
-- **状态**：待补 — 2026-06-13
+### ✅ T4 network_cdp.test.ts — 缺 header 边界场景
+- **状态**：已补 — 2026-06-13
 - **缺口**：
   1. 响应 header 为空对象 `{}` → `extract_mime_type` 返回 null，未测试此路径
   2. header key 大小写混合（CDP 给小写，webRequest 给首字母大写）→ `headers_map_from_cdp` 直接 spread，未验证大小写一致性

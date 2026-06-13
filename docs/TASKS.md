@@ -111,6 +111,68 @@
   - `src/shared/capture_data_reader.ts` — 新建，页面侧直读
   - `src/popup/popup.ts` / `src/dashboard/dashboard.ts` / `src/detail/detail.ts` — 改用直读
 
+### ⛔ P0.48 跨域 PUT/POST 上传内容未抓取（cdp_failed）
+- **状态**：待修复 — 2026-06-13
+- **复现数据**：`chatgpt_web_reverse/data/capture_all_capture_1781328968343_uzvscx9_2026-06-13_14-00-33.zip`
+- **现象**：用户在 ChatGPT 上传文件（张屿川照片.png 981KB、代码.txt 3.4KB、clean_temp.bat 307B），files/library API 响应正确记录了文件列表和元数据，但上传到 oaiusercontent 的 PUT 请求 body 未被抓取，`response_body_status: cdp_failed`。
+- **具体证据**：
+  - `POST https://chatgpt.com/backend-api/files` — 200，`response_body_status: captured`（返回 upload_url）
+  - `POST https://chatgpt.com/backend-api/files/library` — 200，`response_body_status: captured`（返回文件列表，含 file_name/file_size/mime_type）
+  - `PUT https://sdmntprwestus3.oaiusercontent.com/files/.../raw` — 201，`response_body_status: cdp_failed`（上传内容丢失）
+  - `OPTIONS https://sdmntprwestus3.oaiusercontent.com/files/.../raw` — 200，`response_body_status: cdp_failed`（CORS 预检也失败）
+- **根因分析**：
+  - CDP `Network.getResponseBody` 对跨域请求（oaiusercontent.com 与 chatgpt.com 不同 origin）可能返回错误
+  - PUT 请求的 request body 是二进制文件内容，CDP 的 `Network.requestWillBeSent` 对 FormData/multipart 上传的 `postData` 可能为空或不完整
+  - OPTIONS 预检请求通常无 body，CDP 返回错误属于预期行为（但状态应为 `not_enabled` 而非 `cdp_failed`）
+  - 现有代码对 `cdp_failed` 不做区分——OPTIONS 无 body 的正常失败和真正的 body 获取失败用同一个状态
+- **影响**：
+  - 上传到 GPT 的文件内容无法在导出中还原
+  - 用户上传的图片、文档、代码等关键证据丢失
+  - 只能从 files/library 元数据知道"上传了什么"，无法知道"内容是什么"
+- **修复要点**：
+  1. 区分 `cdp_failed` 的原因：OPTIONS/HEAD 等无 body 方法应标 `not_enabled` 而非 `cdp_failed`
+  2. 对 PUT/POST 的 request body（上传内容）：尝试从 `Network.requestWillBeSent` 的 `postData` 或 `request.postDataEntries` 获取
+  3. 对跨域响应 body：检查 `Network.getResponseBody` 错误码，若为 `-32000`（No resource）则标 `not_enabled`（资源已释放），其他错误保留 `cdp_failed`
+  4. 考虑在 `Network.loadingFinished` 时立即获取 body，减少"资源已释放"的超时窗口
+  5. 补测试：模拟跨域 PUT 请求，验证 request body 采集和状态标记
+- **影响文件**：
+  - `src/background/network_capture.ts` — loadingFinished 处理、request body 提取、状态区分
+  - `tests/network_cdp.test.ts` — 跨域 PUT 测试用例
+
+### ⛔ P0.49 ZIP 导出 network.jsonl 缺失 mime_type
+- **状态**：待修复 — 2026-06-13
+- **复现数据**：同 P0.48
+- **现象**：导出 ZIP 中 `network.jsonl` 的所有请求 `mime_type` 字段为 `null`，即使 response headers 中有 `content-type`。
+- **具体证据**：
+  - manifest 显示 3 张图片、343 个 body 文件
+  - `network.jsonl` 中 estuary/content 请求（PNG 2.7MB）：`mime_type: null`，但 body 文件已正确保存为 `bodies/response/230772.1173.bin`
+  - `file` 命令确认该文件是 `PNG image data, 1448 x 1086, 8-bit/color RGB`
+  - 所有 882 条网络请求的 `mime_type` 均为 `null`
+- **根因分析**：
+  - `NetworkRequestData` 接口有 `mime_type: string | null` 字段
+  - CDP `Network.responseReceived` 事件的 `response.headers` 包含 `content-type`
+  - `src/background/network_capture.ts` 在 `Network.responseReceived` handler 中提取 headers，但可能未正确写入 `mime_type` 字段
+  - webRequest 路径的 `onHeadersReceived` 也能获取 content-type，但同样可能未传递到最终数据
+  - `archive_builder.ts` 的 `ext_for_mime()` 函数依赖 `mime_type` 推断扩展名——当 mime 为 null 时所有文件都变成 `.bin`
+- **影响**：
+  - ZIP 中所有 body 文件扩展名为 `.bin`，无法通过扩展名识别文件类型
+  - 需要用 `file` 命令或手动检查才能确定实际格式
+  - 图片无法双击打开（系统不知道 .bin 是 PNG）
+  - `ext_for_mime()` 推断逻辑形同虚设
+- **修复要点**：
+  1. `Network.responseReceived` handler 中从 `params.response.headers` 提取 `content-type` 写入 `mime_type`
+  2. webRequest `onHeadersReceived` handler 中从 `details.responseHeaders` 提取 content-type 写入 `mime_type`
+  3. CDP path 的 `build_cdp_primary_network_event` 和 `build_cdp_body_event` 确保传递 `mime_type`
+  4. `network_correlator.ts` 的 `merge_matched`/`build_cdp_only_request`/`build_web_request_only_request` 确保 `mime_type` 不丢失
+  5. body_routing 的 `ext_for_mime()` 从网络请求的 response headers 提取 content-type 作为兜底
+  6. 补测试：验证 CDP responseReceived 后 `mime_type` 非空；验证 ZIP 中图片文件扩展名为 `.png`/`.jpg` 而非 `.bin`
+- **影响文件**：
+  - `src/background/network_capture.ts` — responseReceived handler、build_cdp_primary_network_event、build_cdp_body_event
+  - `src/background/network_correlator.ts` — merge_matched、build_cdp_only_request、build_web_request_only_request
+  - `src/shared/archive_builder.ts` — body 文件扩展名推断兜底
+  - `tests/network_cdp.test.ts` — mime_type 写入测试
+  - `tests/archive_builder.test.ts` — 扩展名推断测试
+
 ### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
 - **状态**：已实现 — 2026-06-13
 - **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`

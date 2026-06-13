@@ -32,8 +32,8 @@ export function redact_headers(headers: Record<string, string>, enabled: boolean
     const result: Record<string, string> = {};
     let redacted = false;
     for (const [key, value] of Object.entries(headers)) {
-        const lower_key = key.toLowerCase();
-        const lower_value = value.toLowerCase();
+        const lower_key = (key || '').toLowerCase();
+        const lower_value = (value || '').toLowerCase();
         if (SENSITIVE_HEADER_KEYS.includes(lower_key)) {
             result[key] = '[REDACTED]';
             redacted = true;

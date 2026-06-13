@@ -18,11 +18,14 @@ import { get_app_log_transport } from './app_log_storage';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
-function base64_decoded_size(b64: string): number {
+function base64_decoded_size(b64: string | undefined | null): number {
+    if (typeof b64 !== 'string' || b64.length === 0) return 0;
     const trimmed = b64.replace(/\s/g, '');
     const padding = trimmed.endsWith('==') ? 2 : trimmed.endsWith('=') ? 1 : 0;
     return Math.floor(trimmed.length * 3 / 4) - padding;
 }
+// 导出供单测验证 fault injection 边界
+export const _base64_decoded_size_for_test = base64_decoded_size;
 
 interface NetworkCaptureConfig {
     redact_sensitive_headers: boolean;

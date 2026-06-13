@@ -21,6 +21,7 @@ import {
     _deferred_web_requests_for_test,
     _deferred_cdp_index_for_test,
     _try_resolve_deferred_for_test,
+    _base64_decoded_size_for_test,
 } from '../src/background/network_capture';
 
 // ─── request header redaction ───
@@ -87,6 +88,26 @@ describe('request_header_redaction', () => {
         const headers = { 'Proxy-Authorization': 'Basic dXNlcjpwYXNz' };
         const result = redact_headers(headers, true).headers;
         expect(result['Proxy-Authorization']).toBe('[REDACTED]');
+    });
+
+    // ── fault injection: header key/value nullish ──
+    // P0.59: CDP headers 数组转 map 后，个别 entry 可能 value 为 undefined
+    // （非标准 server / Chrome 内部伪造 header），未兜底会触发 value.toLowerCase() TypeError。
+    it('handles undefined header value without crash', () => {
+        const headers = { 'Authorization': undefined as unknown as string, 'X-Other': 'ok' };
+        const result = redact_headers(headers, true).headers;
+        expect(result['Authorization']).toBe('[REDACTED]');
+        expect(result['X-Other']).toBe('ok');
+    });
+    it('handles empty-string header value', () => {
+        const headers = { 'Authorization': '' };
+        const result = redact_headers(headers, true).headers;
+        expect(result['Authorization']).toBe('[REDACTED]');
+    });
+    it('handles case-insensitive key matching with nullish value', () => {
+        const headers = { 'set-cookie': undefined as unknown as string };
+        const result = redact_headers(headers, true).headers;
+        expect(result['set-cookie']).toBe('[REDACTED]');
     });
 });
 
@@ -668,5 +689,35 @@ describe('resolve_resource_type CDP PascalCase normalization', () => {
 
     it('returns other for empty string', () => {
         expect(resolve_resource_type('')).toBe('other');
+    });
+});
+
+// ─── fault injection: base64_decoded_size 边界 ───
+// P0.59: 修复前 b64 为 undefined 时 `b64.replace()` TypeError，
+// 导致整个 handle_cdp_event 崩溃（P0.58 也涉及该路径）。
+// 该函数接收 CDP Network.getResponseBody 返回的 body 字段，
+// 控制帧 / 部分二进制响应可能不携带该字段。
+
+describe('base64_decoded_size fault injection', () => {
+    it('returns 0 for undefined', () => {
+        expect(_base64_decoded_size_for_test(undefined)).toBe(0);
+    });
+    it('returns 0 for null', () => {
+        expect(_base64_decoded_size_for_test(null)).toBe(0);
+    });
+    it('returns 0 for empty string', () => {
+        expect(_base64_decoded_size_for_test('')).toBe(0);
+    });
+    it('computes correct size for valid base64', () => {
+        // 'abc' → base64 'YWJj' (4 chars, no padding) → 3 bytes
+        expect(_base64_decoded_size_for_test('YWJj')).toBe(3);
+    });
+    it('handles whitespace in base64', () => {
+        // 含空白也应正确计算
+        expect(_base64_decoded_size_for_test('YW Jj\n')).toBe(3);
+    });
+    it('subtracts padding correctly', () => {
+        // 'YQ==' → 1 byte（4 chars, 2 padding）
+        expect(_base64_decoded_size_for_test('YQ==')).toBe(1);
     });
 });

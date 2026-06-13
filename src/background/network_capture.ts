@@ -829,6 +829,14 @@ function extract_mime_type(headers: Record<string, string>): string | null {
     return ct.split(';')[0].trim() || null;
 }
 
+/**
+ * 仅当响应为 SSE（text/event-stream）时走 stream_buffer 流式路径。
+ *
+ * 不匹配项的边界说明（避免后续扩展误判）：
+ * - `transfer-encoding: chunked` 不视为流式 — HTTP/1.1 普通响应（CSS/JS/JSON）也用 chunked，误判会触发对普通请求的 streamResourceContent，造成 body 状态降级。
+ * - `application/octet-stream` / `application/x-ndjson` / `application/stream+json` 等其他流式 MIME 不在此处处理 — 仅 SSE 走 CDP streaming。
+ *   若未来需扩展支持 ndjson 等真实流式 fetch，在此处显式追加 MIME 类型。
+ */
 export function is_streaming_response(headers: Record<string, string>): boolean {
     const ct = (headers['content-type'] || headers['Content-Type'] || '').toLowerCase();
     if (ct.includes('text/event-stream')) return true;

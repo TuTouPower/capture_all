@@ -8,7 +8,6 @@ export interface CaptureRecord {
     capture_id: string;
     name: string;
     status: 'capturing' | 'completed';
-    mode: 'standard';
     started_at: string;           // ISO string
     ended_at: string | null;
     duration_ms: number;
@@ -424,7 +423,6 @@ export interface CookieChangeData {
 
 export interface CaptureStartedData {
     capture_id: string;
-    mode: 'standard';
     config_snapshot: object;
     start_url: string;
     trigger: 'popup' | 'main_panel' | 'shortcut';

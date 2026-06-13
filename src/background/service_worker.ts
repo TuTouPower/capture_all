@@ -227,7 +227,6 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
         capture_id: capture_id,
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
-        mode: 'standard',
         started_at: now_iso,
         ended_at: null,
         duration_ms: 0,
@@ -259,7 +258,6 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
     // Write capture_lifecycle.capture_started event
     const started_data: CaptureStartedData = {
         capture_id: capture_id,
-        mode: 'standard',
         config_snapshot: config,
         start_url,
         trigger: 'popup',

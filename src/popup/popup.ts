@@ -366,7 +366,6 @@ async function start_capture(): Promise<void> {
             capture_id,
             name: 'Capture ' + new Date().toLocaleString(),
             status: 'capturing',
-            mode: 'standard',
             started_at: new Date().toISOString(),
             ended_at: null,
             duration_ms: 0,

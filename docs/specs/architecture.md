@@ -67,7 +67,7 @@ graph TB
 src/
 ├── background/                   # Service Worker - 采集核心
 │   ├── service_worker.ts         # 主入口，消息路由，生命周期管理
-│   ├── session_manager.ts        # 采集 session 管理
+│   ├── capture_manager.ts        # 采集管理
 │   ├── storage.ts                # IndexedDB CRUD 封装
 │   ├── network_capture.ts        # webRequest 网络采集
 │   ├── console_capture.ts        # CDP console 采集
@@ -289,23 +289,23 @@ Agent Data Queries (src/background/agent_data_queries.ts)
 | 工具 | 类型 | 说明 |
 |---|---|---|
 | `get_status` | 状态 | bridge 版本、扩展在线状态、活跃采集 |
-| `start_recording` | 采集控制 | 启动采集，返回 capture_id |
-| `stop_recording` | 采集控制 | 停止采集 |
-| `list_sessions` | Session | 列出采集记录 (分页) |
-| `get_session` | Session | 获取单次采集元信息 |
-| `list_data_sources` | 数据源 | 列出 session 中可用的数据源及计数 |
-| `list_records` | 数据 | 按 source 列出记录 (分页/时间过滤/排序) |
-| `get_record` | 数据 | 获取单条完整原始记录 |
+| `start_capture` | 采集控制 | 启动采集，返回 capture_id |
+| `stop_capture` | 采集控制 | 停止采集 |
+| `list_captures` | 采集 | 列出采集记录 (分页) |
+| `get_capture` | 采集 | 获取单次采集元信息 |
+| `list_data_sources` | 数据源 | 列出采集中的可用的数据源及计数 |
+| `list_entries` | 数据 | 按 source 列出记录 (分页/时间过滤/排序) |
+| `get_entry` | 数据 | 获取单条完整原始记录 |
 | `get_timeline` | 时间线 | 合并多个 source 的时间线 (分页) |
 | `get_timeline_item` | 时间线 | 获取时间线单项完整数据 |
-| `get_all_session_data` | 全量 | 一次性获取 session 完整数据 |
-| `export_session` | 导出 | 触发 JSON/JSONL/HTML/HAR 导出 |
+| `get_all_capture_data` | 全量 | 一次性获取 session 完整数据 |
+| `export_capture` | 导出 | 触发 JSON/JSONL/HTML/HAR 导出 |
 
 #### 安全边界
 
 - Bridge 只监听 `127.0.0.1`，不绑定 `0.0.0.0`
 - 所有 API 请求必须带 token；token 由用户提供，禁止硬编码
-- 端口由用户配置，禁止硬编码；不提供删除 session 或清空数据 MCP 能力
+- 端口由用户配置，禁止硬编码；不提供删除采集 或清空数据 MCP 能力
 - Bridge 不存储日志、不脱敏、不摘要替代详情
 
 #### 错误码
@@ -331,17 +331,17 @@ Agent Data Queries (src/background/agent_data_queries.ts)
 
 ```
 get_status          -> bridge 本地状态
-start_recording     -> recording.start
-stop_recording      -> recording.stop
-list_sessions       -> sessions.list
-get_session         -> sessions.get
+start_capture     -> capture.start
+stop_capture      -> capture.stop
+list_captures       -> captures.list
+get_capture         -> captures.get
 list_data_sources   -> sources.list
-list_records        -> records.list
-get_record          -> records.get
+list_entries        -> data.list
+get_entry          -> data.get
 get_timeline        -> timeline.list
 get_timeline_item   -> timeline.get
-get_all_session_data -> session.get_all_data
-export_session      -> session.export
+get_all_capture_data -> capture.get_all_data
+export_capture      -> capture.export
 ```
 
 ### 2.7 Body Capture 三层架构

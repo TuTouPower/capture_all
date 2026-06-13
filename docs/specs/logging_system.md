@@ -10,7 +10,7 @@
 
 ```
 src/background/service_worker.ts   18 处 console.*
-src/background/session_manager.ts   3 处 console.*
+src/background/capture_manager.ts   3 处 console.*
 src/background/keepalive.ts         1 处 console.debug
 src/content/content_script.ts       4 处 console.*
 src/dashboard/dashboard.ts          1 处 console.error
@@ -508,7 +508,7 @@ export async function export_app_logs(options: ExportAppLogsOptions): Promise<st
 | 文件 | 数量 | Transport | Logger 模块名 |
 |------|------|-----------|---------------|
 | `src/background/service_worker.ts` | 18 | IndexedDB | `background/sw` |
-| `src/background/session_manager.ts` | 3 | IndexedDB | `background/session` |
+| `src/background/capture_manager.ts` | 3 | IndexedDB | `background/capture` |
 | `src/background/keepalive.ts` | 1 | IndexedDB | `background/keepalive` |
 | `src/content/content_script.ts` | 4 | Message | `content/script` |
 | `src/dashboard/dashboard.ts` | 1 | IndexedDB | `dashboard` |

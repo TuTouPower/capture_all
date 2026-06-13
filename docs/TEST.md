@@ -77,9 +77,9 @@
 |----------|----------|------|
 | `redaction.test.ts` | header 脱敏、URL query 脱敏、body 截断、password 脱敏 | 已有 |
 | `network_capture.test.ts` | webRequest 监听、headers 捕获、body 状态 | 已有 |
-| `capture_modes.test.ts` | RecordConfig 默认配置 | 已有 |
+| `capture_modes.test.ts` | CaptureConfig 默认配置 | 已有 |
 | `escape.test.ts` | HTML/JS 转义、`</script>` 处理 | 已有 |
-| `storage.test.ts` | DB 初始化、Session CRUD | 已有 |
+| `storage.test.ts` | DB 初始化、Capture CRUD | 已有 |
 | `export_settings.test.ts` | 文件名模板、导出目录 | 已有 |
 | `system_time.test.ts` | 时区转换、相对/系统时间 | 已有 |
 | `agent_bridge_client.test.ts` | heartbeat、poll command、result 回传、401 | 已有 |
@@ -103,7 +103,7 @@
 |--------|----------|------|----------|
 | **P0** | 七数据标签计数从实际数据计算（非固定为 0） | `refresh_counts()` 需返回正确的 `label_counts` | TASKS.md P0.1 |
 | **P0** | `stop_capture` 发送 `{ action: 'stop' }` 后 SW 返回 `{ success: true }` | 验证消息传输和响应 | TASKS.md P0.2 |
-| **P0** | `list_events`/`list_network`/`list_console` 对活跃 session 返回实时数据 | 验证数据查询 handler 不丢失活跃采集数据 | TASKS.md P0.3 |
+| **P0** | `list_events`/`list_network`/`list_console` 对活跃采集 返回实时数据 | 验证数据查询 handler 不丢失活跃采集数据 | TASKS.md P0.3 |
 | **P0** | `label_counts` 计算逻辑：从 CaptureEvent.category 映射到七标签 | 验证 category→label 映射正确 | spec 6.3 |
 | **P1** | UI 渲染不包含 `深度采集`/`标准采集`/`mode` 等字符串 | 验证旧概念彻底清除 | chat10 |
 | **P1** | 所有面向用户字符串使用 `Capture All`/`全采`/`采集` | 验证命名统一 | spec 3.3 |
@@ -118,7 +118,7 @@
 验证扩展 ↔ bridge ↔ MCP server 完整链路：
 
 1. Bridge server 启动 → 健康检查 `GET /health` 返回 200
-2. 扩展 heartbeat `POST /extension/heartbeat` → bridge 收到 `extension_version` + `active_session_id`
+2. 扩展 heartbeat `POST /extension/heartbeat` → bridge 收到 `extension_version` + `active_capture_id`
 3. Bridge 下发命令 → 扩展 dispatcher 执行 → result 回传
 4. MCP 工具调用 → bridge → 扩展 → 数据返回
 5. 无效 token → 401
@@ -167,7 +167,7 @@
 |--------|------|------|------|
 | e2e | `e2e.spec.ts` | headless | 基础采集流程 |
 | e2e-real | `e2e-real.spec.ts` | headed | 真实浏览器采集验证 |
-| e2e-cdp-capture | `e2e-cdp-capture.spec.ts` | headed | 含 body capture 验证的录制测试 |
+| e2e-cdp-capture | `e2e-cdp-capture.spec.ts` | headed | 含 body capture 验证的采集测试 |
 | e2e-mcp | `e2e-mcp.spec.ts` | headed | Agent bridge + MCP 闭环 |
 
 ### 6.3 运行命令
@@ -223,7 +223,7 @@ npm run test:e2e:all   # 全部 4 个项目
 2. 验证详情在主面板内打开（不跳转独立页面）
 3. 验证七数据标签统计显示
 4. 验证时间线 Tab 有事件
-5. 验证网络 Tab 有请求记录
+5. 验证网络 Tab 有请求数据
 6. 验证控制台 Tab 有日志
 7. 验证不出现"深度采集"标签、"当前采集中"卡片
 8. 验证不出现"模式"列和"模式"筛选
@@ -236,9 +236,9 @@ npm run test:e2e:all   # 全部 4 个项目
 
 测试步骤：
 1. 开始采集后，在弹出窗口中点击「实时详情」
-2. 验证跳转到 dashboard 详情视图（`?session=xxx&page=detail`）
+2. 验证跳转到 dashboard 详情视图（`?capture=xxx&page=detail`）
 3. 验证时间线 Tab 有事件条目
-4. 验证网络 Tab 有请求记录
+4. 验证网络 Tab 有请求数据
 5. 验证控制台 Tab 有日志输出
 
 #### 场景 5：导出（P1）
@@ -263,10 +263,10 @@ npm run test:e2e:all   # 全部 4 个项目
 1. 启动 bridge server → 验证 health 端点
 2. 验证 heartbeat 上报 online 状态
 3. `captures.list` 返回采集列表
-4. `recording.start` 启动采集
+4. `capture.start` 启动采集
 5. `sources.list` 返回 7 个数据源
-6. `session.get_all_data` 返回完整数据
-7. `recording.stop` 停止采集
+6. `capture.get_all_data` 返回完整数据
+7. `capture.stop` 停止采集
 8. 无效 token → 401
 
 ### 6.5 E2E 注意事项

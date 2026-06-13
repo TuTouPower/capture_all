@@ -643,3 +643,100 @@ describe('CDP-first: webRequest skips attached tab', () => {
         expect(emitted[0].data.response_body_status).toBe('not_enabled');
     });
 });
+
+describe('CDP edge cases — headers and body boundaries', () => {
+    let emitted: any[];
+
+    beforeEach(() => {
+        try { stop_network_capture(); } catch { /* not started */ }
+        mock_chrome_debugger.reset();
+        vi.clearAllMocks();
+        emitted = [];
+    });
+
+    async function setup_and_emit(method: string, params: any) {
+        start_network_capture(
+            'test_edge',
+            1700000000000,
+            make_cfg(),
+            1,
+            (payload: any) => emitted.push(payload),
+        );
+        await enable_response_body_capture(1, false);
+        mock_chrome_debugger.emit_event({ tabId: 1 }, method, params);
+    }
+
+    it('empty response headers → mime_type is null', async () => {
+        await setup_and_emit('Network.responseReceived', {
+            requestId: 'req_empty_hdr',
+            response: { status: 200, headers: {} },
+            type: 'Document',
+        });
+
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', { body: 'ok', base64Encoded: false });
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'req_empty_hdr' });
+        await new Promise(r => setTimeout(r, 100));
+
+        expect(emitted.length).toBeGreaterThanOrEqual(1);
+        const req = emitted.find(e => e.data.request_id === 'req_empty_hdr');
+        expect(req).toBeDefined();
+        expect(req!.data.mime_type).toBeNull();
+    });
+
+    it('mixed-case Content-Type header → correct mime extraction', async () => {
+        await setup_and_emit('Network.responseReceived', {
+            requestId: 'req_mixed_case',
+            response: { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+            type: 'XHR',
+        });
+
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', { body: '{}', base64Encoded: false });
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'req_mixed_case' });
+        await new Promise(r => setTimeout(r, 100));
+
+        expect(emitted.length).toBeGreaterThanOrEqual(1);
+        const req = emitted.find(e => e.data.request_id === 'req_mixed_case');
+        expect(req).toBeDefined();
+        expect(req!.data.mime_type).toBe('application/json');
+    });
+
+    it('text body exceeding max_body_capture_bytes → too_large with truncation', async () => {
+        // Use a small max_body_capture_bytes for this test
+        try { stop_network_capture(); } catch { /* */ }
+        mock_chrome_debugger.reset();
+        vi.clearAllMocks();
+        emitted = [];
+
+        start_network_capture(
+            'test_large',
+            1700000000000,
+            make_cfg({ max_body_capture_bytes: 50 }),
+            1,
+            (payload: any) => emitted.push(payload),
+        );
+        await enable_response_body_capture(1, false);
+
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.requestWillBeSent', {
+            requestId: 'req_large_text',
+            request: { url: 'https://example.com/big', method: 'GET', headers: {} },
+            type: 'Document',
+        });
+
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.responseReceived', {
+            requestId: 'req_large_text',
+            response: { status: 200, headers: { 'content-type': 'text/plain' } },
+            type: 'Document',
+        });
+
+        const big_body = 'x'.repeat(200);
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', { body: big_body, base64Encoded: false });
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'req_large_text' });
+        await new Promise(r => setTimeout(r, 100));
+
+        expect(emitted.length).toBeGreaterThanOrEqual(1);
+        const req = emitted.find(e => e.data.request_id === 'req_large_text');
+        expect(req).toBeDefined();
+        expect(req!.data.response_body_status).toBe('too_large');
+        expect(req!.data.response_body!.length).toBeLessThan(200);
+    });
+});

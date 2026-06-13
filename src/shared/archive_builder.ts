@@ -248,10 +248,10 @@ export async function build_archive(
     const network_with_times = network_requests.map((r) => {
         const enriched: Record<string, unknown> = add_absolute_system_time(r, time_config) as unknown as Record<string, unknown>;
         if (typeof r.start_time_ms === 'number') {
-            enriched.start_time_system_time = format_system_time(r.start_time_ms, time_config);
+            enriched.start_time_ms = format_system_time(r.start_time_ms, time_config);
         }
         if (typeof r.end_time_ms === 'number') {
-            enriched.end_time_system_time = format_system_time(r.end_time_ms, time_config);
+            enriched.end_time_ms = format_system_time(r.end_time_ms, time_config);
         }
         return enriched as unknown as NetworkRequestData;
     });

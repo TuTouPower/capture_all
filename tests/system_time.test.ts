@@ -166,7 +166,7 @@ describe('system time formatting with UTC offsets', () => {
 // exported data structure — P0.33 human-readable labels
 // ============================================================
 describe('exported capture data with system times', () => {
-    test('adds system time fields to all exported record groups', () => {
+    test('replaces time fields with formatted strings in all exported record groups', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -174,15 +174,15 @@ describe('exported capture data with system times', () => {
             console_events: [log]
         }, config);
 
-        expect(data.capture.start_time_system_time).toBe('2024-01-01 08:00:00');
-        expect(data.capture.end_time_system_time).toBe('2024-01-01 08:01:00');
-        expect(data.events[0].absolute_time_system_time).toBe('2024-01-01 08:00:01');
-        expect(data.network_requests[0].absolute_time_system_time).toBe('2024-01-01 08:00:02');
-        expect(data.console_events[0].absolute_time_system_time).toBe('2024-01-01 08:00:03');
+        // P0.56: original fields replaced, not parallel fields added
+        expect(data.capture.started_at).toBe('2024-01-01 08:00:00');
+        expect(data.capture.ended_at).toBe('2024-01-01 08:01:00');
+        expect(data.events[0].absolute_time).toBe('2024-01-01 08:00:01');
+        expect(data.network_requests[0].absolute_time).toBe('2024-01-01 08:00:02');
+        expect(data.console_events[0].absolute_time).toBe('2024-01-01 08:00:03');
     });
 
-    // P0.33: human-readable label fields
-    test('P0.33 capture has start_time_label and end_time_label', () => {
+    test('P0.56 no parallel *_system_time or *_label fields', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -190,13 +190,18 @@ describe('exported capture data with system times', () => {
             console_events: [log]
         }, config);
 
-        expect(data.capture.start_time_label).toBeDefined();
-        expect(data.capture.end_time_label).toBeDefined();
-        expect(typeof data.capture.start_time_label).toBe('string');
-        expect(typeof data.capture.end_time_label).toBe('string');
+        // Parallel fields should not exist
+        expect((data.capture as any).start_time_system_time).toBeUndefined();
+        expect((data.capture as any).end_time_system_time).toBeUndefined();
+        expect((data.capture as any).start_time_label).toBeUndefined();
+        expect((data.capture as any).end_time_label).toBeUndefined();
+        expect((data.capture as any).started_at_utc).toBeUndefined();
+        expect((data.capture as any).ended_at_utc).toBeUndefined();
+        expect((data.events[0] as any).absolute_time_system_time).toBeUndefined();
+        expect((data.events[0] as any).absolute_time_label).toBeUndefined();
     });
 
-    test('P0.33 start_time_label does not end with Z (not UTC raw)', () => {
+    test('P0.56 replaced time fields do not end with Z (not UTC raw)', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -204,10 +209,12 @@ describe('exported capture data with system times', () => {
             console_events: [log]
         }, config);
 
-        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+        expect(data.capture.started_at).not.toMatch(/Z$/);
+        expect(data.capture.ended_at).not.toMatch(/Z$/);
+        expect(data.events[0].absolute_time).not.toMatch(/Z$/);
     });
 
-    test('P0.33 end_time_label does not end with Z (not UTC raw)', () => {
+    test('P0.56 no raw UNIX timestamps in exported data', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -215,43 +222,13 @@ describe('exported capture data with system times', () => {
             console_events: [log]
         }, config);
 
-        expect(data.capture.end_time_label).not.toMatch(/Z$/);
-    });
-
-    test('P0.33 start_time_system_time does not end with Z', () => {
-        const data = add_system_times_to_capture_data({
-            capture,
-            events: [event],
-            network_requests: [request],
-            console_events: [log]
-        }, config);
-
-        expect(data.capture.start_time_system_time).not.toMatch(/Z$/);
-    });
-
-    test('P0.33 absolute_time_system_time does not end with Z for events', () => {
-        const data = add_system_times_to_capture_data({
-            capture,
-            events: [event],
-            network_requests: [request],
-            console_events: [log]
-        }, config);
-
-        expect(data.events[0].absolute_time_system_time).not.toMatch(/Z$/);
-    });
-
-    test('P0.33 original UTC values preserved in _utc fields', () => {
-        const data = add_system_times_to_capture_data({
-            capture,
-            events: [event],
-            network_requests: [],
-            console_events: []
-        }, config);
-
-        // Original UTC fields preserved in _utc backup
-        expect(data.capture.started_at_utc).toBe('2024-01-01T00:00:00.000Z');
-        expect(data.capture.ended_at_utc).toBe('2024-01-01T00:01:00.000Z');
-        expect(data.events[0].absolute_time).toBe('2024-01-01T00:00:01.000Z');
+        // started_at/ended_at should be formatted strings, not UNIX numbers
+        expect(typeof data.capture.started_at).toBe('string');
+        expect(typeof data.capture.ended_at).toBe('string');
+        expect(data.capture.started_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+        // absolute_time should be formatted string
+        expect(typeof data.events[0].absolute_time).toBe('string');
+        expect(data.events[0].absolute_time).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     });
 
     test('P0.38 started_at/ended_at use user timezone (not UTC Z)', () => {
@@ -293,7 +270,7 @@ describe('exported capture data with system times', () => {
         expect(data.capture.system_time_timezone).toBe('browser');
     });
 
-    test('P0.33 time label with UTC config does not end with Z', () => {
+    test('P0.56 replaced time with UTC config does not end with Z', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -301,10 +278,10 @@ describe('exported capture data with system times', () => {
             console_events: []
         }, config_utc);
 
-        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+        expect(data.capture.started_at).not.toMatch(/Z$/);
     });
 
-    test('P0.33 time label with browser config does not end with Z', () => {
+    test('P0.56 replaced time with browser config does not end with Z', () => {
         const data = add_system_times_to_capture_data({
             capture,
             events: [event],
@@ -312,7 +289,7 @@ describe('exported capture data with system times', () => {
             console_events: []
         }, config_browser);
 
-        expect(data.capture.start_time_label).not.toMatch(/Z$/);
+        expect(data.capture.started_at).not.toMatch(/Z$/);
     });
 });
 

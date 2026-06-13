@@ -23,8 +23,8 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(export_section![0]).toMatch(/await\s+chrome\.runtime\.sendMessage/);
     });
 
-    it('exportBtn sends action "export_json" with session_id', () => {
-        expect(popup_src).toMatch(/action:\s*'export_json'/);
+    it('exportBtn sends action "get_capture_data" with session_id (ZIP archive export)', () => {
+        expect(popup_src).toMatch(/action:\s*'get_capture_data'/);
         expect(popup_src).toMatch(/session_id:\s*finished_capture\.capture_id/);
     });
 
@@ -44,7 +44,7 @@ describe('P0.35/P0.40 export button wiring', () => {
     });
 
     it('exportBtn still checks resp.success before downloading', () => {
-        expect(popup_src).toMatch(/resp\?\.\s*success\s*&&\s*resp\.json/);
+        expect(popup_src).toMatch(/resp\?\.\s*success/);
     });
 
     it('render_saved() is called before wire_view() in render()', () => {

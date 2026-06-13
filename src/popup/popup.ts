@@ -7,6 +7,7 @@ import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
+import { build_archive } from '../shared/archive_builder';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import type { RecordConfig } from '../shared/types';
@@ -255,11 +256,15 @@ function wire_view(): void {
         if (!finished_capture) return;
         try {
             const resp = await chrome.runtime.sendMessage({
-                action: 'export_json',
+                action: 'get_capture_data',
                 session_id: finished_capture.capture_id,
             });
-            if (resp?.success && resp.json) {
-                const blob = new Blob([resp.json], { type: 'application/json' });
+            if (resp?.success) {
+                const archive = await build_archive(resp, {
+                    inline_text_max_bytes: user_config.inline_text_max_bytes,
+                    system_time_timezone: user_config.system_time_timezone,
+                });
+                const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
                 const { capture_dir } = await load_last_export_dirs();
                 const filename = build_capture_filename(
                     {
@@ -268,7 +273,7 @@ function wire_view(): void {
                         system_time_timezone: user_config.system_time_timezone,
                     },
                     finished_capture.capture_id,
-                    'json',
+                    'zip',
                     capture_dir,
                 );
                 const download_id = await download_blob(blob, filename, { save_as: true });

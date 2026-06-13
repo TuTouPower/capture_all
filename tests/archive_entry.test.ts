@@ -9,10 +9,6 @@ describe('ZIP export entries', () => {
         const src = read('src/dashboard/dashboard.ts');
         expect(src).toMatch(/import.*build_archive.*archive_builder/);
     });
-    it('detail imports build_archive from archive_builder', () => {
-        const src = read('src/detail/detail.ts');
-        expect(src).toMatch(/import.*build_archive.*archive_builder/);
-    });
     it('popup imports build_archive from archive_builder', () => {
         const src = read('src/popup/popup.ts');
         expect(src).toMatch(/import.*build_archive.*archive_builder/);

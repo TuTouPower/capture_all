@@ -213,8 +213,12 @@ describe('last export dirs storage', () => {
     });
 
     it('track_export_dir stores capture dir when download completes', async () => {
-        mock_search.mockResolvedValue([{ filename: 'picked/capture/file.json' }]);
+        // Initial search: not yet complete → register listener
+        mock_search.mockResolvedValueOnce([{ id: 42, filename: 'tmp/file.json', state: 'in_progress' }]);
+        // Search after listener fires: complete
+        mock_search.mockResolvedValueOnce([{ id: 42, filename: 'picked/capture/file.json', state: 'complete' }]);
         track_export_dir(42, 'capture');
+        await Promise.resolve();
 
         mock_on_changed_listeners[0]({ id: 42, state: { current: 'complete' } });
         await Promise.resolve();
@@ -227,13 +231,26 @@ describe('last export dirs storage', () => {
         expect(mock_on_changed_listeners).toHaveLength(0);
     });
 
-    it('track_export_dir removes listener when download is interrupted', () => {
+    it('track_export_dir removes listener when download is interrupted', async () => {
+        mock_search.mockResolvedValueOnce([{ id: 42, filename: 'tmp/file.json', state: 'in_progress' }]);
         track_export_dir(42, 'log');
+        await Promise.resolve();
 
         mock_on_changed_listeners[0]({ id: 42, state: { current: 'interrupted' } });
 
-        expect(mock_search).not.toHaveBeenCalled();
         expect(mock_storage_set).not.toHaveBeenCalled();
+        expect(mock_on_changed_listeners).toHaveLength(0);
+    });
+
+    it('track_export_dir persists dir if download already completed', async () => {
+        mock_search.mockResolvedValueOnce([{ id: 42, filename: 'picked/already/file.json', state: 'complete' }]);
+        track_export_dir(42, 'capture');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mock_storage_set).toHaveBeenCalledWith({
+            last_capture_export_dir: 'picked/already',
+        });
         expect(mock_on_changed_listeners).toHaveLength(0);
     });
 });

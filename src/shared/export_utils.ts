@@ -62,34 +62,31 @@ export function track_export_dir(
     download_id: number,
     type: 'capture' | 'log',
 ): void {
-    const listener = (delta: {
-        id: number;
-        state?: { current: string };
-    }) => {
-        if (delta.id !== download_id || !delta.state?.current) {
-            return;
+    const persist = (results: Array<{ id: number; filename: string; state: string }>) => {
+        if (results.length > 0 && results[0].filename) {
+            const dir = extract_dir_from_filename(results[0].filename);
+            if (dir) void save_last_export_dir(type, dir);
         }
-        if (delta.state.current !== 'complete' && delta.state.current !== 'interrupted') {
-            return;
-        }
-        if (delta.state.current === 'interrupted') {
-            chrome.downloads.onChanged.removeListener(listener);
-            return;
-        }
-        chrome.downloads.onChanged.removeListener(listener);
-        chrome.downloads
-            .search({ id: download_id })
-            .then((results) => {
-                if (results.length > 0 && results[0].filename) {
-                    const dir = extract_dir_from_filename(
-                        results[0].filename,
-                    );
-                    if (dir) void save_last_export_dir(type, dir);
-                }
-            })
-            .catch(() => undefined);
     };
-    chrome.downloads.onChanged.addListener(listener);
+    // Check if download already completed before listener was registered
+    chrome.downloads.search({ id: download_id }).then((results) => {
+        if (results.length > 0 && results[0].state === 'complete') {
+            persist(results);
+            return;
+        }
+        const listener = (delta: {
+            id: number;
+            state?: { current: string };
+        }) => {
+            if (delta.id !== download_id || !delta.state?.current) return;
+            if (delta.state.current !== 'complete' && delta.state.current !== 'interrupted') return;
+            chrome.downloads.onChanged.removeListener(listener);
+            if (delta.state.current === 'complete') {
+                chrome.downloads.search({ id: download_id }).then(persist).catch(() => undefined);
+            }
+        };
+        chrome.downloads.onChanged.addListener(listener);
+    }).catch(() => undefined);
 }
 
 export function build_capture_filename(

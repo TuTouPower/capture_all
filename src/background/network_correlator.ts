@@ -22,7 +22,7 @@ export interface CdpBodyEvent {
 }
 
 export interface WebRequestMeta {
-    session_id: string;
+    capture_id: string;
     relative_time: number;
     absolute_time: number;
     tab_id: number;
@@ -62,7 +62,7 @@ export function merge_matched(
     correlation_status: NetworkCorrelationStatus
 ): NetworkRequestData {
     const request: NetworkRequestData = {
-        session_id: web_meta.session_id,
+        capture_id: web_meta.capture_id,
         relative_time: web_meta.relative_time,
         absolute_time: web_meta.absolute_time,
         tab_id: web_meta.tab_id || cdp_event.tab_id,
@@ -109,12 +109,11 @@ export function merge_matched(
 
 export function build_cdp_only_request(
     cdp_event: CdpBodyEvent,
-    session_id: string,
+    capture_id: string,
     start_time: number
 ): NetworkRequestData {
     return {
-        session_id,
-        capture_id: undefined,
+        capture_id,
         event_id: undefined,
         request_id: cdp_event.request_id,
         method: cdp_event.method,
@@ -160,7 +159,7 @@ export function build_cdp_only_request(
 
 export function build_web_request_only_request(web_meta: WebRequestMeta): NetworkRequestData {
     return {
-        session_id: web_meta.session_id,
+        capture_id: web_meta.capture_id,
         relative_time: web_meta.relative_time,
         absolute_time: web_meta.absolute_time,
         tab_id: web_meta.tab_id,

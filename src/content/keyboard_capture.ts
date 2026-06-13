@@ -1,17 +1,17 @@
 // content/keyboard_capture.ts
-import type { RecordConfig, CaptureEvent, KeyboardEventData } from '../shared/types';
+import type { CaptureConfig, CaptureEvent, KeyboardEventData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
-let config: RecordConfig;
+let config: CaptureConfig;
 let capture_id: string;
 let capture_start_epoch_ms: number;
 let tab_id: number;
 let send_event: (event: CaptureEvent, data: KeyboardEventData) => void;
 
 export function start_keyboard_capture(
-    cfg: RecordConfig,
+    cfg: CaptureConfig,
     cid: string,
     start_ms: number,
     tid: number,

@@ -1,5 +1,5 @@
 // shared/constants.ts
-import type { RecordConfig } from './types';
+import type { CaptureConfig } from './types';
 
 export const DB_NAME = 'capture_all_db';
 export const DB_VERSION = 3;
@@ -26,7 +26,7 @@ export const MAX_TARGET_TEXT_CHARS = 100;
 export const FLUSH_BATCH_SIZE = 100;
 export const FLUSH_INTERVAL_MS = 1000;
 
-export const DEFAULT_CONFIG: RecordConfig = {
+export const DEFAULT_CONFIG: CaptureConfig = {
     mouse_precision: 'clicks_scroll_drag',
     capture_console: true,
     capture_network: true,

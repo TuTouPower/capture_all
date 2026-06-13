@@ -10,7 +10,7 @@ import type {
     BodyCaptureFailureReason,
     BodyCaptureStartResult,
     NetworkRequestData,
-    RecordConfig
+    CaptureConfig
 } from '../shared/types';
 import {
     enable_response_body_capture
@@ -50,9 +50,9 @@ export function get_body_capture_result(): BodyCaptureStartResult | null {
 }
 
 export async function start_body_capture(
-    session_id: string,
+    capture_id: string,
     _start_time: number,
-    config: RecordConfig,
+    config: CaptureConfig,
     active_tab_id: number | null,
     deps: CoordinatorDeps,
     already_attached_tab_id?: number | null
@@ -84,7 +84,7 @@ export async function start_body_capture(
 
         if (error_msg.includes('Another debugger is already attached')) {
             // Tier 2: External CDP bridge
-            const bridge_result = await try_external_cdp_bridge(session_id, config, deps);
+            const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
             if (bridge_result) {
                 coordinator_state = bridge_result;
                 return build_result();
@@ -115,7 +115,7 @@ export async function start_body_capture(
             || error_msg.includes('does not have permission')
             || error_msg.includes('debugger is not')) {
             // Permission-related CDP failure — try bridge, then fallback
-            const bridge_result = await try_external_cdp_bridge(session_id, config, deps);
+            const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
             if (bridge_result) {
                 coordinator_state = bridge_result;
                 return build_result();
@@ -130,7 +130,7 @@ export async function start_body_capture(
         }
 
         // Permission or other error — try bridge, then fallback
-        const bridge_result = await try_external_cdp_bridge(session_id, config, deps);
+        const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
         if (bridge_result) {
             coordinator_state = bridge_result;
             return build_result();
@@ -146,7 +146,7 @@ export async function start_body_capture(
     }
 
     // No active tab — try bridge then fallback
-    const bridge_result = await try_external_cdp_bridge(session_id, config, deps);
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
     if (bridge_result) {
         coordinator_state = bridge_result;
         return build_result();
@@ -197,8 +197,8 @@ export async function stop_body_capture_with_cleanup(
 }
 
 async function try_external_cdp_bridge(
-    session_id: string,
-    config: RecordConfig,
+    capture_id: string,
+    config: CaptureConfig,
     deps: CoordinatorDeps
 ): Promise<typeof coordinator_state> {
     try {
@@ -218,7 +218,7 @@ async function try_external_cdp_bridge(
         const start_result = await start_external_cdp(
             bridge_config,
             detect_result.cdp_port!,
-            session_id,
+            capture_id,
             tab_url,
             config.redact_data,
             config.max_body_capture_bytes
@@ -232,7 +232,7 @@ async function try_external_cdp_bridge(
         const poll_timer = setInterval(async () => {
             const events = await poll_external_cdp_events(bridge_config, session_key);
             for (const evt of events) {
-                const req = convert_bridge_event_to_request(evt, session_id);
+                const req = convert_bridge_event_to_request(evt, capture_id);
                 deps.on_network_request(req);
             }
         }, 500);
@@ -251,11 +251,10 @@ async function try_external_cdp_bridge(
 
 function convert_bridge_event_to_request(
     evt: BridgeBodyEvent,
-    session_id: string
+    capture_id: string
 ): NetworkRequestData {
     return {
-        session_id,
-        capture_id: undefined,
+        capture_id,
         event_id: undefined,
         request_id: evt.request_id || `bridge_${Date.now().toString(36)}`,
         method: evt.method || 'GET',

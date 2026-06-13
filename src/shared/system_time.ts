@@ -108,17 +108,6 @@ export function format_system_time(ts: string | number, config: SystemTimeConfig
 }
 
 // ============================================================
-// format_time_label — human-readable label w/ timezone info
-// ============================================================
-export function format_time_label(ts: string | number, config: SystemTimeConfig): string {
-    const formatted = format_system_time(ts, config);
-    const tz = config.system_time_timezone;
-    if (tz === 'browser') return `${formatted} (browser)`;
-    if (tz === 'UTC') return `${formatted} (UTC)`;
-    return `${formatted} (${tz})`;
-}
-
-// ============================================================
 // format_system_time_filename
 // ============================================================
 export function format_system_time_filename(ts: string | number, config: SystemTimeConfig): string {

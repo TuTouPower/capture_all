@@ -1,145 +1,91 @@
-# 类型系统全量对齐 — 设计文档 + 实施计划审阅
+# Review — 流式 / WebSocket / 子 target 全捕获
 
-审阅日期：2026-06-08
-审阅对象：
-- `docs/superpowers/specs/2026-06-08-type-system-alignment-design.md`
-- `docs/superpowers/plans/2026-06-08-type-system-alignment-plan.md`
-
-## 总体评价
-
-设计方向正确，4 阶段拆分合理。以下列出发现的问题，按严重程度排列。
+日期：2026-06-13
+审查文档：
+- `docs/specs/streaming_websocket_capture.md`
+- `docs/specs/streaming_websocket_capture_plan.md`
 
 ---
 
-## 严重问题（必须修复）
+## 结论：APPROVE（需补充 3 个 MEDIUM 风险点后可实施）
 
-### 1. `mode` 字段与 `capture_mode` 值域不一致
-
-设计文档定义 `CaptureRecord.mode: 'standard' | 'deep' | 'custom'`，计划 task 3 也说 `DEFAULT_CONFIG.capture_mode` 从 `'basic'` 改为 `'standard'`。但看 types.ts 计划写的类型定义（task 1），`RecordConfig` 仍写的是 `capture_mode: 'standard' | 'deep'`。而现有代码 `RecordConfig.capture_mode` 是 `'basic' | 'advanced'`。
-
-**问题**：`RecordConfig.capture_mode` 和 `CaptureRecord.mode` 是不同字段但值域高度相似（`standard`/`deep` vs `standard`/`deep`/`custom`）。文档没有解释两者关系：`CaptureRecord.mode` 是从 `config.capture_mode` 映射而来？还是独立设置？如果是映射，`custom` 何时使用？
-
-**建议**：在计划中补充 `mode` 与 `capture_mode` 的映射关系说明，并确保 `RecordConfig` 类型也同步更新。
-
-### 2. `ConsoleEventData.level` 丢失了 `'error'` 值
-
-现有 `ConsoleLog.level = 'log' | 'warn' | 'error' | 'info' | 'debug'`。计划中 `ConsoleEventData.level = 'log' | 'warn' | 'info' | 'debug'`，去掉了 `'error'`。
-
-意图是让 console.error 走 `error` 分类而非 `console`。但 CDP `Runtime.consoleAPICalled` 事件参数包含 `type: 'error'`，**代码需要在采集端做分流**：level=`error` 的输出转为 `error/runtime_exception` 事件。
-
-**建议**：
-- 计划 task 11（console_capture.ts）应明确写："level=`error` 的 console API 调用，转为 `error/runtime_exception` 事件，走 error 通道"
-- 或者在 `ConsoleEventData.level` 保留 `'error'`，但注释说明 "deprecated, 应为空"
-- 同时检查 `console_capture.ts` 和 `service_worker.ts` 中的 level 分发逻辑
-
-### 3. IndexedDB 复合主键 keyPath 可行但不实用
-
-计划 task 4 设计 `keyPath: ['capture_id', 'relative_time_ms']`。复合主键在 IndexedDB 中合法，但有两个隐患：
-
-- `relative_time_ms` 可能在同一 capture 内重复（高频 mouse/scroll 事件、flush 批处理）。如果两事件同一毫秒到达，后者会覆盖前者。
-- 现有代码 `keyPath: ['session_id', 'relative_time']` 同样有这个问题。因为 `relative_time` 以 ms 为单位，高频事件会产生碰撞。
-
-**建议**：使用 `autoIncremented` 的自增主键 + `capture_id` 索引，或者 `keyPath: 'event_id'`（event_id 已是唯一 UUID）。避免事件静默丢失。
-
-### 4. `CookieChangeData.cause` 枚举值与现有代码不同
-
-现有 `types.ts`：`'explicit' | 'expired_overwrite' | 'evicted' | 'expired' | 'overwrite' | 'unknown'`（6 项）
-
-设计文档：`'explicit' | 'expired' | 'evicted' | 'overwrite' | 'unknown'`（5 项，去掉 `expired_overwrite`）
-
-计划（task 1）：列出 `'explicit' | 'expired' | 'evicted' | 'overwrite' | 'unknown'`（5 项）
-
-**问题**：Chrome `cookies.onChanged` API 的 `cause` 实际值是 `"explicit" | "overwrite" | "expired" | "evicted" | "expired_overwrite"`。所以 `expired_overwrite` 是真实存在的，不应删除。这是 Chrome API 的 5 个合法值。
-
-**建议**：在设计文档和计划中恢复 `expired_overwrite`，保持与 Chrome API 一致。
+规格根因分析准确，三机制划分合理，TDD 分阶段顺序正确。无 BLOCK 项。
 
 ---
 
-## 中等优先级问题
+## 优点
 
-### 5. 缺少 `expiration_date` 类型说明
-
-Chrome `cookies.onChanged` 返回的 `expirationDate` 是 `number`（epoch seconds），而 `sameSite` 是 `"unspecified" | "no_restriction" | "lax" | "strict"`。设计文档 `same_site` 写的是 `no_restriction/lax/strict`，缺少 `unspecified`。这也是 Cookie API 的合法返回值。
-
-**建议**：`same_site` 加上 `'unspecified'`，`expiration_date` 明确注释单位为 epoch seconds。
-
-### 6. `session_id` → `capture_id` 改名遗漏：文件名和函数名
-
-设计文档说"session_id → capture_id：直接改名，不做兼容层"，但计划只改了**字段名**和**类型名**，没有改**文件名**：
-- `src/background/session_manager.ts` — 文件未列入修改列表
-- 函数 `create_session` → `create_capture` 在计划中提到了，但 `get_session`、`list_sessions`、`update_session`、`delete_session` 的全部调用方是否都已覆盖？
-
-**建议**：grep 全仓 `session` 关键字，确保没有遗漏的文件/函数/变量。
-
-### 7. 计划缺少测试文件更新任务
-
-计划 task 20 step 2 只说"运行单元测试"和"修复失败"，但没有列出具体测试文件。`npm test` 跑的是 vitest，测试文件可能在 `tests/` 或 `__tests__/` 下，引用了 `Session`、`RecordEvent` 等同名旧类型。
-
-**建议**：在执行前 grep 测试文件中的旧类型名，评估测试改造工作量。
-
-### 8. 缺少 `relative_time_ms` 计算规范
-
-`event_utils.ts` 中 `create_base_event` 接收 `relative_time_ms` 参数，但未定义计算方式。各采集模块需要统一用 `Date.now() - capture_start_time_ms`。如果不同模块用不同基准（`performance.now()` vs `Date.now()`），数据会不一致。
-
-**建议**：在 event_utils.ts 中导出 `get_relative_time(capture_start_epoch_ms: number): number` 函数，统一计算逻辑。
-
-### 9. `TabSwitchData` 字段与现有代码差异大
-
-现有 `TabSwitchData`：`{ action: 'activate' | 'deactivate'; tab_title: string }`
-
-设计文档：`{ from_tab_id: number | null; to_tab_id: number; from_url: string | null; to_url: string | null }`
-
-**问题**：`action` 和 `tab_title` 完全丢失。现有采集代码中 `tab_switch` 只传 `action` 和 `tab_title`，新设计需要 `from/to_tab_id` 和 `from/to_url`，这需要 service_worker 保存 tab 状态才能获取。`from_url` 在此模型中尤其复杂——需要在每次切换时记住上一个活跃 tab 的 URL。
-
-**建议**：要么在 service_worker.ts 中增加 tab 状态管理逻辑，要么在 `TabSwitchData` 中保留 `action` 字段作为可选字段。
+| 项 | 说明 |
+|---|---|
+| 根因清晰 | "事后整体取 body" vs "持续流"的矛盾讲透，三类失效场景（SSE/WS/子target）分类完整 |
+| 每帧独立 event | WS 帧拆独立 `CaptureEvent`，符合现有 append 模型，无需改写入架构 |
+| 禁止 Fetch 拦截 | 明确禁止 `Fetch.requestPaused` 拦截 SSE，防挂死长连接，正确 |
+| 阶段 0 先重构 | 先抽 `cdp_event_router` + `stream_buffer`，再加功能，降低集成风险 |
+| 全量 TDD | 每阶段先 RED 再 GREEN，符合项目约定 |
+| 默认全开 | 随 CDP body capture 启用，无新配置项，符合"全采"定位 |
 
 ---
 
-## 轻微问题 / 建议
+## MEDIUM
 
-### 10. `event_utils.ts` 中 `event_counter` 的并发安全
+### M1：`Network.dataReceived.data` 字段前置条件未说明
 
-`event_counter` 是模块级变量，增量无锁。Content script 和 background service worker 在不同上下文，各自有独立计数器——这没问题。但在同一进程中，如果有并发调用 `create_base_event` 不会出问题（JS 单线程）。只是 event_id 格式带有 `event_counter` 尾巴确保唯一性，实际上 `Date.now().toString(36) + Math.random().toString(36)` 已经足够。
+**位置**：spec §3.2 步骤 3
 
-**建议**：可简化，去掉 `event_counter`。或者保留当前设计也行。
+spec 说"开启 streaming 后 `dataReceived` 携带 `data` 字段"，但 CDP 文档中 `Network.dataReceived.data` 仅在 `Network.enable({ reportResourceContent: true })` 时才出现。spec 没提这个前置条件。
 
-### 11. 计划 Task 1 types.ts 中 `DomReadyData` 缺失 `timestamp`
+降级路径（P2）如果依赖 `dataReceived.data` 但没设该 flag，降级也会静默失效。
 
-现有代码有 `DomReadyData: { timestamp: number }`，计划中的 `DomReadyData` 增加了 `url`、`title`、`ready_state`，但没了 `timestamp`。时间信息在 `CaptureEvent.relative_time_ms` 和 `absolute_time` 中已有，不算丢失。但需确认现有 `content_script.ts` 中构建 DomReadyData 的逻辑是否需要改。
-
-### 12. `store_name` 大小写不一致
-
-计划中的 store name 用 `UPPER_SNAKE`（`USER_ACTION_EVENTS`），现有代码也是 `UPPER_SNAKE`。没问题。
-
-### 13. 计划 task 4 step 5 commit message 缺少对新 flush 函数的描述
-
-commit subject 可以，但 body 应该更详细说明 9 个 store 的结构。
-
-### 14. 文档中的打印样式
-
-计划中 types.ts 的 `print_width` 不一致（单行 vs 多行注释风格混合）。这是文档表示的问题，不影响代码。
+**修复**：§3.2 步骤 2 补充 `streamResourceContent` 成功后 `dataReceived.data` 的启用机制。降级路径需独立验证 `data` 字段可用性，或显式设 `reportResourceContent: true`。
 
 ---
 
-## 现有代码中发现的相关问题（不在评审范围内但值得注意）
+### M2：流式 flush 与现有批写队列的并发协调未说明
 
-- `src/background/storage.ts` 中 `Session` 的 `keyPath: 'id'`，但 `Session` 接口用的是 `id` 字段。计划改为 `CaptureRecord.capture_id`，但 store 的 keyPath 会从 `'id'` 变为 `'capture_id'`。DB migration 需要处理这个不兼容变更——升级 DB 时必须删除旧 sessions store 或用新 store 名创建。当前计划 task 4 说"保留旧 store 不删，新 store 只在新版本创建"，这个策略合理。
+**位置**：spec §3.2 步骤 4，plan 阶段 0.2
 
-- 现有 `src/shared/constants.ts` 中有 `ERROR_LOG`（单数），而 `STORE_NAMES.EVENTS`、`CONSOLE_LOGS` 这些是复数。新设计统一用复数，一致性好。
+"每 ~1s 或 ~16KB flush 一次到 IndexedDB（增量更新 `response_body`）"意味着 `get → 拼接 → put`。IndexedDB 事务读写互斥，若主写入（事件批写）和流式 flush 同时操作同一 objectStore，会触发事务排队或死锁。
+
+**修复**：plan 阶段 0.2 明确 `stream_buffer` 的 flush 暂存后入队到现有批写队列，由队列统一调度，保证单写者模型。spec §3.2 步骤 4 补充一句说明事务协调方式。
 
 ---
 
-## 总结
+### M3：`Target.setAutoAttach` + `waitForDebuggerOnStart` 的 detach 安全阀缺失
 
-| 类别 | 数量 |
-|------|------|
-| 严重 | 4 |
-| 中等 | 5 |
-| 轻微 | 5 |
+**位置**：spec §3.4，plan 阶段 4
 
-设计方向 OK。4 个严重问题中：
-- #3（复合主键）是潜在的运行时 bug
-- #4（cookie cause 枚举）是数据丢失风险
-- #1 和 #2 是设计遗漏
+`waitForDebuggerOnStart: true` 让子 target 暂停在启动阶段。若用户此时打开 DevTools 触发 debugger 独占冲突，现有逻辑会 detach CDP session，但子 target 仍处于暂停状态 → worker/iframe 永久冻结，页面功能卡死。
 
-建议先修复 4 个严重问题再开始实施。
+**修复**：plan 阶段 4 增加安全阀步骤——detach 时先对所有 `attached_sessions` 发 `Runtime.runIfWaitingForDebugger`，再清理 session 状态。spec §6 补充此场景的处理说明。
+
+---
+
+## LOW
+
+| # | 内容 |
+|---|---|
+| L1 | `WsFrameData.payload_bytes` 可在写入时计算，不必存字段，省存储 |
+| L2 | 高频 WS（>100帧/s）场景可考虑 per-connection 采样上限，当前批写吸收够用，但 spec 可提及上限策略 |
+| L3 | `stream_buffer` 单测应覆盖并发 safety（非仅时间/字节/force 三场景） |
+
+---
+
+## 验证结果
+
+| 检查 | 结果 |
+|---|---|
+| 架构一致性 | Pass |
+| 数据模型向后兼容 | Pass |
+| TDD 覆盖设计 | Pass |
+| 降级/错误处理 | Pass（P2 覆盖） |
+| 安全风险 | Pass（无新暴露面） |
+| 可实现性 | Pass（M1-M3 修正后） |
+
+---
+
+## 补充顺序
+
+1. M1：spec §3.2 补 `data` 字段启用条件，P2 降级独立验证
+2. M2：spec §3.2 + plan 阶段 0.2 补事务协调说明
+3. M3：plan 阶段 4 + spec §6 补 detach 安全阀
+4. 进入实施

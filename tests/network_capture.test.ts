@@ -16,6 +16,7 @@ import {
     find_matching_cdp_request,
     find_cdp_candidates,
     resolve_resource_type,
+    is_self_origin_url,
     _cdp_request_meta_for_test,
     _cdp_body_results_for_test,
     _deferred_web_requests_for_test,
@@ -719,5 +720,45 @@ describe('base64_decoded_size fault injection', () => {
     it('subtracts padding correctly', () => {
         // 'YQ==' → 1 byte（4 chars, 2 padding）
         expect(_base64_decoded_size_for_test('YQ==')).toBe(1);
+    });
+});
+
+// ─── BUG-005: Bridge / extension self-origin URL exclusion ───
+// Bridge 日志上报端点 (http://127.0.0.1:<port>/log) 与扩展自身 origin
+// (chrome-extension://) 不应进入 CDP body 采集，否则产生 cdp_failed 污染。
+
+describe('is_self_origin_url (BUG-005)', () => {
+    it('excludes 127.0.0.1 bridge log endpoint', () => {
+        expect(is_self_origin_url('http://127.0.0.1:9777/log')).toBe(true);
+    });
+
+    it('excludes 127.0.0.1 with any port', () => {
+        expect(is_self_origin_url('http://127.0.0.1:17831/extension/heartbeat')).toBe(true);
+        expect(is_self_origin_url('http://127.0.0.1:1/')).toBe(true);
+        expect(is_self_origin_url('http://127.0.0.1:65535/mcp/command')).toBe(true);
+    });
+
+    it('excludes localhost with any port', () => {
+        expect(is_self_origin_url('http://localhost:9777/log')).toBe(true);
+        expect(is_self_origin_url('http://localhost:3000/api')).toBe(true);
+    });
+
+    it('excludes chrome-extension origin', () => {
+        expect(is_self_origin_url('chrome-extension://abc123/options.html')).toBe(true);
+    });
+
+    it('does NOT exclude normal external URLs', () => {
+        expect(is_self_origin_url('https://example.com/api/data')).toBe(false);
+        expect(is_self_origin_url('https://api.example.com:443/v1/log')).toBe(false);
+        expect(is_self_origin_url('http://93.184.216.34/')).toBe(false);
+    });
+
+    it('does NOT exclude a remote host that merely has "localhost" in path', () => {
+        expect(is_self_origin_url('https://example.com/localhost-mirror')).toBe(false);
+    });
+
+    it('handles malformed input safely', () => {
+        expect(is_self_origin_url('')).toBe(false);
+        expect(is_self_origin_url('not-a-url')).toBe(false);
     });
 });

@@ -5,6 +5,10 @@ import { get_db } from './storage';
 import { load_user_config } from '../shared/user_config';
 import type { LogTransport } from '../shared/logger';
 
+function estimate_entry_bytes(entry: AppLogEntry): number {
+    return (entry.message?.length || 0) + (entry.module?.length || 0) + 40;
+}
+
 export class IndexedDBLogTransport implements LogTransport {
     private buffer: AppLogEntry[] = [];
     private flush_timer: ReturnType<typeof setTimeout> | null = null;
@@ -162,31 +166,51 @@ export class IndexedDBLogTransport implements LogTransport {
         });
     }
 
+    async get_total_size_bytes(): Promise<number> {
+        const db = await get_db();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([STORE_NAMES.APP_LOGS], 'readonly');
+            const store = tx.objectStore(STORE_NAMES.APP_LOGS);
+            const cursor_req = store.openCursor();
+            let total = 0;
+            cursor_req.onsuccess = () => {
+                const cursor = cursor_req.result;
+                if (!cursor) {
+                    resolve(total);
+                    return;
+                }
+                total += estimate_entry_bytes(cursor.value as AppLogEntry);
+                cursor.continue();
+            };
+            cursor_req.onerror = () => reject(cursor_req.error);
+        });
+    }
+
     private async trim_if_needed(): Promise<void> {
-        let max: number;
+        let max_bytes: number;
         try {
             const config = await load_user_config();
-            max = config.log_max_entries;
+            max_bytes = (config.log_max_size_mb || 100) * 1024 * 1024;
         } catch {
-            max = 10000;
+            max_bytes = 100 * 1024 * 1024;
         }
-        const total = await this.count();
-        if (total <= max) return;
+        const total_bytes = await this.get_total_size_bytes();
+        if (total_bytes <= max_bytes) return;
 
         const db = await get_db();
         const tx = db.transaction([STORE_NAMES.APP_LOGS], 'readwrite');
         const store = tx.objectStore(STORE_NAMES.APP_LOGS);
         const index = store.index('timestamp');
-        const to_delete = total - max;
-        let deleted = 0;
+        let freed = 0;
+        const to_free = total_bytes - max_bytes;
 
         await new Promise<void>((resolve, reject) => {
             const cursor_req = index.openCursor(null, 'next');
             cursor_req.onsuccess = () => {
                 const cursor = cursor_req.result;
-                if (cursor && deleted < to_delete) {
+                if (cursor && freed < to_free) {
+                    freed += estimate_entry_bytes(cursor.value as AppLogEntry);
                     cursor.delete();
-                    deleted++;
                     cursor.continue();
                 } else {
                     resolve();

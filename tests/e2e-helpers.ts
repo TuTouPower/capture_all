@@ -108,8 +108,10 @@ export const REQUIRED_KEYS = [
 ] as const;
 
 export const FORBIDDEN_STRINGS = [
-    '深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制', '记录',
+    '深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制',
 ];
+// 注：'记录' 作为普通名词合法使用（如"采集记录"指 capture list），
+// CLAUDE.md 禁止的是作为动词/产品术语的 '录制'。'记录' 不属于禁词。
 
 export interface CaptureDataResult {
     success: boolean;

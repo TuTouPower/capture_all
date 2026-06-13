@@ -140,16 +140,16 @@ test.describe('CDP Capture - recording with body capture', () => {
         await popup.locator('#stopBtn').click();
         await popup.waitForTimeout(3000);
 
-        // Verify body_capture_mode via get_session_data
-        const session_data = await popup.evaluate(async () => {
+        // Verify body_capture_mode via get_capture_result
+        const capture_result = await popup.evaluate(async () => {
             try {
-                const sessions = await (chrome.runtime.sendMessage({
+                const captures = await (chrome.runtime.sendMessage({
                     action: 'list_captures',
                 }) as Promise<Array<{ capture_id: string }>>);
-                if (!Array.isArray(sessions) || sessions.length === 0) {
-                    return { error: 'No sessions found' };
+                if (!Array.isArray(sessions) || captures.length === 0) {
+                    return { error: 'No captures found' };
                 }
-                const latest = sessions[sessions.length - 1];
+                const latest = captures[captures.length - 1];
                 const data = await (chrome.runtime.sendMessage({
                     action: 'get_capture_data',
                     session_id: latest.capture_id,
@@ -160,16 +160,16 @@ test.describe('CDP Capture - recording with body capture', () => {
             }
         });
 
-        expect(session_data.success).toBe(true);
-        expect(session_data.capture).toBeDefined();
+        expect(capture_result.success).toBe(true);
+        expect(capture_result.capture).toBeDefined();
 
         // body_capture_mode should be set (not undefined)
         // In extension context without bridge, typical values: 'extension_cdp' or 'fallback_hook'
-        const mode = session_data.capture.body_capture_mode;
+        const mode = capture_result.capture.body_capture_mode;
         expect(['extension_cdp', 'fallback_hook', 'external_cdp_bridge']).toContain(mode);
 
         // Verify some network requests were captured
-        const network_requests = session_data.network_requests || [];
+        const network_requests = capture_result.network_requests || [];
         expect(network_requests.length).toBeGreaterThan(0);
 
         await testPage.close();
@@ -239,13 +239,13 @@ test.describe('CDP Capture - recording with body capture', () => {
         // Export JSON via chrome.runtime.sendMessage
         const export_result = await popup.evaluate(async () => {
             try {
-                const sessions = await (chrome.runtime.sendMessage({
+                const captures = await (chrome.runtime.sendMessage({
                     action: 'list_captures',
                 }) as Promise<Array<{ capture_id: string }>>);
-                if (!Array.isArray(sessions) || sessions.length === 0) {
-                    return { error: 'No sessions found' };
+                if (!Array.isArray(sessions) || captures.length === 0) {
+                    return { error: 'No captures found' };
                 }
-                const latest = sessions[sessions.length - 1];
+                const latest = captures[captures.length - 1];
                 const exported = await (chrome.runtime.sendMessage({
                     action: 'export_json',
                     session_id: latest.capture_id,

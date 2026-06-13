@@ -38,11 +38,11 @@ async function export_via_dashboard(
 
 async function get_latest_capture_id(page: Awaited<ReturnType<typeof open_popup>>): Promise<string> {
     return await page.evaluate(async () => {
-        const sessions = await (chrome.runtime.sendMessage({
+        const captures = await (chrome.runtime.sendMessage({
             action: 'list_captures',
         }) as Promise<Array<{ capture_id: string }>>);
-        if (!sessions || sessions.length === 0) return '';
-        return sessions[sessions.length - 1].capture_id;
+        if (!sessions || captures.length === 0) return '';
+        return captures[captures.length - 1].capture_id;
     });
 }
 
@@ -126,7 +126,7 @@ test.describe.serial('并发多 Tab 采集', () => {
         await popup.close();
     });
 
-    test('时间线合并：同一 session 两 tab 事件可展示（baidu + qq）', async () => {
+    test('时间线合并：同一 capture 两 tab 事件可展示（baidu + qq）', async () => {
         const popup = await open_popup(fix);
         await popup.locator('#startBtn').click();
         await popup.waitForTimeout(500);

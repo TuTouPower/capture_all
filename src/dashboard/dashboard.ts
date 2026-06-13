@@ -163,7 +163,7 @@ async function load_captures(): Promise<void> {
     if (!is_extension) return;
     try { captures = (await chrome.runtime.sendMessage({ action: 'list_captures' })) || []; }
     catch { captures = []; }
-    logger.debug('Sessions loaded', { count: captures.length });
+    logger.debug('Captures loaded', { count: captures.length });
 }
 async function load_detail(id: string): Promise<void> {
     detail_capture = null; detail_events = []; detail_network = []; detail_console = [];

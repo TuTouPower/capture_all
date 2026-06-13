@@ -6,7 +6,7 @@ import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop
 
 interface ExtensionHeartbeat {
     extension_version: string;
-    active_session_id: string | null;
+    active_capture_id: string | null;
     seen_at: number;
 }
 
@@ -68,7 +68,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     bridge_url: `http://${config.host}:${actual_port(server)}`,
                     extension_online: online,
                     extension_version: online ? heartbeat!.extension_version : null,
-                    active_session_id: online ? heartbeat!.active_session_id : null,
+                    active_capture_id: online ? heartbeat!.active_capture_id : null,
                     pending_commands: queue.pending_count(),
                 };
                 return send_json(response, 200, status);
@@ -165,14 +165,14 @@ function validate_heartbeat(value: unknown): Omit<ExtensionHeartbeat, 'seen_at'>
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Heartbeat body must be an object');
     }
 
-    const active_session_id = value.active_session_id;
-    if (typeof value.extension_version !== 'string' || !(typeof active_session_id === 'string' || active_session_id === null)) {
+    const active_capture_id = value.active_capture_id;
+    if (typeof value.extension_version !== 'string' || !(typeof active_capture_id === 'string' || active_capture_id === null)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Heartbeat body is invalid');
     }
 
     return {
         extension_version: value.extension_version,
-        active_session_id,
+        active_capture_id,
     };
 }
 

@@ -9,17 +9,17 @@ import {
 describe('agent protocol', () => {
     it('lists every MVP command type', () => {
         const expected: AgentCommandType[] = [
-            'recording.start',
-            'recording.stop',
-            'sessions.list',
-            'sessions.get',
+            'capture.start',
+            'capture.stop',
+            'captures.list',
+            'captures.get',
             'sources.list',
-            'records.list',
-            'records.get',
+            'data.list',
+            'data.get',
             'timeline.list',
             'timeline.get',
-            'session.get_all_data',
-            'session.export',
+            'capture.get_all_data',
+            'capture.export',
         ];
 
         expect(AGENT_COMMAND_TYPES).toEqual(expected);

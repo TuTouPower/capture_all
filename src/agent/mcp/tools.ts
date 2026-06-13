@@ -7,21 +7,21 @@ export interface McpToolCall {
 }
 
 const TOOL_COMMANDS: Record<string, AgentCommandType> = {
-    start_recording: 'recording.start',
-    stop_recording: 'recording.stop',
-    list_captures: 'sessions.list',
-    get_capture: 'sessions.get',
-    list_sessions: 'sessions.list',
-    get_session: 'sessions.get',
+    start_recording: 'capture.start',
+    stop_recording: 'capture.stop',
+    list_captures: 'captures.list',
+    get_capture: 'captures.get',
+    list_sessions: 'captures.list',
+    get_session: 'captures.get',
     list_data_sources: 'sources.list',
-    list_records: 'records.list',
-    get_record: 'records.get',
+    list_records: 'data.list',
+    get_record: 'data.get',
     get_timeline: 'timeline.list',
     get_timeline_item: 'timeline.get',
-    get_all_capture_data: 'session.get_all_data',
-    get_all_session_data: 'session.get_all_data',
-    export_capture: 'session.export',
-    export_session: 'session.export',
+    get_all_capture_data: 'capture.get_all_data',
+    get_all_session_data: 'capture.get_all_data',
+    export_capture: 'capture.export',
+    export_session: 'capture.export',
 };
 
 export const MCP_TOOL_NAMES = [

@@ -1,7 +1,7 @@
 // shared/types.ts
 
 // ============================================================
-// Capture Record — replaces Session
+// Capture Record
 // ============================================================
 
 export interface CaptureRecord {
@@ -42,7 +42,7 @@ export interface CaptureStats {
 }
 
 // ============================================================
-// Capture Event base — replaces RecordEvent
+// Capture Event base
 // ============================================================
 
 export interface CaptureEvent {
@@ -279,7 +279,6 @@ export interface NetworkRequestData {
     error_text: string | null;
     capture_method: 'web_request' | 'cdp_primary' | 'extension_cdp' | 'external_cdp_bridge' | 'fallback_hook';
     body_capture_mode: BodyCaptureMode;
-    session_id?: string;
     tab_id?: number;
     relative_time?: number;
     absolute_time?: number;

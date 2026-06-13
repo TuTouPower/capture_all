@@ -23,7 +23,7 @@ export type CaptureWithSystemTimes = Omit<CaptureRecord, 'started_at' | 'ended_a
     end_time_label: string | null;
 };
 
-export type RecordWithSystemTime<T> = T & {
+export type WithSystemTime<T> = T & {
     absolute_time_system_time: string;
     absolute_time_label: string;
 };
@@ -31,9 +31,9 @@ export type RecordWithSystemTime<T> = T & {
 export interface ExportableCaptureDataWithSystemTimes {
     system_time_timezone: string;
     capture: CaptureWithSystemTimes;
-    events: Array<RecordWithSystemTime<CaptureEvent>>;
-    network_requests: Array<RecordWithSystemTime<NetworkRequestData>>;
-    console_events: Array<RecordWithSystemTime<ConsoleEventData>>;
+    events: Array<WithSystemTime<CaptureEvent>>;
+    network_requests: Array<WithSystemTime<NetworkRequestData>>;
+    console_events: Array<WithSystemTime<ConsoleEventData>>;
 }
 
 type SystemTimeConfig = Pick<UserConfig, 'system_time_timezone'>;
@@ -169,7 +169,7 @@ export function add_capture_system_times(capture: CaptureRecord, config: SystemT
     };
 }
 
-export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig): RecordWithSystemTime<T> {
+export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig): WithSystemTime<T> {
     const absolute_time = (record as Record<string, unknown>).absolute_time;
     let absolute_time_system_time = '';
     let absolute_time_label = '';
@@ -183,9 +183,3 @@ export function add_absolute_system_time<T>(record: T, config: SystemTimeConfig)
         absolute_time_label
     };
 }
-
-export const add_system_times_to_session_data = add_system_times_to_capture_data;
-export const add_session_system_times = add_capture_system_times;
-export type ExportableSessionData = ExportableCaptureData;
-export type ExportableSessionDataWithSystemTimes = ExportableCaptureDataWithSystemTimes;
-export type SessionWithSystemTimes = CaptureWithSystemTimes;

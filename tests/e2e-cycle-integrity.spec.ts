@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
 
-interface SessionInfo {
+interface CaptureInfo {
     capture_id: string;
     name: string;
     status: string;
@@ -37,7 +37,7 @@ test.describe.serial('多轮采集数据隔离', () => {
         await fix.context.close();
     });
 
-    test('场景 1: 三轮开始-停止 → 独立 session 数据不泄漏', async () => {
+    test('场景 1: 三轮开始-停止 → 独立 capture 数据不泄漏', async () => {
         const popup = await open_popup(fix);
 
         // ── Cycle 1: baidu.com ──
@@ -97,16 +97,16 @@ test.describe.serial('多轮采集数据隔离', () => {
         await expect(popup.locator('.act-done'), 'Cycle 3 完成').toBeVisible();
 
         // ── 获取所有 sessions ──
-        const sessions: SessionInfo[] = await popup.evaluate(() =>
+        const captures: CaptureInfo[] = await popup.evaluate(() =>
             chrome.runtime.sendMessage({ action: 'list_captures' })
         );
 
-        expect(sessions, '至少应有 3 个 session').toBeDefined();
-        expect(Array.isArray(sessions), 'sessions 应为数组').toBe(true);
-        expect(sessions.length, '应有 3 个 session').toBeGreaterThanOrEqual(3);
+        expect(captures, '至少应有 3 个 capture').toBeDefined();
+        expect(Array.isArray(sessions), 'captures 应为数组').toBe(true);
+        expect(captures.length, '应有 3 个 capture').toBeGreaterThanOrEqual(3);
 
         // 取最近 3 个
-        const recent = sessions.slice(-3);
+        const recent = captures.slice(-3);
         expect(recent.length).toBe(3);
 
         // 每个 session 有不同 capture_id
@@ -118,7 +118,7 @@ test.describe.serial('多轮采集数据隔离', () => {
 
         // ── 分别导出每个 session ──
         const exports: ExportResult[] = [];
-        for (const session of recent) {
+        for (const capture of recent) {
             const result: ExportResult = await popup.evaluate(
                 (sid) => chrome.runtime.sendMessage({ action: 'export_json', capture_id: sid }),
                 session.capture_id
@@ -127,55 +127,55 @@ test.describe.serial('多轮采集数据隔离', () => {
         }
 
         for (let i = 0; i < exports.length; i++) {
-            expect(exports[i].success, `Session ${i + 1} 导出应成功`).toBe(true);
-            expect(exports[i].json, `Session ${i + 1} 导出应有内容`).toBeTruthy();
+            expect(exports[i].success, `Capture ${i + 1} 导出应成功`).toBe(true);
+            expect(exports[i].json, `Capture ${i + 1} 导出应有内容`).toBeTruthy();
         }
 
         // ── 验证数据隔离 ──
         const parsed = exports.map((e) => JSON.parse(e.json!));
 
-        // Session 1: 包含 baidu.com 相关 URL
+        // Capture 1: 包含 baidu.com 相关 URL
         const data1 = JSON.stringify(parsed[0]);
         expect(
             data1.includes('baidu.com'),
-            'Session 1 应包含 baidu.com URL'
+            'Capture 1 应包含 baidu.com URL'
         ).toBe(true);
 
-        // Session 2: 包含 toutiao.com 相关 URL
+        // Capture 2: 包含 toutiao.com 相关 URL
         const data2 = JSON.stringify(parsed[1]);
         expect(
             data2.includes('toutiao.com'),
-            'Session 2 应包含 toutiao.com URL'
+            'Capture 2 应包含 toutiao.com URL'
         ).toBe(true);
 
-        // Session 3: 包含 qq.com 相关 URL
+        // Capture 3: 包含 qq.com 相关 URL
         const data3 = JSON.stringify(parsed[2]);
         expect(
             data3.includes('qq.com'),
-            'Session 3 应包含 qq.com URL'
+            'Capture 3 应包含 qq.com URL'
         ).toBe(true);
 
         // ── 验证无数据泄漏 ──
-        // Session 1 不应包含 toutiao.com 或 qq.com
+        // Capture 1 不应包含 toutiao.com 或 qq.com
         expect(
             data1,
-            'Session 1 不应包含 toutiao.com（无泄漏）'
+            'Capture 1 不应包含 toutiao.com（无泄漏）'
         ).not.toContain('toutiao.com');
         expect(
             data1,
-            'Session 1 不应包含 qq.com（无泄漏）'
+            'Capture 1 不应包含 qq.com（无泄漏）'
         ).not.toContain('qq.com');
 
-        // Session 2 不应包含 baidu.com 的搜索关键词（确保是独立数据）
+        // Capture 2 不应包含 baidu.com 的搜索关键词（确保是独立数据）
         expect(
             data2,
-            'Session 2 不应包含 baidu.com（无泄漏）'
+            'Capture 2 不应包含 baidu.com（无泄漏）'
         ).not.toContain('baidu.com');
 
-        // Session 3 不应包含 baidu.com
+        // Capture 3 不应包含 baidu.com
         expect(
             data3,
-            'Session 3 不应包含 baidu.com（无泄漏）'
+            'Capture 3 不应包含 baidu.com（无泄漏）'
         ).not.toContain('baidu.com');
 
         await popup.close();
@@ -201,9 +201,9 @@ test.describe.serial('多轮采集数据隔离', () => {
         // 通过 sendMessage 导出 JSON，验证数据有效
         const result: ExportResult = await popup.evaluate(() =>
             chrome.runtime.sendMessage({ action: 'list_captures' })
-                .then((sessions: SessionInfo[]) => {
-                    if (sessions && sessions.length > 0) {
-                        const latest = sessions[sessions.length - 1];
+                .then((captures: CaptureInfo[]) => {
+                    if (sessions && captures.length > 0) {
+                        const latest = captures[captures.length - 1];
                         return chrome.runtime.sendMessage({
                             action: 'export_json',
                             session_id: latest.capture_id,
@@ -213,8 +213,8 @@ test.describe.serial('多轮采集数据隔离', () => {
                 })
         );
 
-        expect(result.success, '0 事件 session 导出应成功').toBe(true);
-        expect(result.json, '0 事件 session 导出应有内容').toBeTruthy();
+        expect(result.success, '0 事件 capture 导出应成功').toBe(true);
+        expect(result.json, '0 事件 capture 导出应有内容').toBeTruthy();
 
         const data = JSON.parse(result.json!);
         expect(data, '导出数据应有 capture_id').toHaveProperty('capture_id');

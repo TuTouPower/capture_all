@@ -115,7 +115,7 @@ export interface I18nStrings {
 
 const en: I18nStrings = {
     ready: 'Ready',
-    capturing: 'Recording',
+    capturing: 'Capturing',
     captureId: 'ID',
 
     configuration: 'Configuration',
@@ -130,7 +130,7 @@ const en: I18nStrings = {
     sensitiveData: 'Sensitive data',
 
     recentCaptures: 'Recent Captures',
-    noCaptures: 'No captures recorded yet',
+    noCaptures: 'No captures yet',
     view: 'View',
     delete: 'Delete',
     deleteConfirm: 'Delete this capture?',

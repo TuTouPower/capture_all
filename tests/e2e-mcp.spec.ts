@@ -150,7 +150,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: sessions.list', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_list', type: 'sessions.list', payload: {}, created_at: Date.now()
+            command_id: 'e2e_list', type: 'captures.list', payload: {}, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
         expect(data.data).toHaveProperty('total');
@@ -158,7 +158,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: recording.start', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_start', type: 'recording.start',
+            command_id: 'e2e_start', type: 'capture.start',
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
@@ -175,7 +175,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: session.get_all_data', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_alldata', type: 'session.get_all_data',
+            command_id: 'e2e_alldata', type: 'capture.get_all_data',
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
@@ -184,7 +184,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: session.export json', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_export', type: 'session.export',
+            command_id: 'e2e_export', type: 'capture.export',
             payload: { capture_id: 'e2e_capture_1', format: 'json' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
@@ -193,7 +193,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: recording.stop', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_stop', type: 'recording.stop',
+            command_id: 'e2e_stop', type: 'capture.stop',
             payload: {}, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
@@ -202,7 +202,7 @@ test.describe('MCP Bridge E2E', () => {
 
     test('MCP: sessions.get returns details', async () => {
         const data = await bridge_post('/mcp/command', {
-            command_id: 'e2e_get', type: 'sessions.get',
+            command_id: 'e2e_get', type: 'captures.get',
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);

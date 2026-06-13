@@ -11,12 +11,12 @@ import {
     type AgentDataSource
 } from './agent_data_queries';
 import { DEFAULT_CONFIG } from '../shared/constants';
-import type { RecordConfig } from '../shared/types';
+import type { CaptureConfig } from '../shared/types';
 
 export interface AgentRuntimeHandlers {
-    start_recording: (capture_id: string, config: RecordConfig) => Promise<{ success: boolean; error?: string }>;
-    stop_recording: () => Promise<{ success: boolean }>;
-    get_status: () => { active_session_id: string | null };
+    start_capture: (capture_id: string, config: CaptureConfig) => Promise<{ success: boolean; error?: string }>;
+    stop_capture: () => Promise<{ success: boolean }>;
+    get_status: () => { active_capture_id: string | null };
 }
 
 export async function dispatch_agent_command(command: AgentCommand, handlers: AgentRuntimeHandlers): Promise<AgentCommandResult> {
@@ -40,9 +40,9 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
 
     switch (command.type) {
         case 'recording.start':
-            return start_recording(payload, handlers);
+            return start_capture(payload, handlers);
         case 'recording.stop':
-            return stop_recording(handlers);
+            return stop_capture(handlers);
         case 'sessions.list':
             return list_captures(payload);
         case 'sessions.get':
@@ -85,14 +85,14 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
     }
 }
 
-async function start_recording(payload: Record<string, unknown>, handlers: AgentRuntimeHandlers): Promise<unknown> {
+async function start_capture(payload: Record<string, unknown>, handlers: AgentRuntimeHandlers): Promise<unknown> {
     const capture_id = typeof payload.capture_id === 'string'
         ? payload.capture_id
-        : typeof payload.session_id === 'string'
-            ? payload.session_id
+        : typeof payload.capture_id === 'string'
+            ? payload.capture_id
             : `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const config = is_record_config(payload.config) ? payload.config : DEFAULT_CONFIG;
-    const result = await handlers.start_recording(capture_id, config);
+    const config = is_capture_config(payload.config) ? payload.config : DEFAULT_CONFIG;
+    const result = await handlers.start_capture(capture_id, config);
 
     if (!result.success) {
         throw new AgentCommandError('RECORDING_ALREADY_RUNNING', result.error || 'Recording already running');
@@ -101,9 +101,9 @@ async function start_recording(payload: Record<string, unknown>, handlers: Agent
     return { capture_id, status: 'recording' };
 }
 
-async function stop_recording(handlers: AgentRuntimeHandlers): Promise<unknown> {
-    const active_capture_id = handlers.get_status().active_session_id;
-    const result = await handlers.stop_recording();
+async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
+    const active_capture_id = handlers.get_status().active_capture_id;
+    const result = await handlers.stop_capture();
 
     if (!result.success) {
         throw new AgentCommandError('NO_ACTIVE_RECORDING', 'No active recording');
@@ -154,7 +154,7 @@ function get_required_capture_id(payload: Record<string, unknown>): string {
     if (typeof payload.capture_id === 'string' && payload.capture_id.length > 0) {
         return payload.capture_id;
     }
-    return get_required_string(payload, 'session_id');
+    return get_required_string(payload, 'capture_id');
 }
 
 function get_required_string(payload: Record<string, unknown>, key: string): string {
@@ -191,7 +191,7 @@ function get_optional_sources(payload: Record<string, unknown>): AgentDataSource
     return payload.sources as AgentDataSource[];
 }
 
-function is_record_config(value: unknown): value is RecordConfig {
+function is_capture_config(value: unknown): value is CaptureConfig {
     return typeof value === 'object' && value !== null;
 }
 

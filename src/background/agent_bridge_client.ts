@@ -1,6 +1,6 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
 import { normalize_agent_bridge_config, type AgentBridgeUserConfig } from '../shared/agent_bridge_config';
-import type { RecordConfig } from '../shared/types';
+import type { CaptureConfig } from '../shared/types';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 
@@ -8,9 +8,9 @@ const logger = new Logger('background/bridge', get_app_log_transport());
 
 export interface AgentBridgeClientDeps {
     get_user_config: () => Promise<AgentBridgeUserConfig>;
-    start_recording: (session_id: string, config: RecordConfig) => Promise<{ success: boolean; error?: string }>;
-    stop_recording: () => Promise<{ success: boolean }>;
-    get_status: () => { active_session_id: string | null };
+    start_capture: (capture_id: string, config: CaptureConfig) => Promise<{ success: boolean; error?: string }>;
+    stop_capture: () => Promise<{ success: boolean }>;
+    get_status: () => { active_capture_id: string | null };
     extension_version: string;
 }
 
@@ -69,8 +69,8 @@ async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
 
     const { agent_bridge_url, agent_bridge_token, agent_bridge_poll_interval_ms } = config;
     const handlers: AgentRuntimeHandlers = {
-        start_recording: deps.start_recording,
-        stop_recording: deps.stop_recording,
+        start_capture: deps.start_capture,
+        stop_capture: deps.stop_capture,
         get_status: deps.get_status
     };
 
@@ -107,7 +107,7 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             extension_version: deps.extension_version,
-            active_session_id: status.active_session_id
+            active_capture_id: status.active_capture_id
         })
     });
 

@@ -1,5 +1,5 @@
 // popup/popup.ts — Capture All 全采 采集控制台
-// Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real recording wiring.
+// Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real capturing wiring.
 import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
@@ -10,11 +10,11 @@ import { download_blob, build_capture_filename, load_last_export_dirs, track_exp
 import { build_archive } from '../shared/archive_builder';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
-import type { RecordConfig } from '../shared/types';
+import type { CaptureConfig } from '../shared/types';
 
 const logger = new Logger('popup', get_app_log_transport());
 
-type PopupState = 'ready' | 'recording' | 'saved';
+type PopupState = 'ready' | 'capturing' | 'saved';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -135,16 +135,16 @@ function metric_grid(stats: CaptureStats | null, can_toggle: boolean): string {
     return `<div class="metrics">${cards}</div>`;
 }
 
-let recent_sessions: Session[] = [];
+let recent_captures: Session[] = [];
 
 function recent_list(): string {
-    const rows = recent_sessions.slice(0, 3).map((s) => {
+    const rows = recent_captures.slice(0, 3).map((s) => {
         const events = fmt_num(s.stats?.event_count ?? 0);
         const dur = s.ended_at
             ? fmt_dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime())
             : '—';
         const when = escape_html(format_system_time(s.started_at, user_config));
-        return `<a class="recent-row" data-session="${escape_html(s.capture_id)}">
+        return `<a class="recent-row" data-capture="${escape_html(s.capture_id)}">
             <span class="recent-ic">${ICON.clock}</span>
             <span class="recent-main">
                 <span class="recent-top"><b>${when}</b></span>
@@ -153,10 +153,10 @@ function recent_list(): string {
             <span class="recent-go link">${t('viewDetail')} ${ICON.chevron}</span>
         </a>`;
     }).join('');
-    const body = rows || `<div class="recent-empty">${t('noSessions')}</div>`;
+    const body = rows || `<div class="recent-empty">${t('noCaptures')}</div>`;
     return `<div class="recent">
         <div class="recent-hd">
-            <span>${t('recentSessions')}</span>
+            <span>${t('recentCaptures')}</span>
             <a class="link" id="viewAll">${t('viewAll')} ${ICON.chevron}</a>
         </div>
         <div class="recent-list">${body}</div>
@@ -176,7 +176,7 @@ function render_ready(): string {
     </div>`;
 }
 
-function render_recording(): string {
+function render_capturing(): string {
     const elapsed = current_capture
         ? fmt_hms((Date.now() - new Date(current_capture.started_at).getTime()) / 1000)
         : '00:00:00';
@@ -228,8 +228,8 @@ function render_saved(): string {
 
 function render(): void {
     const popup = document.getElementById('popup')!;
-    popup.classList.toggle('is-rec', state === 'recording');
-    if (state === 'recording') view.innerHTML = render_recording();
+    popup.classList.toggle('is-rec', state === 'capturing');
+    if (state === 'capturing') view.innerHTML = render_capturing();
     else if (state === 'saved') view.innerHTML = render_saved();
     else view.innerHTML = render_ready();
     apply_translations();
@@ -247,17 +247,17 @@ function wire_view(): void {
     view.querySelector('#stopBtn')?.addEventListener('click', stop_capture);
     view.querySelector('#newBtn')?.addEventListener('click', () => { state = 'ready'; render(); });
     view.querySelector('#liveDetailBtn')?.addEventListener('click', () => {
-        if (current_capture) open_dashboard(`?session=${current_capture.capture_id}&page=detail`);
+        if (current_capture) open_dashboard(`?capture=${current_capture.capture_id}&page=detail`);
     });
     view.querySelector('#openDetailBtn')?.addEventListener('click', () => {
-        if (finished_capture) open_dashboard(`?session=${finished_capture.capture_id}&page=detail`);
+        if (finished_capture) open_dashboard(`?capture=${finished_capture.capture_id}&page=detail`);
     });
     view.querySelector('#exportBtn')?.addEventListener('click', async () => {
         if (!finished_capture) return;
         try {
             const resp = await chrome.runtime.sendMessage({
                 action: 'get_capture_data',
-                session_id: finished_capture.capture_id,
+                capture_id: finished_capture.capture_id,
             });
             if (resp?.success) {
                 const archive = await build_archive(resp, {
@@ -290,8 +290,8 @@ function wire_view(): void {
     view.querySelector('#viewAll')?.addEventListener('click', () => open_dashboard());
     view.querySelectorAll('.recent-row').forEach((row) => {
         row.addEventListener('click', () => {
-            const id = (row as HTMLElement).dataset.session;
-            if (id) open_dashboard(`?session=${id}&page=detail`);
+            const id = (row as HTMLElement).dataset.capture;
+            if (id) open_dashboard(`?capture=${id}&page=detail`);
         });
     });
     // Toggle switches — only active in 'ready' state
@@ -307,7 +307,7 @@ function wire_view(): void {
     });
 }
 
-function get_record_config(): RecordConfig {
+function get_capture_config(): CaptureConfig {
     chrome.storage.local.set({ capture_toggles: toggles });
     return {
         // Category gates: popup toggles are direct on/off
@@ -334,16 +334,16 @@ function get_record_config(): RecordConfig {
         error_count_enabled: toggles.error_count !== false,
         storage_change_count_enabled: toggles.storage_change_count !== false,
         cookie_change_count_enabled: toggles.cookie_change_count !== false,
-    } as RecordConfig;
+    } as CaptureConfig;
 }
 
 async function start_capture(): Promise<void> {
-    if (!is_extension) { state = 'recording'; render(); return; }
-    const config = get_record_config();
+    if (!is_extension) { state = 'capturing'; render(); return; }
+    const config = get_capture_config();
     const capture_id = `capture_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     logger.info('Starting capture', { capture_id });
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'start', session_id: capture_id, config });
+        const response = await chrome.runtime.sendMessage({ action: 'start', capture_id: capture_id, config });
         if (!response?.success) {
             logger.error('Start capture failed', response?.error);
             alert(`${t('error')}: ${response?.error}`); return;
@@ -364,8 +364,8 @@ async function start_capture(): Promise<void> {
             updated_at: new Date().toISOString(),
         };
         live_counts = null;
-        chrome.storage.local.set({ is_recording: true, current_capture });
-        state = 'recording';
+        chrome.storage.local.set({ is_capturing: true, current_capture });
+        state = 'capturing';
         render();
         start_timer();
     } catch (error) {
@@ -395,7 +395,7 @@ async function stop_capture(): Promise<void> {
         }
         current_capture = null;
         live_counts = null;
-        chrome.storage.local.set({ is_recording: false, current_capture: null });
+        chrome.storage.local.set({ is_capturing: false, current_capture: null });
         await load_history();
         state = 'saved';
         render();
@@ -420,7 +420,7 @@ function stop_timer(): void {
 }
 
 async function refresh_counts(): Promise<void> {
-    if (!is_extension || state !== 'recording') return;
+    if (!is_extension || state !== 'capturing') return;
     try {
         const status = await chrome.runtime.sendMessage({ action: 'get_status' });
         const stats: CaptureStats | undefined = status?.stats ?? status?.current_capture?.stats;
@@ -441,17 +441,17 @@ async function refresh_counts(): Promise<void> {
 async function load_history(): Promise<void> {
     if (!is_extension) return;
     try {
-        recent_sessions = await chrome.runtime.sendMessage({ action: 'list_sessions' }) || [];
+        recent_captures = await chrome.runtime.sendMessage({ action: 'list_captures' }) || [];
     } catch {
-        recent_sessions = [];
+        recent_captures = [];
     }
 }
 
 async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_recording', 'current_capture']);
-    if (result.is_recording && result.current_capture) {
+    const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
+    if (result.is_capturing && result.current_capture) {
         current_capture = result.current_capture;
-        state = 'recording';
+        state = 'capturing';
     } else {
         state = 'ready';
     }
@@ -467,5 +467,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     panelBtn.addEventListener('click', () => open_dashboard());
     render();
-    if (state === 'recording') start_timer();
+    if (state === 'capturing') start_timer();
 });

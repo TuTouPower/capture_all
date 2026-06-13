@@ -1,11 +1,11 @@
 // content/mouse_capture.ts
-import type { RecordConfig, CaptureEvent, MouseEventData } from '../shared/types';
+import type { CaptureConfig, CaptureEvent, MouseEventData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { truncate_target_text } from '../shared/redaction';
 import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
-let config: RecordConfig;
+let config: CaptureConfig;
 let capture_id: string;
 let capture_start_epoch_ms: number;
 let tab_id: number;
@@ -14,7 +14,7 @@ let raf_id: number | null = null;
 let last_mouse_time = 0;
 
 export function start_mouse_capture(
-    cfg: RecordConfig,
+    cfg: CaptureConfig,
     cid: string,
     start_ms: number,
     tid: number,

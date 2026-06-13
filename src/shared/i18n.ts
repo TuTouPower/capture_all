@@ -4,8 +4,8 @@ export type Locale = 'en' | 'zh';
 export interface I18nStrings {
     // Status
     ready: string;
-    recording: string;
-    sessionId: string;
+    capturing: string;
+    captureId: string;
 
     // Config
     configuration: string;
@@ -20,18 +20,18 @@ export interface I18nStrings {
     sensitiveData: string;
 
     // Actions
-    startRecording: string;
-    stopRecording: string;
+    startCapture: string;
+    stopCapture: string;
 
     // History
-    recentSessions: string;
-    noSessions: string;
+    recentCaptures: string;
+    noCaptures: string;
     view: string;
     delete: string;
     deleteConfirm: string;
 
     // Detail page
-    sessionDetail: string;
+    captureDetail: string;
     exportJson: string;
     exportJsonl: string;
     exportHtml: string;
@@ -45,7 +45,7 @@ export interface I18nStrings {
     timeline: string;
     network: string;
     console: string;
-    sessionNotFound: string;
+    captureNotFound: string;
     error: string;
     allEvents: string;
     mouse: string;
@@ -96,8 +96,6 @@ export interface I18nStrings {
     // Popup (Capture All redesign)
     mainPanel: string;
     captureDone: string;
-    startCapture: string;
-    stopCapture: string;
     liveDetail: string;
     openDetail: string;
     clickToEnd: string;
@@ -117,8 +115,8 @@ export interface I18nStrings {
 
 const en: I18nStrings = {
     ready: 'Ready',
-    recording: 'Recording',
-    sessionId: 'ID',
+    capturing: 'Recording',
+    captureId: 'ID',
 
     configuration: 'Configuration',
     mousePrecision: 'Mouse Precision',
@@ -131,16 +129,13 @@ const en: I18nStrings = {
     captureResponseBody: 'Capture Response Body',
     sensitiveData: 'Sensitive data',
 
-    startRecording: 'Start Recording',
-    stopRecording: 'Stop Recording',
-
-    recentSessions: 'Recent Captures',
-    noSessions: 'No captures recorded yet',
+    recentCaptures: 'Recent Captures',
+    noCaptures: 'No captures recorded yet',
     view: 'View',
     delete: 'Delete',
     deleteConfirm: 'Delete this capture?',
 
-    sessionDetail: 'Capture Detail',
+    captureDetail: 'Capture Detail',
     exportJson: 'Export JSON',
     exportJsonl: 'Export JSONL',
     exportHtml: 'Export HTML',
@@ -154,7 +149,7 @@ const en: I18nStrings = {
     timeline: 'Timeline',
     network: 'Network',
     console: 'Console',
-    sessionNotFound: 'Capture not found',
+    captureNotFound: 'Capture not found',
     error: 'Error',
     allEvents: 'All Events',
     mouse: 'Mouse',
@@ -224,8 +219,8 @@ const en: I18nStrings = {
 
 const zh: I18nStrings = {
     ready: '就绪',
-    recording: '采集中',
-    sessionId: 'ID',
+    capturing: '采集中',
+    captureId: 'ID',
 
     configuration: '配置',
     mousePrecision: '鼠标精度',
@@ -238,16 +233,16 @@ const zh: I18nStrings = {
     captureResponseBody: '捕获响应体',
     sensitiveData: '敏感数据',
 
-    startRecording: '开始采集',
-    stopRecording: '停止采集',
+    startCapture: '开始采集',
+    stopCapture: '停止采集',
 
-    recentSessions: '最近采集',
-    noSessions: '暂无采集',
+    recentCaptures: '最近采集',
+    noCaptures: '暂无采集',
     view: '查看',
     delete: '删除',
     deleteConfirm: '确定删除此采集？',
 
-    sessionDetail: '采集详情',
+    captureDetail: '采集详情',
     exportJson: '导出 JSON',
     exportJsonl: '导出 JSONL',
     exportHtml: '导出 HTML',
@@ -261,7 +256,7 @@ const zh: I18nStrings = {
     timeline: '时间线',
     network: '网络',
     console: '控制台',
-    sessionNotFound: '采集未找到',
+    captureNotFound: '采集未找到',
     error: '错误',
     allEvents: '所有事件',
     mouse: '鼠标',
@@ -310,8 +305,6 @@ const zh: I18nStrings = {
 
     mainPanel: '主面板',
     captureDone: '采集完成',
-    startCapture: '开始采集',
-    stopCapture: '停止采集',
     liveDetail: '实时详情',
     openDetail: '查看详情',
     clickToEnd: '点击结束',

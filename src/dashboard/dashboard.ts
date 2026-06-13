@@ -1,6 +1,6 @@
 // dashboard/dashboard.ts — Capture All 主面板 (main panel)
 // Faithful port of the design demo, wired to real extension data.
-import type { Session, RecordEvent, NetworkRequest, ConsoleLog, UserConfig, ThemeMode } from '../shared/types';
+import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig, ThemeMode } from '../shared/types';
 import { init_locale, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
 import { load_user_config, save_user_config } from '../shared/user_config';
@@ -18,15 +18,15 @@ const logger = new Logger('dashboard', get_app_log_transport());
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
-let sessions: Session[] = [];
+let captures: CaptureRecord[] = [];
 let page = 'captures';
 let selected = new Set<string>();
 
 // detail page state
-let detail_session: Session | null = null;
-let detail_events: RecordEvent[] = [];
-let detail_network: NetworkRequest[] = [];
-let detail_console: ConsoleLog[] = [];
+let detail_capture: CaptureRecord | null = null;
+let detail_events: CaptureEvent[] = [];
+let detail_network: NetworkRequestData[] = [];
+let detail_console: ConsoleEventData[] = [];
 let dt_tab = 'timeline';
 let dt_view: 'list' | 'trace' = 'list';
 let dt_quick = 'all';
@@ -53,16 +53,16 @@ function dur_ms(ms: number): string {
     const p = (x: number) => String(x).padStart(2, '0');
     return `${p(h)}:${p(m)}:${p(s)}`;
 }
-function session_dur(s: Session): string {
+function capture_dur(s: CaptureRecord): string {
     if (!s.ended_at) return '—';
     return dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
 }
-function session_name(s: Session): string {
+function capture_name(s: CaptureRecord): string {
     return s.name || `${format_system_time(s.started_at, user_config)} 的采集`;
 }
 
-// estimated on-disk size from stats (real storage size is not tracked per session)
-function est_bytes(s: Session): number {
+// estimated on-disk size from stats (real storage size is not tracked per capture)
+function est_bytes(s: CaptureRecord): number {
     const st = s.stats;
     if (!st) return 0;
     return st.event_count * 120 + st.request_count * 450 + st.log_count * 160
@@ -87,7 +87,7 @@ function delta_pct(cur: number, prev: number): string | null {
 
 // event kind → icon + color (matches demo KIND)
 const KIND: Record<string, { icon: string; color: string }> = {
-    session: { icon: 'agent', color: 'var(--src-session)' },
+    capture: { icon: 'agent', color: 'var(--src-capture)' },
     nav: { icon: 'nav', color: 'var(--src-nav)' },
     user: { icon: 'ui', color: 'var(--src-user)' },
     network: { icon: 'net', color: 'var(--src-network)' },
@@ -97,7 +97,7 @@ const KIND: Record<string, { icon: string; color: string }> = {
     cookie: { icon: 'cookie', color: 'var(--src-cookie)' },
     error: { icon: 'err', color: 'var(--src-error)' },
 };
-function event_kind(e: RecordEvent): string {
+function event_kind(e: CaptureEvent): string {
     switch (e.type) {
         case 'mouse_event': case 'keyboard_event': case 'scroll_event': case 'input_event': return 'user';
         case 'page_navigation': case 'route_change': case 'page_load': case 'tab_switch':
@@ -109,18 +109,18 @@ function event_kind(e: RecordEvent): string {
         case 'storage_change': return 'storage';
         case 'cookie_change': return 'cookie';
         case 'dom_mutation': return 'dom';
-        default: return 'session';
+        default: return 'capture';
     }
 }
 const KIND_LABEL: Record<string, string> = {
     user: '用户行为', nav: '页面导航', network: '网络请求', console: '控制台',
-    error: '错误异常', storage: 'Storage', cookie: 'Cookie', dom: 'DOM', session: '生命周期',
+    error: '错误异常', storage: 'Storage', cookie: 'Cookie', dom: 'DOM', capture: '生命周期',
 };
 function rel_time(ms: number): string {
     const s = Math.floor(ms / 1000), mss = Math.floor(ms % 1000);
     return `+${String(s).padStart(2, '0')}.${String(mss).padStart(3, '0')}s`;
 }
-function event_detail(e: RecordEvent): string {
+function event_detail(e: CaptureEvent): string {
     const d = (e.data || {}) as Record<string, unknown>;
     switch (e.type) {
         case 'mouse_event': return `${d.action} (${d.x}, ${d.y}) ${d.target_tag || ''}`;
@@ -138,7 +138,7 @@ function event_detail(e: RecordEvent): string {
         default: return '';
     }
 }
-function event_title(e: RecordEvent): string {
+function event_title(e: CaptureEvent): string {
     const d = (e.data || {}) as Record<string, unknown>;
     switch (e.type) {
         case 'mouse_event': return `${d.action || '点击'} ${d.target_tag || ''}`;
@@ -159,20 +159,20 @@ function event_title(e: RecordEvent): string {
 }
 
 // ── data ────────────────────────────────────────────────────────────────
-async function load_sessions(): Promise<void> {
+async function load_captures(): Promise<void> {
     if (!is_extension) return;
-    try { sessions = (await chrome.runtime.sendMessage({ action: 'list_sessions' })) || []; }
-    catch { sessions = []; }
-    logger.debug('Sessions loaded', { count: sessions.length });
+    try { captures = (await chrome.runtime.sendMessage({ action: 'list_captures' })) || []; }
+    catch { captures = []; }
+    logger.debug('Sessions loaded', { count: captures.length });
 }
 async function load_detail(id: string): Promise<void> {
-    detail_session = null; detail_events = []; detail_network = []; detail_console = [];
+    detail_capture = null; detail_events = []; detail_network = []; detail_console = [];
     if (!is_extension) return;
     try {
-        const r = await chrome.runtime.sendMessage({ action: 'get_session_data', session_id: id });
+        const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
         if (r?.success) {
-            detail_session = r.session;
-            detail_events = (r.events || []).slice().sort((a: RecordEvent, b: RecordEvent) => a.relative_time_ms - b.relative_time_ms);
+            detail_capture = r.capture;
+            detail_events = (r.events || []).slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
             detail_network = r.network_requests || [];
             detail_console = r.console_logs || [];
         }
@@ -191,7 +191,7 @@ const NAV = [
 
 function render_shell(): void {
     const active = page === 'detail' ? 'captures' : page;
-    const live = sessions.filter((s) => s.status === 'capturing').length;
+    const live = captures.filter((s) => s.status === 'capturing').length;
     root.innerHTML = `<div class="app">
         <div class="titlebar">
             <span class="tl-lights"><i></i><i></i><i></i></span>
@@ -233,13 +233,13 @@ function render_content(): void {
 
 // ── captures page ───────────────────────────────────────────────────────
 function render_captures(): string {
-    const total = sessions.length;
-    const withErr = sessions.filter((s) => (s.stats?.error_count || 0) > 0).length;
-    const completed = sessions.filter((s) => s.status === 'completed').length;
-    const totalBytes = sessions.reduce((a, s) => a + est_bytes(s), 0);
+    const total = captures.length;
+    const withErr = captures.filter((s) => (s.stats?.error_count || 0) > 0).length;
+    const completed = captures.filter((s) => s.status === 'completed').length;
+    const totalBytes = captures.reduce((a, s) => a + est_bytes(s), 0);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const yest = new Date(today.getTime() - 86400000);
-    const cntDay = (d0: Date, d1: Date) => sessions.filter((s) => {
+    const cntDay = (d0: Date, d1: Date) => captures.filter((s) => {
         const t = new Date(s.started_at).getTime();
         return t >= d0.getTime() && t < d1.getTime();
     }).length;
@@ -252,14 +252,14 @@ function render_captures(): string {
         { icon: 'navExport', lbl: '已完成', val: num(completed), tint: 'green', sub: pct(completed, total) },
         { icon: 'storage', lbl: '占用空间', val: fmt_size(totalBytes), tint: 'green', sub: '估算大小' },
     ];
-    const rows = sessions.map((s) => {
+    const rows = captures.map((s) => {
         const id = esc(s.capture_id);
         return `<tr data-open="${id}" data-sel="${selected.has(s.capture_id) ? 1 : 0}">
             <td class="col-chk" data-stop="1"><input type="checkbox" class="ck" data-chk="${id}" ${selected.has(s.capture_id) ? 'checked' : ''}></td>
-            <td><span class="cap-name">${s.status === 'capturing' ? '<span class="recdot" title="采集中"></span>' : ''}<b>${esc(session_name(s))}</b></span></td>
+            <td><span class="cap-name">${s.status === 'capturing' ? '<span class="recdot" title="采集中"></span>' : ''}<b>${esc(capture_name(s))}</b></span></td>
             <td><span class="cap-url mono" title="${esc(s.start_url)}">${esc(strip_proto(s.start_url) || '—')}</span></td>
             <td><span class="cap-time mono">${esc(format_system_time(s.started_at, user_config))}</span></td>
-            <td><span class="cap-dur mono">${session_dur(s)}</span></td>
+            <td><span class="cap-dur mono">${capture_dur(s)}</span></td>
             <td class="col-num mono">${num(s.stats?.event_count || 0)}</td>
             <td class="col-num mono">${num(s.stats?.request_count || 0)}</td>
             <td class="col-num"><span class="cap-errs mono" data-bad="${(s.stats?.error_count || 0) > 0 ? 1 : 0}">${num(s.stats?.error_count || 0)}</span></td>
@@ -318,7 +318,7 @@ function render_captures(): string {
                 <button class="btn primary sm" id="batchExport"><span>${I.export}</span>导出</button>
                 <button class="btn sm danger" id="batchDel"><span>${I.trash}</span>删除</button>
             </div>
-            <div class="cap-batch-r"><span class="cap-total">共 <b class="mono">${num(sessions.length)}</b> 条</span></div>
+            <div class="cap-batch-r"><span class="cap-total">共 <b class="mono">${num(captures.length)}</b> 条</span></div>
         </div>
     </div>`;
 }
@@ -338,26 +338,26 @@ function wire_captures(): void {
     }));
     const all = c.querySelector('#capAll') as HTMLInputElement | null;
     all?.addEventListener('change', () => {
-        if (all.checked) sessions.forEach((s) => selected.add(s.capture_id)); else selected.clear();
+        if (all.checked) captures.forEach((s) => selected.add(s.capture_id)); else selected.clear();
         render_content();
     });
     c.querySelector('#capClear')?.addEventListener('click', () => { selected.clear(); render_content(); });
-    c.querySelectorAll('#capRefresh, #capRefresh2').forEach((b) => b.addEventListener('click', async () => { await load_sessions(); render_content(); }));
-    c.querySelectorAll('[data-export]').forEach((b) => b.addEventListener('click', () => export_session((b as HTMLElement).dataset.export!)));
-    c.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => del_session((b as HTMLElement).dataset.del!)));
-    c.querySelector('#batchExport')?.addEventListener('click', () => selected.forEach((id) => export_session(id)));
+    c.querySelectorAll('#capRefresh, #capRefresh2').forEach((b) => b.addEventListener('click', async () => { await load_captures(); render_content(); }));
+    c.querySelectorAll('[data-export]').forEach((b) => b.addEventListener('click', () => export_capture((b as HTMLElement).dataset.export!)));
+    c.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => del_capture((b as HTMLElement).dataset.del!)));
+    c.querySelector('#batchExport')?.addEventListener('click', () => selected.forEach((id) => export_capture(id)));
     c.querySelector('#batchDel')?.addEventListener('click', async () => {
         if (!selected.size || !confirm('确定删除选中的采集记录？')) return;
-        for (const id of selected) await chrome.runtime.sendMessage({ action: 'delete_session', session_id: id });
-        selected.clear(); await load_sessions(); render_content();
+        for (const id of selected) await chrome.runtime.sendMessage({ action: 'delete_capture', capture_id: id });
+        selected.clear(); await load_captures(); render_content();
     });
 }
 
-async function export_session(id: string, format: string = 'archive'): Promise<void> {
+async function export_capture(id: string, format: string = 'archive'): Promise<void> {
     if (!is_extension) return;
     try {
         if (format === 'archive') {
-            const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', session_id: id });
+            const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
             if (!r?.success) { alert('导出失败'); return; }
             const archive = await build_archive(r, {
                 inline_text_max_bytes: user_config.inline_text_max_bytes,
@@ -375,7 +375,7 @@ async function export_session(id: string, format: string = 'archive'): Promise<v
             return;
         }
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
-        const r = await chrome.runtime.sendMessage({ action, session_id: id });
+        const r = await chrome.runtime.sendMessage({ action, capture_id: id });
         if (!r?.success) { alert('导出失败'); return; }
         const ext = format === 'html' ? 'html' as const : format === 'har' ? 'har' as const : format === 'jsonl' ? 'jsonl' as const : 'json' as const;
         const mime = format === 'html' ? 'text/html' : 'application/json';
@@ -391,11 +391,11 @@ async function export_session(id: string, format: string = 'archive'): Promise<v
         track_export_dir(download_id, 'capture');
     } catch (err) { logger.error('Export error', err); }
 }
-async function del_session(id: string): Promise<void> {
+async function del_capture(id: string): Promise<void> {
     if (!is_extension || !confirm('确定删除此采集记录？')) return;
-    await chrome.runtime.sendMessage({ action: 'delete_session', session_id: id });
+    await chrome.runtime.sendMessage({ action: 'delete_capture', capture_id: id });
     selected.delete(id);
-    await load_sessions(); render_content();
+    await load_captures(); render_content();
 }
 
 async function open_detail(id: string): Promise<void> {
@@ -406,12 +406,12 @@ async function open_detail(id: string): Promise<void> {
 
 // ── detail page ─────────────────────────────────────────────────────────
 function detail_metrics(): { icon: string; lbl: string; val: string; color: string; danger?: boolean; filter?: string; delta?: string; dTone?: string }[] {
-    const st = detail_session?.stats;
-    // previous session (chronologically before current) for real deltas
-    let prev: Session | null = null;
-    if (detail_session) {
-        const cur = new Date(detail_session.started_at).getTime();
-        for (const s of sessions) {
+    const st = detail_capture?.stats;
+    // previous capture (chronologically before current) for real deltas
+    let prev: CaptureRecord | null = null;
+    if (detail_capture) {
+        const cur = new Date(detail_capture.started_at).getTime();
+        for (const s of captures) {
             const t = new Date(s.started_at).getTime();
             if (t < cur && (!prev || t > new Date(prev.started_at).getTime())) prev = s;
         }
@@ -442,8 +442,8 @@ const DT_TABS: [string, string][] = [
 ];
 
 function render_detail(): string {
-    const s = detail_session;
-    const name = s ? session_name(s) : '采集详情';
+    const s = detail_capture;
+    const name = s ? capture_name(s) : '采集详情';
     const showInsp = dt_tab === 'timeline' && dt_insp_open && dt_sel >= 0;
     return `<div class="page">
         <div class="dt-bc">
@@ -460,7 +460,7 @@ function render_detail(): string {
                 </div>
                 <div class="dt-meta">
                     ${I.cal}<span class="mono">${esc(s ? format_system_time(s.started_at, user_config) : '')}</span>
-                    <span class="mdot">·</span><span>时长 <span class="mono">${s ? session_dur(s) : '—'}</span></span>
+                    <span class="mdot">·</span><span>时长 <span class="mono">${s ? capture_dur(s) : '—'}</span></span>
                 </div>
             </div>
             <div class="dt-head-r">
@@ -533,7 +533,7 @@ function render_dt_rail(): string {
     </aside>`;
 }
 
-function filtered_events(): RecordEvent[] {
+function filtered_events(): CaptureEvent[] {
     let list = detail_events;
     if (dt_quick !== 'all') list = list.filter((e) => event_kind(e) === dt_quick);
     const q = (document.getElementById('dtSearch') as HTMLInputElement | null)?.value?.toLowerCase();
@@ -751,13 +751,13 @@ function render_simple_events(types: string[], headers: string[]): string {
 }
 
 function render_dt_overview(): string {
-    const st = detail_session?.stats;
+    const st = detail_capture?.stats;
     return `<div class="simple-pad scroll">
         <div class="ov-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px">
             <div class="ov-panel">
                 <div class="ov-panel-hd">本次采集摘要</div>
                 <div class="dti-grid c3" style="padding:6px 0 12px">
-                    <div class="dti-field"><span class="k">时长</span><span class="v mono">${detail_session ? session_dur(detail_session) : '—'}</span></div>
+                    <div class="dti-field"><span class="k">时长</span><span class="v mono">${detail_capture ? capture_dur(detail_capture) : '—'}</span></div>
                     <div class="dti-field"><span class="k">事件总数</span><span class="v mono">${num(st?.event_count || detail_events.length)}</span></div>
                     <div class="dti-field"><span class="k">错误总数</span><span class="v red mono">${num(st?.error_count || 0)}</span></div>
                 </div>
@@ -785,7 +785,7 @@ function render_dt_overview(): string {
 }
 
 function render_dt_config(): string {
-    const cfg = (detail_session?.config_snapshot || {}) as Record<string, unknown>;
+    const cfg = (detail_capture?.config_snapshot || {}) as Record<string, unknown>;
     const item = (l: string, on: boolean) => `<div class="dt-toggle" style="padding:8px 0"><span class="tg-lbl">${l}</span><span class="switch" data-on="${on ? 1 : 0}"><span class="knob"></span></span></div>`;
     return `<div class="simple-pad scroll" style="max-width:620px">
         <p style="font-size:12.5px;color:var(--ink-3);margin:14px 0 0">本次采集使用的配置（只读快照）。如需修改默认值，请前往 <span class="lnk" data-nav-settings="1">设置 → 采集默认值</span>。</p>
@@ -824,9 +824,9 @@ function wire_detail(): void {
     c.querySelector('#dtSearch')?.addEventListener('input', () => render_content());
     c.querySelector('[data-dexport]')?.addEventListener('click', () => {
         const fmt = (c.querySelector('#dtExportFmt') as HTMLSelectElement)?.value || 'json';
-        detail_session && export_session(detail_session.capture_id, fmt);
+        detail_capture && export_capture(detail_capture.capture_id, fmt);
     });
-    c.querySelector('[data-open-url]')?.addEventListener('click', () => { const u = detail_session?.start_url; if (u) chrome.tabs.create({ url: u }); });
+    c.querySelector('[data-open-url]')?.addEventListener('click', () => { const u = detail_capture?.start_url; if (u) chrome.tabs.create({ url: u }); });
     c.querySelector('[data-nav-settings]')?.addEventListener('click', () => go('settings'));
     // Network row click → open detail inspector
     c.querySelectorAll('[data-netidx]').forEach((row) => row.addEventListener('click', () => {
@@ -1164,10 +1164,10 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
 
 // ── current / exports / integrations ────────────────────────────────────
 function render_current(): string {
-    const live = sessions.filter((s) => s.status === 'capturing');
+    const live = captures.filter((s) => s.status === 'capturing');
     const rows = live.map((s) => `<div class="exp-task" data-open="${esc(s.capture_id)}" style="cursor:pointer">
         <span class="et-ic" style="color:var(--blue-ink)">${I.navCurrent}</span>
-        <div class="et-main"><b>${esc(session_name(s))}</b><div class="et-sub">${esc(strip_proto(s.start_url))} · ${num(s.stats?.event_count || 0)} 事件 · ${num(s.stats?.request_count || 0)} 请求</div></div>
+        <div class="et-main"><b>${esc(capture_name(s))}</b><div class="et-sub">${esc(strip_proto(s.start_url))} · ${num(s.stats?.event_count || 0)} 事件 · ${num(s.stats?.request_count || 0)} 请求</div></div>
         <span class="dt-state"><span class="dot" style="background:var(--blue)"></span><span style="color:var(--blue-ink)" class="mono">采集中</span></span>
     </div>`).join('');
     return `<div class="page">
@@ -1183,14 +1183,14 @@ function wire_simple_open(): void {
 }
 
 function render_exports(): string {
-    const rows = sessions.map((s) => `<div class="exp-task">
+    const rows = captures.map((s) => `<div class="exp-task">
         <span class="et-ic">${I.navExport}</span>
-        <div class="et-main"><b>${esc(session_name(s))}</b><div class="et-sub">${num(s.stats?.event_count || 0)} 事件 · ${session_dur(s)}</div></div>
+        <div class="et-main"><b>${esc(capture_name(s))}</b><div class="et-sub">${num(s.stats?.event_count || 0)} 事件 · ${capture_dur(s)}</div></div>
         <button class="btn sm" data-export="${esc(s.capture_id)}"><span>${I.export}</span>导出</button>
     </div>`).join('');
     return `<div class="page">
-        <div class="pg-head"><div class="pg-title"><h1>导出任务</h1><p>选择采集记录导出。已就绪 ${num(sessions.length)} 条。</p></div></div>
-        <div class="simple-pad scroll">${sessions.length ? rows : '<div style="text-align:center;color:var(--ink-4);padding:48px">暂无采集记录</div>'}</div>
+        <div class="pg-head"><div class="pg-title"><h1>导出任务</h1><p>选择采集记录导出。已就绪 ${num(captures.length)} 条。</p></div></div>
+        <div class="simple-pad scroll">${captures.length ? rows : '<div style="text-align:center;color:var(--ink-4);padding:48px">暂无采集记录</div>'}</div>
     </div>`;
 }
 
@@ -1222,10 +1222,10 @@ async function init(): Promise<void> {
         await init_locale();
         await init_theme();
         user_config = await load_user_config();
-        await load_sessions();
+        await load_captures();
     }
     const params = new URLSearchParams(location.search);
-    const sid = params.get('session');
+    const sid = params.get('capture');
     const p = params.get('page');
     if (sid && (p === 'detail' || !p)) {
         await open_detail(sid);
@@ -1236,18 +1236,18 @@ async function init(): Promise<void> {
     // Auto-refresh: poll for capture state changes every 2s
     setInterval(async () => {
         if (!is_extension) return;
-        const prev_state = sessions.map(s => `${s.capture_id}:${s.status}`);
-        await load_sessions();
-        const cur_state = sessions.map(s => `${s.capture_id}:${s.status}`);
-        const sessions_changed = prev_state.join(',') !== cur_state.join(',');
-        if (sessions_changed) {
+        const prev_state = captures.map(s => `${s.capture_id}:${s.status}`);
+        await load_captures();
+        const cur_state = captures.map(s => `${s.capture_id}:${s.status}`);
+        const captures_changed = prev_state.join(',') !== cur_state.join(',');
+        if (captures_changed) {
             if (page === 'captures' || page === 'current' || page === 'exports') {
                 render_content();
             }
         }
         // 实时详情页自动刷新：采集中每 2s 更新数据
-        if (page === 'detail' && detail_session?.status === 'capturing') {
-            await load_detail(detail_session.capture_id);
+        if (page === 'detail' && detail_capture?.status === 'capturing') {
+            await load_detail(detail_capture.capture_id);
             render_content();
         }
     }, 2000);

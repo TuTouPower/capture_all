@@ -25,7 +25,7 @@ import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../shared/user_config';
 import type {
-    UserConfig, RecordConfig, CaptureEvent, CaptureRecord,
+    UserConfig, CaptureConfig, CaptureEvent, CaptureRecord,
     NetworkRequestData, ConsoleEventData,
     TabSwitchData, TabCreatedData, TabUrlChangeData,
     CaptureStartedData, CaptureStoppedData,
@@ -57,7 +57,7 @@ let is_capturing = false;
 let current_capture: CaptureRecord | null = null;
 let current_capture_id: string | null = null;
 let start_time: number = 0;
-let current_config: RecordConfig = DEFAULT_CONFIG;
+let current_config: CaptureConfig = DEFAULT_CONFIG;
 
 // Track last active tab for tab_switch events
 const last_active_tab = new Map<number, { tab_id: number; url: string }>();
@@ -90,9 +90,9 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
 async function handle_message(message: any): Promise<any> {
     switch (message.action) {
         case 'start':
-            return start_recording(message.session_id, message.config || DEFAULT_CONFIG);
+            return start_capture(message.capture_id, message.config || DEFAULT_CONFIG);
         case 'stop':
-            return stop_recording();
+            return stop_capture();
         case 'event':
             return handle_event(message.event);
         case 'get_status':
@@ -105,21 +105,21 @@ async function handle_message(message: any): Promise<any> {
                 tab_id: current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
             };
-        case 'get_session_data':
-            return get_capture_data(message.session_id);
-        case 'list_sessions':
+        case 'get_capture_data':
+            return get_capture_data(message.capture_id);
+        case 'list_captures':
             return storage_list_captures();
-        case 'delete_session':
-            await storage_delete_capture(message.session_id);
+        case 'delete_capture':
+            await storage_delete_capture(message.capture_id);
             return { success: true };
         case 'export_json':
-            return { success: true, json: await export_json(message.session_id) };
+            return { success: true, json: await export_json(message.capture_id) };
         case 'export_jsonl':
-            return { success: true, jsonl: await export_jsonl(message.session_id) };
+            return { success: true, jsonl: await export_jsonl(message.capture_id) };
         case 'export_html':
-            return { success: true, html: await export_html(message.session_id) };
+            return { success: true, html: await export_html(message.capture_id) };
         case 'export_har':
-            return { success: true, har: await export_har(message.session_id) };
+            return { success: true, har: await export_har(message.capture_id) };
         case 'restart_bridge':
             stop_bridge_client();
             start_agent_bridge();
@@ -223,7 +223,7 @@ async function get_capture_data(capture_id: string): Promise<any> {
 
     return {
         success: true,
-        session: capture,
+        capture: capture,
         events: all_events,
         nav_events,
         network_requests,
@@ -234,10 +234,10 @@ async function get_capture_data(capture_id: string): Promise<any> {
     };
 }
 
-async function start_recording(session_id: string, config: RecordConfig): Promise<{ success: boolean; error?: string }> {
+async function start_capture(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) {
-        logger.warn('start_recording called while already capturing');
-        return { success: false, error: 'Already recording' };
+        logger.warn('start_capture called while already capturing');
+        return { success: false, error: 'Already capturing' };
     }
 
     const now = Date.now();
@@ -264,7 +264,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Create CaptureRecord in IndexedDB
     const capture: CaptureRecord = {
-        capture_id: session_id,
+        capture_id: capture_id,
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
         mode: 'standard',
@@ -291,21 +291,21 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     }
 
     current_capture = capture;
-    current_capture_id = session_id;
+    current_capture_id = capture_id;
     current_config = config;
     start_time = now;
     is_capturing = true;
 
     // Write capture_lifecycle.capture_started event
     const started_data: CaptureStartedData = {
-        capture_id: session_id,
+        capture_id: capture_id,
         mode: 'standard',
         config_snapshot: config,
         start_url,
         trigger: 'popup',
     };
     const started_event = create_base_event({
-        capture_id: session_id,
+        capture_id: capture_id,
         category: 'capture_lifecycle',
         type: 'capture_started',
         relative_time_ms: 0,
@@ -323,7 +323,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
 
     // Start network capture if enabled
     if (config.capture_network) {
-        start_network_capture(session_id, start_time, config, tab_id, handle_network_request);
+        start_network_capture(capture_id, start_time, config, tab_id, handle_network_request);
     }
 
     // Start console capture if enabled
@@ -343,7 +343,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
             }
 
             const result = await start_console_capture(
-                session_id, start_time, tab_id, config.redact_data, handle_console_log,
+                capture_id, start_time, tab_id, config.redact_data, handle_console_log,
                 cdp_attached
             );
             if (!result.success) {
@@ -351,7 +351,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
             }
 
             const ex_result = await start_exception_capture(
-                session_id, start_time, tab_id, handle_console_log,
+                capture_id, start_time, tab_id, handle_console_log,
                 cdp_attached
             );
             if (!ex_result.success) {
@@ -390,7 +390,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         });
 
         const result = await start_body_capture(
-            session_id, start_time, config, target_tab_id,
+            capture_id, start_time, config, target_tab_id,
             {
                 get_active_tab_url,
                 get_bridge_config,
@@ -408,7 +408,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         }
         logger.info(`Body capture started via ${result.mode}`, { status: result.status, message: result.message });
     } else {
-        // Record body capture as not enabled
+        // Note: body capture not enabled
         if (current_capture) {
             current_capture.body_capture_mode = 'none';
             current_capture.body_capture_status = 'not_enabled';
@@ -418,7 +418,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
     }
 
     // Start cookie change capture (always, regardless of capture_network)
-    start_cookie_capture(session_id, start_time, handle_cookie_change);
+    start_cookie_capture(capture_id, start_time, handle_cookie_change);
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
@@ -429,7 +429,7 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
                 await chrome.tabs.sendMessage(tab.id, {
                     action: 'start',
                     config,
-                    capture_id: session_id,
+                    capture_id: capture_id,
                     capture_start_epoch_ms: start_time,
                     tab_id: tab.id,
                 });
@@ -445,11 +445,11 @@ async function start_recording(session_id: string, config: RecordConfig): Promis
         last_active_tab.set((active_tab as { windowId?: number }).windowId ?? 0, { tab_id: active_tab.id, url: active_tab.url || '' });
     }
 
-    logger.info('Recording started');
+    logger.info('Capture started');
     return { success: true };
 }
 
-async function stop_recording(): Promise<{ success: boolean }> {
+async function stop_capture(): Promise<{ success: boolean }> {
     if (!is_capturing) {
         return { success: true };
     }
@@ -526,7 +526,7 @@ async function stop_recording(): Promise<{ success: boolean }> {
 
     current_capture = null;
     last_active_tab.clear();
-    logger.info('Recording stopped');
+    logger.info('Capture stopped');
     return { success: true };
 }
 
@@ -782,10 +782,10 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     }
 });
 
-// Tab close listener - session continues, just logs
+// Tab close listener - capture continues, just logs
 chrome.tabs.onRemoved.addListener((_tabId: number) => {
     if (!is_capturing) return;
-    // Tab closed during recording - data already captured, session continues
+    // Tab closed during capture - data already captured
 });
 
 // Tab created listener
@@ -898,9 +898,9 @@ async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bri
 function start_agent_bridge(): void {
     const bridge_deps: AgentBridgeClientDeps = {
         get_user_config: get_user_config_for_bridge,
-        start_recording: (session_id, config) => start_recording(session_id, config),
-        stop_recording: () => stop_recording(),
-        get_status: () => ({ active_session_id: current_capture_id }),
+        start_capture: (capture_id, config) => start_capture(capture_id, config),
+        stop_capture: () => stop_capture(),
+        get_status: () => ({ active_capture_id: current_capture_id }),
         extension_version: chrome.runtime.getManifest().version
     };
     start_bridge_client(bridge_deps);

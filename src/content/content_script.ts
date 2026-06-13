@@ -1,5 +1,5 @@
 // content/content_script.ts
-import type { RecordConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
+import type { CaptureConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { category_for_event_type } from '../shared/event_category';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
@@ -58,7 +58,7 @@ chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
     // Extension context might not be ready
 });
 
-function start_capture(config: RecordConfig): void {
+function start_capture(config: CaptureConfig): void {
     if (is_capturing) return;
 
     is_capturing = true;

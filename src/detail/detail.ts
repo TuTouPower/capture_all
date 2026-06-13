@@ -1,5 +1,5 @@
 // detail/detail.ts
-import type { Session, RecordEvent, NetworkRequest, ConsoleLog, UserConfig } from '../shared/types';
+import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig } from '../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
@@ -10,12 +10,12 @@ import { format_system_time } from '../shared/system_time';
 
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
-let session_id: string;
-let session_data: Session | null = null;
+let capture_id: string;
+let capture_data: CaptureRecord | null = null;
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
-let events: RecordEvent[] = [];
-let network_requests: NetworkRequest[] = [];
-let console_logs: ConsoleLog[] = [];
+let events: CaptureEvent[] = [];
+let network_requests: NetworkRequestData[] = [];
+let console_logs: ConsoleEventData[] = [];
 
 // Page size for pagination
 const PAGE_SIZE = 50;
@@ -24,7 +24,7 @@ let network_page = 0;
 let logs_page = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    session_id = get_session_id();
+    capture_id = get_capture_id();
     if (is_extension) {
         await init_locale();
         await init_theme();
@@ -33,15 +33,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     apply_translations();
     setup_tabs();
     setup_export();
-    await load_session_data();
+    await load_capture_data();
 });
 
-function get_session_id(): string {
+function get_capture_id(): string {
     const params = new URLSearchParams(window.location.search);
-    return params.get('session') || '';
+    return params.get('capture') || '';
 }
 
-async function load_session_data(): Promise<void> {
+async function load_capture_data(): Promise<void> {
     // Always render the UI structure first
     render_timeline();
     render_network();
@@ -53,16 +53,16 @@ async function load_session_data(): Promise<void> {
     try {
         const response = await chrome.runtime.sendMessage({
             action: 'get_session_data',
-            session_id
+            capture_id
         });
 
         if (!response.success) {
-            setText('sessionId', session_id);
-            setText('startTime', t('sessionNotFound'));
+            setText('captureId', capture_id);
+            setText('startTime', t('captureNotFound'));
             return;
         }
 
-        session_data = response.session;
+        capture_data = response.capture;
         events = response.events || [];
         network_requests = response.network_requests || [];
         console_logs = response.console_logs || [];
@@ -73,16 +73,16 @@ async function load_session_data(): Promise<void> {
         render_console();
         render_events();
     } catch (error) {
-        setText('sessionId', session_id);
+        setText('captureId', capture_id);
         setText('startTime', `${t('error')}: ${error}`);
     }
 }
 
 function render_overview(): void {
-    if (!session_data) return;
+    if (!capture_data) return;
 
-    const s = session_data;
-    setText('sessionId', s.capture_id);
+    const s = capture_data;
+    setText('captureId', s.capture_id);
     setText('startTime', format_system_time(s.started_at, user_config));
     setText('duration', s.ended_at ? format_duration(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) : 'In progress');
     setText('eventCount', String(s.stats.event_count || events.length));
@@ -118,7 +118,7 @@ function render_timeline(): void {
     };
 }
 
-function render_timeline_item(event: RecordEvent): string {
+function render_timeline_item(event: CaptureEvent): string {
     const time = format_detail_time(event.relative_time_ms, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="timeline-item">
@@ -149,7 +149,7 @@ function render_network(): void {
         : page_items.map(render_network_row).join('');
 }
 
-function render_network_row(req: NetworkRequest): string {
+function render_network_row(req: NetworkRequestData): string {
     const method_class = req.method.toUpperCase();
     const status_class = `s${String(req.status_code)[0]}xx`;
     const body_status = req.response_body_status || '-';
@@ -185,7 +185,7 @@ function render_console(): void {
         : page_items.map(render_console_item).join('');
 }
 
-function render_console_item(log: ConsoleLog): string {
+function render_console_item(log: ConsoleEventData): string {
     const stack_html = log.stack_trace
         ? `<div class="console-stack">${escape_html(log.stack_trace)}</div>`
         : '';
@@ -210,7 +210,7 @@ function render_events(): void {
         : filtered.map(render_event_item).join('');
 }
 
-function render_event_item(event: RecordEvent): string {
+function render_event_item(event: CaptureEvent): string {
     const time = format_detail_time(event.relative_time_ms, event.absolute_time);
     const detail = get_event_detail(event);
     return `<div class="event-item">
@@ -266,7 +266,7 @@ async function export_json(): Promise<void> {
 
     const response = await chrome.runtime.sendMessage({
         action: 'export_json',
-        session_id
+        capture_id
     });
 
     if (response.success) {
@@ -279,7 +279,7 @@ async function export_jsonl(): Promise<void> {
 
     const response = await chrome.runtime.sendMessage({
         action: 'export_jsonl',
-        session_id
+        capture_id
     });
 
     if (response.success) {
@@ -292,7 +292,7 @@ async function export_html(): Promise<void> {
 
     const response = await chrome.runtime.sendMessage({
         action: 'export_html',
-        session_id
+        capture_id
     });
 
     if (response.success) {
@@ -305,7 +305,7 @@ async function export_har(): Promise<void> {
 
     const response = await chrome.runtime.sendMessage({
         action: 'export_har',
-        session_id
+        capture_id
     });
 
     if (response.success) {
@@ -318,7 +318,7 @@ async function export_archive_zip(): Promise<void> {
 
     const response = await chrome.runtime.sendMessage({
         action: 'get_capture_data',
-        session_id
+        capture_id
     });
 
     if (response.success) {
@@ -334,7 +334,7 @@ async function export_archive_zip(): Promise<void> {
                 export_filename_template: user_config.export_filename_template,
                 system_time_timezone: user_config.system_time_timezone,
             },
-            session_id,
+            capture_id,
             'zip',
             capture_dir,
         );
@@ -352,7 +352,7 @@ async function download_export(content: string, type: string, extension: 'json' 
             export_filename_template: user_config.export_filename_template,
             system_time_timezone: user_config.system_time_timezone,
         },
-        session_id,
+        capture_id,
         extension,
         capture_dir,
     );
@@ -361,7 +361,7 @@ async function download_export(content: string, type: string, extension: 'json' 
 }
 
 // Helpers
-function filter_events(evts: RecordEvent[], type_filter: string, search: string): RecordEvent[] {
+function filter_events(evts: CaptureEvent[], type_filter: string, search: string): CaptureEvent[] {
     let filtered = evts;
     if (type_filter !== 'all') {
         filtered = filtered.filter(e => e.type === type_filter);
@@ -376,7 +376,7 @@ function filter_events(evts: RecordEvent[], type_filter: string, search: string)
     return filtered;
 }
 
-function get_event_detail(event: RecordEvent): string {
+function get_event_detail(event: CaptureEvent): string {
     const data = event.data as Record<string, unknown> | undefined;
     if (!data) return '';
 

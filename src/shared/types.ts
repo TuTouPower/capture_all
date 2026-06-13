@@ -492,7 +492,7 @@ export interface BodyCaptureStartResult {
 // Config types (preserved, not renamed)
 // ============================================================
 
-export interface RecordConfig {
+export interface CaptureConfig {
     mouse_precision: 'clicks' | 'clicks_scroll_drag' | 'full_trajectory';
     capture_console: boolean;
     capture_network: boolean;
@@ -568,6 +568,8 @@ export interface LogQueryFilter {
 export type Session = CaptureRecord;
 /** @deprecated Use CaptureEvent */
 export type RecordEvent = CaptureEvent;
+/** @deprecated Use CaptureConfig */
+export type RecordConfig = CaptureConfig;
 /** @deprecated Use ConsoleEventData */
 export type ConsoleLog = ConsoleEventData;
 /** @deprecated Use NetworkRequestData */

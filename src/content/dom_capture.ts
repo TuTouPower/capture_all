@@ -1,12 +1,12 @@
 // content/dom_capture.ts
-import type { RecordConfig, InputEventData } from '../shared/types';
+import type { CaptureConfig, InputEventData } from '../shared/types';
 import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
-let config: RecordConfig;
+let config: CaptureConfig;
 let send_event: (type: string, data: any) => void;
 
-export function start_dom_capture(cfg: RecordConfig, sender: (type: string, data: any) => void): void {
+export function start_dom_capture(cfg: CaptureConfig, sender: (type: string, data: any) => void): void {
     if (is_capturing) return;
 
     config = cfg;

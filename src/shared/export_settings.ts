@@ -10,7 +10,7 @@ export function build_export_filename(config: ExportConfig, capture_id: string, 
     const date = format_system_time_filename(now.getTime(), config);
     const base_name = config.export_filename_template
         .split('{capture_id}').join(capture_id)
-        .split('{session_id}').join(capture_id)
+        .split('{capture_id}').join(capture_id)
         .split('{date}').join(date)
         .split('{ext}').join(extension);
     const filename = base_name.endsWith(`.${extension}`) ? base_name : `${base_name}.${extension}`;

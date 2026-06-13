@@ -216,7 +216,7 @@ function render_saved(): string {
                     ${ICON.ext}<span>${t('openDetail')}</span>
                 </a>
                 <button class="actbtn act-ghost" id="exportBtn">
-                    ${ICON.download}<span>导出</span>
+                    ${ICON.download}<span>${t('exportLabel')}</span>
                 </button>
                 <button class="actbtn act-ghost" id="newBtn">
                     ${ICON.refresh}<span>${t('newCapture')}</span>

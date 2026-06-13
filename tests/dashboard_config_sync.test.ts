@@ -21,8 +21,8 @@ describe('dashboard settings update in-memory user_config before save', () => {
         'export_log_directory',
         'export_filename_template',
         'export_save_as',
-        'max_request_body_bytes',
-        'max_response_body_bytes',
+        'max_body_capture_bytes',
+        'inline_text_max_bytes',
     ]
 
     for (const field of fields) {
@@ -34,10 +34,10 @@ describe('dashboard settings update in-memory user_config before save', () => {
 
     it('body size config fields are persisted with clamped numbers', () => {
         expect(dashboard_source).toMatch(
-            /name === 'max_request_body_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.max_request_body_bytes\)/
+            /name === 'max_body_capture_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.max_body_capture_bytes\)/
         )
         expect(dashboard_source).toMatch(
-            /name === 'max_response_body_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.max_response_body_bytes\)/
+            /name === 'inline_text_max_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.inline_text_max_bytes\)/
         )
     })
 })

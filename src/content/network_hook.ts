@@ -4,7 +4,7 @@
 //
 // Phase 2: unified network_request type with NetworkRequestData
 
-import { MAX_RESPONSE_BODY_BYTES } from '../shared/constants';
+import { MAX_BODY_CAPTURE_BYTES } from '../shared/constants';
 
 const SIGNAL = '__capture_all_network_hook__';
 
@@ -78,8 +78,8 @@ const PAGE_SCRIPT = `(function() {
                 var bytes = new TextEncoder().encode(text);
                 var truncated = text;
                 var body_status = 'captured';
-                if (bytes.length > ${MAX_RESPONSE_BODY_BYTES}) {
-                    truncated = new TextDecoder().decode(bytes.slice(0, ${MAX_RESPONSE_BODY_BYTES})) + '...[TRUNCATED]';
+                if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
+                    truncated = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
                     body_status = 'too_large';
                 }
                 post({
@@ -185,8 +185,8 @@ const PAGE_SCRIPT = `(function() {
                     var text = self.responseText;
                     if (typeof text === 'string') {
                         var bytes = new TextEncoder().encode(text);
-                        if (bytes.length > ${MAX_RESPONSE_BODY_BYTES}) {
-                            body = new TextDecoder().decode(bytes.slice(0, ${MAX_RESPONSE_BODY_BYTES})) + '...[TRUNCATED]';
+                        if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
+                            body = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
                             body_status = 'too_large';
                         } else {
                             body = text;

@@ -316,8 +316,8 @@ function get_record_config(): RecordConfig {
         capture_input_values: user_config.capture_input_values,
         capture_request_body: user_config.capture_request_body,
         capture_response_body: user_config.capture_response_body,
-        max_request_body_bytes: user_config.max_request_body_bytes,
-        max_response_body_bytes: user_config.max_response_body_bytes,
+        max_body_capture_bytes: user_config.max_body_capture_bytes,
+        inline_text_max_bytes: user_config.inline_text_max_bytes,
         redact_data: toggles.mask !== false,
         // Redaction settings
         redact_sensitive_headers: true,

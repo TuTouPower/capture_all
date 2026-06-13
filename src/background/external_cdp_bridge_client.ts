@@ -76,7 +76,7 @@ export async function start_external_cdp(
     session_id: string,
     tab_url: string,
     redact_data: boolean,
-    max_response_body_bytes: number
+    max_body_capture_bytes: number
 ): Promise<{ success: boolean; error?: string; session_key?: string }> {
     try {
         const res = await fetch(`${config.bridge_url}/cdp/start`, {
@@ -90,7 +90,7 @@ export async function start_external_cdp(
                 session_id,
                 tab_url,
                 redact_data,
-                max_response_body_bytes
+                max_body_capture_bytes
             }),
             signal: AbortSignal.timeout(10000)
         });

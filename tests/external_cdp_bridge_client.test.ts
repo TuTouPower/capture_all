@@ -132,7 +132,7 @@ describe('start_external_cdp', () => {
             session_id: 'session-1',
             tab_url: 'https://example.com',
             redact_data: false,
-            max_response_body_bytes: 1048576
+            max_body_capture_bytes: 1048576
         });
     });
 

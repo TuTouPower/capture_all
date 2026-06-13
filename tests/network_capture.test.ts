@@ -6,7 +6,7 @@ import {
     truncate,
     redact_url
 } from '../src/shared/redaction';
-import { MAX_REQUEST_BODY_BYTES } from '../src/shared/constants';
+import { MAX_BODY_CAPTURE_BYTES } from '../src/shared/constants';
 import {
     decode_raw_body,
     encode_form_data,
@@ -170,8 +170,8 @@ describe('request_body_truncation', () => {
         expect(truncate_request_body(body)).toBe(body);
     });
 
-    it('truncates body exceeding MAX_REQUEST_BODY_BYTES', () => {
-        const big_body = 'x'.repeat(MAX_REQUEST_BODY_BYTES + 1000);
+    it('truncates body exceeding MAX_BODY_CAPTURE_BYTES', () => {
+        const big_body = 'x'.repeat(MAX_BODY_CAPTURE_BYTES + 1000);
         const result = truncate_request_body(big_body);
         expect(result).not.toBeNull();
         expect(result!.length).toBeLessThan(big_body.length);
@@ -179,7 +179,7 @@ describe('request_body_truncation', () => {
     });
 
     it('extract_request_body marks large body as too_large', () => {
-        const big_body = 'y'.repeat(MAX_REQUEST_BODY_BYTES + 100);
+        const big_body = 'y'.repeat(MAX_BODY_CAPTURE_BYTES + 100);
         const details = {
             requestBody: {
                 raw: [{ bytes: new TextEncoder().encode(big_body).buffer }]

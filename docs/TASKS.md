@@ -45,8 +45,8 @@
   2. `payloadData` 为空时设 `payload_status = 'captured'`、`payload = null`、`payload_bytes = 0`。
   3. 补测试：`webSocketFrameReceived` 无 `payloadData` → 不崩溃，`payload` 为 null。
 
-### ⛔ P0.56 导出时间字段仍为 UNIX 时间戳（P0.51 假修复，仅追加未替换）
-- **状态**：待修复 — 2026-06-13
+### ✅ P0.56 导出时间字段仍为 UNIX 时间戳（P0.51 假修复，仅追加未替换）
+- **状态**：已修复 — 2026-06-13
 - **现象**：导出采集记录（ZIP 的 `network.jsonl`/`events.jsonl`，以及 JSON 导出）中时间字段仍是 UNIX 时间戳数字（如 `1781328968343`），不是用户设置时区的人类可读时间。
 - **根因（P0.51 假修复）**：P0.51 标记「已修复」，但实现只是**追加**了一个平行字段，原始 UNIX 字段原封未动：
   1. `src/shared/system_time.ts:24` `add_absolute_system_time`：`...obj` 保留原 `absolute_time`(UNIX 数字)，只新增 `absolute_time_system_time` 字符串。

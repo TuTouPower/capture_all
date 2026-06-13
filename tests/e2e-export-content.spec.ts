@@ -156,12 +156,11 @@ test.describe.serial('导出内容正确性', () => {
             expect(ce, 'console 事件应有 source_url').toHaveProperty('source_url');
         }
 
-        // 系统时间信息存在（distributed across capture record）
+        // 系统时间信息存在（P0.56: 时间字段直接替换为格式化字符串）
         const has_system_time =
             (data.system_time && typeof data.system_time === 'object') ||
-            (data.capture &&
-                ('start_time_system_time' in data.capture ||
-                    'end_time_system_time' in data.capture));
+            (data.capture && typeof data.capture.system_time_timezone === 'string') ||
+            (data.capture && typeof data.capture.started_at === 'string' && !data.capture.started_at.includes('T'));
         expect(has_system_time, '应有系统时间信息').toBe(true);
 
         // 若存在独立 system_time 对象，验证其 key

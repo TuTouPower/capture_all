@@ -10,6 +10,7 @@ import { start_storage_capture, stop_storage_capture } from './storage_capture';
 import { start_network_hook, stop_network_hook } from './network_hook';
 import { DEFAULT_CONFIG } from '../shared/constants';
 import { Logger, MessageLogTransport } from '../shared/logger';
+import { start_status_poll, type CaptureStatusResponse } from '../shared/poll_capture_status';
 
 const log_transport = new MessageLogTransport();
 const logger = new Logger('content/script', log_transport);
@@ -45,17 +46,27 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
     return true;
 });
 
-// Check if recording is already active when content script loads
-chrome.runtime.sendMessage({ action: 'get_status' }).then((response: any) => {
-    if (response?.is_capturing && !is_capturing) {
-        capture_id = response.capture_id ?? '';
-        capture_start_epoch_ms = response.start_time ?? Date.now();
-        tab_id = response.tab_id ?? 0;
-        logger.info('Recording already active, starting capture');
-        start_capture(response.config || DEFAULT_CONFIG);
-    }
-}).catch((_err: unknown) => {
-    // Extension context might not be ready
+// Check if recording is already active when content script loads.
+// BUG-004 修复：原实现只在加载时调用一次 get_status；若 SW 此时未采集就退出，
+// 之后 SW 开始采集时给本 tab 发 sendMessage 会失败（"Receiving end does not exist"），
+// 导致用户行为 / storage 事件 0 条。改为周期轮询，直到 SW 采集开始或脚本被卸载。
+//
+// 详见 tests/poll_capture_status.test.ts。
+const stop_status_poll = start_status_poll({
+    get_status: (): Promise<CaptureStatusResponse | null> =>
+        chrome.runtime.sendMessage({ action: 'get_status' })
+            .then((r: CaptureStatusResponse | null) => r)
+            .catch(() => null),
+    on_active: (resp: CaptureStatusResponse): void => {
+        if (is_capturing) return;
+        capture_id = resp.capture_id ?? '';
+        capture_start_epoch_ms = resp.start_time ?? Date.now();
+        tab_id = resp.tab_id ?? 0;
+        logger.info('Recording already active (detected via poll), starting capture');
+        start_capture((resp.config as CaptureConfig) || DEFAULT_CONFIG);
+    },
+    setInterval: (handler: () => void, ms: number) => window.setInterval(handler, ms),
+    clearInterval: (id: unknown) => window.clearInterval(id as number),
 });
 
 function start_capture(config: CaptureConfig): void {
@@ -169,6 +180,9 @@ function stop_capture(): void {
     stop_dom_capture();
     stop_storage_capture();
     stop_network_hook();
+
+    // BUG-004: 停止轮询（避免 stop 后仍触发 start_capture）
+    stop_status_poll();
 
     document.removeEventListener('visibilitychange', handle_visibility_change);
     window.removeEventListener('popstate', handle_popstate_navigation);

@@ -537,3 +537,114 @@ npm test                               # 单元测试（vitest 默认并行）
 npm run test:e2e -- --project=e2e-p0   # P0 E2E 并发
 npm run test:e2e -- --project=e2e-p1   # P1 E2E 并发
 ```
+
+---
+
+## 17. 测试红线
+
+> 起因：多次「标记已修复但实际没修」「同一类 TypeError 反复出现」。规则化避免重蹈。
+
+### 17.1 标 ✅「已修复/已完成」前必须逐项验证
+
+> commit `d8cf5ab` 一次性把 10 项 `⛔→✅` 批量翻牌，未逐项核验。P0.53 露馅——标题翻成 ✅ 但状态行仍写「待修复」，代码方案根本跑不通。批量改状态 = 没验证。
+
+**规则：禁止批量翻牌。每标一项 ✅，必须留下当次验证证据。**
+
+- **不允许** 一个 commit 同时把多项从 `⛔` 改 `✅` 而无逐项实证。
+- 标 ✅ 前，对该项逐条核验并在任务条目里留证：
+  1. **代码实证**：指出实现所在的 `文件:行号`（如 `service_worker.ts:625`），不是「应该在某处」。
+  2. **状态一致**：标题的 ✅ 与「状态」行同步改为「已修复」，不留「待修复」残留。
+  3. **测试实证**：贴出 `npm test` / 相关 spec 通过结果，或新增回归测试覆盖该 bug。
+  4. **功能实证**：涉及运行时行为（导出、采集、下载路径等）的，说明为何方案成立，而非仅「代码已写」。
+
+**自检命令**：
+```bash
+# 找出标题 ✅ 但状态行仍是「待修复」的不一致条目
+grep -n "状态.*待修复" docs/TASKS.md
+```
+有输出即说明存在「标完成但没做完」，必须修正后再提交。
+
+### 17.2 所有外部数据入口必须做 fault injection
+
+> P0.58 / P0.59 反复出现「假设入参是合法值，运行时收到 undefined / null 触发 `.replace()` / `.toLowerCase()` 等 TypeError」。每次只补"上次踩过的坑"，没系统性测「输入边界」。结构性盲区，不是个案。
+
+**规则：任何接收外部数据（CDP 事件、用户配置、IndexedDB 读出的旧数据、跨进程消息）的函数，单测必须覆盖四档输入：合法值 / null / undefined / 空字符串（或对应的 empty 值）。**
+
+#### 适用范围
+
+下列函数属于「外部数据入口」，必须做 fault injection：
+
+| 类别 | 例子 |
+|------|------|
+| CDP 事件字段解析 | `payloadData`、`requestId`、`response.body`、`headers` |
+| 字符串处理 | `escape_html`、`safe_request_id`、`base64_decoded_size`、`format_*` |
+| 配置/参数读取 | `user_config.*`、`message.capture_id`、URL query 参数 |
+| IndexedDB 反序列化 | `get_capture`、`get_events_by_category`、`get_network_requests` 返回值的字段 |
+
+#### 单测最低要求
+
+每个外部数据入口函数，单测**必须**包含：
+
+```ts
+// fault injection 四档
+it('handles valid input', () => { /* happy path */ });
+it('returns fallback for null', () => { /* 不崩溃 */ });
+it('returns fallback for undefined', () => { /* 不崩溃 */ });
+it('returns fallback for empty string', () => { /* 不崩溃 */ });
+```
+
+「不崩溃」的判定：函数返回合理 fallback（`null` / `0` / `''` / `'unknown'`），**不抛 TypeError**。
+
+#### 防御性代码模式
+
+- `String(s ?? '')` 优于 `s.replace(...)`
+- `typeof x === 'string' && x.length > 0` 优先于 `if (x)`
+- `id ?? 'unknown'` / `id || 'unknown'` 显式标明 fallback 意图
+- 不要相信 TypeScript 类型标注：`string` 在运行时可能是 `undefined`
+
+#### 自检命令
+
+```bash
+# 列出所有接收外部数据的函数（粗略启发式）
+grep -rn "\.replace(\|\.toLowerCase()\|\.split(\|\.match(" src/ --include="*.ts" \
+  | grep -v "escape.ts\|format_system_time\|String(s\|?? ''"
+
+# 然后逐一确认：每个调用点的入参是否有 typeof / ?? 兜底？
+```
+
+有未兜底的点 → 要么加兜底，要么在对应单测里证明该入参在调用链上游一定非空。
+
+#### 反例（禁止）
+
+```ts
+// ❌ 禁止：假设入参是 string
+function escape_html(s: string): string {
+    return s.replace(/[&<>"]/g, ...);  // s 可能是 undefined
+}
+
+// ❌ 禁止：单测只用 happy-path
+describe('escape_html', () => {
+    it('works', () => {
+        expect(escape_html('<a>')).toBe('&lt;a&gt;');
+        // 没测 undefined / null / ''
+    });
+});
+```
+
+#### 正例
+
+```ts
+// ✅ 正确：unknown 入参 + 显式 fallback
+function escape_html(s: unknown): string {
+    return String(s ?? '').replace(/[&<>"]/g, ...);
+}
+
+// ✅ 正确：四档 fault injection
+describe('escape_html', () => {
+    it('handles valid input', () => { ... });
+    it('returns empty for null', () => { expect(escape_html(null)).toBe(''); });
+    it('returns empty for undefined', () => { expect(escape_html(undefined)).toBe(''); });
+    it('returns empty for empty string', () => { expect(escape_html('')).toBe(''); });
+});
+```
+

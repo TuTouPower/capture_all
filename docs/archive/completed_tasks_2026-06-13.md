@@ -1,7 +1,7 @@
 # 已完成任务归档 — 2026-06-13
 
 > 从 `docs/TASKS.md` 迁出。所有标记 ✅ 的 P0 / P1 / T0 条目按原顺序保留。
-> 未完成项（⛔ P0.60）仍在 `docs/TASKS.md`。
+> P0.60 / P0.61 于 2026-06-14 修复并追加到本文件末尾。
 
 ---
 
@@ -655,3 +655,36 @@
   - `if (data.console_events.length > 0)` → 强制 `expect(data.console_events.length).toBeGreaterThanOrEqual(0)`
   - 导出验证：`expect(body_capture_mode).not.toBe('extension_cdp')` → 改为检查 `not_enabled` 占比
   - detail tab：每个 tab 断言至少有一行数据
+
+---
+
+## P0 · 功能缺陷（2026-06-14 修复追加）
+
+### ✅ P0.60 capture_id 含冗余 `capture_` 前缀，导出文件名默认带 ID 段
+- **状态**：已修复 — 2026-06-14（commit `86378be`）
+- **修复内容**：
+  1. 新增 `src/shared/id.ts`，统一 `generate_capture_id()` 实现：格式 `<时间戳毫秒>_<随机7字符>`，去除 `capture_` 前缀
+  2. `src/background/session_manager.ts`、`src/background/agent_command_dispatcher.ts` 改用共享 `generate_capture_id`
+  3. `DEFAULT_USER_CONFIG.export_filename_template`：`capture_all_{capture_id}_{date}.{ext}` → `capture_{date}.{ext}`
+  4. `src/shared/system_time.ts` `format_system_time_filename`：`YYYY-MM-DD_HH-MM-SS` → `YYYYMMDD_HHMMSS`（紧凑日期）
+  5. 用户自定义模板仍可用 `{capture_id}` 占位符（向后兼容）
+  6. 历史 IndexedDB 数据保留可读，不强制迁移
+- **测试**：`tests/p060_capture_id.test.ts`（5 条全绿）
+  - capture_id 不含 `capture_` 子串
+  - capture_id 仍含 `_`（两段结构保留）
+  - 默认模板渲染形如 `capture_20260613_225526.zip`，无 capture_id 段
+  - 紧凑日期格式不含 `-` `:` ` `
+  - 用户自定义模板仍可用 `{capture_id}` 占位符
+- **回归**：`tests/export_settings.test.ts`、`tests/system_time.test.ts`、`tests/e2e-mcp.spec.ts`、`tests/e2e-mcp-full.spec.ts` 中旧日期格式 / 旧默认模板的断言已同步更新为 P0.60 新格式
+
+### ✅ P0.61 导出目录不记忆 — filename 子目录与 saveAs=true 互相冲突
+- **状态**：已修复 — 2026-06-14（commit `61e4eb1`）
+- **修复内容**：`src/shared/export_utils.ts` 的 `download_blob()` 按 `filename.includes('/')` 自动决定 `saveAs`：
+  - filename 含子目录（如 `captures/foo.zip`）→ `saveAs: false`，Chrome 直接存到 `Downloads/{dir}/`
+  - filename 不含子目录（如 `foo.zip`）→ `saveAs: true`，弹框让 Chrome 记忆
+  - 移除 `opts.save_as` 参数，调用方 popup / dashboard / detail 三处同步清理
+- **测试**：`tests/export_utils.test.ts`（3 条新用例全绿）
+  - `captures/foo.zip`（有子目录）→ `saveAs === false`
+  - `foo.zip`（无子目录）→ `saveAs === true`
+  - `logs/bar.log`（有子目录）→ `saveAs === false`
+- **回归**：`tests/popup_export.test.ts` 断言改为 `not.toMatch(/save_as/)`；`tests/e2e-export.spec.ts` 注释更新

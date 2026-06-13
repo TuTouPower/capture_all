@@ -64,7 +64,7 @@ node -e "const {zipSync,strToU8}=require('fflate');const z=zipSync({'a.txt':strT
 
 Expected: `zip bytes true`
 
-- [ ] **Step 3: Commit**（仅在用户要求时执行）
+- [ ] **Step 3: Commit**
 
 ```bash
 git add package.json package-lock.json

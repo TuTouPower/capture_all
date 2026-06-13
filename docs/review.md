@@ -21,7 +21,7 @@
 | MED #4 network_line 丢字段 | 改为 { ...req } 全字段保留，只覆盖 body/ref 字段 |
 | MED #5 request_id 非法字符 | safe_request_id() 仅保留 [a-zA-Z0-9._-]，冲突去重 |
 | MED #6 too_large 丢 encoding | too_large 时保留 encoding=base64 |
-| MED #7 commit 步骤 | 全部标注"仅在用户要求时执行" |
+- [x] MED #7 commit 步骤 — 用户确认可直接执行 commit，无需标注
 
 设计方向正确：二进制 body 不再丢弃，ZIP 中用 `bodies/` 文件承载大内容，JSONL 只保留小文本或引用，这能解决单 JSON 导出内存爆和 base64 污染问题。但当前 plan 有几处会导致实现失败或目标落空的问题，需要先修正再执行。
 

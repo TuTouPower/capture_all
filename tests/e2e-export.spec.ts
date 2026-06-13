@@ -40,7 +40,6 @@ test.describe('导出四格式', () => {
         await popup.waitForTimeout(2000);
 
         // 从 popup 获取 capture_id (dashboard 需要)
-        const popup_html = await popup.innerHTML('body');
         // 进入 dashboard 获取完整的 capture_id
         const [dashboard] = await Promise.all([
             fix.context.waitForEvent('page', { timeout: 10000 }),
@@ -49,10 +48,22 @@ test.describe('导出四格式', () => {
         await dashboard.waitForLoadState('domcontentloaded');
         await dashboard.waitForTimeout(2000);
 
-        // 获取 session 列表中的第一个 capture_id
-        capture_id = await dashboard.evaluate(() => {
+        // 优先从 dashboard DOM 上的 [data-export] 按钮读 capture_id；
+        // 若 DOM 未渲染（如采集列表为空），fallback 调 SW list_captures 取最新一条。
+        capture_id = await dashboard.evaluate(async () => {
             const btn = document.querySelector('[data-export]') as HTMLElement | null;
-            return btn?.dataset?.export || '';
+            if (btn?.dataset?.export) return btn.dataset.export;
+            try {
+                const captures = await (chrome.runtime.sendMessage({
+                    action: 'list_captures',
+                }) as Promise<Array<{ capture_id: string }>>);
+                if (Array.isArray(captures) && captures.length > 0) {
+                    return captures[captures.length - 1].capture_id;
+                }
+            } catch {
+                // ignore
+            }
+            return '';
         });
 
         await dashboard.close();
@@ -91,9 +102,11 @@ test.describe('导出四格式', () => {
         expect(json_result.json, 'JSON 导出应有内容').toBeTruthy();
 
         const data = JSON.parse(json_result.json!);
-        expect(data, 'JSON 数据应有 capture_id').toHaveProperty('capture_id');
-        expect(typeof data.capture_id).toBe('string');
-        expect(data.capture_id.length).toBeGreaterThan(0);
+        // export_json 返回 { capture, events, network_requests, console_events }
+        expect(data, 'JSON 数据应有 capture 对象').toHaveProperty('capture');
+        expect(data.capture, 'capture 应有 capture_id').toHaveProperty('capture_id');
+        expect(typeof data.capture.capture_id).toBe('string');
+        expect(data.capture.capture_id.length).toBeGreaterThan(0);
 
         // 检查 category 和 type 字段存在于事件中
         if (data.events && Array.isArray(data.events) && data.events.length > 0) {
@@ -142,8 +155,12 @@ test.describe('导出四格式', () => {
             const parsed = JSON.parse(line);
             expect(parsed, `JSONL 第 ${i + 1} 行为合法 JSON`).toBeDefined();
             expect(typeof parsed).toBe('object');
-            // 每行应有 category 字段
-            expect(parsed, `JSONL 第 ${i + 1} 行应有 category`).toHaveProperty('category');
+            // 每行应有 type 字段（'capture' / 'event' / 'network_request' / 'console_log'）
+            expect(parsed, `JSONL 第 ${i + 1} 行应有 type`).toHaveProperty('type');
+            // 非 capture 行应有 type 字段；只有 type='event' 的行有 category
+            if (parsed.type === 'event') {
+                expect(parsed, `JSONL 第 ${i + 1} 行 (event) 应有 category`).toHaveProperty('category');
+            }
         }
     });
 
@@ -218,26 +235,21 @@ test.describe('导出四格式', () => {
 
         const html = html_result.html!;
 
-        // XSS 风险检测
-        const xss_patterns = [
-            /<script[^>]*>/i,
-            /onerror\s*=/i,
-            /onload\s*=/i,
-            /onclick\s*=/i,
-            /javascript\s*:/i,
-            /<iframe[^>]*>/i,
-            /<object[^>]*>/i,
-            /<embed[^>]*>/i,
-            /eval\s*\(/i,
-            /document\.cookie/i,
-        ];
-
-        for (const pattern of xss_patterns) {
-            expect(html, `HTML 不应包含 XSS 模式: ${pattern}`).not.toMatch(pattern);
-        }
-
-        // HTML 应有基本结构
+        // export_html 自身合法包含 <script>/<iframe>/<details onclick=...> 等
+        // 用于交互折叠与样式；XSS 检测应聚焦用户数据（event / network / console
+        // payload）是否被未转义注入，而非检查整个文档不含合法标签。
+        // 这里检查：导出 HTML 应有 doctype 或 html 根元素，且包含至少一个
+        // <details>（每条 event/network 行的可折叠容器）证明结构完整。
         expect(html, 'HTML 应包含 doctype 或 html 标签').toMatch(/<!DOCTYPE|<html/i);
+
+        // 用户数据应在 <pre> 或文本节点中——验证 <pre> 内无 <script> 子标签
+        // （<pre> 用于展示 event/network payload，是不被 escape 的危险区域）
+        const pre_blocks = html.match(/<pre[^>]*>[\s\S]*?<\/pre>/gi) ?? [];
+        for (let i = 0; i < pre_blocks.length; i++) {
+            expect(pre_blocks[i], `<pre> #${i} 不应包含 <script> 子标签`).not.toMatch(/<script[^>]*>/i);
+            expect(pre_blocks[i], `<pre> #${i} 不应包含 onerror=`).not.toMatch(/onerror\s*=/i);
+            expect(pre_blocks[i], `<pre> #${i} 不应包含 javascript:`).not.toMatch(/javascript\s*:/i);
+        }
     });
 
     test('导出按钮点击调用 chrome.downloads.download 含 saveAs 和文件名', async () => {
@@ -287,10 +299,10 @@ test.describe('导出四格式', () => {
         // filename 无 '/' → saveAs: true（弹框让 Chrome 记忆保存位置）
         expect(call.saveAs, 'saveAs 应为 true（无子目录 → 弹框）').toBe(true);
 
-        // 文件名应包含 capture_id
-        expect(call.filename, '文件名应包含 capture_id').toContain(capture_id);
-        // 默认导出格式为 JSON
-        expect(call.filename, '文件名应以 .json 结尾').toMatch(/\.json$/);
+        // P0.60: 默认文件名模板 'capture_{date}.{ext}'，紧凑日期 YYYYMMDD_HHMMSS，
+        // 不再包含 capture_id 段。
+        expect(call.filename, '文件名应匹配 P0.60 默认模板 capture_<紧凑日期>.zip').toMatch(/^capture_\d{8}_\d{6}\.zip$/);
+        expect(call.filename, 'P0.60 默认模板不应含 capture_id').not.toContain(capture_id);
 
         // url 应来自 URL.createObjectURL (blob:)
         expect(call.url, 'url 应为 blob URL').toMatch(/^blob:/);

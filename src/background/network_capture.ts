@@ -16,6 +16,12 @@ import { get_app_log_transport } from './app_log_storage';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
+function base64_decoded_size(b64: string): number {
+    const trimmed = b64.replace(/\s/g, '');
+    const padding = trimmed.endsWith('==') ? 2 : trimmed.endsWith('=') ? 1 : 0;
+    return Math.floor(trimmed.length * 3 / 4) - padding;
+}
+
 interface NetworkCaptureConfig {
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
@@ -23,7 +29,8 @@ interface NetworkCaptureConfig {
     capture_request_body: boolean;
     capture_response_body: boolean;
     max_request_body_bytes: number;
-    max_response_body_bytes: number;
+    max_body_capture_bytes: number;
+    inline_text_max_bytes: number;
 }
 
 interface NetworkEventPayload {
@@ -69,6 +76,7 @@ interface CdpRequestMeta {
     timestamp: number;
     request_body: string | null;
     request_body_status: BodyCaptureStatus;
+    request_body_mime: string | null;
 }
 const cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
 export const _cdp_request_meta_for_test = cdp_request_meta;
@@ -79,6 +87,8 @@ interface CdpBodyResult {
     status: BodyCaptureStatus;
     timestamp: number;
     preview: string | null;
+    encoding: 'utf8' | 'base64' | null;
+    byte_size: number | null;
 }
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 export const _cdp_body_results_for_test = cdp_body_results;
@@ -219,7 +229,7 @@ export async function enable_response_body_capture(
     }
 }
 
-export function build_cdp_body_result(body_text: string, max_response_body_bytes = config.max_response_body_bytes): { body: string; status: BodyCaptureStatus; preview: string | null } {
+export function build_cdp_body_result(body_text: string, max_response_body_bytes = config.max_body_capture_bytes): { body: string; status: BodyCaptureStatus; preview: string | null } {
     const byte_len = new TextEncoder().encode(body_text).length;
     if (byte_len > max_response_body_bytes) {
         const trunc_result = truncate_response_body(body_text, max_response_body_bytes);
@@ -252,6 +262,9 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 }
             }
 
+            const req_headers = (request.headers || {}) as Record<string, string>;
+            const request_body_mime = (req_headers['content-type'] || req_headers['Content-Type']) ?? null;
+
             cdp_request_meta.set(req_id, {
                 url: request.url || '',
                 method: request.method || 'GET',
@@ -262,6 +275,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 timestamp: Date.now(),
                 request_body: req_body,
                 request_body_status: req_body_status,
+                request_body_mime,
             });
         }
     }
@@ -283,7 +297,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 request_headers: {},
                 timestamp: Date.now(),
                 request_body: null,
-                request_body_status: 'not_enabled'
+                request_body_status: 'not_enabled',
+                request_body_mime: null,
             });
         }
     }
@@ -298,19 +313,30 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             let body_status: BodyCaptureStatus = 'cdp_failed';
             let body: string | null = null;
             let preview: string | null = null;
+            let encoding: 'utf8' | 'base64' | null = null;
+            let byte_size: number | null = null;
 
             if (!result || typeof result.body !== 'string') {
                 logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result' });
             } else if (result.base64Encoded) {
-                body_status = 'unsupported_binary';
+                byte_size = base64_decoded_size(result.body);
+                encoding = 'base64';
+                if (byte_size > config.max_body_capture_bytes) {
+                    body_status = 'too_large';
+                } else {
+                    body = result.body;
+                    body_status = 'captured';
+                }
             } else {
-                const body_result = build_cdp_body_result(result.body, config.max_response_body_bytes);
+                byte_size = new TextEncoder().encode(result.body).length;
+                encoding = 'utf8';
+                const body_result = build_cdp_body_result(result.body, config.max_body_capture_bytes);
                 body = body_result.body;
                 preview = body_result.preview;
                 body_status = body_result.status;
             }
 
-            const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview };
+            const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview, encoding, byte_size };
             cdp_body_results.set(req_id, body_result);
 
             // CDP-first: if we have metadata, build and emit the complete record directly
@@ -334,7 +360,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         }).catch((err: any) => {
-            const fail_result: CdpBodyResult = { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null };
+            const fail_result: CdpBodyResult = { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
             cdp_body_results.set(req_id, fail_result);
             logger.debug('get_body_error', { req_id, error: String(err)?.slice(0, 100) });
 
@@ -354,7 +380,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     }
 
     if (method === 'Network.loadingFailed') {
-        cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null });
+        cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
         try_resolve_deferred(req_id);
         schedule_orphan_check(req_id);
     }
@@ -629,9 +655,14 @@ function build_network_event(
         headers_status: redacted_headers ? 'redacted' : 'captured',
         request_body: pending.request_body ?? null,
         request_body_status: pending.request_body_status || 'not_enabled',
+        request_body_encoding: pending.request_body ? 'utf8' : null,
+        request_body_bytes: pending.request_body ? new TextEncoder().encode(pending.request_body).length : null,
+        request_body_mime: null,
         response_body,
         response_preview,
         response_body_status,
+        response_body_encoding: null,
+        response_body_bytes: null,
         mime_type: null,
         request_size_bytes: null,
         response_size_bytes: null,
@@ -693,9 +724,14 @@ function build_cdp_primary_network_event(
         headers_status: redact_hdrs ? 'redacted' : 'captured',
         request_body: meta.request_body,
         request_body_status: meta.request_body_status,
+        request_body_encoding: meta.request_body ? 'utf8' : null,
+        request_body_bytes: meta.request_body ? new TextEncoder().encode(meta.request_body).length : null,
+        request_body_mime: meta.request_body_mime ?? null,
         response_body: body_result.body,
         response_preview: body_result.preview,
         response_body_status: body_result.status,
+        response_body_encoding: body_result.encoding ?? null,
+        response_body_bytes: body_result.byte_size ?? null,
         mime_type: null,
         request_size_bytes: null,
         response_size_bytes: null,

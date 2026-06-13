@@ -6,11 +6,13 @@
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
-import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus } from '../shared/types';
+import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus, WsFrameData } from '../shared/types';
 import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
 import { DEFAULT_CONFIG } from '../shared/constants';
 import type { CdpBodyEvent } from './network_correlator';
+import { should_handle_event, clear_sessions, register_session, unregister_session, get_attached_sessions } from './cdp_event_router';
+import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 
@@ -34,7 +36,7 @@ interface NetworkCaptureConfig {
 
 interface NetworkEventPayload {
     event: CaptureEvent;
-    data: NetworkRequestData;
+    data: NetworkRequestData | WsFrameData;
 }
 
 let is_capturing = false;
@@ -78,6 +80,9 @@ interface CdpRequestMeta {
     request_body_status: BodyCaptureStatus;
     request_body_mime: string | null;
     mime_type: string | null;
+    response_body?: string | null;
+    response_body_status?: BodyCaptureStatus;
+    stream_mode?: 'none' | 'sse' | 'chunked';
 }
 const cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
 export const _cdp_request_meta_for_test = cdp_request_meta;
@@ -97,6 +102,23 @@ export const _cdp_body_results_for_test = cdp_body_results;
 // CDP-first: track request IDs that CDP has already emitted as primary entries.
 // webRequest handlers skip these to avoid duplicates.
 const cdp_primary_emitted: Set<string> = new Set();
+
+// WebSocket connection tracking
+interface WsConnectionMeta {
+    url: string;
+    request_headers: Record<string, string>;
+    response_headers: Record<string, string>;
+    status_code: number;
+    ws_status: 'connecting' | 'open' | 'closed' | 'error';
+    created_ts: number;
+}
+const ws_connections: Map<string, WsConnectionMeta> = new Map();
+export const _ws_connections_for_test = ws_connections;
+
+// Streaming request tracking
+const streaming_requests: Set<string> = new Set();
+export const _streaming_requests_for_test = streaming_requests;
+let stream_buffer_instance: ReturnType<typeof create_stream_buffer> | null = null;
 
 // Orphan CDP body events: entries that haven't been matched by webRequest within timeout
 const ORPHAN_TIMEOUT_MS = 3000;
@@ -180,6 +202,13 @@ export function stop_network_capture(): void {
 
     if (dbg_tab_id !== null) {
         const tab = dbg_tab_id;
+        // M3 safety valve: release all sub-targets before detaching
+        for (const session_id of get_attached_sessions()) {
+            chrome.dbg.sendCommand(
+                { tabId: tab, sessionId: session_id } as any,
+                'Runtime.runIfWaitingForDebugger'
+            ).catch(() => { /* best-effort */ });
+        }
         chrome.dbg.onEvent.removeListener(handle_cdp_event);
         chrome.dbg.sendCommand({ tabId: tab }, 'Network.disable').catch(() => { /* best-effort */ });
         if (!dbg_attached_externally) {
@@ -192,6 +221,11 @@ export function stop_network_capture(): void {
     cdp_request_meta.clear();
     cdp_body_results.clear();
     cdp_primary_emitted.clear();
+    ws_connections.clear();
+    streaming_requests.clear();
+    stream_buffer_instance?.flush_all();
+    stream_buffer_instance = null;
+    clear_sessions();
     on_cdp_body_event = null;
 }
 
@@ -218,7 +252,30 @@ export async function enable_response_body_capture(
         if (!already_attached) {
             await chrome.dbg.attach({ tabId: tab_id }, '1.3');
         }
-        await chrome.dbg.sendCommand({ tabId: tab_id }, 'Network.enable');
+        await chrome.dbg.sendCommand({ tabId: tab_id }, 'Network.enable', {
+            maxResourceBufferSize: 100 * 1024 * 1024,
+            maxTotalBufferSize: 500 * 1024 * 1024,
+            reportResourceContent: true,
+        });
+        stream_buffer_instance = create_stream_buffer({
+            on_flush: (request_id, accumulated) => {
+                const meta = cdp_request_meta.get(request_id);
+                if (meta) {
+                    meta.response_body = (meta.response_body || '') + accumulated;
+                    meta.response_body_status = 'streaming';
+                }
+            },
+        });
+        // P1: auto-attach to sub-targets (worker/iframe/OOPIF)
+        try {
+            await chrome.dbg.sendCommand({ tabId: tab_id }, 'Target.setAutoAttach', {
+                autoAttach: true,
+                waitForDebuggerOnStart: true,
+                flatten: true,
+            });
+        } catch (err) {
+            logger.debug('setAutoAttach_failed', { error: String(err).slice(0, 80) });
+        }
         chrome.dbg.onEvent.addListener(handle_cdp_event);
         dbg_tab_id = tab_id;
         dbg_attached_externally = already_attached;
@@ -239,9 +296,150 @@ export function build_cdp_body_result(body_text: string, max_body_capture_bytes 
     return { body: body_text, status: 'captured', preview: body_text.slice(0, 200) };
 }
 
+function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_status: WsConnectionMeta['ws_status']): void {
+    const event = create_base_event({
+        capture_id,
+        category: 'network',
+        type: 'network_request',
+        relative_time_ms: Date.now() - start_time,
+        tab_id: dbg_tab_id ?? current_tab_id,
+        url: conn.url,
+        source: 'background',
+        severity: 'info',
+    });
+    const data: NetworkRequestData = {
+        capture_id: event.capture_id,
+        event_id: event.event_id,
+        request_id: req_id,
+        method: '',
+        url: conn.url,
+        url_status: 'captured',
+        status_code: conn.status_code || null,
+        status_text: null,
+        protocol: null,
+        resource_type: 'websocket',
+        initiator: null,
+        duration_ms: null,
+        start_time_ms: conn.created_ts,
+        end_time_ms: ws_status === 'closed' ? Date.now() : null,
+        request_headers: conn.request_headers,
+        response_headers: conn.response_headers,
+        headers_status: 'captured',
+        request_body: null,
+        request_body_status: 'not_enabled',
+        request_body_encoding: null,
+        request_body_bytes: null,
+        request_body_mime: null,
+        response_body: null,
+        response_preview: null,
+        response_body_status: 'not_enabled',
+        response_body_encoding: null,
+        response_body_bytes: null,
+        mime_type: null,
+        request_size_bytes: null,
+        response_size_bytes: null,
+        transfer_size_bytes: null,
+        from_cache: null,
+        cache_status: null,
+        error_text: null,
+        capture_method: 'cdp_websocket',
+        body_capture_mode: 'none',
+        ws_connection_id: req_id,
+        ws_status,
+    };
+    send_to_background({ event, data });
+}
+
+function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: any): void {
+    const resp = params?.response || {};
+    const raw_payload = resp.payloadData || null;
+    const is_binary = resp.opcode === 2;
+    let payload: string | null = null;
+    let payload_encoding: 'utf8' | 'base64' | null = null;
+    let payload_status: BodyCaptureStatus = 'captured';
+    let payload_bytes: number | null = null;
+
+    if (raw_payload !== null) {
+        payload_bytes = is_binary
+            ? base64_decoded_size(raw_payload)
+            : new TextEncoder().encode(raw_payload).length;
+        if (payload_bytes > config.max_body_capture_bytes) {
+            const max_chars = is_binary
+                ? Math.floor(config.max_body_capture_bytes * 4 / 3)
+                : config.max_body_capture_bytes;
+            payload = raw_payload.slice(0, max_chars);
+            payload_status = 'too_large';
+        } else {
+            payload = raw_payload;
+        }
+        payload_encoding = is_binary ? 'base64' : 'utf8';
+    }
+
+    const conn = ws_connections.get(req_id);
+    const frame_data: WsFrameData = {
+        ws_connection_id: req_id,
+        direction,
+        opcode: resp.opcode ?? null,
+        payload,
+        payload_encoding,
+        payload_bytes,
+        payload_status,
+        mask: resp.mask ?? null,
+        error_message: null,
+        url: conn?.url || '',
+        tab_id: dbg_tab_id ?? undefined,
+    };
+    const event = create_base_event({
+        capture_id,
+        category: 'network',
+        type: 'ws_frame',
+        relative_time_ms: (params?.timestamp ? params.timestamp * 1000 : Date.now()) - start_time,
+        tab_id: dbg_tab_id ?? current_tab_id,
+        url: frame_data.url,
+        source: 'background',
+        severity: 'info',
+    });
+    send_to_background({ event, data: frame_data });
+}
+
 function handle_cdp_event(source: any, method: string, params: any): void {
     if (!is_capturing || dbg_tab_id === null) return;
-    if (source?.tabId !== dbg_tab_id) return;
+    if (!should_handle_event(source, dbg_tab_id)) return;
+
+    // ── Sub-target lifecycle ──
+    if (method === 'Target.attachedToTarget') {
+        const child_session = params?.sessionId;
+        if (child_session) {
+            register_session(child_session);
+            const child_target = { tabId: dbg_tab_id!, sessionId: child_session } as any;
+            chrome.dbg.sendCommand(
+                child_target,
+                'Network.enable',
+                {
+                    maxResourceBufferSize: 100 * 1024 * 1024,
+                    maxTotalBufferSize: 500 * 1024 * 1024,
+                    reportResourceContent: true,
+                }
+            ).catch((err: any) => {
+                logger.debug('sub_target_network_enable_failed', { sessionId: child_session, error: String(err).slice(0, 80) });
+            });
+            chrome.dbg.sendCommand(
+                child_target,
+                'Runtime.runIfWaitingForDebugger'
+            ).catch(() => { /* best-effort */ });
+            logger.debug('sub_target_attached', { sessionId: child_session });
+        }
+        return;
+    }
+
+    if (method === 'Target.detachedFromTarget') {
+        const child_session = params?.sessionId;
+        if (child_session) {
+            unregister_session(child_session);
+            logger.debug('sub_target_detached', { sessionId: child_session });
+        }
+        return;
+    }
 
     const req_id: string = params?.requestId;
     if (!req_id) return;
@@ -292,7 +490,6 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             existing.response_headers = resp_headers;
             existing.mime_type = mime;
         } else {
-            // Response arrived before request event (unusual but possible)
             cdp_request_meta.set(req_id, {
                 url: response?.url || '',
                 method: '',
@@ -307,12 +504,66 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 mime_type: mime,
             });
         }
+
+        if (is_streaming_response(resp_headers) && dbg_tab_id !== null) {
+            streaming_requests.add(req_id);
+            if (existing) {
+                existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
+            }
+            chrome.dbg.sendCommand(
+                { tabId: dbg_tab_id },
+                'Network.streamResourceContent',
+                { requestId: req_id }
+            ).then((result: any) => {
+                if (result?.bufferedData) {
+                    stream_buffer_instance?.append(req_id, result.bufferedData);
+                }
+                logger.debug('stream_started', { req_id, mime });
+            }).catch((err: any) => {
+                logger.debug('streamResourceContent_failed', { req_id, error: String(err).slice(0, 80) });
+                const meta = cdp_request_meta.get(req_id);
+                if (meta) {
+                    meta.response_body_status = 'partial';
+                }
+            });
+        }
+    }
+
+    if (method === 'Network.dataReceived' && streaming_requests.has(req_id)) {
+        const chunk = (params as any)?.data;
+        if (chunk && stream_buffer_instance) {
+            stream_buffer_instance.append(req_id, chunk);
+        }
     }
 
     if (method === 'Network.loadingFinished') {
         if (dbg_tab_id === null) return;
         const meta_for_method = cdp_request_meta.get(req_id);
         const http_method = meta_for_method?.method?.toUpperCase() || '';
+
+        if (streaming_requests.has(req_id)) {
+            stream_buffer_instance?.force_flush(req_id);
+            streaming_requests.delete(req_id);
+            const meta = cdp_request_meta.get(req_id);
+            if (meta) {
+                const body = meta.response_body || null;
+                const byte_size = body ? new TextEncoder().encode(body).length : 0;
+                const is_partial = meta.response_body_status === 'partial';
+                const body_result: CdpBodyResult = {
+                    body,
+                    status: is_partial ? 'partial' : (byte_size > config.max_body_capture_bytes ? 'too_large' : 'captured'),
+                    timestamp: Date.now(),
+                    preview: body?.slice(0, 200) ?? null,
+                    encoding: 'utf8',
+                    byte_size,
+                };
+                cdp_primary_emitted.add(req_id);
+                send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
+                cdp_request_meta.delete(req_id);
+            }
+            return;
+        }
+
         chrome.dbg.sendCommand(
             { tabId: dbg_tab_id },
             'Network.getResponseBody',
@@ -405,6 +656,82 @@ function handle_cdp_event(source: any, method: string, params: any): void {
         cdp_body_results.set(req_id, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
         try_resolve_deferred(req_id);
         schedule_orphan_check(req_id);
+    }
+
+    // ── WebSocket events ──
+    if (method === 'Network.webSocketCreated') {
+        const ws_url = params?.url || '';
+        const conn: WsConnectionMeta = {
+            url: ws_url,
+            request_headers: {},
+            response_headers: {},
+            status_code: 0,
+            ws_status: 'connecting',
+            created_ts: Date.now(),
+        };
+        ws_connections.set(req_id, conn);
+        send_ws_connection_event(req_id, conn, 'connecting');
+    }
+
+    if (method === 'Network.webSocketWillSendHandshakeRequest') {
+        const conn = ws_connections.get(req_id);
+        if (conn) {
+            conn.request_headers = headers_map_from_cdp(params?.request?.headers || {});
+        }
+    }
+
+    if (method === 'Network.webSocketHandshakeResponseReceived') {
+        const conn = ws_connections.get(req_id);
+        if (conn) {
+            conn.response_headers = headers_map_from_cdp(params?.response?.headers || {});
+            conn.status_code = params?.response?.status || 101;
+            conn.ws_status = 'open';
+            send_ws_connection_event(req_id, conn, 'open');
+        }
+    }
+
+    if (method === 'Network.webSocketFrameSent') {
+        send_ws_frame(req_id, 'sent', params);
+    }
+
+    if (method === 'Network.webSocketFrameReceived') {
+        send_ws_frame(req_id, 'received', params);
+    }
+
+    if (method === 'Network.webSocketFrameError') {
+        const frame_data: WsFrameData = {
+            ws_connection_id: req_id,
+            direction: 'error',
+            opcode: null,
+            payload: null,
+            payload_encoding: null,
+            payload_bytes: null,
+            payload_status: 'captured',
+            mask: null,
+            error_message: params?.errorMessage || null,
+            url: ws_connections.get(req_id)?.url || '',
+            tab_id: dbg_tab_id ?? undefined,
+        };
+        const event = create_base_event({
+            capture_id,
+            category: 'network',
+            type: 'ws_frame',
+            relative_time_ms: Date.now() - start_time,
+            tab_id: dbg_tab_id ?? current_tab_id,
+            url: frame_data.url,
+            source: 'background',
+            severity: 'warning',
+        });
+        send_to_background({ event, data: frame_data });
+    }
+
+    if (method === 'Network.webSocketClosed') {
+        const conn = ws_connections.get(req_id);
+        if (conn) {
+            conn.ws_status = 'closed';
+            send_ws_connection_event(req_id, conn, 'closed');
+            ws_connections.delete(req_id);
+        }
     }
 }
 
@@ -499,6 +826,12 @@ function extract_mime_type(headers: Record<string, string>): string | null {
     const ct = headers['content-type'] || headers['Content-Type'] || null;
     if (!ct) return null;
     return ct.split(';')[0].trim() || null;
+}
+
+export function is_streaming_response(headers: Record<string, string>): boolean {
+    const ct = (headers['content-type'] || headers['Content-Type'] || '').toLowerCase();
+    if (ct.includes('text/event-stream')) return true;
+    return false;
 }
 
 // ─── webRequest handlers ───

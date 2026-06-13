@@ -9,6 +9,42 @@
 
 ## P0 · 功能缺陷（待修复）
 
+### ✅ P0.57 streamResourceContent 对所有请求触发（is_streaming_response 匹配过宽）
+- **状态**：已修复 — 2026-06-13
+- **现象**：采集 chatgpt.com 时日志出现大量 `streamResourceContent_failed`，涉及 favicon、CSS、woff2、POST 等**非流式请求**。正常采集流程不应对这些请求调用 `streamResourceContent`。
+- **根因**：`src/background/network_capture.ts` 的 `is_streaming_response()` 判定过宽：
+  1. `ct.includes('stream')` 会匹配任何 content-type 含 `stream` 的响应（如未来可能出现的 `application/stream+json` 等非 SSE 类型）。
+  2. **更关键**：`te.includes('chunked') && !cl` 条件——HTTP/1.1 普通响应也带 `transfer-encoding: chunked`（无 `content-length`），此条件会把**所有 HTTP/1.1 chunked 响应**误判为流式。实际只有 SSE（`text/event-stream`）和真正的 fetch streaming 才应走 `streamResourceContent` 路径。
+- **影响**：
+  - 每个非流式请求都多一次无意义的 CDP 调用（`streamResourceContent`），增加延迟和日志噪音。
+  - `streamResourceContent` 失败后设置 `response_body_status = 'partial'`，导致普通请求的 body 状态被错误降级为 partial（应为 captured）。
+  - 如果 `streamResourceContent` 恰好在 `loadingFinished` 之前成功，会把普通请求当流式处理（走 stream_buffer 而非 getResponseBody），可能丢失 body。
+- **测试为什么没发现**：单测只测了干净的 header 组合（`{ 'transfer-encoding': 'chunked' }` 无 content-length），没测真实浏览器场景——HTTP/1.1 chunked 响应同时带 `content-type: text/css` 等非流式 MIME。
+- **要求**：
+  1. `is_streaming_response` 只匹配 `text/event-stream` 和明确的流式 content-type（含 `stream` 且非 `application/octet-stream` 等）。
+  2. 移除 `transfer-encoding: chunked && !content-length` 条件（HTTP/1.1 chunked 是传输编码，不是流式语义）。
+  3. 补测试：`{ 'transfer-encoding': 'chunked', 'content-type': 'text/css' }` → `false`；`{ 'content-type': 'text/event-stream' }` → `true`。
+
+### ✅ P0.58 send_ws_frame 中 raw_payload 为 undefined 时触发 TypeError
+- **状态**：已修复 — 2026-06-13
+- **现象**：WebSocket 帧采集时抛出 `TypeError: Cannot read properties of undefined (reading 'replace')`，来自 `base64_decoded_size(undefined)`。
+- **根因**：`src/background/network_capture.ts` 的 `send_ws_frame()` 中：
+  ```ts
+  const raw_payload = resp.payloadData ?? null;  // ?? 只拦截 null，不拦截 undefined
+  ```
+  CDP 的 `webSocketFrameReceived`/`webSocketFrameSent` 事件中，控制帧（ping/pong/close）或无 payload 的帧可能不携带 `payloadData` 字段，此时 `resp.payloadData` 为 `undefined`，`?? null` 不生效，`raw_payload` 保持 `undefined`。随后：
+  ```ts
+  payload_bytes = is_binary
+      ? base64_decoded_size(raw_payload)  // undefined.replace() → TypeError
+      : new TextEncoder().encode(raw_payload).length;
+  ```
+- **影响**：任何无 payload 的 WebSocket 控制帧都会导致整个 `handle_cdp_event` 函数崩溃，后续所有 CDP 事件（包括普通网络请求）都不会被处理。
+- **测试为什么没发现**：mock 中 `payloadData` 始终传了字符串（`'hello'`/`'world'`），没测 `payloadData` 缺失的帧。CDP 实际返回的控制帧无此字段。
+- **要求**：
+  1. `raw_payload` 用 `|| null` 替代 `?? null`，或在使用前判空。
+  2. `payloadData` 为空时设 `payload_status = 'captured'`、`payload = null`、`payload_bytes = 0`。
+  3. 补测试：`webSocketFrameReceived` 无 `payloadData` → 不崩溃，`payload` 为 null。
+
 ### ⛔ P0.56 导出时间字段仍为 UNIX 时间戳（P0.51 假修复，仅追加未替换）
 - **状态**：待修复 — 2026-06-13
 - **现象**：导出采集记录（ZIP 的 `network.jsonl`/`events.jsonl`，以及 JSON 导出）中时间字段仍是 UNIX 时间戳数字（如 `1781328968343`），不是用户设置时区的人类可读时间。
@@ -494,6 +530,67 @@
 
 以下 bug 都要找原因为什么测试没有发现，测试有问题就补测试，文档有问题就改文档，最后才是改代码解决 bug。我要的是这次错了修正后以后不再犯。
 
+---
+
+## P1 · 测试缺口（流式/WS 采集）
+
+### ✅ T1 websocket_capture.test.ts — 缺 undefined payloadData、控制帧测试
+- **状态**：已补 — 2026-06-13
+- **关联**：P0.58
+- **缺口**：所有测试用例的 `payloadData` 均为字符串（`'hello'`/`'world'`/`'a'.repeat(100)`），未覆盖：
+  1. `payloadData` 字段缺失（CDP 控制帧不携带此字段，值为 `undefined`）
+  2. 控制帧（opcode 8=close, 9=ping, 10=pong）通常无 payload
+  3. 二进制帧（opcode 2）的 base64 payload + 截断
+- **原因**：mock 数据来自开发者想象，未参考 CDP 实际事件格式。Chrome 的 `webSocketFrameReceived` 对 ping/pong 帧不填 `payloadData`。
+- **补测要求**：
+  1. `webSocketFrameReceived` 无 `payloadData` → 不崩溃，`payload` 为 null，`payload_status` 为 captured
+  2. `webSocketFrameReceived` opcode=9 (ping) → 正常产出 ws_frame event
+  3. `webSocketFrameSent` opcode=2 (binary) + base64 payload → `payload_encoding` 为 base64
+
+### ✅ T2 streaming_capture.test.ts — 缺 chunked + 非流式 MIME 组合测试
+- **状态**：已补 — 2026-06-13
+- **关联**：P0.57
+- **缺口**：`is_streaming_response` 测试只测了：
+  - `transfer-encoding: chunked`（无 content-length）→ true ✓
+  - `transfer-encoding: chunked` + `content-length` → false ✓
+  - 但没测 `transfer-encoding: chunked` + `content-type: text/css`（真实 HTTP/1.1 场景）
+- **原因**：测试按 spec 条件逐一验证，未模拟真实浏览器响应 header 组合。HTTP/1.1 普通响应（CSS/JS/JSON）也带 `transfer-encoding: chunked` 且无 `content-length`。
+- **补测要求**：
+  1. `{ 'transfer-encoding': 'chunked', 'content-type': 'text/css' }` → false
+  2. `{ 'transfer-encoding': 'chunked', 'content-type': 'application/json' }` → false
+  3. `{ 'transfer-encoding': 'chunked', 'content-type': 'text/event-stream' }` → true
+  4. `{ 'content-type': 'text/event-stream' }`（无 transfer-encoding）→ true
+
+### ⚠️ T3 stream_buffer.test.ts — 缺并发 append 安全测试
+- **状态**：待补 — 2026-06-13
+- **缺口**：7 个测试全部是串行调用 `append`，未验证多 request 并发写入场景。虽然 `create_stream_buffer` 内部用 Map 隔离 request_id，但无测试证明：
+  1. 两个不同 request_id 同时 append 不互相干扰
+  2. 同一 request_id 在 flush 期间被再次 append 不丢数据
+- **风险**：低。Map 天然隔离 request_id，当前实现无并发 bug，但缺测试作为回归保障。
+- **补测要求**：
+  1. 两个 request_id 交替 append → 各自独立 flush，数据不混
+  2. flush 回调中再次 append 同一 request_id → 新数据正确累积
+
+### ⚠️ T4 network_cdp.test.ts — 缺 header 边界场景
+- **状态**：待补 — 2026-06-13
+- **缺口**：
+  1. 响应 header 为空对象 `{}` → `extract_mime_type` 返回 null，未测试此路径
+  2. header key 大小写混合（CDP 给小写，webRequest 给首字母大写）→ `headers_map_from_cdp` 直接 spread，未验证大小写一致性
+  3. 响应 body 为超大文本（>max_body_capture_bytes）→ `build_cdp_body_result` 截断 + too_large，现有测试只测了二进制超限
+- **风险**：低。现有代码对这些场景有基本处理，但缺回归保障。
+- **补测要求**：
+  1. `responseReceived` header 为空 → `mime_type` 为 null，不崩溃
+  2. `responseReceived` header key 大写 `Content-Type` → 正确提取 mime
+  3. 文本 body 超 `max_body_capture_bytes` → `body_status` 为 too_large，body 被截断
+
+### 根因总结
+
+| 模式 | 涉及测试 | 根因 |
+|---|---|---|
+| mock 数据太理想 | T1, T2 | 开发者按 spec 写 mock，未参考 CDP/HTTP 真实行为 |
+| 缺字段缺失场景 | T1 | CDP 可选字段在控制帧中不出现，mock 始终提供 |
+| 缺真实组合 | T2 | 按 spec 条件逐一验证，未做交叉组合 |
+| 缺并发测试 | T3 | 串行思维，未考虑多 request 同时写入 |
 
 ---
 

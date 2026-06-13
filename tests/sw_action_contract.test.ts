@@ -9,7 +9,6 @@ import { resolve } from 'path';
 const sw_src = readFileSync(resolve(__dirname, '../src/background/service_worker.ts'), 'utf8');
 const popup_src = readFileSync(resolve(__dirname, '../src/popup/popup.ts'), 'utf8');
 const dashboard_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
-const detail_src = readFileSync(resolve(__dirname, '../src/detail/detail.ts'), 'utf8');
 
 function extract_actions_from_source(src: string): Set<string> {
     const actions = new Set<string>();
@@ -35,12 +34,10 @@ describe('P0.46: SW action contract', () => {
     const sw_cases = extract_sw_cases(sw_src);
     const popup_actions = extract_actions_from_source(popup_src);
     const dashboard_actions = extract_actions_from_source(dashboard_src);
-    const detail_actions = extract_actions_from_source(detail_src);
 
     const all_ui_actions = new Set([
         ...popup_actions,
         ...dashboard_actions,
-        ...detail_actions,
     ]);
 
     it('every UI sendMessage action is handled by SW', () => {

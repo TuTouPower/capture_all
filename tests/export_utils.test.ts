@@ -141,7 +141,6 @@ describe('P0.40/P0.53: export entries unified, no last_dir override', () => {
     };
     const entries = [
         'src/dashboard/dashboard.ts',
-        'src/detail/detail.ts',
         'src/popup/popup.ts',
     ];
 

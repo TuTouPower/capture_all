@@ -9,6 +9,20 @@
 
 ## P0 · 功能缺陷（待修复）
 
+### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
+- **状态**：已实现 — 2026-06-13
+- **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`
+- **实施计划**：`docs/superpowers/plans/2026-06-13-zip-archive-export.md`
+- **审阅**：`docs/review.md`
+- **现象**：CDP 返回 base64Encoded 的图片/字体等二进制响应被标 unsupported_binary、body 置 null；单 JSON 承载大二进制导致导出内存爆且 grep 受污染。
+- **修复**：
+  1. 采集层保存二进制为 base64（不再丢弃），记录 `response_body_encoding`/`response_body_bytes`/`request_body_mime`，`too_large` 时保留 encoding 元数据
+  2. 新增 ZIP 完整包导出：页面侧 `archive_builder` 组装（`src/shared/archive_builder.ts`），走已有 `get_capture_data` 通道，`fflate.zipSync` 打包，bodies/ 独立文件 + jsonl 引用 + README
+  3. body 上限统一为采集上限(100MB)+内联阈值(32KB)，取代原 1MB 双上限
+  4. popup/dashboard/detail 三个入口均接入 ZIP 导出
+  5. 采用子代理驱动开发（subagent-driven），9 个独立 task，TDD 红绿重构
+- **影响文件**：network_capture.ts、archive_builder.ts、body_routing.ts、hash.ts、types.ts、constants.ts、redaction.ts、external_cdp_bridge_client.ts、body_capture_coordinator.ts、service_worker.ts、cdp_handler.ts、network_hook.ts、popup/dashboard/detail、export_utils.ts、export_settings.ts、设置 UI
+
 ### ✅ P0.31-R1 CDP 路径 resource_type 未归一化，大写 CDP 类型混入导出
 - **状态**：已修复 — 2026-06-12
 - **复现文件**：`data/capture_all_capture_1781262222966_2lkg3rn.json`

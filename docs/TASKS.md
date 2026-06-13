@@ -9,6 +9,20 @@
 
 ## P0 · 功能缺陷（待修复）
 
+### ⛔ P0.56 导出时间字段仍为 UNIX 时间戳（P0.51 假修复，仅追加未替换）
+- **状态**：待修复 — 2026-06-13
+- **现象**：导出采集记录（ZIP 的 `network.jsonl`/`events.jsonl`，以及 JSON 导出）中时间字段仍是 UNIX 时间戳数字（如 `1781328968343`），不是用户设置时区的人类可读时间。
+- **根因（P0.51 假修复）**：P0.51 标记「已修复」，但实现只是**追加**了一个平行字段，原始 UNIX 字段原封未动：
+  1. `src/shared/system_time.ts:24` `add_absolute_system_time`：`...obj` 保留原 `absolute_time`(UNIX 数字)，只新增 `absolute_time_system_time` 字符串。
+  2. `src/shared/archive_builder.ts:248-253` network 请求：保留 `start_time_ms`/`end_time_ms`(UNIX)，旁边加 `start_time_system_time`；且 network 请求无 `absolute_time` 字段，`add_absolute_system_time(req)` 直接原样返回，等于没格式化。
+  3. JSON 导出同为「追加」模式，同样问题。
+- **要求（方案 A — 直接替换）**：
+  1. 原始时间字段（`absolute_time`/`start_time_ms`/`end_time_ms`/`timestamp` 等）直接替换为格式化字符串 `YYYY-MM-DD HH:mm:ss`（按 `system_time_timezone`），导出中**彻底不保留 UNIX 数字**，不保留 `*_raw`。
+  2. ZIP（`network.jsonl`/`events.jsonl`）与 JSON 导出行为一致，统一走替换。
+  3. network 请求的 `start_time_ms`/`end_time_ms` 也要替换，不能因无 `absolute_time` 字段而被跳过。
+- **测试**：补回归测试——导入真实导出 JSON/JSONL，断言所有时间字段为格式化字符串、且不存在任何纯数字 UNIX 时间字段。
+- **教训**：P0.51 核验时只确认「调了格式化函数」就判真，未区分**替换 vs 追加**。标 ✅ 前须按 TEST_STRATEGY §6 逐项验证实际产物。
+
 ### ✅ P0.46 导出入口与 SW action 契约断裂，测试只做源码审计导致漏检
 - **状态**：已修复 — 2026-06-13
 - **触发日志**：`data/` 新日志中出现 `Export failed "Unknown action"`
@@ -26,7 +40,7 @@
 - **测试为什么没有发现**：
   1. `tests/popup_export.test.ts` 主要是 `readFileSync + toMatch` 源码正则，只验证源码里出现 `action: 'get_session_data'`、`download_blob`、`build_capture_filename` 等字符串，不触发真实 click handler，不捕获实际 `chrome.runtime.sendMessage` 参数
   2. `tests/archive_entry.test.ts`、`tests/entry_unification.test.ts` 只验证入口 import 了 `build_archive` / `download_blob`，不验证运行时是否调用、不验证 action 是否被 SW 处理
-  3. `tests/export_utils.test.ts` 只测 `download_blob()`、文件名、目录记录等工具函数；P0.40/P0.45 入口统一部分仍是源码正则审计
+  3. `tests/export_utils.test.ts` 只测 `download_blob()`、文件名等工具函数；P0.40/P0.45/P0.53 入口统一部分仍是源码正则审计
   4. `tests/live_data_queries.test.ts` 在测试文件里重新实现了 `get_capture_data()`，直接调 mock 存储层，完全绕过 `service_worker.ts` 的 `handle_message` switch
   5. `tests/export_integrity.test.ts` 使用手写 fixture，不来自真实 `get_session_data -> build_archive -> download_blob` 链路
   6. `tests/e2e-export.spec.ts` / `tests/e2e-export-content.spec.ts` 主要覆盖 dashboard 的 JSON/HAR/HTML 等导出，不覆盖 popup ZIP 导出按钮
@@ -198,9 +212,11 @@
   5. "最大日志大小"和"日志级别"放到同一行，有间距，不重叠
 
 ### ✅ P0.53 导出目录仍未记住（采集记录/日志分开）
-- **状态**：待修复 — 2026-06-13（P0.40-R1 修复后仍复现）
-- **现象**：导出采集记录和导出运行日志时，保存对话框没有回到上次选择的目录。两个导出应该分别记住各自上次的目录。
-- **历史修复**：P0.40-R1（2026-06-13）已修复过，代码侧接入了 `load_last_export_dirs()` 和 `track_export_dir()`。但仍复现，需要重新验证修复是否生效，或是否有新路径未接入。
+- **状态**：已修复 — 2026-06-13
+- **现象**：导出采集记录和导出运行日志时，保存对话框没有回到上次选择的目录；修改"采集导出目录"配置也不生效，永远是默认目录。
+- **根因**：`last_dir` 回填机制从设计上跑不通。`chrome.downloads.search()` 返回磁盘**绝对路径**（如 `<USER_HOME>/Downloads/exports`），被 `track_export_dir()` 持久化；但 `chrome.downloads.download({filename})` 只接受**相对 Downloads 根**的相对路径。下次导出 `build_capture_filename` 用 `last_dir || config` —— stale 绝对路径既覆盖了用户配置目录，经 `normalize_download_path` 剥掉前导 `/` 后又被 Chrome 判为非法 → 回退默认目录。P0.40-R1 接入 `load_last_export_dirs`/`track_export_dir` 反而引入了这条覆盖链。
+- **修复**：移除整套 `last_dir` 持久化机制（`load_last_export_dirs`/`save_last_export_dir`/`track_export_dir`/`extract_dir_from_filename` 及两个 storage key）。导出目录唯一来源为用户配置（`export_capture_directory`/`export_log_directory`）；`saveAs` 对话框由 Chrome 自身记忆上次文件夹。`build_capture_filename`/`build_log_filename` 去掉 `last_dir` 参数。
+- **测试**：`tests/export_utils.test.ts` 改为验证「目录来自配置」「config 空时扁平文件名」「三入口不再引用 `load_last_export_dirs`/`track_export_dir`」「export_utils 不再导出持久化辅助函数」。
 
 ### ✅ P0.54 采集记录面板列精简 + 7 种数据标签统计
 - **状态**：已修复 — 2026-06-13

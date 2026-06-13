@@ -110,10 +110,13 @@ export function plan_body(
 // ============================================================
 
 export function safe_request_id(
-    id: string,
+    id: string | undefined | null,
     used?: Set<string>,
 ): string {
-    const safe = id.replace(/[^a-zA-Z0-9._-]/g, '_');
+    // 空字符串 / null / undefined 均视为无效 id，走 'unknown' fallback。
+    // 空字符串尤其要拦截：archive 文件名不能为空。
+    const safe_id_input = (typeof id === 'string' && id.length > 0) ? id : 'unknown';
+    const safe = safe_id_input.replace(/[^a-zA-Z0-9._-]/g, '_');
     if (!used) return safe;
     let candidate = safe;
     let n = 2;

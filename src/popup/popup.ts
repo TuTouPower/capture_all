@@ -98,8 +98,8 @@ const CAPTURE: CaptureSource[] = [
     { key: 'mask',                 i18n: 'capMask',    icon: 'shield',  tone: 'green',  stat: null },
 ];
 
-function escape_html(s: string): string {
-    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+function escape_html(s: unknown): string {
+    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
 function fmt_num(n: number): string {

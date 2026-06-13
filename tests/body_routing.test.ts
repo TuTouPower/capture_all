@@ -74,4 +74,25 @@ describe('safe_request_id', () => {
         used.add('a_2');
         expect(safe_request_id('a', used)).toBe('a_3');
     });
+
+    // ── fault injection: nullish / 空字符串 入参 ──
+    // P0.59: 修复前传 undefined 会触发 `id.replace()` TypeError。
+    // 该入口接收 NetworkRequestData.request_id（类型标注 string，但运行时
+    // 异常路径或旧数据可能 undefined）。须兜底而非崩溃。
+    it('returns placeholder when id is undefined', () => {
+        expect(safe_request_id(undefined)).toBe('unknown');
+    });
+    it('returns placeholder when id is null', () => {
+        expect(safe_request_id(null)).toBe('unknown');
+    });
+    it('returns placeholder when id is empty string', () => {
+        // 空字符串也是无效 id（archive 文件名不能为空），应走 fallback
+        expect(safe_request_id('')).toBe('unknown');
+    });
+    it('preserves dedup behavior with undefined id', () => {
+        const used = new Set<string>();
+        expect(safe_request_id(undefined, used)).toBe('unknown');
+        used.add('unknown');
+        expect(safe_request_id(undefined, used)).toBe('unknown_2');
+    });
 });

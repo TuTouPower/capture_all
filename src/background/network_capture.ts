@@ -27,6 +27,29 @@ function base64_decoded_size(b64: string | undefined | null): number {
 // 导出供单测验证 fault injection 边界
 export const _base64_decoded_size_for_test = base64_decoded_size;
 
+/**
+ * 判断 URL 是否属于扩展自身或本地 Bridge 的 origin。
+ *
+ * 这些 URL（chrome-extension://、http(s)://127.0.0.1、http(s)://localhost）
+ * 不应进入网络采集范围：Bridge 响应在 CDP 拿到 body 前可能已结束，
+ * 且扩展自身请求无业务价值，纳入采集会产生大量 cdp_failed 污染 stats。
+ *
+ * BUG-005: Bridge 日志上报端点 http://127.0.0.1:<port>/log 之前
+ * 未被排除，导致 117 个 cdp_failed。
+ */
+export function is_self_origin_url(raw_url: string): boolean {
+    if (!raw_url || typeof raw_url !== 'string') return false;
+    // 扩展自身 origin（MV3 content/background 内部跳转）
+    if (raw_url.startsWith('chrome-extension://')) return true;
+    // 本地 Bridge / 开发服务器：覆盖所有端口，不硬编码
+    try {
+        const parsed = new URL(raw_url);
+        return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+    } catch {
+        return false;
+    }
+}
+
 interface NetworkCaptureConfig {
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
@@ -451,6 +474,10 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     if (method === 'Network.requestWillBeSent') {
         const request = params?.request;
         if (request) {
+            // BUG-005: 排除扩展自身 origin 与本地 Bridge URL，避免 /log 等端点
+            // 进入 CDP body 采集后产生 cdp_failed。
+            if (is_self_origin_url(request.url || '')) return;
+
             // CDP-first: extract request body from postData
             let req_body: string | null = null;
             let req_body_status: BodyCaptureStatus = 'not_enabled';
@@ -943,6 +970,10 @@ function handle_before_request(details: any): void {
     if (!is_capturing) return;
     // CDP-first: skip requests on the attached tab — CDP handles them directly
     if (dbg_tab_id !== null && details.tabId === dbg_tab_id) return;
+
+    // BUG-005: 排除扩展自身 origin 与本地 Bridge URL（含 /log 日志上报端点），
+    // 避免 Bridge 响应在 CDP 拿到 body 前结束而污染 cdp_failed 计数。
+    if (is_self_origin_url(details.url)) return;
 
     const { body, status } = extract_request_body(details);
 

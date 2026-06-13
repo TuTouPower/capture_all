@@ -99,6 +99,14 @@ export const REQUIRED_LABELS = [
     '用户行为', '页面导航', '网络请求', '控制台', '错误异常', 'Storage', 'Cookie',
 ];
 
+// Popup mcard 用 data-key 标识（与 i18n locale 无关）。
+// dashboard 硬编码中文 label → 用 REQUIRED_LABELS；
+// popup mcard 通过 i18n 渲染 → 用 REQUIRED_KEYS + data-key selector。
+export const REQUIRED_KEYS = [
+    'event_count', 'nav_count', 'request_count', 'log_count',
+    'error_count', 'storage_change_count', 'cookie_change_count',
+] as const;
+
 export const FORBIDDEN_STRINGS = [
     '深度采集', '标准采集', '就绪', 'Record All', 'record_all', '录制', '记录',
 ];

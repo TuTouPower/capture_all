@@ -173,6 +173,20 @@
   - `tests/network_cdp.test.ts` — mime_type 写入测试
   - `tests/archive_builder.test.ts` — 扩展名推断测试
 
+### ⛔ P0.50 MCP 桥接默认开启，用户未配置也自动启动
+- **状态**：待修复 — 2026-06-13
+- **现象**：扩展安装后 MCP 桥接默认开启，即使用户未配置 token/URL 也自动启动 bridge client，产生不必要的连接尝试和日志。
+- **期望行为**：MCP 桥接应默认关闭，用户在设置页主动开启后才启动。
+- **影响**：未使用 MCP 功能的用户也会看到 bridge 相关日志和错误，干扰排查。
+
+### ⛔ P0.51 导出 ZIP 时间字段仍为 UNIX 时间戳，未使用用户设置时区
+- **状态**：待修复 — 2026-06-13
+- **复现数据**：`capture_all_capture_1781328968343_uzvscx9_2026-06-13_14-00-33.zip`
+- **现象**：导出 ZIP 中 `network.jsonl` 和 `events.jsonl` 的时间字段仍为 UNIX 时间戳（数字），不是用户在设置中选择的时区格式化时间。文件名中的日期正确（`2026-06-13_14-00-33`），但 JSON 内的时间字段没有格式化。
+- **期望行为**：所有时间字段应按用户设置的 `system_time_timezone` 格式化为人类可读时间（如 `2026-06-13 14:00:33`），与 JSON 导出的行为一致。
+- **历史修复参考**：P0.33/P0.38 修复了 JSON 导出的时间格式化（`add_system_times_to_capture_data`、`add_absolute_system_time`），但 ZIP 导出的 `archive_builder.ts` 可能未调用这些函数，或调用时传入的 timezone 参数不对。
+- **影响**：用户打开 network.jsonl 看到的是 `1781328968343` 而不是 `2026-06-13 14:00:33 (UTC+8)`，需要自行换算，违背"采集包直接可读"的设计目标。
+
 ### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
 - **状态**：已实现 — 2026-06-13
 - **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`

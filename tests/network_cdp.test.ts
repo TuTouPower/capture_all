@@ -52,7 +52,8 @@ function make_cfg(overrides: Partial<{
     capture_request_body: boolean;
     capture_response_body: boolean;
     max_request_body_bytes: number;
-    max_response_body_bytes: number;
+    max_body_capture_bytes: number;
+    inline_text_max_bytes: number;
 }> = {}) {
     return {
         redact_sensitive_headers: false,
@@ -61,7 +62,8 @@ function make_cfg(overrides: Partial<{
         capture_request_body: false,
         capture_response_body: true,
         max_request_body_bytes: 1024 * 1024,
-        max_response_body_bytes: 1024 * 1024,
+        max_body_capture_bytes: 104857600,
+        inline_text_max_bytes: 32768,
         ...overrides,
     };
 }
@@ -370,7 +372,7 @@ describe('CDP-first: primary record emission', () => {
         expect(emitted[0].data.request_body_status).toBe('captured');
     });
 
-    it('handles binary response as unsupported_binary', async () => {
+    it('captures binary response (was unsupported_binary)', async () => {
         mock_chrome_debugger.set_command_response('Network.getResponseBody', {
             body: 'base64data',
             base64Encoded: true,
@@ -396,8 +398,69 @@ describe('CDP-first: primary record emission', () => {
         await new Promise(r => setTimeout(r, 20));
 
         expect(emitted).toHaveLength(1);
-        expect(emitted[0].data.response_body_status).toBe('unsupported_binary');
+        expect(emitted[0].data.response_body_status).toBe('captured');
+        expect(emitted[0].data.response_body_encoding).toBe('base64');
+        expect(emitted[0].data.response_body).toBe('base64data');
+    });
+
+    it('captures binary response as base64 with captured status', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'aGVsbG8=',
+            base64Encoded: true,
+        });
+        await setup_capture();
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_png',
+                request: { url: 'https://example.com/i.png', method: 'GET', headers: {} },
+                type: 'Image',
+            }
+        );
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_png' }
+        );
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.response_body_status).toBe('captured');
+        expect(emitted[0].data.response_body_encoding).toBe('base64');
+        expect(emitted[0].data.response_body).toBe('aGVsbG8=');
+        expect(emitted[0].data.response_body_bytes).toBe(5);
+    });
+
+    it('marks binary exceeding ceiling as too_large, preserves encoding', async () => {
+        mock_chrome_debugger.set_command_response('Network.getResponseBody', {
+            body: 'A'.repeat(2000000),
+            base64Encoded: true,
+        });
+        await setup_capture({ max_body_capture_bytes: 1024 });
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.requestWillBeSent',
+            {
+                requestId: 'cdp_big',
+                request: { url: 'https://example.com/big.jpg', method: 'GET', headers: {} },
+                type: 'Image',
+            }
+        );
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.loadingFinished',
+            { requestId: 'cdp_big' }
+        );
+        await new Promise(r => setTimeout(r, 20));
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.response_body_status).toBe('too_large');
+        expect(emitted[0].data.response_body_encoding).toBe('base64');
         expect(emitted[0].data.response_body).toBeNull();
+        expect(emitted[0].data.response_body_bytes).toBeGreaterThan(0);
     });
 
     it('handles getResponseBody failure as cdp_failed', async () => {

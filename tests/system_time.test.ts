@@ -149,15 +149,18 @@ describe('system time formatting with UTC offsets', () => {
     });
 
     test('formats filename timestamps in configured timezone', () => {
-        expect(format_system_time_filename(1704067200000, config)).toBe('2024-01-01_08-00-00');
+        // P0.60: compact format YYYYMMDD_HHMMSS
+        expect(format_system_time_filename(1704067200000, config)).toBe('20240101_080000');
     });
 
     test('filename uses offset time for UTC+8', () => {
-        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config)).toBe('2024-01-01_08-00-00');
+        // P0.60: compact format YYYYMMDD_HHMMSS
+        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config)).toBe('20240101_080000');
     });
 
     test('filename uses offset time for UTC-5', () => {
-        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config_utc_minus_5)).toBe('2023-12-31_19-00-00');
+        // P0.60: compact format YYYYMMDD_HHMMSS
+        expect(format_system_time_filename('2024-01-01T00:00:00.000Z', config_utc_minus_5)).toBe('20231231_190000');
     });
 });
 

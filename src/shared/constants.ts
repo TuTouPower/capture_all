@@ -57,7 +57,7 @@ export const DEFAULT_USER_CONFIG = {
     detail_time_display_mode: 'system' as const,
     export_capture_directory: '',
     export_log_directory: '',
-    export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
+    export_filename_template: 'capture_{date}.{ext}',
     export_save_as: true,
     agent_bridge_enabled: false,
     agent_bridge_url: 'http://127.0.0.1:17831',

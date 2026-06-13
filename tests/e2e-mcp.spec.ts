@@ -59,7 +59,7 @@ test.beforeAll(async () => {
                 detail_time_display_mode: 'system',
                 export_capture_directory: '',
                 export_log_directory: '',
-                export_filename_template: 'capture_all_{capture_id}_{date}.{ext}',
+                export_filename_template: 'capture_{date}.{ext}',  // P0.60 新默认模板
                 export_save_as: true,
                 agent_bridge_enabled: true,
                 agent_bridge_url: cfg.url,

@@ -9,6 +9,80 @@
 
 ## P0 · 功能缺陷（待修复）
 
+### ⛔ P0.46 导出入口与 SW action 契约断裂，测试只做源码审计导致漏检
+- **状态**：待修复 — 2026-06-13
+- **触发日志**：`data/` 新日志中出现 `Export failed "Unknown action"`
+- **现象**：无法正常导出采集记录。popup 上的导出与采集记录面板里的导出报错不一致。
+- **直接根因**：导出入口发送的 message action 与 `src/background/service_worker.ts` 注册的 action 不一致。真实问题中 UI 侧发送 `action: 'get_capture_data'`，但 SW 只处理：
+  ```typescript
+  case 'get_session_data':
+      return get_capture_data(message.session_id);
+  ```
+  `get_capture_data` 是 SW 内部函数名，不是公开 message action。发到 SW 后落入 default，返回 `{ success: false, error: 'Unknown action' }`。
+- **为什么 popup 和采集记录面板报错不一样**：
+  1. popup 路径先在 message routing 层失败，收到 `Unknown action`，所以提示导出失败/未知 action
+  2. dashboard/detail 路径可能走旧的 `get_session_data` 或其他导出 action，进入后续数据组装/ZIP 构建/响应字段读取阶段，失败点不同，错误文案也不同
+  3. 三个导出入口（popup/dashboard/detail）各自硬编码 action 和响应读取字段，没有共享契约，错误不会统一
+- **测试为什么没有发现**：
+  1. `tests/popup_export.test.ts` 主要是 `readFileSync + toMatch` 源码正则，只验证源码里出现 `action: 'get_session_data'`、`download_blob`、`build_capture_filename` 等字符串，不触发真实 click handler，不捕获实际 `chrome.runtime.sendMessage` 参数
+  2. `tests/archive_entry.test.ts`、`tests/entry_unification.test.ts` 只验证入口 import 了 `build_archive` / `download_blob`，不验证运行时是否调用、不验证 action 是否被 SW 处理
+  3. `tests/export_utils.test.ts` 只测 `download_blob()`、文件名、目录记录等工具函数；P0.40/P0.45 入口统一部分仍是源码正则审计
+  4. `tests/live_data_queries.test.ts` 在测试文件里重新实现了 `get_capture_data()`，直接调 mock 存储层，完全绕过 `service_worker.ts` 的 `handle_message` switch
+  5. `tests/export_integrity.test.ts` 使用手写 fixture，不来自真实 `get_session_data -> build_archive -> download_blob` 链路
+  6. `tests/e2e-export.spec.ts` / `tests/e2e-export-content.spec.ts` 主要覆盖 dashboard 的 JSON/HAR/HTML 等导出，不覆盖 popup ZIP 导出按钮
+  7. `tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` 的断言文案写成 `get_capture_data 应成功`，但实际 action 应为 `get_session_data`，文案本身会误导排查
+- **高风险测试反模式**：
+  1. **源码正则审计替代行为测试**：字符串存在不等于该字符串在正确 handler 中被使用
+  2. **纯函数测试断链**：`build_archive()`、`download_blob()` 都可通过，但 UI 入口拿不到数据仍会失败
+  3. **mock 过宽**：`chrome.runtime.sendMessage` 或模拟函数不校验 action，任何 action 都可返回 success
+  4. **测试自测自**：测试复制生产逻辑，未调用真实 SW 路由
+  5. **硬编码 fixture**：导出数据结构由测试手写，无法发现真实返回字段漂移
+- **需要改什么**：
+  1. 把 popup/dashboard/detail 所有 ZIP 完整包导出入口统一为发送 `action: 'get_session_data'`
+  2. 不要把内部函数名 `get_capture_data` 当 message action 使用
+  3. 增加 UI action 集合与 SW handler 集合的契约测试：UI 发出的每个 action 必须被 `service_worker.ts` 处理
+  4. 增加 `get_session_data` 返回形状测试：返回值必须满足 `build_archive()` 需要的数据结构
+  5. 增加 popup 导出行为测试：点击完成态 `#exportBtn` 后实际发送 `get_session_data`，拿到数据后调用 `build_archive()` 和 `download_blob()`
+  6. 增加 dashboard/detail ZIP 导出行为测试：确认 action、response 字段、ZIP 构建输入一致
+  7. 修正 E2E 断言文案：`get_capture_data 应成功` → `get_session_data 应成功`
+  8. 逐步替换导出相关 `readFileSync + toMatch` 测试为行为测试；保留源码审计只能作为补充，不能作为主保护
+- **怎么改（最小路径）**：
+  1. 新增 `tests/sw_action_contract.test.ts`
+     - 从 `src/popup/popup.ts`、`src/dashboard/dashboard.ts`、`src/detail/detail.ts` 提取 `chrome.runtime.sendMessage({ action: '...' })`
+     - 从 `src/background/service_worker.ts` 提取 `case '...'`
+     - 断言 UI action 集合是 SW case 集合子集
+     - 断言不存在 `get_capture_data` 作为 UI action
+  2. 新增/改造 `tests/popup_export.test.ts`
+     - mock `chrome.runtime.sendMessage`
+     - 构造 finished capture 状态
+     - 触发 `#exportBtn.click()`
+     - 断言第一条 message 为 `{ action: 'get_session_data', session_id: finished_capture.capture_id }`
+     - mock 成功响应后断言 `download_blob()` 被调用，文件名为 `.zip`
+  3. 新增 `tests/export_action_response_contract.test.ts`
+     - 覆盖 `get_session_data` 返回 `success`、`capture/session`、`events`、`network_requests`、`console_events/console_logs`、`error_events`、`storage_changes`、`cookie_changes`
+     - 覆盖 `export_json` 返回 `json`、`export_jsonl` 返回 `jsonl`、`export_html` 返回 `html`、`export_har` 返回 `har`
+     - 断言前端读取字段与 SW 返回字段完全一致
+  4. 改 E2E：新增 `tests/e2e-popup-export.spec.ts`
+     - start capture → stop capture → popup 完成态点击导出 → 监听下载 → 验证 `.zip` 文件存在且可解包
+     - ZIP 至少包含 `capture.json`/`README`/`network_requests.jsonl`（按当前 archive_builder 实际产物命名断言）
+  5. 修正现有误导文案：`tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` 中 `get_capture_data 应成功` 改为 `get_session_data 应成功`
+- **验收标准**：
+  1. `npm test -- tests/sw_action_contract.test.ts tests/popup_export.test.ts tests/export_action_response_contract.test.ts` 通过
+  2. `npm run test:e2e -- --project=e2e-p0 tests/e2e-popup-export.spec.ts` 通过
+  3. 手动从 popup、dashboard、detail 三处导出同一采集记录，三处都成功下载 ZIP
+  4. 任意 UI action 改成未注册字符串时，契约测试必须失败
+  5. 任意 SW 导出响应字段改名时，对应前端契约测试必须失败
+- **影响文件**：
+  - `src/popup/popup.ts` — ZIP 导出 action 与 response 读取
+  - `src/dashboard/dashboard.ts` — ZIP 导出 action 与 response 读取
+  - `src/detail/detail.ts` — ZIP 导出 action 与 response 读取
+  - `src/background/service_worker.ts` — action 注册与导出响应字段
+  - `tests/popup_export.test.ts` — 从源码正则改为行为测试
+  - `tests/sw_action_contract.test.ts` — 新增 action 集合契约测试
+  - `tests/export_action_response_contract.test.ts` — 新增响应字段契约测试
+  - `tests/e2e-popup-export.spec.ts` — 新增 popup ZIP 导出 E2E
+  - `tests/e2e-baidu.spec.ts`、`tests/e2e-toutiao.spec.ts`、`tests/e2e-sina.spec.ts`、`tests/e2e-qq.spec.ts` — 修正断言文案
+
 ### ✅ P0.45 二进制响应体被丢弃 + 新增 ZIP 完整包导出
 - **状态**：已实现 — 2026-06-13
 - **详细设计**：`docs/superpowers/specs/2026-06-13-zip-archive-export-design.md`

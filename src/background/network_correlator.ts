@@ -39,6 +39,12 @@ export interface WebRequestMeta {
 
 const MATCH_WINDOW_MS = 2000;
 
+function get_mime_type(headers: Record<string, string>): string | null {
+    const ct = headers['content-type'] || headers['Content-Type'] || null;
+    if (!ct) return null;
+    return ct.split(';')[0].trim() || null;
+}
+
 export function correlate(
     web_meta: WebRequestMeta,
     cdp_event: CdpBodyEvent
@@ -90,7 +96,7 @@ export function merge_matched(
         response_body_status: cdp_event.response_body_status,
         response_body_encoding: cdp_event.response_body ? 'utf8' : null,
         response_body_bytes: cdp_event.response_body ? new TextEncoder().encode(cdp_event.response_body).length : null,
-        mime_type: null,
+        mime_type: get_mime_type(web_meta.response_headers || cdp_event.response_headers),
         request_size_bytes: null,
         response_size_bytes: null,
         transfer_size_bytes: null,
@@ -143,7 +149,7 @@ export function build_cdp_only_request(
         response_body_status: cdp_event.response_body_status,
         response_body_encoding: cdp_event.response_body ? 'utf8' : null,
         response_body_bytes: cdp_event.response_body ? new TextEncoder().encode(cdp_event.response_body).length : null,
-        mime_type: null,
+        mime_type: get_mime_type(cdp_event.response_headers),
         request_size_bytes: null,
         response_size_bytes: null,
         transfer_size_bytes: null,
@@ -188,7 +194,7 @@ export function build_web_request_only_request(web_meta: WebRequestMeta): Networ
         response_body_status: 'not_enabled',
         response_body_encoding: null,
         response_body_bytes: null,
-        mime_type: null,
+        mime_type: get_mime_type(web_meta.response_headers),
         request_size_bytes: null,
         response_size_bytes: null,
         transfer_size_bytes: null,

@@ -60,6 +60,7 @@ interface PendingRequest {
     request_body: string | null;
     request_body_status: BodyCaptureStatus;
     resource_type: string;
+    mime_type: string | null;
 }
 const pending_requests: Map<string, PendingRequest> = new Map();
 export const _pending_requests_for_test = pending_requests;
@@ -76,6 +77,7 @@ interface CdpRequestMeta {
     request_body: string | null;
     request_body_status: BodyCaptureStatus;
     request_body_mime: string | null;
+    mime_type: string | null;
 }
 const cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
 export const _cdp_request_meta_for_test = cdp_request_meta;
@@ -275,6 +277,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 request_body: req_body,
                 request_body_status: req_body_status,
                 request_body_mime,
+                mime_type: null,
             });
         }
     }
@@ -282,9 +285,12 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     if (method === 'Network.responseReceived') {
         const response = params?.response;
         const existing = cdp_request_meta.get(req_id);
+        const resp_headers = headers_map_from_cdp(response?.headers || {});
+        const mime = extract_mime_type(resp_headers);
         if (existing) {
             existing.status_code = response?.status || 0;
-            existing.response_headers = headers_map_from_cdp(response?.headers || {});
+            existing.response_headers = resp_headers;
+            existing.mime_type = mime;
         } else {
             // Response arrived before request event (unusual but possible)
             cdp_request_meta.set(req_id, {
@@ -292,12 +298,13 @@ function handle_cdp_event(source: any, method: string, params: any): void {
                 method: '',
                 status_code: response?.status || 0,
                 resource_type: resolve_resource_type(params?.type || 'other'),
-                response_headers: headers_map_from_cdp(response?.headers || {}),
+                response_headers: resp_headers,
                 request_headers: {},
                 timestamp: Date.now(),
                 request_body: null,
                 request_body_status: 'not_enabled',
                 request_body_mime: null,
+                mime_type: mime,
             });
         }
     }
@@ -472,6 +479,12 @@ function headers_map_from_cdp(headers: Record<string, string>): Record<string, s
     return { ...headers };
 }
 
+function extract_mime_type(headers: Record<string, string>): string | null {
+    const ct = headers['content-type'] || headers['Content-Type'] || null;
+    if (!ct) return null;
+    return ct.split(';')[0].trim() || null;
+}
+
 // ─── webRequest handlers ───
 
 export function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
@@ -582,7 +595,8 @@ function handle_before_request(details: any): void {
         response_headers: {},
         request_body: body,
         request_body_status: status,
-        resource_type: details.type || 'other'
+        resource_type: details.type || 'other',
+        mime_type: null,
     };
 
     pending_requests.set(details.requestId, pending);
@@ -608,6 +622,7 @@ function handle_headers_received(details: any): void {
     const headers = headers_array_to_map(details.responseHeaders);
     pending.response_headers = (config.redact_data && config.redact_sensitive_headers)
         ? redact_headers(headers, true).headers : headers;
+    pending.mime_type = extract_mime_type(pending.response_headers);
 }
 
 function build_network_event(
@@ -662,7 +677,7 @@ function build_network_event(
         response_body_status,
         response_body_encoding: null,
         response_body_bytes: null,
-        mime_type: null,
+        mime_type: pending.mime_type,
         request_size_bytes: null,
         response_size_bytes: null,
         transfer_size_bytes: null,
@@ -731,7 +746,7 @@ function build_cdp_primary_network_event(
         response_body_status: body_result.status,
         response_body_encoding: body_result.encoding ?? null,
         response_body_bytes: body_result.byte_size ?? null,
-        mime_type: null,
+        mime_type: meta.mime_type,
         request_size_bytes: null,
         response_size_bytes: null,
         transfer_size_bytes: null,

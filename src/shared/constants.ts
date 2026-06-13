@@ -19,8 +19,8 @@ export const STORE_NAMES = {
 
 export const MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 export const MAX_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-export const MAX_REQUEST_BODY_BYTES = 1024 * 1024; // 1MB
-export const MAX_RESPONSE_BODY_BYTES = 1024 * 1024; // 1MB
+export const MAX_BODY_CAPTURE_BYTES = 100 * 1024 * 1024; // 100MB
+export const INLINE_TEXT_MAX_BYTES = 32 * 1024; // 32KB
 export const MAX_CONSOLE_ARG_BYTES = 1024; // 1KB
 export const MAX_TARGET_TEXT_CHARS = 100;
 export const FLUSH_BATCH_SIZE = 100;
@@ -34,8 +34,8 @@ export const DEFAULT_CONFIG: RecordConfig = {
     capture_input_values: true,
     capture_request_body: true,
     capture_response_body: true,
-    max_request_body_bytes: MAX_REQUEST_BODY_BYTES,
-    max_response_body_bytes: MAX_RESPONSE_BODY_BYTES,
+    max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
+    inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_sensitive_headers: true,
     redact_url_query: true,
     redact_data: true,
@@ -48,8 +48,8 @@ export const DEFAULT_USER_CONFIG = {
     capture_input_values: true,
     capture_request_body: true,
     capture_response_body: true,
-    max_request_body_bytes: MAX_REQUEST_BODY_BYTES,
-    max_response_body_bytes: MAX_RESPONSE_BODY_BYTES,
+    max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
+    inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_data: true,
     theme: 'follow-system' as const,
     locale: 'en' as const,

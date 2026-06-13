@@ -262,9 +262,14 @@ export interface NetworkRequestData {
     headers_status: 'captured' | 'redacted';
     request_body: string | null;
     request_body_status: BodyCaptureStatus;
+    request_body_encoding: 'utf8' | 'base64' | null;
+    request_body_bytes: number | null;
+    request_body_mime: string | null;
     response_body: string | null;
     response_preview: string | null;
     response_body_status: BodyCaptureStatus;
+    response_body_encoding: 'utf8' | 'base64' | null;
+    response_body_bytes: number | null;
     mime_type: string | null;
     request_size_bytes: number | null;
     response_size_bytes: number | null;
@@ -495,8 +500,8 @@ export interface RecordConfig {
     capture_input_values: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
-    max_request_body_bytes: number;
-    max_response_body_bytes: number;
+    max_body_capture_bytes: number;
+    inline_text_max_bytes: number;
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
     redact_data: boolean;
@@ -513,8 +518,8 @@ export interface UserConfig {
     capture_input_values: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
-    max_request_body_bytes: number;
-    max_response_body_bytes: number;
+    max_body_capture_bytes: number;
+    inline_text_max_bytes: number;
     redact_data: boolean;
     theme: ThemeMode;
     locale: string;

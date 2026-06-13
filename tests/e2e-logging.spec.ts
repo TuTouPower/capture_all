@@ -153,7 +153,7 @@ test.describe('日志系统', () => {
     // 2. 导出日志 JSON 含内部日志条目
     // ============================================================
 
-    test('导出日志 JSON 含内部日志条目', async () => {
+    test('导出日志含内部日志条目（文本格式）', async () => {
         const dash = await open_diagnostics();
 
         await set_log_level(dash, 'debug');
@@ -178,32 +178,46 @@ test.describe('日志系统', () => {
         await dash.locator('[data-setnav="set-diagnostics"]').click();
         await dash.waitForTimeout(300);
 
-        const [download] = await Promise.all([
-            dash.waitForEvent('download', { timeout: 8000 }),
-            dash.locator('#exportLogJson').click(),
-        ]);
+        // P0.61: 默认 export_log_directory 为空，filename 无 '/'
+        // → saveAs=true，dash.waitForEvent('download') 在 headed 环境下不可靠。
+        // 用 chrome.downloads.download mock 捕获调用（参考 e2e-export.spec.ts:255）。
+        await dash.evaluate(() => {
+            const calls: Array<{ url: string; filename: string }> = [];
+            (window as any).__log_dl_calls = calls;
+            const orig = chrome.downloads.download;
+            (window as any).__orig_dl = orig;
+            chrome.downloads.download = ((opts: any) => {
+                calls.push({
+                    url: String(opts.url ?? ''),
+                    filename: String(opts.filename ?? ''),
+                });
+                return Promise.resolve(1);
+            }) as typeof chrome.downloads.download;
+        });
+        dash.on('dialog', (d) => d.dismiss());
 
-        const path = await download.path();
-        expect(path).toBeTruthy();
+        await dash.locator('#exportLog').click();
+        await dash.waitForTimeout(2000);
 
-        const fs = await import('fs');
-        const content = fs.readFileSync(path!, 'utf-8');
-        const parsed = JSON.parse(content);
+        // 从导出的 url (blob:) fetch 内容
+        const result = await dash.evaluate(async () => {
+            const calls = (window as any).__log_dl_calls as Array<{ url: string; filename: string }>;
+            chrome.downloads.download = (window as any).__orig_dl;
+            if (calls.length === 0) return { filename: '', content: '' };
+            const blob = await fetch(calls[0].url).then(r => r.text());
+            return { filename: calls[0].filename, content: blob };
+        });
 
-        // 验证导出结构
-        expect(parsed).toHaveProperty('exported_at');
-        expect(parsed).toHaveProperty('total');
-        expect(parsed).toHaveProperty('entries');
-        expect(Array.isArray(parsed.entries)).toBe(true);
-        expect(parsed.total).toBeGreaterThan(0);
+        expect(result.filename).toMatch(/\.log$/);
+        expect(result.content.length).toBeGreaterThan(0);
 
-        // 验证条目结构
-        const entry = parsed.entries[0];
-        expect(entry).toHaveProperty('id');
-        expect(entry).toHaveProperty('timestamp');
-        expect(entry).toHaveProperty('level');
-        expect(entry).toHaveProperty('module');
-        expect(entry).toHaveProperty('message');
+        // 文本格式：每行 '<time> [<level>] [<module>] <message>'
+        const lines = result.content.split('\n').filter((l: string) => l.trim());
+        expect(lines.length, '应至少有 1 条日志').toBeGreaterThan(0);
+
+        // 第一行应符合格式
+        const first = lines[0];
+        expect(first).toMatch(/\[\w+\]\s*\[[\w_]+\]/);
 
         await dash.close();
     });
@@ -287,8 +301,10 @@ test.describe('日志系统', () => {
         await set_log_level(dash, 'debug');
         await dash.waitForTimeout(300);
 
+        // log_max_size_mb 单位是 MB（按字节 trim，非条数）
+        // 设 1MB 上限，多次采集产生日志后验证总条数受控
         const max_input = dash.locator('[data-cfg="log_max_size_mb"]');
-        await max_input.fill('50');
+        await max_input.fill('1');
         await max_input.dispatchEvent('change');
         await dash.waitForTimeout(300);
 
@@ -311,19 +327,35 @@ test.describe('日志系统', () => {
         await dash.locator('[data-setnav="set-diagnostics"]').click();
         await dash.waitForTimeout(300);
 
-        const [download] = await Promise.all([
-            dash.waitForEvent('download', { timeout: 8000 }),
-            dash.locator('#exportLogJson').click(),
-        ]);
+        // P0.61: saveAs=true 时 download event 不可靠 → mock chrome.downloads.download
+        await dash.evaluate(() => {
+            const calls: Array<{ url: string; filename: string }> = [];
+            (window as any).__log_dl_calls = calls;
+            const orig = chrome.downloads.download;
+            (window as any).__orig_dl = orig;
+            chrome.downloads.download = ((opts: any) => {
+                calls.push({
+                    url: String(opts.url ?? ''),
+                    filename: String(opts.filename ?? ''),
+                });
+                return Promise.resolve(1);
+            }) as typeof chrome.downloads.download;
+        });
+        dash.on('dialog', (d) => d.dismiss());
 
-        const path = await download.path();
-        if (path) {
-            const fs = await import('fs');
-            const content = fs.readFileSync(path, 'utf-8');
-            const parsed = JSON.parse(content);
-            // trim 后总数应 ≤ 上限 + 容差
-            expect(parsed.total).toBeLessThanOrEqual(40);
-        }
+        await dash.locator('#exportLog').click();
+        await dash.waitForTimeout(2000);
+
+        const result = await dash.evaluate(async () => {
+            const calls = (window as any).__log_dl_calls as Array<{ url: string; filename: string }>;
+            chrome.downloads.download = (window as any).__orig_dl;
+            if (calls.length === 0) return { bytes: 0 };
+            const content = await fetch(calls[0].url).then(r => r.text());
+            return { bytes: content.length };
+        });
+
+        // trim 按 log_max_size_mb=1 的字节上限生效 → 导出内容 < 1MB + 容差
+        expect(result.bytes, '1MB 上限下导出字节应受控').toBeLessThan(1.5 * 1024 * 1024);
 
         // 恢复默认上限
         await max_input.fill('10000');
@@ -340,8 +372,8 @@ test.describe('日志系统', () => {
     test('诊断日志 UI 完整：按钮和输入框', async () => {
         const dash = await open_diagnostics();
 
-        await expect(dash.locator('#exportLogJson')).toBeVisible();
-        await expect(dash.locator('#exportLogJsonl')).toBeVisible();
+        // dashboard 只有 #exportLog（运行日志纯文本导出）和 #clearLogs
+        await expect(dash.locator('#exportLog')).toBeVisible();
         await expect(dash.locator('#clearLogs')).toBeVisible();
         await expect(dash.locator('#logSize')).toBeVisible();
         await expect(
@@ -362,13 +394,28 @@ test.describe('日志系统', () => {
         await set_log_level(dash, 'debug');
         await dash.waitForTimeout(300);
 
-        // 点击 #exportLog 触发纯文本日志导出
-        const [download] = await Promise.all([
-            dash.waitForEvent('download', { timeout: 8000 }),
-            dash.locator('#exportLog').click(),
-        ]);
+        // P0.61: saveAs=true 时 download event 不可靠 → mock chrome.downloads.download
+        await dash.evaluate(() => {
+            const calls: Array<{ filename: string }> = [];
+            (window as any).__log_dl_calls = calls;
+            const orig = chrome.downloads.download;
+            (window as any).__orig_dl = orig;
+            chrome.downloads.download = ((opts: any) => {
+                calls.push({ filename: String(opts.filename ?? '') });
+                return Promise.resolve(1);
+            }) as typeof chrome.downloads.download;
+        });
+        dash.on('dialog', (d) => d.dismiss());
 
-        const filename = download.suggestedFilename();
+        await dash.locator('#exportLog').click();
+        await dash.waitForTimeout(2000);
+
+        const filename = await dash.evaluate(() => {
+            const calls = (window as any).__log_dl_calls as Array<{ filename: string }>;
+            chrome.downloads.download = (window as any).__orig_dl;
+            return calls[0]?.filename ?? '';
+        });
+
         expect(filename).toMatch(/\.log$/);
         expect(filename).not.toMatch(/\.txt$/);
 

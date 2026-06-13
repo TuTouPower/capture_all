@@ -28,7 +28,7 @@ class MockChromeDebugger {
     private command_errors: Map<string, Error> = new Map();
     private _attach_count = 0;
     private _detach_count = 0;
-    private _send_command_calls: Array<{ tabId: number; command: string; params: any }> = [];
+    private _send_command_calls: Array<{ tabId: number; sessionId?: string; command: string; params: any }> = [];
     private _last_attached_tab_id: number | null = null;
     private _last_detached_tab_id: number | null = null;
 
@@ -54,7 +54,7 @@ class MockChromeDebugger {
     }
 
     sendCommand(target: { tabId: number; sessionId?: string }, command: string, params?: any): Promise<any> {
-        this._send_command_calls.push({ tabId: target.tabId, command, params: params || {} });
+        this._send_command_calls.push({ tabId: target.tabId, sessionId: target.sessionId, command, params: params || {} });
 
         if (this.command_errors.has(command)) {
             return Promise.reject(this.command_errors.get(command)!);
@@ -116,7 +116,7 @@ class MockChromeDebugger {
 
     get attach_count(): number { return this._attach_count; }
     get detach_count(): number { return this._detach_count; }
-    get send_command_calls(): Array<{ tabId: number; command: string; params: any }> { return [...this._send_command_calls]; }
+    get send_command_calls(): Array<{ tabId: number; sessionId?: string; command: string; params: any }> { return [...this._send_command_calls]; }
     get last_attached_tab_id(): number | null { return this._last_attached_tab_id; }
     get last_detached_tab_id(): number | null { return this._last_detached_tab_id; }
     get listener_count(): number { return this.listeners.length; }

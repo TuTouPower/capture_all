@@ -6,7 +6,7 @@ import { init_theme } from '../shared/theme';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
-import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
+import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { Logger } from '../shared/logger';
@@ -286,7 +286,6 @@ function wire_view(): void {
                 system_time_timezone: user_config.system_time_timezone,
             });
             const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
-            const { capture_dir } = await load_last_export_dirs();
             const filename = build_capture_filename(
                 {
                     export_capture_directory: user_config.export_capture_directory,
@@ -295,10 +294,8 @@ function wire_view(): void {
                 },
                 finished_capture.capture_id,
                 'zip',
-                capture_dir,
             );
-            const download_id = await download_blob(blob, filename, { save_as: true });
-            track_export_dir(download_id, 'capture');
+            await download_blob(blob, filename, { save_as: true });
         } catch (e) {
             logger.error('Export message failed', e);
             alert(`${t('error')}: ${e}`);

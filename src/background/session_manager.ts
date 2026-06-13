@@ -22,7 +22,6 @@ export async function start_capture(config: CaptureConfig = DEFAULT_CONFIG): Pro
         capture_id: generate_capture_id(),
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
-        mode: 'standard',
         started_at: now_iso,
         ended_at: null,
         duration_ms: 0,

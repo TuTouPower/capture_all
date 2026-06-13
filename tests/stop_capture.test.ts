@@ -114,7 +114,6 @@ function make_capture(overrides: Partial<CaptureRecord> = {}): CaptureRecord {
         capture_id: 'test-capture-001',
         name: 'Test Capture',
         status: 'capturing',
-        mode: 'standard',
         started_at: new Date(1000).toISOString(),
         ended_at: null,
         duration_ms: 0,

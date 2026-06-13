@@ -15,7 +15,6 @@ function create_capture_record(opts: {
         capture_id: opts.session_id,
         name: 'Capture ' + new Date().toLocaleString(),
         status: 'capturing',
-        mode: 'standard',
         started_at: now_iso,
         ended_at: null,
         duration_ms: 0,

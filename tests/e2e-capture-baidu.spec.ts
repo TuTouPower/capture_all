@@ -75,7 +75,8 @@ test.describe('百度全开采集 — 字段结构验证', () => {
         // === CaptureRecord 字段 ===
         expect(data.capture_id, 'capture_id 应匹配').toBe(capture_id);
         expect(data.capture.status, 'status 应为 completed').toBe('completed');
-        expect(data.capture.mode, 'mode 应为 standard').toBe('standard');
+        // BUG-001 回归：mode 字段已废弃，归档不应包含
+        expect(data.capture.mode, 'mode 应已移除').toBeUndefined();
         expect(Array.isArray(data.capture.tags), 'tags 应为数组').toBe(true);
         expect(data.capture.tags.length, 'tags 应至少 1 项').toBeGreaterThan(0);
         expect(data.capture.started_at, 'started_at 应存在').toBeTruthy();

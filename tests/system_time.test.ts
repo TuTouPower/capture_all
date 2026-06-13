@@ -18,7 +18,6 @@ const capture: CaptureRecord = {
     capture_id: 'capture_1',
     name: 'capture_1',
     status: 'completed',
-    mode: 'standard',
     started_at: '2024-01-01T00:00:00.000Z',
     ended_at: '2024-01-01T00:01:00.000Z',
     duration_ms: 60000,

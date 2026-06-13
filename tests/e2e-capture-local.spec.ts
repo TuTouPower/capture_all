@@ -162,7 +162,8 @@ test.describe.serial('本地页面全开采集 — 字段结构 + 精确内容',
         expect(data.capture, '导出应包含 capture').toBeDefined();
         expect(data.capture_id, 'capture_id 应匹配').toBe(capture_id);
         expect(data.capture.status, 'status 应为 completed').toBe('completed');
-        expect(data.capture.mode, 'mode 应为 standard').toBe('standard');
+        // BUG-001 回归：mode 字段已废弃，归档不应包含
+        expect(data.capture.mode, 'mode 应已移除').toBeUndefined();
         expect(typeof data.capture.started_at, 'started_at 应为 string').toBe('string');
         expect(typeof data.capture.ended_at, 'ended_at 应为 string').toBe('string');
         expect(data.capture.duration_ms, 'duration_ms 应 > 0').toBeGreaterThan(0);

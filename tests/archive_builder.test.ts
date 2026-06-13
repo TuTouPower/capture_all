@@ -136,6 +136,77 @@ describe('render_readme', () => {
     });
 });
 
+// BUG-002 回归：jsonl 文件必须以换行符结尾，否则标准工具
+// （wc -l、grep -c、文本编辑器）计行数比实际少 1，导致与
+// manifest.counts 不一致。POSIX 文本规范要求每行以 \n 结尾。
+describe('build_archive — jsonl 末尾换行符契约', () => {
+    function count_lines(bytes: Uint8Array): number {
+        // 模拟 wc -l：数 \n 字节数
+        let n = 0;
+        for (let i = 0; i < bytes.length; i++) {
+            if (bytes[i] === 0x0a) n++;
+        }
+        return n;
+    }
+
+    it('network.jsonl 行数 = manifest.counts.network（末尾换行符存在）', async () => {
+        const reqs = [make_req(), make_req({ request_id: 'r2' }), make_req({ request_id: 'r3' })];
+        const archive = await build_archive(
+            {
+                capture: make_capture(),
+                events: [],
+                network_requests: reqs,
+                console_events: [],
+            },
+            { inline_text_max_bytes: INLINE, system_time_timezone: 'browser' },
+        );
+        const unzipped = unzipSync(archive);
+        const manifest = JSON.parse(strFromU8(unzipped['manifest.json']));
+        const network_jsonl = unzipped['network.jsonl'];
+        const line_count = count_lines(network_jsonl);
+        // 修复前：join('\n') 不加末尾换行，3 行数组只有 2 个 \n，wc -l=2 ≠ counts.network=3
+        // 修复后：末尾追加 \n，3 行 = 3 个 \n，wc -l=3 = counts.network
+        expect(line_count).toBe(manifest.counts.network);
+    });
+
+    it('events.jsonl 行数 = manifest.counts.events', async () => {
+        const events = [
+            { event_id: 'e1', capture_id: 'cap1', category: 'navigation', type: 'load' },
+            { event_id: 'e2', capture_id: 'cap1', category: 'navigation', type: 'load' },
+        ] as unknown as Parameters<typeof build_archive>[0]['events'];
+        const archive = await build_archive(
+            {
+                capture: make_capture(),
+                events,
+                network_requests: [],
+                console_events: [],
+            },
+            { inline_text_max_bytes: INLINE, system_time_timezone: 'browser' },
+        );
+        const unzipped = unzipSync(archive);
+        const manifest = JSON.parse(strFromU8(unzipped['manifest.json']));
+        const line_count = count_lines(unzipped['events.jsonl']);
+        expect(line_count).toBe(manifest.counts.events);
+    });
+
+    it('空 jsonl（0 条）保持为空文件，不追加换行符', async () => {
+        const archive = await build_archive(
+            {
+                capture: make_capture(),
+                events: [],
+                network_requests: [],
+                console_events: [],
+            },
+            { inline_text_max_bytes: INLINE, system_time_timezone: 'browser' },
+        );
+        const unzipped = unzipSync(archive);
+        // 空文件不应有任何字节（包括换行符）
+        expect(unzipped['console.jsonl'].length).toBe(0);
+        expect(unzipped['network.jsonl'].length).toBe(0);
+        expect(unzipped['events.jsonl'].length).toBe(0);
+    });
+});
+
 describe('build_archive', () => {
     it('produces valid zip with manifest, README, and jsonl files', async () => {
         const archive = await build_archive(
@@ -186,5 +257,31 @@ describe('build_archive', () => {
         );
         expect(png_path).toBeDefined();
         expect(unzipped[png_path!].length).toBe(5);
+    });
+
+    // BUG-001 回归：归档 manifest.capture 不应包含已废弃的 mode 字段。
+    // 历史 IndexedDB 数据可能残留 mode: 'standard'，归档层须过滤，
+    // 防止「已删除概念：模式切换/标准采集」再次流入导出产物。
+    it('strips deprecated mode field from manifest.capture', async () => {
+        // 模拟历史脏数据：capture 对象运行时仍带 mode（类型已删，用 as 绕过）
+        const dirty_capture = make_capture({
+            mode: 'standard' as never,
+        } as Partial<CaptureRecord>);
+        const archive = await build_archive(
+            {
+                capture: dirty_capture,
+                events: [],
+                network_requests: [],
+                console_events: [],
+            },
+            {
+                inline_text_max_bytes: INLINE,
+                system_time_timezone: 'browser',
+            },
+        );
+        const unzipped = unzipSync(archive);
+        const manifest = JSON.parse(strFromU8(unzipped['manifest.json']));
+        expect(manifest.capture).toBeDefined();
+        expect(manifest.capture.mode).toBeUndefined();
     });
 });

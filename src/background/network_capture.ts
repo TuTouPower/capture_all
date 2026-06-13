@@ -311,6 +311,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
 
     if (method === 'Network.loadingFinished') {
         if (dbg_tab_id === null) return;
+        const meta_for_method = cdp_request_meta.get(req_id);
+        const http_method = meta_for_method?.method?.toUpperCase() || '';
         chrome.dbg.sendCommand(
             { tabId: dbg_tab_id },
             'Network.getResponseBody',
@@ -323,7 +325,10 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             let byte_size: number | null = null;
 
             if (!result || typeof result.body !== 'string') {
-                logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result' });
+                // OPTIONS/HEAD typically have no body — not an error
+                body_status = (http_method === 'OPTIONS' || http_method === 'HEAD')
+                    ? 'not_enabled' : 'cdp_failed';
+                logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result', method: http_method });
             } else if (result.base64Encoded) {
                 byte_size = base64_decoded_size(result.body);
                 encoding = 'base64';
@@ -366,9 +371,16 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             try_resolve_deferred(req_id);
             schedule_orphan_check(req_id);
         }).catch((err: any) => {
-            const fail_result: CdpBodyResult = { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
+            // -32000 = "No resource with given identifier" (resource already released)
+            // OPTIONS/HEAD have no body by spec
+            const err_msg = String(err?.message || err) || '';
+            const is_resource_released = err_msg.includes('-32000') || err_msg.includes('No resource');
+            const is_no_body_method = http_method === 'OPTIONS' || http_method === 'HEAD';
+            const status: BodyCaptureStatus = (is_resource_released || is_no_body_method)
+                ? 'not_enabled' : 'cdp_failed';
+            const fail_result: CdpBodyResult = { body: null, status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
             cdp_body_results.set(req_id, fail_result);
-            logger.debug('get_body_error', { req_id, error: String(err)?.slice(0, 100) });
+            logger.debug('get_body_error', { req_id, error: err_msg.slice(0, 100), status });
 
             // CDP-first: emit even on failure (status will be cdp_failed)
             const meta = cdp_request_meta.get(req_id);
@@ -386,7 +398,11 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     }
 
     if (method === 'Network.loadingFailed') {
-        cdp_body_results.set(req_id, { body: null, status: 'cdp_failed', timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
+        const fail_meta = cdp_request_meta.get(req_id);
+        const fail_method = fail_meta?.method?.toUpperCase() || '';
+        const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
+            ? 'not_enabled' : 'cdp_failed';
+        cdp_body_results.set(req_id, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
         try_resolve_deferred(req_id);
         schedule_orphan_check(req_id);
     }

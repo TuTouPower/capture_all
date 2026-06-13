@@ -53,7 +53,7 @@ class MockChromeDebugger {
         return Promise.resolve();
     }
 
-    sendCommand(target: { tabId: number }, command: string, params?: any): Promise<any> {
+    sendCommand(target: { tabId: number; sessionId?: string }, command: string, params?: any): Promise<any> {
         this._send_command_calls.push({ tabId: target.tabId, command, params: params || {} });
 
         if (this.command_errors.has(command)) {

@@ -8,6 +8,7 @@ import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename, build_log_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
+import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
@@ -170,12 +171,20 @@ async function load_detail(id: string): Promise<void> {
     if (!is_extension) return;
     try {
         const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
-        if (r?.success) {
-            detail_capture = r.capture;
-            detail_events = (r.events || []).slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
-            detail_network = r.network_requests || [];
-            detail_console = r.console_logs || [];
-        }
+        if (!r?.success) return;
+        detail_capture = r.capture;
+
+        const snapshot = await read_capture_snapshot(id);
+        detail_events = [
+            ...snapshot.user_events,
+            ...snapshot.nav_events,
+            ...snapshot.error_events,
+            ...snapshot.storage_changes,
+            ...snapshot.cookie_changes,
+        ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
+        detail_network = snapshot.network_requests;
+        detail_console = snapshot.console_events;
+
         logger.debug('Detail loaded', { capture_id: id, events: detail_events.length });
     } catch { /* best effort */ }
 }
@@ -357,9 +366,20 @@ async function export_capture(id: string, format: string = 'archive'): Promise<v
     if (!is_extension) return;
     try {
         if (format === 'archive') {
-            const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
-            if (!r?.success) { alert('导出失败'); return; }
-            const archive = await build_archive(r, {
+            const snapshot = await read_capture_snapshot(id);
+            if (!snapshot.capture) { alert('导出失败'); return; }
+            const archive = await build_archive({
+                capture: snapshot.capture,
+                events: [
+                    ...snapshot.user_events,
+                    ...snapshot.nav_events,
+                    ...snapshot.error_events,
+                    ...snapshot.storage_changes,
+                    ...snapshot.cookie_changes,
+                ],
+                network_requests: snapshot.network_requests,
+                console_events: snapshot.console_events,
+            }, {
                 inline_text_max_bytes: user_config.inline_text_max_bytes,
                 system_time_timezone: user_config.system_time_timezone,
             });

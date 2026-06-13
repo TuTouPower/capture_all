@@ -3,7 +3,6 @@ import {
     init_db, flush_all,
     get_capture, list_captures as storage_list_captures,
     delete_capture as storage_delete_capture,
-    get_events_by_category, get_network_requests, get_console_events,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
     start_periodic_flush, stop_periodic_flush,
@@ -184,53 +183,9 @@ async function get_capture_data(capture_id: string): Promise<any> {
     // every FLUSH_INTERVAL_MS) are consistent for the caller.
     await flush_all();
 
-    const [user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
-        get_events_by_category(capture_id, 'user_action', 0, 100000),
-        get_events_by_category(capture_id, 'navigation', 0, 100000),
-        get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000),
-        get_events_by_category(capture_id, 'error', 0, 100000),
-        get_events_by_category(capture_id, 'storage', 0, 100000),
-        get_events_by_category(capture_id, 'cookie', 0, 100000)
-    ]);
-
-    // Include network and console events in the events array for timeline display
-    const network_events = network_requests.map(nr => ({
-        event_id: nr.event_id || `net_${nr.request_id}`,
-        capture_id: nr.capture_id || capture_id,
-        category: 'network' as const,
-        type: 'network_request' as const,
-        relative_time_ms: nr.start_time_ms ?? 0,
-        absolute_time: '',
-        tab_id: nr.tab_id || 0,
-        frame_id: 0,
-        url: nr.url_status === 'redacted' ? '' : nr.url,
-        data: nr,
-    }));
-    const console_events_mapped = console_events.map(ce => ({
-        event_id: ce.event_id || `con_${Math.random().toString(36).slice(2, 9)}`,
-        capture_id: ce.capture_id || capture_id,
-        category: 'console' as const,
-        type: 'console_event' as const,
-        relative_time_ms: 0,
-        absolute_time: '',
-        tab_id: 0,
-        frame_id: 0,
-        url: ce.source_url || '',
-        data: ce,
-    }));
-    const all_events = [...user_events, ...nav_events, ...network_events, ...console_events_mapped, ...error_events, ...storage_changes, ...cookie_changes];
-
     return {
         success: true,
-        capture: capture,
-        events: all_events,
-        nav_events,
-        network_requests,
-        console_logs: console_events,
-        error_events,
-        storage_changes,
-        cookie_changes
+        capture,
     };
 }
 

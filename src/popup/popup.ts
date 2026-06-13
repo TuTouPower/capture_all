@@ -8,6 +8,7 @@ import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
 import { download_blob, build_capture_filename, load_last_export_dirs, track_export_dir } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
+import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import type { CaptureConfig } from '../shared/types';
@@ -259,29 +260,45 @@ function wire_view(): void {
                 action: 'get_capture_data',
                 capture_id: finished_capture.capture_id,
             });
-            if (resp?.success) {
-                const archive = await build_archive(resp, {
-                    inline_text_max_bytes: user_config.inline_text_max_bytes,
-                    system_time_timezone: user_config.system_time_timezone,
-                });
-                const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
-                const { capture_dir } = await load_last_export_dirs();
-                const filename = build_capture_filename(
-                    {
-                        export_capture_directory: user_config.export_capture_directory,
-                        export_filename_template: user_config.export_filename_template,
-                        system_time_timezone: user_config.system_time_timezone,
-                    },
-                    finished_capture.capture_id,
-                    'zip',
-                    capture_dir,
-                );
-                const download_id = await download_blob(blob, filename, { save_as: true });
-                track_export_dir(download_id, 'capture');
-            } else {
+            if (!resp?.success) {
                 logger.error('Export failed', resp?.error);
                 alert(`${t('error')}: ${resp?.error ?? 'Export failed'}`);
+                return;
             }
+            const snapshot = await read_capture_snapshot(finished_capture.capture_id);
+            if (!snapshot.capture) {
+                alert(`${t('error')}: Capture not found`);
+                return;
+            }
+            const archive = await build_archive({
+                capture: snapshot.capture,
+                events: [
+                    ...snapshot.user_events,
+                    ...snapshot.nav_events,
+                    ...snapshot.error_events,
+                    ...snapshot.storage_changes,
+                    ...snapshot.cookie_changes,
+                ],
+                network_requests: snapshot.network_requests,
+                console_events: snapshot.console_events,
+            }, {
+                inline_text_max_bytes: user_config.inline_text_max_bytes,
+                system_time_timezone: user_config.system_time_timezone,
+            });
+            const blob = new Blob([archive as BlobPart], { type: 'application/zip' });
+            const { capture_dir } = await load_last_export_dirs();
+            const filename = build_capture_filename(
+                {
+                    export_capture_directory: user_config.export_capture_directory,
+                    export_filename_template: user_config.export_filename_template,
+                    system_time_timezone: user_config.system_time_timezone,
+                },
+                finished_capture.capture_id,
+                'zip',
+                capture_dir,
+            );
+            const download_id = await download_blob(blob, filename, { save_as: true });
+            track_export_dir(download_id, 'capture');
         } catch (e) {
             logger.error('Export message failed', e);
             alert(`${t('error')}: ${e}`);

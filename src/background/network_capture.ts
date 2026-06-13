@@ -28,7 +28,6 @@ interface NetworkCaptureConfig {
     redact_data: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
-    max_request_body_bytes: number;
     max_body_capture_bytes: number;
     inline_text_max_bytes: number;
 }
@@ -229,10 +228,10 @@ export async function enable_response_body_capture(
     }
 }
 
-export function build_cdp_body_result(body_text: string, max_response_body_bytes = config.max_body_capture_bytes): { body: string; status: BodyCaptureStatus; preview: string | null } {
+export function build_cdp_body_result(body_text: string, max_body_capture_bytes = config.max_body_capture_bytes): { body: string; status: BodyCaptureStatus; preview: string | null } {
     const byte_len = new TextEncoder().encode(body_text).length;
-    if (byte_len > max_response_body_bytes) {
-        const trunc_result = truncate_response_body(body_text, max_response_body_bytes);
+    if (byte_len > max_body_capture_bytes) {
+        const trunc_result = truncate_response_body(body_text, max_body_capture_bytes);
         return { body: trunc_result.body!, status: 'too_large', preview: trunc_result.response_preview };
     }
     return { body: body_text, status: 'captured', preview: body_text.slice(0, 200) };
@@ -253,8 +252,8 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             let req_body_status: BodyCaptureStatus = 'not_enabled';
             if (config.capture_request_body && request.postData) {
                 const byte_len = new TextEncoder().encode(request.postData).length;
-                if (byte_len > config.max_request_body_bytes) {
-                    req_body = truncate_request_body(request.postData, config.max_request_body_bytes);
+                if (byte_len > config.max_body_capture_bytes) {
+                    req_body = truncate_request_body(request.postData, config.max_body_capture_bytes);
                     req_body_status = 'too_large';
                 } else {
                     req_body = request.postData;
@@ -497,7 +496,7 @@ export function encode_form_data(form: Record<string, string | string[]>): strin
     return parts.join('&');
 }
 
-export function extract_request_body(details: any, capture_enabled?: boolean, max_request_body_bytes = config.max_request_body_bytes): { body: string | null; status: BodyCaptureStatus } {
+export function extract_request_body(details: any, capture_enabled?: boolean, max_body_capture_bytes = config.max_body_capture_bytes): { body: string | null; status: BodyCaptureStatus } {
     const enabled = capture_enabled ?? config.capture_request_body;
     if (!enabled) {
         return { body: null, status: 'not_enabled' };
@@ -528,8 +527,8 @@ export function extract_request_body(details: any, capture_enabled?: boolean, ma
     }
 
     const byte_len = new TextEncoder().encode(body).length;
-    if (byte_len > max_request_body_bytes) {
-        return { body: truncate_request_body(body, max_request_body_bytes), status: 'too_large' };
+    if (byte_len > max_body_capture_bytes) {
+        return { body: truncate_request_body(body, max_body_capture_bytes), status: 'too_large' };
     }
     return { body, status: 'captured' };
 }

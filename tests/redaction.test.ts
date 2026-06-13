@@ -10,7 +10,7 @@ import {
     truncate_console_args,
     truncate_target_text
 } from '../src/shared/redaction';
-import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES } from '../src/shared/constants';
+import { MAX_BODY_CAPTURE_BYTES } from '../src/shared/constants';
 
 describe('redact_headers', () => {
     it('redacts authorization header', () => {
@@ -119,7 +119,7 @@ describe('truncate_request_body', () => {
     });
 
     it('truncates body even when redact_data would be false', () => {
-        const big_body = 'x'.repeat(MAX_REQUEST_BODY_BYTES + 1000);
+        const big_body = 'x'.repeat(MAX_BODY_CAPTURE_BYTES + 1000);
         const result = truncate_request_body(big_body);
         expect(result).not.toBeNull();
         expect(result!.length).toBeLessThan(big_body.length);
@@ -141,7 +141,7 @@ describe('truncate_response_body', () => {
     });
 
     it('truncates large body unconditionally', () => {
-        const big_body = 'y'.repeat(MAX_RESPONSE_BODY_BYTES + 500);
+        const big_body = 'y'.repeat(MAX_BODY_CAPTURE_BYTES + 500);
         const result = truncate_response_body(big_body);
         expect(result.body).not.toBeNull();
         expect(result.body!.length).toBeLessThan(big_body.length);
@@ -176,10 +176,10 @@ describe('redaction_and_truncation_split', () => {
     });
 
     it('truncate_request_body always truncates by size', () => {
-        const big_body = 'a'.repeat(MAX_REQUEST_BODY_BYTES + 100);
+        const big_body = 'a'.repeat(MAX_BODY_CAPTURE_BYTES + 100);
         const result = truncate_request_body(big_body);
         expect(result).not.toBeNull();
-        expect(result!.length).toBeLessThanOrEqual(MAX_REQUEST_BODY_BYTES + 20); // +20 for truncation marker
+        expect(result!.length).toBeLessThanOrEqual(MAX_BODY_CAPTURE_BYTES + 20); // +20 for truncation marker
     });
 
     it('redact_password keeps value when disabled', () => {

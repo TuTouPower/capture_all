@@ -221,7 +221,7 @@ async function try_external_cdp_bridge(
             session_id,
             tab_url,
             config.redact_data,
-            config.max_response_body_bytes
+            config.max_body_capture_bytes
         );
         if (!start_result.success || !start_result.session_key) {
             return null;
@@ -277,9 +277,14 @@ function convert_bridge_event_to_request(
         headers_status: 'captured',
         request_body: evt.request_body ?? null,
         request_body_status: evt.request_body_status || 'not_enabled',
+        request_body_encoding: evt.request_body ? 'utf8' : null,
+        request_body_bytes: evt.request_body ? new TextEncoder().encode(evt.request_body).length : null,
+        request_body_mime: null,
         response_body: evt.response_body ?? null,
         response_preview: null,
         response_body_status: evt.response_body_status || 'failed',
+        response_body_encoding: evt.response_body ? 'utf8' : null,
+        response_body_bytes: evt.response_body ? new TextEncoder().encode(evt.response_body).length : null,
         mime_type: null,
         request_size_bytes: null,
         response_size_bytes: null,

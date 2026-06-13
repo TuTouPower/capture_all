@@ -3,7 +3,7 @@
 // captures Network events, and serves body events to the extension.
 
 import http from 'node:http';
-import { MAX_RESPONSE_BODY_BYTES } from '../../shared/constants';
+import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
 
 interface CdpSession {
     session_key: string;
@@ -83,9 +83,9 @@ export async function handle_cdp_start(
 ): Promise<{ status: number; body: unknown }> {
     const port = typeof body.port === 'number' ? body.port : parseInt(String(body.port || ''), 10);
     const tab_url = String(body.tab_url || '');
-    const max_body_bytes = typeof body.max_response_body_bytes === 'number'
-        ? body.max_response_body_bytes
-        : MAX_RESPONSE_BODY_BYTES;
+    const max_body_bytes = typeof body.max_body_capture_bytes === 'number'
+        ? body.max_body_capture_bytes
+        : MAX_BODY_CAPTURE_BYTES;
 
     if (!port || port < 1 || port > 65535) {
         return { status: 400, body: { ok: false, error: { code: 'INVALID_QUERY', message: 'Invalid port' } } };

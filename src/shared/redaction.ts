@@ -1,5 +1,5 @@
 // shared/redaction.ts
-import { MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES, MAX_CONSOLE_ARG_BYTES, MAX_TARGET_TEXT_CHARS } from './constants';
+import { MAX_BODY_CAPTURE_BYTES, MAX_CONSOLE_ARG_BYTES, MAX_TARGET_TEXT_CHARS } from './constants';
 
 const SENSITIVE_HEADER_KEYS = [
     'authorization', 'cookie', 'set-cookie', 'x-api-key',
@@ -82,12 +82,12 @@ export function redact_password(value: string, input_type?: string, enabled: boo
     return value;
 }
 
-export function truncate_request_body(body: string | null, max_bytes = MAX_REQUEST_BODY_BYTES): string | null {
+export function truncate_request_body(body: string | null, max_bytes = MAX_BODY_CAPTURE_BYTES): string | null {
     if (!body) return null;
     return truncate(body, max_bytes, true);
 }
 
-export function truncate_response_body(body: string | null, max_bytes = MAX_RESPONSE_BODY_BYTES): TruncateBodyResult {
+export function truncate_response_body(body: string | null, max_bytes = MAX_BODY_CAPTURE_BYTES): TruncateBodyResult {
     if (!body) return { body: null, response_preview: null };
     const preview = body.slice(0, RESPONSE_PREVIEW_LENGTH);
     return {

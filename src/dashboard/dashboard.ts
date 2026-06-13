@@ -977,8 +977,8 @@ function render_settings(): string {
                             <div class="field"><span class="field-lbl">捕获请求体</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
                             <div class="field"><span class="field-lbl">捕获响应体</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
                             <div class="field"><span class="field-lbl">捕获输入值</span>${sw('capture_input_values', cfg.capture_input_values)}</div>
-                            <div class="field"><span class="field-lbl">请求体上限 (字节)</span><input class="input mono" type="number" data-cfg="max_request_body_bytes" value="${esc(String(cfg.max_request_body_bytes))}" min="1024" max="104857600" step="1024"></div>
-                            <div class="field"><span class="field-lbl">响应体上限 (字节)</span><input class="input mono" type="number" data-cfg="max_response_body_bytes" value="${esc(String(cfg.max_response_body_bytes))}" min="1024" max="104857600" step="1024"></div>
+                            <div class="field"><span class="field-lbl">采集上限 (字节)</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(cfg.max_body_capture_bytes))}" min="1024" max="1073741824" step="1024"></div>
+                            <div class="field"><span class="field-lbl">内联文本上限 (字节)</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(cfg.inline_text_max_bytes))}" min="0" max="1048576" step="1024"></div>
                         </div>
                     </div>
                 </section>
@@ -1095,8 +1095,8 @@ function wire_settings(): void {
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_entries') await persist({ [name]: Number(v) } as Partial<UserConfig>);
-            else if (name === 'max_request_body_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.max_request_body_bytes) } as Partial<UserConfig>);
-            else if (name === 'max_response_body_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.max_response_body_bytes) } as Partial<UserConfig>);
+            else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.max_body_capture_bytes) } as Partial<UserConfig>);
+            else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.inline_text_max_bytes) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
         });
     });

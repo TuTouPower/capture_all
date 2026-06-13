@@ -51,7 +51,6 @@ function make_cfg(overrides: Partial<{
     redact_data: boolean;
     capture_request_body: boolean;
     capture_response_body: boolean;
-    max_request_body_bytes: number;
     max_body_capture_bytes: number;
     inline_text_max_bytes: number;
 }> = {}) {
@@ -61,7 +60,6 @@ function make_cfg(overrides: Partial<{
         redact_data: false,
         capture_request_body: false,
         capture_response_body: true,
-        max_request_body_bytes: 1024 * 1024,
         max_body_capture_bytes: 104857600,
         inline_text_max_bytes: 32768,
         ...overrides,

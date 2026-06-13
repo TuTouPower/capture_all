@@ -461,7 +461,7 @@ describe('CDP-first: primary record emission', () => {
         expect(emitted[0].data.response_body_bytes).toBeGreaterThan(0);
     });
 
-    it('handles getResponseBody failure as cdp_failed', async () => {
+    it('handles getResponseBody "No resource" as not_enabled (resource released)', async () => {
         mock_chrome_debugger.set_command_error('Network.getResponseBody', new Error('No resource'));
         await setup_capture();
 
@@ -484,7 +484,7 @@ describe('CDP-first: primary record emission', () => {
         await new Promise(r => setTimeout(r, 20));
 
         expect(emitted).toHaveLength(1);
-        expect(emitted[0].data.response_body_status).toBe('cdp_failed');
+        expect(emitted[0].data.response_body_status).toBe('not_enabled');
     });
 
     it('normalizes CDP PascalCase resource_type to lowercase', async () => {

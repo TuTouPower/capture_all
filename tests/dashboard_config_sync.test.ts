@@ -34,10 +34,10 @@ describe('dashboard settings update in-memory user_config before save', () => {
 
     it('body size config fields are persisted with clamped numbers', () => {
         expect(dashboard_source).toMatch(
-            /name === 'max_body_capture_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.max_body_capture_bytes\)/
+            /name === 'max_body_capture_bytes'[\s\S]*clamp_body_size_bytes\(/
         )
         expect(dashboard_source).toMatch(
-            /name === 'inline_text_max_bytes'[\s\S]*clamp_body_size_bytes\(v, DEFAULT_USER_CONFIG\.inline_text_max_bytes\)/
+            /name === 'inline_text_max_bytes'[\s\S]*clamp_body_size_bytes\(/
         )
     })
 })

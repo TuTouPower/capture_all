@@ -1033,8 +1033,8 @@ function render_settings(): string {
                             <div class="field"><span class="field-lbl">捕获请求体</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
                             <div class="field"><span class="field-lbl">捕获响应体</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
                             <div class="field"><span class="field-lbl">捕获输入值</span>${sw('capture_input_values', cfg.capture_input_values)}</div>
-                            <div class="field"><span class="field-lbl">采集上限 (字节)</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(cfg.max_body_capture_bytes))}" min="1024" max="1073741824" step="1024"></div>
-                            <div class="field"><span class="field-lbl">内联文本上限 (字节)</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(cfg.inline_text_max_bytes))}" min="0" max="1048576" step="1024"></div>
+                            <div class="field"><span class="field-lbl">采集上限 (MB)</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(Math.round(cfg.max_body_capture_bytes / 1048576)))}" min="1" max="1024" step="1"></div>
+                            <div class="field"><span class="field-lbl">内联文本上限 (KB)</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(Math.round(cfg.inline_text_max_bytes / 1024)))}" min="0" max="1024" step="1"></div>
                         </div>
                     </div>
                 </section>
@@ -1056,9 +1056,9 @@ function render_settings(): string {
                 <section class="set-section" id="set-diagnostics">
                     <h2>诊断日志</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field"><span class="field-lbl">日志级别</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
+                        <div class="field span2"><span class="field-lbl">日志级别</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
                         <div class="field"><span class="field-lbl">最大日志大小 (MB)</span><input class="input mono" type="number" data-cfg="log_max_size_mb" value="${esc(String(cfg.log_max_size_mb))}" min="1" max="1024" step="1"></div>
-                        <div class="field"><span class="field-lbl">当前日志大小</span><span id="logSize" class="mono" style="font-weight:600">—</span></div>
+                        <div class="field"><span class="field-lbl">当前日志大小</span><input id="logSize" class="input mono" readonly value="—"></div>
                         <div class="field span2" style="display:flex;gap:8px">
                             <button class="btn sm" id="exportLog"><span>${I.export}</span>导出运行日志</button>
                             <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>清除所有日志</button>
@@ -1123,7 +1123,6 @@ function wire_settings(): void {
             default_px: 196,
             min_px: 140,
             max_px: 320,
-            direction: 'left',
         });
     }
     c.querySelectorAll('[data-setnav]').forEach((b) => b.addEventListener('click', () => {
@@ -1164,8 +1163,8 @@ function wire_settings(): void {
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
-            else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.max_body_capture_bytes) } as Partial<UserConfig>);
-            else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(v, DEFAULT_USER_CONFIG.inline_text_max_bytes) } as Partial<UserConfig>);
+            else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes) } as Partial<UserConfig>);
+            else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
         });
     });
@@ -1175,18 +1174,18 @@ function wire_settings(): void {
 async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
     // Load current log size
     const update_size = async () => {
-        const el = c.querySelector('#logSize');
+        const el = c.querySelector('#logSize') as HTMLInputElement | null;
         if (!el) return;
         try {
             const r = await chrome.runtime.sendMessage({ action: 'get_app_log_size' });
             if (r?.size_bytes != null) {
                 const mb = (r.size_bytes / (1024 * 1024)).toFixed(1);
-                el.textContent = `${mb} MB`;
+                el.value = `${mb} MB`;
             } else {
-                el.textContent = '—';
+                el.value = '—';
             }
         } catch {
-            el.textContent = '—';
+            el.value = '—';
         }
     };
     update_size();

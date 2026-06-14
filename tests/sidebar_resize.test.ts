@@ -118,7 +118,7 @@ describe('sidebar_resize', () => {
         expect(mock_storage.setItem).toHaveBeenCalledWith('sidebar_width', '300');
     });
 
-    it('direction=left 时反向计算宽度', () => {
+    it('settings_nav_width 默认方向：鼠标右移 = 变宽', () => {
         const handle = create_handle();
         wire_sidebar_resize({
             handle,
@@ -127,13 +127,31 @@ describe('sidebar_resize', () => {
             default_px: 196,
             min_px: 140,
             max_px: 320,
+        });
+        handle.dispatchEvent(new MouseEvent('mousedown', { clientX: 200 }));
+        // Moving right = wider (default direction)
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 256 }));
+        // 196 + (256 - 200) = 252
+        expect(mock_style.setProperty).toHaveBeenCalledWith('--set-nav-w', '252px');
+        window.dispatchEvent(new MouseEvent('mouseup'));
+    });
+
+    it('direction=left 时反向计算宽度', () => {
+        const handle = create_handle();
+        wire_sidebar_resize({
+            handle,
+            storage_key: 'right_panel_width',
+            css_var: '--right-panel-w',
+            default_px: 300,
+            min_px: 200,
+            max_px: 500,
             direction: 'left',
         });
         handle.dispatchEvent(new MouseEvent('mousedown', { clientX: 200 }));
         // Moving right = narrower (left direction)
         window.dispatchEvent(new MouseEvent('mousemove', { clientX: 256 }));
-        // 196 - (256 - 200) = 140
-        expect(mock_style.setProperty).toHaveBeenCalledWith('--set-nav-w', '140px');
+        // 300 - (256 - 200) = 244
+        expect(mock_style.setProperty).toHaveBeenCalledWith('--right-panel-w', '244px');
         window.dispatchEvent(new MouseEvent('mouseup'));
     });
 

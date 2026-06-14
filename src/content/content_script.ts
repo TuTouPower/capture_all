@@ -8,6 +8,14 @@ import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
 import { start_dom_capture, stop_dom_capture } from './dom_capture';
 import { start_storage_capture, stop_storage_capture } from './storage_capture';
 import { start_network_hook, stop_network_hook } from './network_hook';
+import { start_clipboard_capture, stop_clipboard_capture } from './clipboard_capture';
+import { start_form_submit_capture, stop_form_submit_capture } from './form_submit_capture';
+import { start_focus_capture, stop_focus_capture } from './focus_capture';
+import { start_visibility_capture, stop_visibility_capture } from './visibility_capture';
+import { start_resize_capture, stop_resize_capture } from './resize_capture';
+import { start_fullscreen_capture, stop_fullscreen_capture } from './fullscreen_capture';
+import { start_print_capture, stop_print_capture } from './print_capture';
+import { start_websocket_capture, stop_websocket_capture } from './websocket_capture';
 import { DEFAULT_CONFIG } from '../shared/constants';
 import { Logger, MessageLogTransport } from '../shared/logger';
 import { start_status_poll, type CaptureStatusResponse } from '../shared/poll_capture_status';
@@ -96,9 +104,25 @@ function start_capture(config: CaptureConfig): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     start_storage_capture(send_event as any, capture_id, capture_start_epoch_ms);
     start_network_hook(send_event);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_clipboard_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_form_submit_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_focus_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_visibility_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_resize_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_fullscreen_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_print_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    start_websocket_capture(send_event as any, capture_id, capture_start_epoch_ms);
 
     logger.debug('All capture modules started', {
-        modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook'],
+        modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook', 'clipboard', 'form_submit', 'focus', 'visibility', 'resize', 'fullscreen', 'print', 'websocket'],
         config: {
             capture_network: config.capture_network,
             capture_console: config.capture_console,
@@ -180,6 +204,14 @@ function stop_capture(): void {
     stop_dom_capture();
     stop_storage_capture();
     stop_network_hook();
+    stop_clipboard_capture();
+    stop_form_submit_capture();
+    stop_focus_capture();
+    stop_visibility_capture();
+    stop_resize_capture();
+    stop_fullscreen_capture();
+    stop_print_capture();
+    stop_websocket_capture();
 
     // BUG-004: 停止轮询（避免 stop 后仍触发 start_capture）
     stop_status_poll();

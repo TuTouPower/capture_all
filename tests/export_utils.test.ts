@@ -84,6 +84,74 @@ describe('download_blob', () => {
     });
 });
 
+// P0.62: 空目录时优先用 showSaveFilePicker（浏览器按 id 记忆上次任意文件夹），
+// 不可用时退回 chrome.downloads.download。
+describe('download_blob: showSaveFilePicker', () => {
+    const make_picker = () => {
+        const write = vi.fn().mockResolvedValue(undefined);
+        const close = vi.fn().mockResolvedValue(undefined);
+        const create_writable = vi.fn().mockResolvedValue({ write, close });
+        const picker = vi.fn().mockResolvedValue({ createWritable: create_writable });
+        return { picker, write, close };
+    };
+
+    it('uses picker (not downloads API) when filename has no subdirectory', async () => {
+        const { picker, write, close } = make_picker();
+        vi.stubGlobal('showSaveFilePicker', picker);
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        const ret = await download_blob(blob, 'foo.zip', 'capture_export');
+        expect(picker).toHaveBeenCalledWith(expect.objectContaining({
+            suggestedName: 'foo.zip',
+            id: 'capture_export',
+        }));
+        expect(write).toHaveBeenCalledWith(blob);
+        expect(close).toHaveBeenCalled();
+        expect(mock_download).not.toHaveBeenCalled();
+        expect(ret).toBeUndefined();
+    });
+
+    it('bypasses picker and uses downloads API when filename has subdirectory', async () => {
+        const { picker } = make_picker();
+        vi.stubGlobal('showSaveFilePicker', picker);
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await download_blob(blob, 'captures/foo.zip', 'capture_export');
+        expect(picker).not.toHaveBeenCalled();
+        expect(mock_download).toHaveBeenCalledWith({
+            url: 'blob:mock-url',
+            filename: 'captures/foo.zip',
+            saveAs: false,
+        });
+    });
+
+    it('swallows AbortError (user cancel) without throwing or falling back', async () => {
+        const picker = vi.fn().mockRejectedValue(
+            new DOMException('cancelled', 'AbortError'),
+        );
+        vi.stubGlobal('showSaveFilePicker', picker);
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        const ret = await download_blob(blob, 'foo.zip', 'capture_export');
+        expect(ret).toBeUndefined();
+        expect(mock_download).not.toHaveBeenCalled();
+    });
+
+    it('rethrows non-AbortError picker failures', async () => {
+        const picker = vi.fn().mockRejectedValue(new Error('disk full'));
+        vi.stubGlobal('showSaveFilePicker', picker);
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await expect(download_blob(blob, 'foo.zip', 'log_export')).rejects.toThrow('disk full');
+    });
+
+    it('falls back to downloads API when picker is unavailable', async () => {
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await download_blob(blob, 'foo.zip', 'capture_export');
+        expect(mock_download).toHaveBeenCalledWith({
+            url: 'blob:mock-url',
+            filename: 'foo.zip',
+            saveAs: true,
+        });
+    });
+});
+
 describe('build_capture_filename', () => {
     it('uses export_capture_directory from config', () => {
         const name = build_capture_filename(

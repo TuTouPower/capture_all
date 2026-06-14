@@ -395,7 +395,7 @@ async function export_capture(id: string, format: string = 'archive'): Promise<v
                 export_filename_template: user_config.export_filename_template,
                 system_time_timezone: user_config.system_time_timezone,
             }, id, 'zip');
-            await download_blob(blob, capture_filename);
+            await download_blob(blob, capture_filename, 'capture_export');
             return;
         }
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
@@ -410,7 +410,7 @@ async function export_capture(id: string, format: string = 'archive'): Promise<v
             export_filename_template: user_config.export_filename_template,
             system_time_timezone: user_config.system_time_timezone,
         }, id, ext);
-        await download_blob(blob, capture_filename);
+        await download_blob(blob, capture_filename, 'capture_export');
     } catch (err) { logger.error('Export error', err); }
 }
 async function del_capture(id: string): Promise<void> {
@@ -1173,7 +1173,7 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
                 export_log_directory: user_config.export_log_directory,
                 system_time_timezone: user_config.system_time_timezone,
             });
-            await download_blob(blob, log_filename);
+            await download_blob(blob, log_filename, 'log_export');
         } catch (e) { logger.error('Export logs error', e); }
     });
 

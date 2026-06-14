@@ -144,6 +144,9 @@ export const _ws_connections_for_test = ws_connections;
 // Streaming request tracking
 const streaming_requests: Set<string> = new Set();
 export const _streaming_requests_for_test = streaming_requests;
+// Requests that finished before streamResourceContent could be called (CDP race guard)
+const finished_before_stream: Set<string> = new Set();
+export const _finished_before_stream_for_test = finished_before_stream;
 let stream_buffer_instance: ReturnType<typeof create_stream_buffer> | null = null;
 
 // Orphan CDP body events: entries that haven't been matched by webRequest within timeout
@@ -249,6 +252,7 @@ export function stop_network_capture(): void {
     cdp_primary_emitted.clear();
     ws_connections.clear();
     streaming_requests.clear();
+    finished_before_stream.clear();
     stream_buffer_instance?.flush_all();
     stream_buffer_instance = null;
     clear_sessions();
@@ -541,22 +545,30 @@ function handle_cdp_event(source: any, method: string, params: any): void {
             if (existing) {
                 existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
             }
-            chrome.dbg.sendCommand(
-                { tabId: dbg_tab_id },
-                'Network.streamResourceContent',
-                { requestId: req_id }
-            ).then((result: any) => {
-                if (result?.bufferedData) {
-                    stream_buffer_instance?.append(req_id, result.bufferedData);
+            if (finished_before_stream.delete(req_id)) {
+                // loadingFinished already fired — skip streamResourceContent, mark partial
+                logger.debug('stream_skipped_already_finished', { req_id });
+                if (existing) {
+                    existing.response_body_status = 'partial';
                 }
-                logger.debug('stream_started', { req_id, mime });
-            }).catch((err: any) => {
-                logger.debug('streamResourceContent_failed', { req_id, error: String(err).slice(0, 80) });
-                const meta = cdp_request_meta.get(req_id);
-                if (meta) {
-                    meta.response_body_status = 'partial';
-                }
-            });
+            } else {
+                chrome.dbg.sendCommand(
+                    { tabId: dbg_tab_id },
+                    'Network.streamResourceContent',
+                    { requestId: req_id }
+                ).then((result: any) => {
+                    if (result?.bufferedData) {
+                        stream_buffer_instance?.append(req_id, result.bufferedData);
+                    }
+                    logger.debug('stream_started', { req_id, mime });
+                }).catch((err: any) => {
+                    logger.debug('streamResourceContent_failed', { req_id, error: String(err).slice(0, 80) });
+                    const meta = cdp_request_meta.get(req_id);
+                    if (meta) {
+                        meta.response_body_status = 'partial';
+                    }
+                });
+            }
         }
     }
 
@@ -569,6 +581,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
 
     if (method === 'Network.loadingFinished') {
         if (dbg_tab_id === null) return;
+        finished_before_stream.add(req_id);
         const meta_for_method = cdp_request_meta.get(req_id);
         const http_method = meta_for_method?.method?.toUpperCase() || '';
 

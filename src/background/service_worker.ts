@@ -380,8 +380,9 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
-    logger.info(`Notifying ${all_tabs.length} tabs to start`);
-    for (const tab of all_tabs) {
+    const capturable_tabs = all_tabs.filter(t => /^https?:\/\//.test(t.url || ''));
+    logger.info(`Notifying ${capturable_tabs.length} tabs to start (of ${all_tabs.length} total)`);
+    for (const tab of capturable_tabs) {
         if (tab.id) {
             try {
                 await chrome.tabs.sendMessage(tab.id, {

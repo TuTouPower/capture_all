@@ -296,7 +296,7 @@ function wire_view(): void {
                 finished_capture.capture_id,
                 'zip',
             );
-            await download_blob(blob, filename);
+            await download_blob(blob, filename, 'capture_export');
         } catch (e) {
             logger.error('Export message failed', e);
             alert(`${t('error')}: ${e}`);

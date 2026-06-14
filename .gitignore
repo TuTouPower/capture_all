@@ -4,7 +4,6 @@ artifacts/
 .claude/worktrees/
 *.log
 *.zip
+*.Zone.Identifier
 .DS_Store
-data/capture_all*.json
-data/capture_all*.zip
-data/logs/
+data/

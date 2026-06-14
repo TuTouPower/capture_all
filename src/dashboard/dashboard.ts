@@ -252,7 +252,7 @@ function render_content(): void {
     else if (page === 'settings') { c.innerHTML = render_settings(); wire_settings(); }
     else if (page === 'current') { c.innerHTML = render_current(); wire_simple_open(); }
     else if (page === 'exports') { c.innerHTML = render_exports(); }
-    else if (page === 'integrations') { c.innerHTML = render_integrations(); }
+    else if (page === 'integrations') { c.innerHTML = render_integrations(); wire_integrations(); }
 }
 
 // ── captures page ───────────────────────────────────────────────────────
@@ -1248,24 +1248,35 @@ function render_exports(): string {
 
 function render_integrations(): string {
     const on = user_config.agent_bridge_enabled;
-    const cards: [string, string, string, boolean, string][] = [
-        ['MCP Bridge', 'navMcp', '连接本地 MCP 服务，向 Agent 暴露采集数据', on, on ? '已连接' : '配置'],
-        ['本地 Agent', 'navCurrent', '连接本地 Agent 以分析与回答问题', on, '配置'],
-        ['Webhook', 'navExport', '采集结束后向自定义地址推送事件', false, '连接'],
-        ['Issue 平台', 'err', '把失败请求与错误同步为 Issue', false, '连接'],
+    const cards: [string, string, string, boolean, string, boolean][] = [
+        ['MCP Bridge', 'navMcp', '连接本地 MCP 服务，向 Agent 暴露采集数据', on, on ? '已连接' : '配置', false],
+        ['本地 Agent', 'navCurrent', '连接本地 Agent 以分析与回答问题', on, '配置', false],
+        ['Webhook', 'navExport', '采集结束后向自定义地址推送事件', false, '即将推出', true],
+        ['Issue 平台', 'err', '把失败请求与错误同步为 Issue', false, '即将推出', true],
     ];
     return `<div class="page">
         <div class="pg-head"><div class="pg-title"><h1>MCP / 集成</h1><p>连接本地 Agent、MCP 服务与外部平台，把采集数据接入你的工作流。</p></div>
-            <div class="pg-actions"><button class="btn" data-setnav-go="1"><span>${I.navSettings}</span>前往设置</button></div></div>
+            <div class="pg-actions"><button class="btn" data-action="go-settings"><span>${I.navSettings}</span>前往设置</button></div></div>
         <div class="simple-pad scroll"><div class="integrations" style="margin-top:14px">
-            ${cards.map(([name, ic, desc, conn, btn]) => `<div class="integ-card">
+            ${cards.map(([name, ic, desc, conn, btn, disabled]) => `<div class="integ-card" ${disabled ? 'style="opacity:0.5;cursor:not-allowed"' : ''}>
                 <div class="integ-top"><span class="integ-ic">${I[ic]}</span>
                     <div class="integ-meta"><b>${name}</b><span>${desc}</span></div>
-                    <span class="integ-state" data-on="${conn ? 1 : 0}">${conn ? '已连接' : '未连接'}</span></div>
-                <button class="btn sm" style="justify-content:center">${btn}</button>
+                    <span class="integ-state" data-on="${conn ? 1 : 0}">${conn ? '已连接' : disabled ? '未实现' : '未连接'}</span></div>
+                <button class="btn sm" style="justify-content:center" ${disabled ? 'disabled' : ''} ${!disabled ? 'data-action="go-settings"' : ''}>${btn}</button>
             </div>`).join('')}
         </div></div>
     </div>`;
+}
+
+function wire_integrations(): void {
+    const c = document.getElementById('content')!;
+    c.querySelectorAll('[data-action="go-settings"]').forEach((b) =>
+        b.addEventListener('click', () => {
+            go('settings');
+            requestAnimationFrame(() => {
+                document.getElementById('set-integrations')?.scrollIntoView({ block: 'start' });
+            });
+        }));
 }
 
 // ── init ────────────────────────────────────────────────────────────────

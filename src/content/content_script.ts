@@ -130,9 +130,6 @@ function start_capture(config: CaptureConfig): void {
         }
     });
 
-    // Visibility change
-    document.addEventListener('visibilitychange', handle_visibility_change);
-
     // SPA navigation — popstate + hashchange
     window.addEventListener('popstate', handle_popstate_navigation);
     window.addEventListener('hashchange', handle_hashchange_navigation);
@@ -216,23 +213,11 @@ function stop_capture(): void {
     // BUG-004: 停止轮询（避免 stop 后仍触发 start_capture）
     stop_status_poll();
 
-    document.removeEventListener('visibilitychange', handle_visibility_change);
     window.removeEventListener('popstate', handle_popstate_navigation);
     window.removeEventListener('hashchange', handle_hashchange_navigation);
 
     // Flush remaining log entries before shutdown
     log_transport.flush().catch(() => {});
-}
-
-function handle_visibility_change(): void {
-    if (!is_capturing) return;
-
-    logger.debug('Visibility changed', { hidden: document.hidden });
-
-    send_event('tab_switch', {
-        action: document.hidden ? 'deactivate' : 'activate',
-        tab_title: document.title
-    });
 }
 
 /** Send a fully-typed CaptureEvent for navigation/lifecycle events */

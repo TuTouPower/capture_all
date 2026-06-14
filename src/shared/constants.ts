@@ -59,7 +59,7 @@ export const DEFAULT_USER_CONFIG = {
     export_log_directory: '',
     export_filename_template: 'capture_{date}.{ext}',
     export_save_as: true,
-    agent_bridge_enabled: false,
+    agent_bridge_enabled: true,
     agent_bridge_url: 'http://127.0.0.1:17831',
     agent_bridge_token: '',
     agent_bridge_poll_interval_ms: 1000,

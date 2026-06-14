@@ -13,11 +13,41 @@
 
 ---
 
-## P1 · 功能增强（待实现）
+## P1 · 功能增强（实现中）
+
+### FEAT-002：可拉伸侧边栏
+
+**状态**：实现中
+
+**现象**：主面板 `.sidebar`（232px 固定）和设置页 `.set-subnav`（196px Grid 固定列）均不可拉伸，用户无法调整宽度。
+
+**方案**：提取公共 `wire_sidebar_resize()` 函数，复用详情页 `wire_rail_resize` 模式（mousedown + mousemove + localStorage 持久化）。
+
+**涉及文件**：
+
+| 文件 | 改动 |
+|------|------|
+| `src/dashboard/dashboard.ts` | render_shell() / render_settings() 加 handle 元素 + wire 调用；新增 wire_sidebar_resize |
+| `src/dashboard/dashboard.css` | .sidebar 改用 CSS 变量 + handle 样式 |
+| `src/dashboard/dashboard-pages.css` | .set-body 改用 CSS 变量 + handle 样式 |
+| `tests/sidebar_resize.test.ts` | 新增测试 |
+
+**边界约束**：
+
+| 侧边栏 | 默认 | 最小 | 最大 | localStorage key |
+|--------|------|------|------|-----------------|
+| 主 sidebar | 232px | 160px | 400px | `sidebar_width` |
+| 设置 subnav | 196px | 140px | 320px | `settings_nav_width` |
+
+**TDD 执行顺序**：
+1. 写测试 `tests/sidebar_resize.test.ts`
+2. CSS 变量化 + handle 样式
+3. 实现 wire_sidebar_resize + 注入 handle + wire 调用
+4. 验证：tsc + npm test + npm run build
 
 ### FEAT-001：剪贴板 API 监控
 
-**状态**：待实现
+**状态**：✅ 已实现（见 CAPTURE_GAPS.md GAP-U01）
 
 **现象**：ChatGPT 等网站的分享按钮调用 `navigator.clipboard.writeText()` 复制链接，扩展无法捕获此操作。采集记录中无任何痕迹。
 

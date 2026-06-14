@@ -1,9 +1,41 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { clamp_body_size_bytes } from '../src/dashboard/dashboard'
 
 const project_root = resolve(__dirname, '..')
 const dashboard_source = readFileSync(resolve(project_root, 'src/dashboard/dashboard.ts'), 'utf8')
+
+describe('clamp_body_size_bytes 行为', () => {
+    const BODY_MAX = 1024 * 1048576   // 1GB
+    const INLINE_MAX = 1024 * 1024    // 1MB
+
+    it('max_body: 1024MB 输入 → 1073741824 字节', () => {
+        // UI 输入 1024 → persist 时 * 1048576 = 1073741824
+        expect(clamp_body_size_bytes(String(1024 * 1048576), 5242880, BODY_MAX)).toBe(1073741824)
+    })
+
+    it('max_body: 超过 1GB 被夹到 1GB', () => {
+        expect(clamp_body_size_bytes(String(2048 * 1048576), 5242880, BODY_MAX)).toBe(BODY_MAX)
+    })
+
+    it('inline: 1024KB 输入 → 1048576 字节', () => {
+        expect(clamp_body_size_bytes(String(1024 * 1024), 65536, INLINE_MAX)).toBe(1048576)
+    })
+
+    it('inline: 超过 1MB 被夹到 1MB', () => {
+        expect(clamp_body_size_bytes(String(2048 * 1024), 65536, INLINE_MAX)).toBe(INLINE_MAX)
+    })
+
+    it('非数字返回 fallback', () => {
+        expect(clamp_body_size_bytes('abc', 5242880, BODY_MAX)).toBe(5242880)
+    })
+
+    it('负数返回 0', () => {
+        expect(clamp_body_size_bytes('-100', 5242880, BODY_MAX)).toBe(0)
+    })
+})
 
 describe('BUG-006: 采集上限 / 内联文本上限单位', () => {
     it('采集上限标签使用 MB 单位', () => {

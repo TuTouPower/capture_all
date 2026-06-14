@@ -1105,10 +1105,10 @@ async function persist_bridge(): Promise<void> {
     }
 }
 
-function clamp_body_size_bytes(value: string, fallback: number): number {
+export function clamp_body_size_bytes(value: string, fallback: number, max: number): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
-    return Math.min(104857600, Math.max(1024, parsed));
+    return Math.min(max, Math.max(0, parsed));
 }
 
 function wire_settings(): void {
@@ -1163,8 +1163,8 @@ function wire_settings(): void {
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
-            else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes) } as Partial<UserConfig>);
-            else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes) } as Partial<UserConfig>);
+            else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes, 1024 * 1048576) } as Partial<UserConfig>);
+            else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes, 1024 * 1024) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
         });
     });

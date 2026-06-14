@@ -3,6 +3,7 @@
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig, ThemeMode } from '../shared/types';
 import { init_locale, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
+import { wire_sidebar_resize } from './sidebar_resize';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
@@ -221,11 +222,24 @@ function render_shell(): void {
                     <span class="sb-ava">A</span>
                     <div class="sb-user-meta"><b>本地用户</b><span>Capture All</span></div>
                 </div>
+                <div class="sb-resize-handle"></div>
             </aside>
             <div class="content" id="content"></div>
         </div>
     </div>`;
     root.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => go((b as HTMLElement).dataset.nav!)));
+    // Wire main sidebar resize
+    const sb_handle = root.querySelector('.sb-resize-handle') as HTMLElement | null;
+    if (sb_handle) {
+        wire_sidebar_resize({
+            handle: sb_handle,
+            storage_key: 'sidebar_width',
+            css_var: '--sidebar-w',
+            default_px: 232,
+            min_px: 160,
+            max_px: 400,
+        });
+    }
     render_content();
 }
 
@@ -997,6 +1011,7 @@ function render_settings(): string {
             <nav class="set-subnav scroll">
                 ${SET_NAV.map(([k, l, ic], i) => `<button class="set-navitem" data-setnav="set-${k}" data-on="${i === 0 ? 1 : 0}">${I[ic]}${l}</button>`).join('')}
             </nav>
+            <div class="set-resize-handle"></div>
             <div class="set-scroll scroll">
                 <section class="set-section" id="set-general">
                     <h2>通用</h2>
@@ -1098,6 +1113,19 @@ function clamp_body_size_bytes(value: string, fallback: number): number {
 
 function wire_settings(): void {
     const c = document.getElementById('content')!;
+    // Wire settings subnav resize
+    const set_handle = c.querySelector('.set-resize-handle') as HTMLElement | null;
+    if (set_handle) {
+        wire_sidebar_resize({
+            handle: set_handle,
+            storage_key: 'settings_nav_width',
+            css_var: '--set-nav-w',
+            default_px: 196,
+            min_px: 140,
+            max_px: 320,
+            direction: 'left',
+        });
+    }
     c.querySelectorAll('[data-setnav]').forEach((b) => b.addEventListener('click', () => {
         c.querySelectorAll('[data-setnav]').forEach((x) => (x as HTMLElement).dataset.on = '0');
         (b as HTMLElement).dataset.on = '1';

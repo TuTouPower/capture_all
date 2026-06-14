@@ -221,8 +221,13 @@
 [data-density="compact"] .dt-ev-table td { padding: 7px 14px; }
 
 /* ════════════════════ SETTINGS PAGE ════════════════════ */
-.set-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 196px 1fr; overflow: hidden; }
-.set-subnav { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--surface-2); overflow-y: auto; }
+.set-body { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--set-nav-w, 196px) 4px 1fr; overflow: hidden; }
+.set-resize-handle {
+  cursor: col-resize; z-index: 10;
+  background: var(--border); transition: background .12s;
+}
+.set-resize-handle:hover, .set-resize-handle.active { background: var(--blue); }
+.set-subnav { padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; background: var(--surface-2); overflow-y: auto; }
 .set-navitem {
   appearance: none; border: 0; cursor: pointer; width: 100%; font-family: var(--font-sans);
   display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px;

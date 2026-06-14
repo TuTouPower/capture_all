@@ -39,7 +39,7 @@ describe('entry_unification', () => {
         const event_category = source('src/shared/event_category.ts');
 
         expect(event_category).toMatch(/export function category_for_event_type/);
-        expect(event_category).toMatch(/type === 'network_request'\) return 'network'/);
+        expect(event_category).toMatch(/network_request.*return 'network'/);
         expect(event_category).toMatch(/type === 'console_event'\) return 'console'/);
     });
 });

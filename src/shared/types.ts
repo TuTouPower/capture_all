@@ -87,6 +87,13 @@ export type EventType =
     | 'keyboard_event'
     | 'scroll_event'
     | 'input_event'
+    | 'clipboard_write'
+    | 'clipboard_read'
+    | 'form_submit'
+    | 'focus_event'
+    | 'resize_event'
+    | 'fullscreen_change'
+    | 'print_event'
     // navigation
     | 'page_navigation'
     | 'route_change'
@@ -95,9 +102,11 @@ export type EventType =
     | 'tab_created'
     | 'tab_url_change'
     | 'dom_ready'
+    | 'visibility_change'
     // network
     | 'network_request'
     | 'ws_frame'
+    | 'ws_message'
     // console
     | 'console_event'
     // error
@@ -180,6 +189,60 @@ export interface InputEventData {
     value_length: number | null;
     checked: boolean | null;
     selected_count: number | null;
+}
+
+export interface ClipboardEventData {
+    method: 'navigator.clipboard' | 'execCommand';
+    action: 'write' | 'read';
+}
+
+export interface FormSubmitData {
+    form_action: string | null;
+    form_method: string;
+    form_id: string | null;
+    form_name: string | null;
+    field_count: number;
+    target_selector: string | null;
+    target_xpath: string | null;
+}
+
+export interface FocusEventData {
+    action: 'focus' | 'blur';
+    target_selector: string | null;
+    target_xpath: string | null;
+    target_tag: string | null;
+    target_input_type: string | null;
+}
+
+export interface VisibilityChangeData {
+    state: 'visible' | 'hidden';
+    url: string;
+}
+
+export interface ResizeEventData {
+    width: number;
+    height: number;
+    inner_width: number;
+    inner_height: number;
+    device_pixel_ratio: number;
+}
+
+export interface FullscreenChangeData {
+    action: 'enter' | 'exit';
+    element_tag: string | null;
+    element_id: string | null;
+}
+
+export interface PrintEventData {
+    action: 'beforeprint' | 'afterprint';
+}
+
+export interface WsMessageData {
+    ws_url: string;
+    direction: 'sent' | 'received';
+    data_preview: string | null;
+    data_bytes: number;
+    data_status: 'captured' | 'too_large' | 'binary';
 }
 
 // ============================================================

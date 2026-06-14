@@ -420,6 +420,7 @@ async function stop_capture(): Promise<void> {
 
 function start_timer(): void {
     stop_timer();
+    refresh_counts();
     timer = setInterval(async () => {
         const el = document.getElementById('timer');
         if (el && current_capture) {

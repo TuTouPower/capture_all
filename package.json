@@ -20,6 +20,7 @@
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
     "playwright": "^1.60.0",
     "tsx": "^4.22.4",
     "typescript": "^5.5.0",

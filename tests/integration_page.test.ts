@@ -1,55 +1,72 @@
+// @vitest-environment jsdom
+// tests/integration_page.test.ts
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { describe, it, expect } from 'vitest';
 
 const src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
 
-// 提取 render_integrations 函数体
-const fn_match = src.match(/function render_integrations\(\): string \{([\s\S]*?)\n\}/);
-const fn_body = fn_match ? fn_match[1] : '';
+function get_integrations_body(): string {
+    const fn_start = src.indexOf('function render_integrations(): string {');
+    if (fn_start === -1) return '';
+    let depth = 0;
+    let fn_end = fn_start;
+    for (let i = fn_start; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        if (src[i] === '}') { depth--; if (depth === 0) { fn_end = i; break; } }
+    }
+    return src.slice(fn_start, fn_end + 1);
+}
 
-describe('BUG-010: MCP 集成页按钮绑定', () => {
-    it('MCP Bridge 卡片按钮有 data-action 属性', () => {
-        expect(fn_body).toMatch(/data-action/);
+describe('BUG-010: MCP 集成页按钮行为', () => {
+    it('MCP Bridge 和本地 Agent 按钮有 data-action="go-settings"', () => {
+        const body = get_integrations_body();
+        const go_settings_count = (body.match(/data-action="go-settings"/g) || []).length;
+        // 非 disabled 的卡片按钮 + 页面顶部"前往设置"按钮
+        expect(go_settings_count).toBeGreaterThanOrEqual(2);
     });
 
-    it('data-action 值为 go-settings', () => {
-        expect(fn_body).toContain('data-action="go-settings"');
-    });
-
-    it('wire_integrations 函数存在', () => {
-        expect(src).toMatch(/function wire_integrations\b/);
-    });
-
-    it('wire_integrations 绑定 data-action click handler', () => {
+    it('wire_integrations 绑定 click → go("settings") + scrollIntoView', () => {
         const wire_match = src.match(/function wire_integrations\b[\s\S]*?^\}/m);
-        const wire_body = wire_match ? wire_match[0] : '';
-        expect(wire_body).toContain('[data-action');
+        expect(wire_match).toBeTruthy();
+        const wire_body = wire_match![0];
+        expect(wire_body).toContain("'settings'");
+        expect(wire_body).toContain('set-integrations');
         expect(wire_body).toContain('addEventListener');
     });
 
-    it('render_content 调用 wire_integrations', () => {
+    it('render_content 中 integrations 分支调用 wire_integrations', () => {
         expect(src).toMatch(/render_integrations\(\);\s*wire_integrations\(\)/);
     });
 });
 
-describe('BUG-011: 禁用未实现卡片', () => {
-    it('Webhook 卡片按钮有 disabled 属性', () => {
-        // disabled 按钮文本应为"即将推出"
-        expect(fn_body).toMatch(/disabled[\s\S]*?即将推出|即将推出[\s\S]*?disabled/);
+describe('BUG-011: Webhook / Issue 平台禁用态', () => {
+    it('Webhook 和 Issue 平台卡片 disabled=true', () => {
+        const body = get_integrations_body();
+        // cards 数组中第 3、4 项的 disabled 标志为 true
+        expect(body).toContain("'即将推出', true");
     });
 
-    it('Issue 平台卡片按钮有 disabled 属性', () => {
-        // 至少两个 disabled 按钮（Webhook + Issue）
-        const disabled_count = (fn_body.match(/disabled/g) || []).length;
-        expect(disabled_count).toBeGreaterThanOrEqual(2);
+    it('disabled 按钮不应有 data-action', () => {
+        const body = get_integrations_body();
+        // 模板中 disabled ? '' : 'data-action="go-settings"' 逻辑
+        expect(body).toContain("!disabled ? 'data-action=\"go-settings\"'");
     });
 
-    it('未实现卡片状态标签为"未实现"', () => {
-        expect(fn_body).toContain('未实现');
+    it('disabled 卡片有 opacity:0.5 样式', () => {
+        const body = get_integrations_body();
+        expect(body).toContain('opacity:0.5');
     });
 
-    it('禁用卡片有降低 opacity 样式', () => {
-        expect(fn_body).toMatch(/opacity.*0\.\d|integ-card--disabled|data-disabled/);
+    it('disabled 卡片状态标签为"未实现"', () => {
+        const body = get_integrations_body();
+        expect(body).toContain("disabled ? '未实现'");
+    });
+
+    it('disabled 按钮文本为"即将推出"', () => {
+        const body = get_integrations_body();
+        // cards 数组中 btn 参数为'即将推出'
+        const matches = body.match(/'即将推出'/g) || [];
+        expect(matches.length).toBe(2);
     });
 });

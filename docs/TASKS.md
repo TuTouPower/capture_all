@@ -5,7 +5,35 @@
 
 ---
 
+主面板采集中没有及时刷新，我点击开始采集后，操作网页去了，然后再点击按钮出现采集中的弹窗，里面的数据标签统计都是空的，过了一秒才刷新，没有实时更新
+
+
+
 ## P0 · 功能缺陷（待修复）
+
+---
+
+## P1 · 功能增强（待实现）
+
+### FEAT-001：剪贴板 API 监控
+
+**状态**：待实现
+
+**现象**：ChatGPT 等网站的分享按钮调用 `navigator.clipboard.writeText()` 复制链接，扩展无法捕获此操作。采集记录中无任何痕迹。
+
+**影响**：用户行为标签遗漏「复制到剪贴板」操作，对需要还原用户操作序列的场景（如 AI Agent 回放）信息不完整。
+
+**预期行为**：content_script 拦截 `navigator.clipboard.writeText()` / `readText()`，生成 `user_action` 类事件，type 为 `clipboard_write` / `clipboard_read`，data 包含操作类型（出于隐私不记录具体内容）。
+
+**涉及文件**：
+- `src/content/content_script.ts` — 注入 clipboard 拦截
+- `src/shared/types.ts` — 新增事件 type
+- `src/shared/event_category.ts` — 映射到 `user_action` category
+
+**注意事项**：
+- 仅记录操作类型，不记录剪贴板内容（隐私安全）
+- 需处理 `document.execCommand('copy')` 旧式复制
+- 需 site permission 检查，无权限时静默跳过
 
 ---
 

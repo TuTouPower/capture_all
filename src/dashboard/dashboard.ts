@@ -1258,7 +1258,7 @@ function render_integrations(): string {
         <div class="pg-head"><div class="pg-title"><h1>MCP / 集成</h1><p>连接本地 Agent、MCP 服务与外部平台，把采集数据接入你的工作流。</p></div>
             <div class="pg-actions"><button class="btn" data-action="go-settings"><span>${I.navSettings}</span>前往设置</button></div></div>
         <div class="simple-pad scroll"><div class="integrations" style="margin-top:14px">
-            ${cards.map(([name, ic, desc, conn, btn, disabled]) => `<div class="integ-card" ${disabled ? 'style="opacity:0.5;cursor:not-allowed"' : ''}>
+            ${cards.map(([name, ic, desc, conn, btn, disabled]) => `<div class="integ-card${disabled ? ' integ-card--disabled' : ''}">
                 <div class="integ-top"><span class="integ-ic">${I[ic]}</span>
                     <div class="integ-meta"><b>${name}</b><span>${desc}</span></div>
                     <span class="integ-state" data-on="${conn ? 1 : 0}">${conn ? '已连接' : disabled ? '未实现' : '未连接'}</span></div>

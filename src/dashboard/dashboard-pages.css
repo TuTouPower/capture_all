@@ -293,6 +293,7 @@
 
 .integrations { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .integ-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 11px; background: var(--surface); }
+.integ-card--disabled { opacity: 0.5; cursor: not-allowed; }
 .integ-top { display: flex; align-items: flex-start; gap: 11px; }
 .integ-ic { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--surface-3); color: var(--ink-2); }
 .integ-meta { flex: 1; min-width: 0; }

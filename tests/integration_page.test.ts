@@ -53,9 +53,9 @@ describe('BUG-011: Webhook / Issue 平台禁用态', () => {
         expect(body).toContain("!disabled ? 'data-action=\"go-settings\"'");
     });
 
-    it('disabled 卡片有 opacity:0.5 样式', () => {
+    it('disabled 卡片有 integ-card--disabled class', () => {
         const body = get_integrations_body();
-        expect(body).toContain('opacity:0.5');
+        expect(body).toContain('integ-card--disabled');
     });
 
     it('disabled 卡片状态标签为"未实现"', () => {

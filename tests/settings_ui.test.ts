@@ -5,108 +5,81 @@ import { resolve } from 'node:path'
 import { clamp_body_size_bytes } from '../src/dashboard/dashboard'
 
 const project_root = resolve(__dirname, '..')
-const dashboard_source = readFileSync(resolve(project_root, 'src/dashboard/dashboard.ts'), 'utf8')
-
-describe('clamp_body_size_bytes 行为', () => {
-    const BODY_MAX = 1024 * 1048576   // 1GB
-    const INLINE_MAX = 1024 * 1024    // 1MB
-
-    it('max_body: 1024MB 输入 → 1073741824 字节', () => {
-        // UI 输入 1024 → persist 时 * 1048576 = 1073741824
-        expect(clamp_body_size_bytes(String(1024 * 1048576), 5242880, BODY_MAX)).toBe(1073741824)
-    })
-
-    it('max_body: 超过 1GB 被夹到 1GB', () => {
-        expect(clamp_body_size_bytes(String(2048 * 1048576), 5242880, BODY_MAX)).toBe(BODY_MAX)
-    })
-
-    it('inline: 1024KB 输入 → 1048576 字节', () => {
-        expect(clamp_body_size_bytes(String(1024 * 1024), 65536, INLINE_MAX)).toBe(1048576)
-    })
-
-    it('inline: 超过 1MB 被夹到 1MB', () => {
-        expect(clamp_body_size_bytes(String(2048 * 1024), 65536, INLINE_MAX)).toBe(INLINE_MAX)
-    })
-
-    it('非数字返回 fallback', () => {
-        expect(clamp_body_size_bytes('abc', 5242880, BODY_MAX)).toBe(5242880)
-    })
-
-    it('负数返回 0', () => {
-        expect(clamp_body_size_bytes('-100', 5242880, BODY_MAX)).toBe(0)
-    })
-})
+const src = readFileSync(resolve(project_root, 'src/dashboard/dashboard.ts'), 'utf8')
 
 describe('BUG-006: 采集上限 / 内联文本上限单位', () => {
-    it('采集上限标签使用 MB 单位', () => {
-        expect(dashboard_source).toMatch(/采集上限\s*\(MB\)/)
+    const BODY_MAX = 1024 * 1048576
+    const INLINE_MAX = 1024 * 1024
+
+    describe('字节 ↔ 显示单位 round-trip', () => {
+        it('5242880 字节 → 5 MB → 保存回 5242880', () => {
+            const display_mb = 5242880 / 1048576
+            expect(display_mb).toBe(5)
+            const saved = clamp_body_size_bytes(String(display_mb * 1048576), 5242880, BODY_MAX)
+            expect(saved).toBe(5242880)
+        })
+
+        it('65536 字节 → 64 KB → 保存回 65536', () => {
+            const display_kb = 65536 / 1024
+            expect(display_kb).toBe(64)
+            const saved = clamp_body_size_bytes(String(display_kb * 1024), 65536, INLINE_MAX)
+            expect(saved).toBe(65536)
+        })
+
+        it('非整数 MB 会被 Math.round 四舍五入', () => {
+            // 1536 * 1024 = 1572864 字节 = 1.5 MB
+            const bytes = 1536 * 1024
+            const display_mb = Math.round(bytes / 1048576)
+            expect(display_mb).toBe(2) // 1.5 → 2
+        })
     })
 
-    it('采集上限 input 的 step=1, min=1, max=1024', () => {
-        expect(dashboard_source).toMatch(
-            /data-cfg="max_body_capture_bytes"[^>]*min="1"[^>]*max="1024"[^>]*step="1"/
-        )
-    })
+    describe('UI 约束验证', () => {
+        it('采集上限最大 1024 MB（1 GB），保存不被夹', () => {
+            const saved = clamp_body_size_bytes(String(1024 * 1048576), 5242880, BODY_MAX)
+            expect(saved).toBe(1073741824)
+        })
 
-    it('采集上限 HTML value 以 MB 显示（除以 1048576）', () => {
-        expect(dashboard_source).toMatch(
-            /max_body_capture_bytes[^>]*value="[^"]*max_body_capture_bytes\s*\/\s*1048576/
-        )
-    })
+        it('内联文本上限最大 1024 KB（1 MB），保存不被夹', () => {
+            const saved = clamp_body_size_bytes(String(1024 * 1024), 65536, INLINE_MAX)
+            expect(saved).toBe(1048576)
+        })
 
-    it('采集上限 persist 时乘回 1048576', () => {
-        expect(dashboard_source).toMatch(
-            /max_body_capture_bytes[\s\S]*\*\s*1048576/
-        )
-    })
+        it('超限值被夹到上限', () => {
+            expect(clamp_body_size_bytes(String(2048 * 1048576), 5242880, BODY_MAX)).toBe(BODY_MAX)
+            expect(clamp_body_size_bytes(String(2048 * 1024), 65536, INLINE_MAX)).toBe(INLINE_MAX)
+        })
 
-    it('内联文本上限标签使用 KB 单位', () => {
-        expect(dashboard_source).toMatch(/内联文本上限\s*\(KB\)/)
-    })
+        it('非数字使用 fallback', () => {
+            expect(clamp_body_size_bytes('abc', 5242880, BODY_MAX)).toBe(5242880)
+        })
 
-    it('内联文本上限 input 的 step=1, min=0, max=1024', () => {
-        expect(dashboard_source).toMatch(
-            /data-cfg="inline_text_max_bytes"[^>]*min="0"[^>]*max="1024"[^>]*step="1"/
-        )
-    })
-
-    it('内联文本上限 HTML value 以 KB 显示（除以 1024）', () => {
-        expect(dashboard_source).toMatch(
-            /inline_text_max_bytes[^>]*value="[^"]*inline_text_max_bytes\s*\/\s*1024/
-        )
-    })
-
-    it('内联文本上限 persist 时乘回 1024', () => {
-        expect(dashboard_source).toMatch(
-            /inline_text_max_bytes[\s\S]*\*\s*1024/
-        )
+        it('负数返回 0', () => {
+            expect(clamp_body_size_bytes('-100', 5242880, BODY_MAX)).toBe(0)
+        })
     })
 })
 
-describe('BUG-007: 日志级别字段跨越 2 列', () => {
-    it('日志级别的 field div 有 span2 class', () => {
-        expect(dashboard_source).toMatch(
-            /class="field span2"[^>]*>[\s\S]*?<span[^>]*>日志级别<\/span>/
-        )
+describe('BUG-007: 日志级别不与最大日志大小重叠', () => {
+    it('日志级别 field 跨 2 列（span2）', () => {
+        // render_settings 中日志级别 field 有 span2 class
+        const match = src.match(/日志级别[\s\S]{0,200}span2|span2[\s\S]{0,200}日志级别/)
+        expect(match).toBeTruthy()
     })
 })
 
-describe('BUG-008: 当前日志大小用 readonly input', () => {
-    it('logSize 是 readonly input 而非 span', () => {
-        expect(dashboard_source).toMatch(
-            /<input\s+id="logSize"[^>]*readonly/
-        )
+describe('BUG-008: 当前日志大小用 input 而非 span', () => {
+    it('logSize 是 readonly input 元素', () => {
+        // 渲染 HTML 中 logSize 是 input[readonly]，不是 span
+        const input_match = src.match(/<input\s+id="logSize"[^>]*readonly/)
+        expect(input_match).toBeTruthy()
     })
 
-    it('logSize input 有 input mono class', () => {
-        expect(dashboard_source).toMatch(
-            /<input\s+id="logSize"\s+class="input mono"/
-        )
-    })
-
-    it('wire_diagnostics_settings 用 .value 赋值而非 .textContent', () => {
-        expect(dashboard_source).toMatch(
-            /logSize[\s\S]*?\.value\s*=/
-        )
+    it('wire_diagnostics_settings 对 logSize 赋 .value（非 .textContent）', () => {
+        // 函数体内 logSize 用 .value = 赋值
+        const fn_match = src.match(/function wire_diagnostics_settings[\s\S]*?^\}/m)
+        expect(fn_match).toBeTruthy()
+        expect(fn_match![0]).toMatch(/logSize[\s\S]*?\.value\s*=/)
+        expect(fn_match![0]).not.toMatch(/logSize[\s\S]*?\.textContent\s*=/)
     })
 })

@@ -70,7 +70,7 @@ test.describe('导出四格式', () => {
         await popup.close();
 
         if (!capture_id) {
-            console.warn('⚠ 未找到 capture_id，导出测试可能失败');
+            throw new Error('未找到 capture_id，导出测试前置条件不满足');
         }
     });
 

@@ -5,7 +5,7 @@ import {
     wcag_contrast_ratio,
     parse_rgb,
     wcag_contrast_between,
-} from './wcag_contrast';
+} from './helpers/wcag_contrast';
 
 describe('parse_rgb', () => {
     test('解析 rgb(255, 255, 255)', () => {

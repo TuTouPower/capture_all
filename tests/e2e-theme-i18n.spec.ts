@@ -1,7 +1,7 @@
 // tests/e2e-theme-i18n.spec.ts — P5.6 主题 + i18n
 import { test, expect } from '@playwright/test';
 import { launch_extension, open_popup, open_site, TEST_SITES } from './e2e-helpers';
-import { parse_rgb, wcag_luminance, wcag_contrast_ratio } from './wcag_contrast';
+import { parse_rgb, wcag_luminance, wcag_contrast_ratio } from './helpers/wcag_contrast';
 
 test.describe.serial('主题 + i18n', () => {
     let fix: Awaited<ReturnType<typeof launch_extension>>;

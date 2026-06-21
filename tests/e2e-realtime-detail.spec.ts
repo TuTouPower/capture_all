@@ -71,7 +71,7 @@ test.describe('采集中实时详情 P4.8 — 验证内容实时增长', () => {
         // （百度持续后台 activity: cookie 过期/keepalive 等会产出 events；
         //  即使无活动，dashboard 也会刷新到 SW buffer 中已 flush 的最新数据）
         expect(ev_count_t2, 't2 时间线事件数应 >= t1').toBeGreaterThanOrEqual(ev_count_t1);
-        console.log(`events: t1=${ev_count_t1} → t2=${ev_count_t2}`);
+        // events: t1 → t2 数量变化已通过上方断言验证
 
         await live_page.close();
 

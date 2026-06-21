@@ -53,7 +53,7 @@ const PAGE_SCRIPT = `(function() {
                 data_preview: data_preview,
                 data_bytes: data_bytes,
                 data_status: data_status
-            }, '*');
+            }, window.location.origin);
         } catch (e) {}
     }
 
@@ -142,6 +142,7 @@ export function start_websocket_capture(
 
     message_listener = (e: MessageEvent) => {
         if (!is_capturing) return;
+        if (e.origin !== window.location.origin) return;
         if (e.source !== window) return;
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;

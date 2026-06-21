@@ -15,7 +15,7 @@ const PAGE_SCRIPT = `(function() {
 
     function post(data) {
         try {
-            window.postMessage(data, window.location.origin || '*');
+            window.postMessage(data, window.location.origin);
         } catch (e) {}
     }
 
@@ -258,6 +258,7 @@ export function start_network_hook(
 
     message_listener = (e: MessageEvent) => {
         if (!is_capturing) return;
+        if (e.origin !== window.location.origin) return;
         if (e.source !== window) return;
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;

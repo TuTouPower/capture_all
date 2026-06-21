@@ -23,7 +23,7 @@ const PAGE_SCRIPT = `(function() {
                 action: action,
                 key: key,
                 value_length: value_length
-            }, '*');
+            }, window.location.origin);
         } catch (e) {}
     }
 
@@ -76,6 +76,7 @@ export function start_storage_capture(
 
     message_listener = (e: MessageEvent) => {
         if (!is_capturing) return;
+        if (e.origin !== window.location.origin) return;
         if (e.source !== window) return;
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;

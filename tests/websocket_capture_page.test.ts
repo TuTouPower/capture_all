@@ -16,6 +16,7 @@ function post_ws_message(
     data_status: 'captured' | 'too_large' | 'binary',
 ): void {
     window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
         source: window,
         data: { source: SIGNAL, ws_url, direction, data_preview, data_bytes, data_status },
     }));
@@ -78,10 +79,12 @@ describe('websocket_capture (page-level)', () => {
     it('source 不是 SIGNAL 的消息被忽略', () => {
         start_websocket_capture(sender, CAPTURE_ID, START_EPOCH);
         window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
             source: window,
             data: { source: '__other_signal__', ws_url: 'wss://x', direction: 'sent', data_preview: 'nope', data_bytes: 4, data_status: 'captured' },
         }));
         window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
             source: window,
             data: null,
         }));

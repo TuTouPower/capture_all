@@ -73,10 +73,12 @@
 redact_sensitive_headers: true   // 默认开启 header 脱敏
 redact_url_query: true           // 默认开启 URL 脱敏
 redact_data: true                // 默认开启数据脱敏
-keyboard_capture_mode: 'none'    // 默认不记录键盘
-capture_input_values: false      // 默认不捕获输入值
-capture_request_body: false      // 默认不捕获请求体
-capture_response_body: false     // 默认不捕获响应体
+keyboard_capture_mode: 'shortcuts' // 默认只记录快捷键
+capture_input_values: true       // 默认捕获输入值
+capture_request_body: true       // 默认捕获请求体
+capture_response_body: true      // 默认捕获响应体
+max_body_capture_bytes: 100MB    // 单条 body 截断上限
+inline_text_max_bytes: 32KB      // 单条 inline text 截断上限
 ```
 
 ### 3.2 脱敏规则
@@ -85,7 +87,7 @@ capture_response_body: false     // 默认不捕获响应体
 - **表单值**：`type=password` 始终 `[REDACTED]`；其他仅在 `capture_input_values=true` 时采集
 - **URL query**：`token`/`key`/`secret`/`password`/`auth` 参数值替换为 `[REDACTED]`
 - **键盘**：`'none'` 不记录；`'shortcuts'` 只记修饰键；`'all'` 完整记录
-- **Body 截断**：request_body 10KB、response_body 50KB、console args 1KB、target_text 100 字符
+- **Body 截断**：request_body/response_body 共用 `max_body_capture_bytes`（默认 100MB）、inline text `inline_text_max_bytes`（默认 32KB）、console args 1KB、target_text 100 字符
 - **脱敏与截断分离**：`redact_data` 控制脱敏，payload size limit 永远生效
 
 ### 3.3 安全约束
@@ -105,14 +107,15 @@ capture_response_body: false     // 默认不捕获响应体
 
 ```typescript
 DEFAULT_CONFIG: CaptureConfig = {
-    capture_mode: 'basic',
     mouse_precision: 'clicks_scroll_drag',
-    capture_console: false,
+    capture_console: true,
     capture_network: true,
     keyboard_capture_mode: 'shortcuts',
-    capture_input_values: false,
-    capture_request_body: false,
-    capture_response_body: false,
+    capture_input_values: true,
+    capture_request_body: true,
+    capture_response_body: true,
+    max_body_capture_bytes: 100 * 1024 * 1024,  // 100MB
+    inline_text_max_bytes: 32 * 1024,            // 32KB
     redact_sensitive_headers: true,
     redact_url_query: true,
     redact_data: true,
@@ -124,24 +127,28 @@ DEFAULT_CONFIG: CaptureConfig = {
 
 ```typescript
 DEFAULT_USER_CONFIG = {
-    selected_mode: 'basic',
     mouse_precision: 'clicks_scroll_drag',
     keyboard_capture_mode: 'none',
-    capture_input_values: false,
-    capture_request_body: false,
-    capture_response_body: false,
+    capture_input_values: true,
+    capture_request_body: true,
+    capture_response_body: true,
+    max_body_capture_bytes: 100 * 1024 * 1024,  // 100MB
+    inline_text_max_bytes: 32 * 1024,            // 32KB
     redact_data: true,
     theme: 'follow-system',
     locale: 'en',
     system_time_timezone: 'browser',
     detail_time_display_mode: 'system',
-    export_directory: '',
+    export_capture_directory: '',
+    export_log_directory: '',
     export_filename_template: 'capture_{date}.{ext}',  // P0.60 新默认模板
     export_save_as: true,
-    agent_bridge_enabled: false,
+    agent_bridge_enabled: true,
     agent_bridge_url: 'http://127.0.0.1:17831',
     agent_bridge_token: '',
-    agent_bridge_poll_interval_ms: 1000
+    agent_bridge_poll_interval_ms: 1000,
+    log_level: 'debug',
+    log_max_size_mb: 100
 };
 ```
 

@@ -9,6 +9,7 @@ import { register_session, unregister_session } from './cdp_event_router';
 const logger = new Logger('background/console', get_app_log_transport());
 
 let is_capturing = false;
+let attached_by_us = false;
 let capture_id: string;
 let start_time: number;
 let tab_id: number;
@@ -30,14 +31,21 @@ export async function start_console_capture(
     send_to_background = sender;
 
     try {
-        if (!already_attached) {
-            await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+        if (already_attached) {
+            attached_by_us = false;
+        } else {
+            try {
+                await chrome.dbg.attach({ tabId: tab_id }, '1.3');
+                attached_by_us = true;
+            } catch {
+                attached_by_us = false;
+            }
         }
         await chrome.dbg.sendCommand({ tabId: tab_id }, 'Runtime.enable');
 
         chrome.dbg.onEvent.addListener(handle_debugger_event);
         is_capturing = true;
-        logger.info('Console capture started', { tab_id, already_attached });
+        logger.info('Console capture started', { tab_id, attached_by_us, already_attached });
 
         return { success: true };
     } catch (error) {
@@ -64,10 +72,13 @@ export async function stop_console_capture(): Promise<void> {
 
     chrome.dbg.onEvent.removeListener(handle_debugger_event);
 
-    try {
-        await chrome.dbg.detach({ tabId: tab_id });
-    } catch {
-        // Ignore detach errors
+    if (attached_by_us) {
+        try {
+            await chrome.dbg.detach({ tabId: tab_id });
+        } catch {
+            // Ignore detach errors
+        }
+        attached_by_us = false;
     }
 }
 

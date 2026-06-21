@@ -767,7 +767,7 @@ chrome.tabs.onRemoved.addListener((_tabId: number) => {
 });
 
 // Tab created listener
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener(async (tab) => {
     if (!is_capturing) return;
     logger.debug(`Tab created: ${tab.id}`, { url: tab.url || tab.pendingUrl });
 
@@ -786,7 +786,7 @@ chrome.tabs.onCreated.addListener((tab) => {
         url: tab.url || tab.pendingUrl || '',
         source: 'background',
     });
-    write_events([{ ...event, data } as any]);
+    await write_events([{ ...event, data } as any]);
 });
 
 // Tab URL change listener
@@ -816,7 +816,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         url: new_url,
         source: 'background',
     });
-    write_events([{ ...event, data } as any]);
+    await write_events([{ ...event, data } as any]);
 
     // Retry CDP-based capture if navigating from restricted URL to normal page
     const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');

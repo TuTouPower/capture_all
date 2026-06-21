@@ -17,6 +17,11 @@ import { I } from './icons';
 
 const logger = new Logger('dashboard', get_app_log_transport());
 
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    return ((...args: unknown[]) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }) as T;
+}
+
 const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
 let user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
@@ -687,17 +692,6 @@ function render_dt_inspector(): string {
 }
 
 function render_net_table(selected_net_idx = dt_net_sel): string {
-    const rows = detail_network.map((r) => {
-        const err = (r.status_code || 0) >= 400;
-        return `<div class="net-row${err ? ' err' : ''}">
-            <span class="mono dim">${esc((r as unknown as Record<string, unknown>).timestamp || '')}</span>
-            <span class="mono"><span class="method-sm" data-m="${esc(r.method)}">${esc(r.method)}</span></span>
-            <span class="mono url-cell" title="${esc(r.url)}">${esc(r.url)}</span>
-            <span class="mono" style="color:${err ? 'var(--red-ink)' : 'var(--green-ink)'}">${esc(r.status_code)}</span>
-            <span class="mono dim">${esc(r.resource_type)}</span>
-            <span class="mono">${r.duration_ms != null ? Math.round(r.duration_ms) + ' ms' : '—'}</span>
-        </div>`;
-    }).join('');
     const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">暂无网络请求</div>`;
     return `<div class="dt-events"><div class="net"><div class="net-table scroll">
         <div class="net-row net-head mono" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px">
@@ -714,7 +708,7 @@ function render_net_table(selected_net_idx = dt_net_sel): string {
             <span class="mono">${r.duration_ms != null ? Math.round(r.duration_ms) + ' ms' : '—'}</span>
         </div>`;
     }).join('') : empty}
-    </div></div></div>` + (rows ? '' : '');
+    </div></div></div>`;
 }
 
 function render_net_inspector(selected_net_idx = dt_net_sel): string {
@@ -857,7 +851,7 @@ function wire_detail(): void {
     c.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { dt_view = (b as HTMLElement).dataset.view as 'list' | 'trace'; render_content(); }));
     c.querySelectorAll('tr[data-ev]').forEach((tr) => tr.addEventListener('click', () => { dt_sel = Number((tr as HTMLElement).dataset.ev); dt_insp_open = true; render_content(); }));
     c.querySelector('[data-insp-close]')?.addEventListener('click', () => { dt_insp_open = false; render_content(); });
-    c.querySelector('#dtSearch')?.addEventListener('input', () => render_content());
+    c.querySelector('#dtSearch')?.addEventListener('input', debounce(() => render_content(), 200));
     c.querySelector('[data-dexport]')?.addEventListener('click', () => {
         const fmt = (c.querySelector('#dtExportFmt') as HTMLSelectElement)?.value || 'json';
         detail_capture && export_capture(detail_capture.capture_id, fmt);
@@ -1297,21 +1291,27 @@ async function init(): Promise<void> {
         render_shell();
     }
     // Auto-refresh: poll for capture state changes every 2s
+    // TODO(M4): 改用 chrome.runtime.onMessage 监听 service worker 推送的变化通知，
+    // 替代全量轮询。需 service_worker.ts 在 capture 状态变化时主动推送消息。
     setInterval(async () => {
-        if (!is_extension) return;
-        const prev_state = captures.map(s => `${s.capture_id}:${s.status}`);
-        await load_captures();
-        const cur_state = captures.map(s => `${s.capture_id}:${s.status}`);
-        const captures_changed = prev_state.join(',') !== cur_state.join(',');
-        if (captures_changed) {
-            if (page === 'captures' || page === 'current' || page === 'exports') {
+        try {
+            if (!is_extension) return;
+            const prev_state = captures.map(s => `${s.capture_id}:${s.status}`);
+            await load_captures();
+            const cur_state = captures.map(s => `${s.capture_id}:${s.status}`);
+            const captures_changed = prev_state.join(',') !== cur_state.join(',');
+            if (captures_changed) {
+                if (page === 'captures' || page === 'current' || page === 'exports') {
+                    render_content();
+                }
+            }
+            // 实时详情页自动刷新：采集中每 2s 更新数据
+            if (page === 'detail' && detail_capture?.status === 'capturing') {
+                await load_detail(detail_capture.capture_id);
                 render_content();
             }
-        }
-        // 实时详情页自动刷新：采集中每 2s 更新数据
-        if (page === 'detail' && detail_capture?.status === 'capturing') {
-            await load_detail(detail_capture.capture_id);
-            render_content();
+        } catch (err) {
+            logger.error('polling error', err);
         }
     }, 2000);
 }

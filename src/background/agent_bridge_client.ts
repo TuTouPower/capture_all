@@ -47,56 +47,45 @@ export function stop_bridge_client(): void {
 
 function schedule_poll(deps: AgentBridgeClientDeps): void {
     if (!running) return;
-
-    poll_timer = setTimeout(async () => {
-        await poll_cycle(deps);
-        schedule_poll(deps);
-    }, 1000);
+    poll_timer = setTimeout(() => poll_cycle(deps), 0);
 }
 
 async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
-    let config: AgentBridgeUserConfig;
-    try {
-        config = normalize_agent_bridge_config(await deps.get_user_config());
-    } catch {
-        return;
-    }
-
-    if (!config.agent_bridge_enabled) {
-        stop_bridge_client();
-        return;
-    }
-
-    const { agent_bridge_url, agent_bridge_token, agent_bridge_poll_interval_ms } = config;
-    const handlers: AgentRuntimeHandlers = {
-        start_capture: deps.start_capture,
-        stop_capture: deps.stop_capture,
-        get_status: deps.get_status
-    };
+    let interval_ms = 1000;
 
     try {
+        const config = normalize_agent_bridge_config(await deps.get_user_config());
+        interval_ms = config.agent_bridge_poll_interval_ms;
+
+        if (!config.agent_bridge_enabled) {
+            stop_bridge_client();
+            return;
+        }
+
+        const { agent_bridge_url, agent_bridge_token } = config;
+        const handlers: AgentRuntimeHandlers = {
+            start_capture: deps.start_capture,
+            stop_capture: deps.stop_capture,
+            get_status: deps.get_status
+        };
+
         await send_heartbeat(agent_bridge_url, agent_bridge_token, deps);
 
         const command = await fetch_command(agent_bridge_url, agent_bridge_token);
-        if (!command) return;
-
-        const result = await dispatch_agent_command(
-            { command_id: command.command_id, type: command.type as any, payload: command.payload ?? {}, created_at: command.created_at },
-            handlers
-        );
-
-        await send_result(agent_bridge_url, agent_bridge_token, result);
+        if (command) {
+            const result = await dispatch_agent_command(
+                { command_id: command.command_id, type: command.type as any, payload: command.payload ?? {}, created_at: command.created_at },
+                handlers
+            );
+            await send_result(agent_bridge_url, agent_bridge_token, result);
+        }
     } catch {
-        // network error — next poll will retry
+        // network/config error — next poll will retry
     }
 
-    // adjust poll interval for next cycle
-    if (poll_timer && running) {
-        clearTimeout(poll_timer);
-        poll_timer = setTimeout(async () => {
-            await poll_cycle(deps);
-            schedule_poll(deps);
-        }, agent_bridge_poll_interval_ms);
+    // schedule next poll with configured interval
+    if (running) {
+        poll_timer = setTimeout(() => poll_cycle(deps), interval_ms);
     }
 }
 

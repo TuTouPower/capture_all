@@ -8,7 +8,7 @@ import { parse_bridge_config } from '../src/agent/bridge/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EXTENSION_PATH = path.resolve(__dirname, '../dist');
+const EXTENSION_PATH = path.resolve(__dirname, '../artifacts/dist');
 
 const BRIDGE_PORT = 18731;
 const BRIDGE_TOKEN = 'e2e-test-token-abc123xyz';

@@ -150,7 +150,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_sources',
             type: 'sources.list',
-            payload: { session_id: active_capture_id },
+            payload: { capture_id: active_capture_id },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
@@ -179,7 +179,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_timeline',
             type: 'timeline.list',
-            payload: { session_id: active_capture_id, offset: 0, limit: 50 },
+            payload: { capture_id: active_capture_id, offset: 0, limit: 50 },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
@@ -198,7 +198,7 @@ test.describe('MCP Agent 全流程', () => {
             command_id: 'full_records_console',
             type: 'data.list',
             payload: {
-                session_id: active_capture_id,
+                capture_id: active_capture_id,
                 source: 'console_events',
                 offset: 0,
                 limit: 20,
@@ -216,7 +216,7 @@ test.describe('MCP Agent 全流程', () => {
             command_id: 'full_records_nav',
             type: 'data.list',
             payload: {
-                session_id: active_capture_id,
+                capture_id: active_capture_id,
                 source: 'navigation_events',
                 offset: 0,
                 limit: 20,
@@ -233,7 +233,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_alldata',
             type: 'capture.get_all_data',
-            payload: { session_id: active_capture_id },
+            payload: { capture_id: active_capture_id },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
@@ -256,7 +256,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_export_json',
             type: 'capture.export',
-            payload: { session_id: active_capture_id, format: 'json' },
+            payload: { capture_id: active_capture_id, format: 'json' },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
@@ -266,7 +266,7 @@ test.describe('MCP Agent 全流程', () => {
         const data = await bridge_post('/mcp/command', {
             command_id: 'full_export_har',
             type: 'capture.export',
-            payload: { session_id: active_capture_id, format: 'har' },
+            payload: { capture_id: active_capture_id, format: 'har' },
             created_at: Date.now(),
         });
         expect(data.ok).toBe(true);
@@ -276,7 +276,7 @@ test.describe('MCP Agent 全流程', () => {
         const all_data = await bridge_post('/mcp/command', {
             command_id: 'full_loop',
             type: 'capture.get_all_data',
-            payload: { session_id: active_capture_id },
+            payload: { capture_id: active_capture_id },
             created_at: Date.now(),
         });
         expect(all_data.ok).toBe(true);

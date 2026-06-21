@@ -41,7 +41,7 @@ async function get_latest_capture_id(page: Awaited<ReturnType<typeof open_popup>
         const captures = await (chrome.runtime.sendMessage({
             action: 'list_captures',
         }) as Promise<Array<{ capture_id: string }>>);
-        if (!sessions || captures.length === 0) return '';
+        if (!captures || captures.length === 0) return '';
         return captures[captures.length - 1].capture_id;
     });
 }

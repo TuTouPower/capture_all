@@ -102,7 +102,7 @@ test.describe.serial('多轮采集数据隔离', () => {
         );
 
         expect(captures, '至少应有 3 个 capture').toBeDefined();
-        expect(Array.isArray(sessions), 'captures 应为数组').toBe(true);
+        expect(Array.isArray(captures), 'captures 应为数组').toBe(true);
         expect(captures.length, '应有 3 个 capture').toBeGreaterThanOrEqual(3);
 
         // 取最近 3 个
@@ -121,7 +121,7 @@ test.describe.serial('多轮采集数据隔离', () => {
         for (const capture of recent) {
             const result: ExportResult = await popup.evaluate(
                 (sid) => chrome.runtime.sendMessage({ action: 'export_json', capture_id: sid }),
-                session.capture_id
+                capture.capture_id
             );
             exports.push(result);
         }
@@ -202,11 +202,11 @@ test.describe.serial('多轮采集数据隔离', () => {
         const result: ExportResult = await popup.evaluate(() =>
             chrome.runtime.sendMessage({ action: 'list_captures' })
                 .then((captures: CaptureInfo[]) => {
-                    if (sessions && captures.length > 0) {
+                    if (captures && captures.length > 0) {
                         const latest = captures[captures.length - 1];
                         return chrome.runtime.sendMessage({
                             action: 'export_json',
-                            session_id: latest.capture_id,
+                            capture_id: latest.capture_id,
                         });
                     }
                     return { success: false };

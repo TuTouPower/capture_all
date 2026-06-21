@@ -60,9 +60,9 @@ async function capture_with_toggle_off(
         return row?.dataset?.session || '';
     });
     if (!capture_id) {
-        // Fallback: use list_sessions
+        // Fallback: use list_captures
         const sessions = await popup.evaluate(() =>
-            chrome.runtime.sendMessage({ action: 'list_sessions' })
+            chrome.runtime.sendMessage({ action: 'list_captures' })
         );
         const latest = sessions?.[0];
         if (!latest) throw new Error('无法获取 capture_id');
@@ -82,7 +82,7 @@ async function export_json(fix: Awaited<ReturnType<typeof launch_extension>>, ca
         try {
             const r = await (chrome.runtime.sendMessage({
                 action: 'export_json',
-                session_id: id,
+                capture_id: id,
             }) as Promise<{ success: boolean; json?: string }>);
             return r;
         } catch {

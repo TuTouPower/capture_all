@@ -30,6 +30,8 @@ export function increment_capture_event_stats(stats: CaptureStats, category: Cat
         event_count: stats.event_count + 1,
         user_action_count: category === 'user_action' ? stats.user_action_count + 1 : stats.user_action_count,
         nav_count: category === 'navigation' ? stats.nav_count + 1 : stats.nav_count,
+        request_count: category === 'network' ? stats.request_count + 1 : stats.request_count,
+        log_count: category === 'console' ? stats.log_count + 1 : stats.log_count,
         error_count: category === 'error' ? stats.error_count + 1 : stats.error_count,
         storage_change_count: category === 'storage' ? stats.storage_change_count + 1 : stats.storage_change_count,
         cookie_change_count: category === 'cookie' ? stats.cookie_change_count + 1 : stats.cookie_change_count,

@@ -15,6 +15,18 @@ describe('capture_stats', () => {
         expect(after_user_action.nav_count).toBe(1);
     });
 
+    it('increments request_count for network category', () => {
+        const result = increment_capture_event_stats(create_empty_capture_stats(), 'network');
+        expect(result.request_count).toBe(1);
+        expect(result.event_count).toBe(1);
+    });
+
+    it('increments log_count for console category', () => {
+        const result = increment_capture_event_stats(create_empty_capture_stats(), 'console');
+        expect(result.log_count).toBe(1);
+        expect(result.event_count).toBe(1);
+    });
+
     it('uses user_action_count for the visible seven data labels', () => {
         const stats = {
             ...create_empty_capture_stats(),

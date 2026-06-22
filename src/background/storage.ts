@@ -446,6 +446,44 @@ export async function check_storage_limit(capture_id: string): Promise<boolean> 
 }
 
 // ============================================================
+// Generic cursor pagination helper
+// ============================================================
+
+async function query_by_store<T>(
+    store_name: string,
+    capture_id: string,
+    offset: number = 0,
+    limit: number = 100,
+): Promise<T[]> {
+    const database = await init_db();
+    return new Promise((resolve, reject) => {
+        const tx = database.transaction(store_name, 'readonly');
+        const store = tx.objectStore(store_name);
+        const index = store.index('capture_id');
+        const request = index.openCursor(IDBKeyRange.only(capture_id));
+        const results: T[] = [];
+        let skipped = 0;
+
+        request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor || results.length >= limit) {
+                resolve(results);
+                return;
+            }
+
+            if (skipped < offset) {
+                skipped++;
+                cursor.continue();
+            } else {
+                results.push(cursor.value);
+                cursor.continue();
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// ============================================================
 // Query with pagination
 // ============================================================
 
@@ -456,32 +494,7 @@ export async function get_events_by_category(
     limit: number = 100,
 ): Promise<CaptureEvent[]> {
     const store_name = CATEGORY_STORE_MAP[category] ?? STORE_NAMES.USER_ACTION_EVENTS;
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(store_name, 'readonly');
-        const store = tx.objectStore(store_name);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: CaptureEvent[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<CaptureEvent>(store_name, capture_id, offset, limit);
 }
 
 export async function get_network_requests(
@@ -489,32 +502,7 @@ export async function get_network_requests(
     offset: number = 0,
     limit: number = 100,
 ): Promise<NetworkRequestData[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.NETWORK_REQUESTS, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.NETWORK_REQUESTS);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: NetworkRequestData[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<NetworkRequestData>(STORE_NAMES.NETWORK_REQUESTS, capture_id, offset, limit);
 }
 
 export async function get_console_events(
@@ -522,32 +510,7 @@ export async function get_console_events(
     offset: number = 0,
     limit: number = 100,
 ): Promise<ConsoleEventData[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.CONSOLE_EVENTS, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.CONSOLE_EVENTS);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: ConsoleEventData[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<ConsoleEventData>(STORE_NAMES.CONSOLE_EVENTS, capture_id, offset, limit);
 }
 
 export async function get_error_events(
@@ -555,32 +518,7 @@ export async function get_error_events(
     offset: number = 0,
     limit: number = 100,
 ): Promise<RuntimeExceptionData[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.ERROR_EVENTS, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.ERROR_EVENTS);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: RuntimeExceptionData[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<RuntimeExceptionData>(STORE_NAMES.ERROR_EVENTS, capture_id, offset, limit);
 }
 
 export async function get_storage_changes(
@@ -588,32 +526,7 @@ export async function get_storage_changes(
     offset: number = 0,
     limit: number = 100,
 ): Promise<StorageChangeData[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.STORAGE_CHANGES, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.STORAGE_CHANGES);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: StorageChangeData[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<StorageChangeData>(STORE_NAMES.STORAGE_CHANGES, capture_id, offset, limit);
 }
 
 export async function get_cookie_changes(
@@ -621,32 +534,7 @@ export async function get_cookie_changes(
     offset: number = 0,
     limit: number = 100,
 ): Promise<CookieChangeData[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.COOKIE_CHANGES, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.COOKIE_CHANGES);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: CookieChangeData[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<CookieChangeData>(STORE_NAMES.COOKIE_CHANGES, capture_id, offset, limit);
 }
 
 export async function get_lifecycle_events(
@@ -654,32 +542,7 @@ export async function get_lifecycle_events(
     offset: number = 0,
     limit: number = 100,
 ): Promise<CaptureEvent[]> {
-    const database = await init_db();
-    return new Promise((resolve, reject) => {
-        const tx = database.transaction(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, 'readonly');
-        const store = tx.objectStore(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS);
-        const index = store.index('capture_id');
-        const request = index.openCursor(IDBKeyRange.only(capture_id));
-        const results: CaptureEvent[] = [];
-        let skipped = 0;
-
-        request.onsuccess = () => {
-            const cursor = request.result;
-            if (!cursor || results.length >= limit) {
-                resolve(results);
-                return;
-            }
-
-            if (skipped < offset) {
-                skipped++;
-                cursor.continue();
-            } else {
-                results.push(cursor.value);
-                cursor.continue();
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+    return query_by_store<CaptureEvent>(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, capture_id, offset, limit);
 }
 
 // ============================================================

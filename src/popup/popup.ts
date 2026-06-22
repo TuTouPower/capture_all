@@ -3,6 +3,7 @@
 import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
+import { escape_html } from '../shared/escape';
 import { load_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
 import { format_system_time } from '../shared/system_time';
@@ -98,10 +99,6 @@ const CAPTURE: CaptureSource[] = [
     { key: 'cookie_change_count',  i18n: 'capCookie',  icon: 'cookie',  tone: 'cyan',   stat: 'cookie_change_count' },
     { key: 'mask',                 i18n: 'capMask',    icon: 'shield',  tone: 'green',  stat: null },
 ];
-
-function escape_html(s: unknown): string {
-    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
-}
 
 function fmt_num(n: number): string {
     return n.toLocaleString('en-US');
@@ -323,7 +320,6 @@ function wire_view(): void {
 }
 
 function get_capture_config(): CaptureConfig {
-    chrome.storage.local.set({ capture_toggles: toggles });
     return {
         // Category gates: popup toggles are direct on/off
         capture_network: toggles.request_count !== false,
@@ -378,7 +374,7 @@ async function start_capture(): Promise<void> {
             updated_at: new Date().toISOString(),
         };
         live_counts = null;
-        chrome.storage.local.set({ is_capturing: true, current_capture });
+        chrome.storage.local.set({ is_capturing: true, current_capture, capture_toggles: toggles });
         state = 'capturing';
         render();
         start_timer();

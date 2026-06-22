@@ -3,6 +3,7 @@
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig, ThemeMode } from '../shared/types';
 import { init_locale, set_locale, type Locale } from '../shared/i18n';
 import { init_theme, set_theme } from '../shared/theme';
+import { escape_html as esc } from '../shared/escape';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { load_user_config, save_user_config } from '../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../shared/constants';
@@ -48,9 +49,6 @@ let dt_net_insp_closed = false;
 const root = document.getElementById('root')!;
 
 // ── helpers ─────────────────────────────────────────────────────────────
-function esc(s: unknown): string {
-    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
-}
 function num(n: number): string { return (n ?? 0).toLocaleString('en-US'); }
 function strip_proto(u: string): string { return (u || '').replace(/^https?:\/\//, ''); }
 

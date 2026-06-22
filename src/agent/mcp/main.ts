@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { BridgeMcpClient } from './client';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from './tools';
+import { MCP_TOOL_SCHEMAS } from './schemas';
 
 const bridge_url = process.env.CAPTURE_ALL_BRIDGE_URL;
 const bridge_token = process.env.CAPTURE_ALL_BRIDGE_TOKEN;
@@ -13,12 +14,12 @@ if (!bridge_url || !bridge_token) {
 
 const client = new BridgeMcpClient(bridge_url, bridge_token);
 const server = new McpServer({ name: 'capture-all', version: '0.1.0' });
-const input_schema = z.object({}).passthrough();
 
 function register_tool(name: string): void {
+    const schema = MCP_TOOL_SCHEMAS[name] ?? z.object({}).passthrough();
     server.registerTool(
         name,
-        { inputSchema: input_schema },
+        { inputSchema: schema },
         async (input) => {
             const result = await execute_mcp_tool(client, { name, arguments: input });
             return {

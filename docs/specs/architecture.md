@@ -67,18 +67,20 @@ graph TB
 src/
 ├── background/                   # Service Worker - 采集核心
 │   ├── service_worker.ts         # 主入口，消息路由，生命周期管理
-│   ├── capture_manager.ts        # 采集管理
 │   ├── storage.ts                # IndexedDB CRUD 封装
-│   ├── network_capture.ts        # webRequest 网络采集
+│   ├── network_capture.ts        # webRequest / CDP 网络采集
 │   ├── console_capture.ts        # CDP console 采集
 │   ├── exception_capture.ts      # CDP runtime 异常采集
 │   ├── cookie_capture.ts         # chrome.cookies API 采集
 │   ├── body_capture_coordinator.ts # Body 捕获协调器
 │   ├── network_correlator.ts     # webRequest-CDP 请求关联
+│   ├── cdp_event_router.ts       # CDP 事件路由分发
+│   ├── stream_buffer.ts          # SSE/流式响应增量缓冲
 │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端
 │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端
 │   ├── agent_command_dispatcher.ts # Agent 命令分发
 │   ├── agent_data_queries.ts     # Agent 数据查询
+│   ├── app_log_storage.ts        # 应用日志存储
 │   ├── exporter.ts               # JSON/JSONL/HTML/HAR 导出
 │   └── keepalive.ts              # SW 保活 (chrome.alarms)
 ├── content/                      # Content Scripts - 页面内采集
@@ -87,8 +89,15 @@ src/
 │   ├── keyboard_capture.ts       # 键盘事件
 │   ├── scroll_capture.ts         # 滚动事件
 │   ├── dom_capture.ts            # DOM 变化 (input_event)
+│   ├── clipboard_capture.ts      # 剪贴板事件
+│   ├── focus_capture.ts          # 焦点事件
+│   ├── form_submit_capture.ts    # 表单提交事件
+│   ├── fullscreen_capture.ts     # 全屏变化事件
+│   ├── print_capture.ts          # 打印事件
+│   ├── resize_capture.ts         # 窗口尺寸变化事件
+│   ├── visibility_capture.ts     # 页面可见性变化事件
 │   ├── storage_capture.ts        # localStorage/sessionStorage 拦截
-│   ├── xhr_fetch_capture.ts      # XHR/fetch 请求拦截
+│   ├── websocket_capture.ts      # WebSocket 帧捕获
 │   └── network_hook.ts           # fetch response body hook
 ├── popup/                        # 弹出窗口
 │   ├── popup.html                # 入口 HTML
@@ -101,11 +110,8 @@ src/
 │   ├── dashboard-pages.css       # 页面级样式
 │   ├── detail-shell.css          # Shell 布局
 │   ├── detail-views.css          # 详情视图组件样式
+│   ├── sidebar_resize.ts         # 侧边栏拖拽调整
 │   └── icons.ts                  # 图标定义
-├── detail/                       # 遗留详情页 (已废弃，仅保留兼容入口)
-│   ├── detail.html
-│   ├── detail.ts
-│   └── detail.css
 ├── devtools/                     # DevTools 面板
 │   ├── devtools.html
 │   ├── devtools_panel.html
@@ -117,15 +123,24 @@ src/
 │   ├── i18n.ts                   # 国际化
 │   ├── theme.ts                  # 主题
 │   ├── event_utils.ts            # event_id 生成 + 公共字段填充
+│   ├── event_category.ts         # 事件分类映射
 │   ├── redaction.ts              # 脱敏规则
-│   ├── capture_modes.ts          # 采集模式默认配置
 │   ├── escape.ts                 # HTML/JS 安全转义
 │   ├── dom_utils.ts              # DOM 工具
 │   ├── user_config.ts            # 用户配置读写
 │   ├── system_time.ts            # 系统时间处理
 │   ├── agent_bridge_config.ts    # Bridge 配置
 │   ├── export_settings.ts        # 导出设置
-│   └── design_tokens.css         # 设计令牌 (CSS 变量)
+│   ├── export_utils.ts           # 导出工具函数
+│   ├── capture_data_reader.ts    # 采集数据读取器
+│   ├── capture_stats.ts          # 采集统计计算
+│   ├── poll_capture_status.ts    # 采集状态轮询
+│   ├── archive_builder.ts        # 归档构建
+│   ├── body_routing.ts           # Body 捕获路由
+│   ├── hash.ts                   # 哈希工具
+│   ├── id.ts                     # ID 生成
+│   ├── logger.ts                 # 日志模块
+│   └── chrome.d.ts               # Chrome API 类型声明
 └── agent/                        # 本地 Agent 基础设施
     ├── bridge/
     │   ├── main.ts               # Bridge 服务入口
@@ -133,8 +148,13 @@ src/
     │   ├── command_queue.ts       # 命令队列
     │   ├── config.ts             # Bridge 配置
     │   └── cdp_handler.ts        # 外部 CDP 处理
-    └── mcp/
-        └── main.ts               # MCP Server 入口 + 工具注册
+    ├── mcp/
+    │   ├── main.ts               # MCP Server 入口
+    │   ├── client.ts             # Bridge MCP 客户端
+    │   ├── schemas.ts            # Zod 参数校验 schema
+    │   └── tools.ts              # 工具注册 + 命令映射
+    └── shared/
+        └── protocol.ts           # Agent 命令协议类型
 ```
 
 ### 2.2 Background Service Worker
@@ -286,20 +306,20 @@ Agent Data Queries (src/background/agent_data_queries.ts)
 
 #### MCP 工具列表
 
-| 工具 | 类型 | 说明 |
-|---|---|---|
-| `get_status` | 状态 | bridge 版本、扩展在线状态、活跃采集 |
-| `start_capture` | 采集控制 | 启动采集，返回 capture_id |
-| `stop_capture` | 采集控制 | 停止采集 |
-| `list_captures` | 采集 | 列出采集记录 (分页) |
-| `get_capture` | 采集 | 获取单次采集元信息 |
-| `list_data_sources` | 数据源 | 列出采集中的可用的数据源及计数 |
-| `list_entries` | 数据 | 按 source 列出记录 (分页/时间过滤/排序) |
-| `get_entry` | 数据 | 获取单条完整原始记录 |
-| `get_timeline` | 时间线 | 合并多个 source 的时间线 (分页) |
-| `get_timeline_item` | 时间线 | 获取时间线单项完整数据 |
-| `get_all_capture_data` | 全量 | 一次性获取 session 完整数据 |
-| `export_capture` | 导出 | 触发 JSON/JSONL/HTML/HAR 导出 |
+| 工具 | 别名 | 类型 | 说明 |
+|---|---|---|---|
+| `get_status` | — | 状态 | bridge 版本、扩展在线状态、活跃采集 |
+| `start_recording` | — | 采集控制 | 启动采集，返回 capture_id |
+| `stop_recording` | — | 采集控制 | 停止采集 |
+| `list_captures` | `list_sessions` | 采集 | 列出采集记录 (分页) |
+| `get_capture` | `get_session` | 采集 | 获取单次采集元信息 |
+| `list_data_sources` | — | 数据源 | 列出采集中的可用的数据源及计数 |
+| `list_records` | — | 数据 | 按 source 列出记录 (分页/时间过滤/排序) |
+| `get_record` | — | 数据 | 获取单条完整原始记录 |
+| `get_timeline` | — | 时间线 | 合并多个 source 的时间线 (分页) |
+| `get_timeline_item` | — | 时间线 | 获取时间线单项完整数据 |
+| `get_all_capture_data` | `get_all_session_data` | 全量 | 一次性获取 capture 完整数据 |
+| `export_capture` | `export_session` | 导出 | 触发 JSON/JSONL/HTML/HAR 导出 |
 
 #### 安全边界
 
@@ -312,7 +332,7 @@ Agent Data Queries (src/background/agent_data_queries.ts)
 
 **Bridge 层**：`BRIDGE_UNAVAILABLE`, `EXTENSION_OFFLINE`, `COMMAND_TIMEOUT`, `TOKEN_INVALID`, `COMMAND_CANCELLED`
 
-**扩展层**：`SESSION_NOT_FOUND`, `SOURCE_NOT_FOUND`, `RECORD_NOT_FOUND`, `INVALID_QUERY`, `RECORDING_ALREADY_RUNNING`, `NO_ACTIVE_RECORDING`, `EXPORT_FAILED`, `STORAGE_READ_FAILED`, `PAYLOAD_TOO_LARGE`
+**扩展层**：`CAPTURE_NOT_FOUND`, `SOURCE_NOT_FOUND`, `RECORD_NOT_FOUND`, `INVALID_QUERY`, `CAPTURE_ALREADY_RUNNING`, `NO_ACTIVE_CAPTURE`, `EXPORT_FAILED`, `STORAGE_READ_FAILED`, `PAYLOAD_TOO_LARGE`
 
 **超时策略**：查询类 30s、全量类 120s、导出类 120s、start/stop 15s。超时只返回错误，不自动降级。
 
@@ -330,18 +350,18 @@ Agent Data Queries (src/background/agent_data_queries.ts)
 #### 命令映射 (MCP -> Bridge)
 
 ```
-get_status          -> bridge 本地状态
-start_capture     -> capture.start
-stop_capture      -> capture.stop
-list_captures       -> captures.list
-get_capture         -> captures.get
-list_data_sources   -> sources.list
-list_entries        -> data.list
-get_entry          -> data.get
-get_timeline        -> timeline.list
-get_timeline_item   -> timeline.get
-get_all_capture_data -> capture.get_all_data
-export_capture      -> capture.export
+get_status            -> bridge 本地状态
+start_recording     -> capture.start
+stop_recording      -> capture.stop
+list_captures        -> captures.list   (alias: list_sessions)
+get_capture          -> captures.get    (alias: get_session)
+list_data_sources    -> sources.list
+list_records         -> data.list
+get_record           -> data.get
+get_timeline         -> timeline.list
+get_timeline_item    -> timeline.get
+get_all_capture_data -> capture.get_all_data   (alias: get_all_session_data)
+export_capture       -> capture.export   (alias: export_session)
 ```
 
 ### 2.7 Body Capture 三层架构

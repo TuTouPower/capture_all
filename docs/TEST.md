@@ -77,25 +77,77 @@
 |----------|----------|------|
 | `redaction.test.ts` | header 脱敏、URL query 脱敏、body 截断、password 脱敏 | 已有 |
 | `network_capture.test.ts` | webRequest 监听、headers 捕获、body 状态 | 已有 |
-| `capture_modes.test.ts` | CaptureConfig 默认配置 | 已有 |
 | `escape.test.ts` | HTML/JS 转义、`</script>` 处理 | 已有 |
+| `escape_html.test.ts` | escape_html 边界行为 | 已有 |
 | `storage.test.ts` | DB 初始化、Capture CRUD | 已有 |
+| `storage_helpers.test.ts` | storage 辅助函数 | 已有 |
 | `export_settings.test.ts` | 文件名模板、导出目录 | 已有 |
+| `export_utils.test.ts` | 导出工具函数 | 已有 |
+| `export_integrity.test.ts` | 导出数据完整性 | 已有 |
 | `system_time.test.ts` | 时区转换、相对/系统时间 | 已有 |
 | `agent_bridge_client.test.ts` | heartbeat、poll command、result 回传、401 | 已有 |
 | `agent_bridge_config.test.ts` | 默认值、保存/读取 | 已有 |
+| `agent_bridge_config_ui.test.ts` | Bridge 配置 UI 交互 | 已有 |
 | `agent_bridge_queue.test.ts` | 命令队列、超时 | 已有 |
 | `agent_bridge_server.test.ts` | 端点响应、CORS、健康检查 | 已有 |
 | `agent_protocol.test.ts` | 消息格式、错误码 | 已有 |
 | `agent_command_dispatcher.test.ts` | 全部命令成功+至少一个错误路径 | 已有 |
 | `agent_data_queries.test.ts` | source 统计、分页、时间范围、timeline 合并 | 已有 |
 | `agent_mcp_client.test.ts` | 工具转发、错误透传 | 已有 |
+| `mcp_schema.test.ts` | MCP 工具参数 schema 校验 | 已有 |
 | `network_correlator.test.ts` | CDP/webRequest/fallback 事件匹配 | 已有 |
+| `network_cdp.test.ts` | CDP-first 网络采集 | 已有 |
 | `external_cdp_bridge_client.test.ts` | CDP 端口发现、attach/detach | 已有 |
 | `tab_events.test.ts` | Tab 打开/关闭/切换/URL 变化 | 已有 |
 | `dashboard_config_sync.test.ts` | 设置持久化 | 已有 |
 | `popup_main_panel_url.test.ts` | dashboard 跳转参数 | 已有 |
-| `example.test.ts` | 示例/占位 | 已有 |
+| `popup_export.test.ts` | Popup 导出触发 | 已有 |
+| `popup_immediate_refresh.test.ts` | Popup 立即刷新 | 已有 |
+| `popup_layout.test.ts` | Popup 布局验证 | 已有 |
+| `popup_start_timing.test.ts` | Popup 采集启动时序 | 已有 |
+| `capture_stats.test.ts` | 采集统计计算 | 已有 |
+| `label_counts.test.ts` | 七标签计数映射 | 已有 |
+| `event_category.test.ts` | 事件分类映射 | 已有 |
+| `entry_unification.test.ts` | 记录统一化 | 已有 |
+| `pipeline_consistency.test.ts` | 采集管线一致性 | 已有 |
+| `archive_builder.test.ts` | 归档构建 | 已有 |
+| `archive_config.test.ts` | 归档配置 | 已有 |
+| `archive_entry.test.ts` | 归档条目 | 已有 |
+| `body_routing.test.ts` | Body 路由分发 | 已有 |
+| `stream_buffer.test.ts` | SSE 流缓冲 | 已有 |
+| `streaming_capture.test.ts` | 流式响应捕获 | 已有 |
+| `websocket_capture.test.ts` | WebSocket 帧捕获 | 已有 |
+| `websocket_capture_page.test.ts` | WebSocket 页面级捕获 | 已有 |
+| `clipboard_capture.test.ts` | 剪贴板事件捕获 | 已有 |
+| `focus_capture.test.ts` | 焦点事件捕获 | 已有 |
+| `form_submit_capture.test.ts` | 表单提交捕获 | 已有 |
+| `fullscreen_capture.test.ts` | 全屏变化捕获 | 已有 |
+| `print_capture.test.ts` | 打印事件捕获 | 已有 |
+| `resize_capture.test.ts` | 窗口尺寸变化捕获 | 已有 |
+| `visibility_capture.test.ts` | 页面可见性变化捕获 | 已有 |
+| `console_capture.test.ts` | Console CDP 采集 | 已有 |
+| `content_script_uses_poll.test.ts` | Content script 轮询机制 | 已有 |
+| `app_log_storage.test.ts` | 应用日志存储 | 已有 |
+| `hash.test.ts` | 哈希工具 | 已有 |
+| `logger.test.ts` | 日志模块 | 已有 |
+| `ui_strings.test.ts` | 用户可见字符串验证 | 已有 |
+| `settings_ui.test.ts` | 设置 UI | 已有 |
+| `sidebar_resize.test.ts` | 侧边栏拖拽调整 | 已有 |
+| `default_config.test.ts` | 默认配置 | 已有 |
+| `detail_layout_source.test.ts` | 详情布局数据源 | 已有 |
+| `detail_render_consistency.test.ts` | 详情渲染一致性 | 已有 |
+| `live_data_queries.test.ts` | 实时数据查询 | 已有 |
+| `integration_page.test.ts` | 集成页面测试 | 已有 |
+| `poll_capture_status.test.ts` | 采集状态轮询 | 已有 |
+| `stop_capture.test.ts` | 停止采集消息 | 已有 |
+| `sw_action_contract.test.ts` | Service Worker 消息契约 | 已有 |
+| `extension_icons.test.ts` | 扩展图标 | 已有 |
+| `session_manager.test.ts` | Session 管理器（兼容层） | 已有 |
+| `wcag_contrast.test.ts` | WCAG 对比度 | 已有 |
+| `redaction.test.ts` | 脱敏规则 | 已有 |
+| `p036_user_action_filter.test.ts` | P036 用户操作过滤 | 已有 |
+| `p043_flush_before_read.test.ts` | P043 读取前 flush | 已有 |
+| `p060_capture_id.test.ts` | P060 capture_id 验证 | 已有 |
 
 ### 4.2 必须补充的单元测试
 
@@ -103,7 +155,7 @@
 |--------|----------|------|----------|
 | **P0** | 七数据标签计数从实际数据计算（非固定为 0） | `refresh_counts()` 需返回正确的 `label_counts` | TASKS.md P0.1 |
 | **P0** | `stop_capture` 发送 `{ action: 'stop' }` 后 SW 返回 `{ success: true }` | 验证消息传输和响应 | TASKS.md P0.2 |
-| **P0** | `list_events`/`list_network`/`list_console` 对活跃采集 返回实时数据 | 验证数据查询 handler 不丢失活跃采集数据 | TASKS.md P0.3 |
+| **P0** | `list_records`/`list_data_sources` 对活跃采集返回实时数据 | 验证数据查询 handler 不丢失活跃采集数据 | TASKS.md P0.3 |
 | **P0** | `label_counts` 计算逻辑：从 CaptureEvent.category 映射到七标签 | 验证 category→label 映射正确 | spec 6.3 |
 | **P1** | UI 渲染不包含 `深度采集`/`标准采集`/`mode` 等字符串 | 验证旧概念彻底清除 | chat10 |
 | **P1** | 所有面向用户字符串使用 `Capture All`/`全采`/`采集` | 验证命名统一 | spec 3.3 |
@@ -138,7 +190,7 @@
 ### 5.3 导出管线
 
 1. JSON 导出：`capture_id` 正确、使用新类型（`CaptureEvent` + `*Data`）
-2. JSONL 导出：逐行事件、`capture_id` 替换旧 `session_id`
+2. JSONL 导出：逐行事件、使用 `capture_id`
 3. HAR 导出：标准格式兼容 Chrome DevTools / Fiddler / Charles
 4. HTML 导出：`</script>` 转义为 `<\/script>`、`<` `>` `&` 全部转义、footer 使用 "Capture All"
 
@@ -168,7 +220,35 @@
 | e2e | `e2e.spec.ts` | headless | 基础采集流程 |
 | e2e-real | `e2e-real.spec.ts` | headed | 真实浏览器采集验证 |
 | e2e-cdp-capture | `e2e-cdp-capture.spec.ts` | headed | 含 body capture 验证的采集测试 |
+| e2e-cdp-retry | `e2e-cdp-retry.spec.ts` | headed | CDP 重试逻辑验证 |
 | e2e-mcp | `e2e-mcp.spec.ts` | headed | Agent bridge + MCP 闭环 |
+| e2e-mcp-full | `e2e-mcp-full.spec.ts` | headed | MCP 完整闭环测试 |
+| e2e-baidu | `e2e-baidu.spec.ts` | headed | 百度网站采集 |
+| e2e-toutiao | `e2e-toutiao.spec.ts` | headed | 今日头条网站采集 |
+| e2e-qq | `e2e-qq.spec.ts` | headed | QQ 网站采集 |
+| e2e-sina | `e2e-sina.spec.ts` | headed | 新浪网站采集 |
+| e2e-capture-baidu | `e2e-capture-baidu.spec.ts` | headed | 百度采集流程 |
+| e2e-capture-local | `e2e-capture-local.spec.ts` | headed | 本地页面采集 |
+| e2e-streaming-capture | `e2e-streaming-capture.spec.ts` | headed | SSE/流式响应采集 |
+| e2e-websocket-capture | `e2e-websocket-capture.spec.ts` | headed | WebSocket 帧采集 |
+| e2e-states | `e2e-states.spec.ts` | headed | 三状态切换 |
+| e2e-stop | `e2e-stop.spec.ts` | headed | 停止采集验证 |
+| e2e-labels | `e2e-labels.spec.ts` | headed | 七标签统计 |
+| e2e-consistency | `e2e-consistency.spec.ts` | headed | Popup/Dashboard 一致性 |
+| e2e-dashboard-list | `e2e-dashboard-list.spec.ts` | headed | 主面板列表 |
+| e2e-detail-tabs | `e2e-detail-tabs.spec.ts` | headed | 详情 Tab 切换 |
+| e2e-realtime-detail | `e2e-realtime-detail.spec.ts` | headed | 实时详情验证 |
+| e2e-export | `e2e-export.spec.ts` | headed | 导出功能 |
+| e2e-export-content | `e2e-export-content.spec.ts` | headed | 导出内容验证 |
+| e2e-concurrent | `e2e-concurrent.spec.ts` | headed | 并发采集 |
+| e2e-network | `e2e-network.spec.ts` | headed | 网络请求采集 |
+| e2e-console-errors | `e2e-console-errors.spec.ts` | headed | 控制台错误采集 |
+| e2e-xss | `e2e-xss.spec.ts` | headed | XSS 安全验证 |
+| e2e-logging | `e2e-logging.spec.ts` | headed | 日志验证 |
+| e2e-settings-effects | `e2e-settings-effects.spec.ts` | headed | 设置生效验证 |
+| e2e-toggle-effects | `e2e-toggle-effects.spec.ts` | headed | 开关效果验证 |
+| e2e-theme-i18n | `e2e-theme-i18n.spec.ts` | headed | 主题与国际化 |
+| e2e-ui-audit | `e2e-ui-audit.spec.ts` | headed | UI 审计 |
 
 ### 6.3 运行命令
 
@@ -249,7 +329,7 @@ npm run test:e2e:all   # 全部 4 个项目
 
 测试步骤：
 1. 点击「导出」→ 选择 JSON
-2. 验证导出文件使用 `capture_id`（不是 `session_id`）
+2. 验证导出文件使用 `capture_id`
 3. 验证事件使用 `category` + `type` 两级分类
 4. 选择 HTML 导出
 5. 验证 HTML 文件可独立打开，无 XSS
@@ -369,7 +449,7 @@ npm run test:e2e:all   # 全部 4 个项目
 | 中等采集 | 验证统计和分页 | 100-1000 事件 |
 | 异常数据 | 验证错误处理 | 网络失败、CDP detach、body 捕获失败、超大响应体 |
 | 特殊字符 | 验证脱敏和转义 | URL 含 `<script>`、header 含换行符 |
-| 旧版本数据 | 验证兼容性 | 旧 `session_id` 字段、旧 `Session` 类型 |
+| 旧版本数据 | 验证兼容性 | 旧 `session_id` 字段（兼容层自动映射为 `capture_id`）、旧类型 |
 
 ---
 
@@ -447,16 +527,34 @@ npm run test:e2e:all   # 全部 4 个项目
 ### 项目目录约定
 
 ```
-tests/                          # 测试文件目录
-├── *.test.ts                   # 单元测试（vitest，排除 *.spec.ts）
-├── e2e.spec.ts                 # 基础 E2E
-├── e2e-real.spec.ts            # 真实浏览器 E2E
-├── e2e-cdp-capture.spec.ts      # CDP body capture E2E
-└── e2e-mcp.spec.ts             # MCP 闭环 E2E
+tests/                              # 测试文件目录
+├── *.test.ts                       # 单元测试（vitest，排除 *.spec.ts）
+├── helpers/
+│   └── wcag_contrast.ts            # 测试辅助工具
+├── fixtures/
+│   ├── server.ts                   # 测试服务器
+│   └── test-page.html              # 测试页面
+├── __mocks__/
+│   └── chrome_debugger.ts          # Chrome debugger mock
+├── e2e.spec.ts                     # 基础 E2E (headless)
+├── e2e-real.spec.ts                # 真实浏览器 E2E
+├── e2e-cdp-capture.spec.ts         # CDP body capture E2E
+├── e2e-cdp-retry.spec.ts           # CDP 重试 E2E
+├── e2e-mcp.spec.ts                 # MCP 闭环 E2E
+├── e2e-mcp-full.spec.ts            # MCP 完整闭环 E2E
+├── e2e-{baidu,toutiao,qq,sina}.spec.ts  # 四网站并发 E2E
+├── e2e-capture-{baidu,local}.spec.ts    # 采集流程 E2E
+├── e2e-streaming-capture.spec.ts   # SSE 流式采集 E2E
+├── e2e-websocket-capture.spec.ts   # WebSocket 采集 E2E
+├── e2e-{states,stop,labels,consistency,realtime-detail}.spec.ts  # P0 状态 E2E
+├── e2e-{dashboard-list,detail-tabs,export,export-content}.spec.ts # P0 详情/导出 E2E
+├── e2e-{concurrent,network,console-errors,xss,mcp-full,theme-i18n}.spec.ts  # P1 增强 E2E
+├── e2e-{logging,settings-effects,toggle-effects,ui-audit}.spec.ts # P1 辅助 E2E
+└── e2e-helpers.ts                  # E2E 公共工具
 
 artifacts/
-├── dist/                       # 构建产物（扩展加载源）
-└── test-results/               # Playwright 测试输出
+├── dist/                           # 构建产物（扩展加载源）
+└── test-results/                   # Playwright 测试输出
 ```
 
 ---

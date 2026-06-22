@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const dashboard_ts = readFileSync('src/dashboard/dashboard.ts', 'utf8');
+const dashboard_ts = readFileSync('src/dashboard/dashboard_detail.ts', 'utf8');
 const dashboard_css = readFileSync('src/dashboard/dashboard-pages.css', 'utf8');
 
 describe('detail layout source', () => {
@@ -22,6 +22,6 @@ describe('detail layout source', () => {
 
     it('allows closing the default network inspector', () => {
         expect(dashboard_ts).toContain('!dt_net_insp_closed && detail_network.length > 0');
-        expect(dashboard_ts).toContain('dt_net_insp_closed = true');
+        expect(dashboard_ts).toContain('set_dt_net_insp_closed(true)');
     });
 });

@@ -11,10 +11,10 @@ function source(path: string): string {
 describe('entry_unification', () => {
     it('all UI export entries use shared download_blob', () => {
         const popup = source('src/popup/popup.ts');
-        const dashboard = source('src/dashboard/dashboard.ts');
+        const dashboard_shared = source('src/dashboard/dashboard_shared.ts');
 
         expect(popup).toMatch(/download_blob/);
-        expect(dashboard).toMatch(/download_blob/);
+        expect(dashboard_shared).toMatch(/download_blob/);
     });
 
     it('export filename generation stays centralized', () => {

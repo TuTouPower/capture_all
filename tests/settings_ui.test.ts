@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { clamp_body_size_bytes } from '../src/dashboard/dashboard'
+import { clamp_body_size_bytes } from '../src/dashboard/dashboard_settings'
 
 const project_root = resolve(__dirname, '..')
-const src = readFileSync(resolve(project_root, 'src/dashboard/dashboard.ts'), 'utf8')
+const src = readFileSync(resolve(project_root, 'src/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('BUG-006: 采集上限 / 内联文本上限单位', () => {
     const BODY_MAX = 1024 * 1048576

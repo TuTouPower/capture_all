@@ -3,10 +3,10 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { clamp_body_size_bytes } from '../src/dashboard/dashboard'
+import { clamp_body_size_bytes } from '../src/dashboard/dashboard_settings'
 
 const project_root = resolve(__dirname, '..')
-const dashboard_source = readFileSync(resolve(project_root, 'src/dashboard/dashboard.ts'), 'utf8')
+const dashboard_source = readFileSync(resolve(project_root, 'src/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('settings 配置同步行为', () => {
     describe('persist 逻辑结构', () => {
@@ -17,7 +17,7 @@ describe('settings 配置同步行为', () => {
             )
             expect(persist_match).toBeTruthy()
             const body = persist_match![1]
-            const merge_pos = body.indexOf('...user_config')
+            const merge_pos = body.indexOf('...get_user_config()')
             const save_pos = body.indexOf('save_user_config')
             expect(merge_pos).toBeGreaterThan(-1)
             expect(save_pos).toBeGreaterThan(-1)

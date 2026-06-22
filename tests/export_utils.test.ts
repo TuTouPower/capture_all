@@ -208,7 +208,7 @@ describe('P0.40/P0.53: export entries unified, no last_dir override', () => {
         return readFileSync(resolve(__dirname, '..', rel), 'utf8');
     };
     const entries = [
-        'src/dashboard/dashboard.ts',
+        'src/dashboard/dashboard_shared.ts',
         'src/popup/popup.ts',
     ];
 

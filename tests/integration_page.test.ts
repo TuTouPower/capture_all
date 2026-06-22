@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
+const src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_integrations.ts'), 'utf8');
+const main_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
 
 function get_integrations_body(): string {
     const fn_start = src.indexOf('function render_integrations(): string {');
@@ -36,7 +37,7 @@ describe('BUG-010: MCP 集成页按钮行为', () => {
     });
 
     it('render_content 中 integrations 分支调用 wire_integrations', () => {
-        expect(src).toMatch(/render_integrations\(\);\s*wire_integrations\(\)/);
+        expect(main_src).toMatch(/render_integrations\(\);\s*wire_integrations\(\)/);
     });
 });
 

@@ -277,6 +277,16 @@ export interface PageLoadData {
     navigation_start_time: string | null;
 }
 
+export interface DomMutationData {
+    action: string;
+    target_selector?: string;
+    target_tag?: string;
+    target_path?: string;
+    attribute_name?: string;
+    old_value?: string;
+    new_value?: string;
+}
+
 export interface DomReadyData {
     url: string;
     title: string | null;
@@ -524,6 +534,55 @@ export interface BodyCaptureStatusChangedData {
     status: 'enabled' | 'disabled';
     reason: string | null;
 }
+
+// ============================================================
+// CaptureEvent discriminated union (type → data mapping)
+// ============================================================
+
+export type CaptureEventDataMap = {
+    mouse_event: MouseEventData;
+    keyboard_event: KeyboardEventData;
+    scroll_event: ScrollEventData;
+    input_event: InputEventData;
+    clipboard_write: ClipboardEventData;
+    clipboard_read: ClipboardEventData;
+    form_submit: FormSubmitData;
+    focus_event: FocusEventData;
+    resize_event: ResizeEventData;
+    fullscreen_change: FullscreenChangeData;
+    print_event: PrintEventData;
+    page_navigation: PageNavigationData;
+    route_change: RouteChangeData;
+    page_load: PageLoadData;
+    tab_switch: TabSwitchData;
+    tab_created: TabCreatedData;
+    tab_url_change: TabUrlChangeData;
+    dom_ready: DomReadyData;
+    visibility_change: VisibilityChangeData;
+    network_request: NetworkRequestData;
+    ws_frame: WsFrameData;
+    ws_message: WsMessageData;
+    console_event: ConsoleEventData;
+    runtime_exception: RuntimeExceptionData;
+    unhandled_rejection: UnhandledRejectionData;
+    resource_error: ResourceErrorData;
+    network_failed: NetworkFailedData;
+    capture_error: CaptureErrorData;
+    storage_change: StorageChangeData;
+    cookie_change: CookieChangeData;
+    dom_mutation: DomMutationData;
+    capture_started: CaptureStartedData;
+    capture_stopped: CaptureStoppedData;
+    capture_config_changed: CaptureConfigChangedData;
+    permission_missing: PermissionMissingData;
+    debugger_attach_status: DebuggerAttachStatusData;
+    body_capture_status_changed: BodyCaptureStatusChangedData;
+};
+
+export type TypedCaptureEvent<T extends EventType = EventType> =
+    Omit<CaptureEvent, 'data'> & { type: T; data?: CaptureEventDataMap[T] };
+
+export type CaptureEventUnion = TypedCaptureEvent;
 
 // ============================================================
 // Body capture types (preserved, slightly adjusted)

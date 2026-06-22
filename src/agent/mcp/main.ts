@@ -21,7 +21,7 @@ function register_tool(name: string): void {
         name,
         { inputSchema: schema },
         async (input) => {
-            const result = await execute_mcp_tool(client, { name, arguments: input });
+            const result = await execute_mcp_tool(client, { name, arguments: input as Record<string, unknown> });
             return {
                 content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };

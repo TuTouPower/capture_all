@@ -2,7 +2,7 @@
 // Merges webRequest metadata and CDP body events into unified NetworkRequest.
 
 import type { NetworkRequestData, NetworkCorrelationStatus, BodyCaptureStatus } from '../shared/types';
-import { resolve_resource_type } from './network_capture';
+import { resolve_resource_type } from './network_webrequest';
 
 export interface CdpBodyEvent {
     request_id: string;

@@ -11,11 +11,13 @@ import {
     decode_raw_body,
     encode_form_data,
     extract_request_body,
-    build_cdp_body_result,
     headers_array_to_map,
+    resolve_resource_type,
+} from '../src/background/network_webrequest';
+import {
+    build_cdp_body_result,
     find_matching_cdp_request,
     find_cdp_candidates,
-    resolve_resource_type,
     is_self_origin_url,
     _cdp_request_meta_for_test,
     _cdp_body_results_for_test,
@@ -207,7 +209,7 @@ describe('request_body_truncation', () => {
                 raw: [{ bytes: new TextEncoder().encode(big_body).buffer }]
             }
         };
-        const result = extract_request_body(details, true);
+        const result = extract_request_body(details, true, MAX_BODY_CAPTURE_BYTES);
         expect(result.status).toBe('too_large');
         expect(result.body).toContain('[TRUNCATED]');
     });
@@ -232,7 +234,7 @@ describe('request_body_truncation', () => {
                 raw: [{ bytes: new TextEncoder().encode('hello').buffer }]
             }
         };
-        const result = extract_request_body(details, true);
+        const result = extract_request_body(details, true, MAX_BODY_CAPTURE_BYTES);
         expect(result.status).toBe('captured');
         expect(result.body).toBe('hello');
     });
@@ -288,7 +290,7 @@ describe('body_parsing_formdata', () => {
                 formData: { name: 'test', value: '123' }
             }
         };
-        const result = extract_request_body(details, true);
+        const result = extract_request_body(details, true, MAX_BODY_CAPTURE_BYTES);
         expect(result.status).toBe('captured');
         expect(result.body).toContain('name=test');
         expect(result.body).toContain('value=123');
@@ -325,7 +327,7 @@ describe('body_parsing_raw', () => {
                 raw: [{ bytes: new TextEncoder().encode(text).buffer }]
             }
         };
-        const result = extract_request_body(details, true);
+        const result = extract_request_body(details, true, MAX_BODY_CAPTURE_BYTES);
         expect(result.status).toBe('captured');
         expect(result.body).toBe(text);
     });
@@ -343,7 +345,7 @@ describe('body_parsing_raw', () => {
 
     it('extract_request_body returns failed when requestBody has error', () => {
         const details = { requestBody: { error: 'net::ERR_BLOCKED_BY_CLIENT' } };
-        const result = extract_request_body(details, true);
+        const result = extract_request_body(details, true, MAX_BODY_CAPTURE_BYTES);
         expect(result.status).toBe('failed');
         expect(result.body).toBeNull();
     });

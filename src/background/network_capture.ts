@@ -15,6 +15,7 @@ import { should_handle_event, clear_sessions, register_session, unregister_sessi
 import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
+import { extract_request_body, headers_array_to_map, resolve_resource_type } from './network_webrequest';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
@@ -888,97 +889,6 @@ export function is_streaming_response(headers: Record<string, string>): boolean 
 
 // ─── webRequest handlers ───
 
-export function decode_raw_body(raw: Array<{ bytes?: ArrayBuffer }>): string {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const parts: string[] = [];
-    for (const part of raw) {
-        if (part.bytes) {
-            parts.push(decoder.decode(part.bytes));
-        }
-    }
-    return parts.join('');
-}
-
-export function encode_form_data(form: Record<string, string | string[]>): string {
-    const parts: string[] = [];
-    for (const [key, values] of Object.entries(form)) {
-        const vals = Array.isArray(values) ? values : [values];
-        for (const v of vals) {
-            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
-        }
-    }
-    return parts.join('&');
-}
-
-export function extract_request_body(details: any, capture_enabled?: boolean, max_body_capture_bytes = config.max_body_capture_bytes): { body: string | null; status: BodyCaptureStatus } {
-    const enabled = capture_enabled ?? config.capture_request_body;
-    if (!enabled) {
-        return { body: null, status: 'not_enabled' };
-    }
-    const rb = details.requestBody;
-    if (!rb) {
-        return { body: null, status: 'unsupported' };
-    }
-    if (rb.error) {
-        return { body: null, status: 'failed' };
-    }
-
-    let body: string | null = null;
-    if (rb.formData) {
-        body = encode_form_data(rb.formData);
-    } else if (rb.raw && Array.isArray(rb.raw) && rb.raw.length > 0) {
-        try {
-            body = decode_raw_body(rb.raw);
-        } catch {
-            return { body: null, status: 'failed' };
-        }
-    } else {
-        return { body: null, status: 'unsupported' };
-    }
-
-    if (body === null || body.length === 0) {
-        return { body, status: 'captured' };
-    }
-
-    const byte_len = new TextEncoder().encode(body).length;
-    if (byte_len > max_body_capture_bytes) {
-        return { body: truncate_request_body(body, max_body_capture_bytes), status: 'too_large' };
-    }
-    return { body, status: 'captured' };
-}
-
-export function headers_array_to_map(arr: Array<{ name: string; value?: string }> | undefined): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (!arr) return out;
-    for (const h of arr) {
-        out[h.name] = h.value || '';
-    }
-    return out;
-}
-
-const RESOURCE_TYPE_MAP: Record<string, NetworkRequestData['resource_type']> = {
-    'xmlhttprequest': 'xhr',
-    'main_frame': 'document',
-    'sub_frame': 'document',
-    'script': 'script',
-    'stylesheet': 'stylesheet',
-    'image': 'image',
-    'font': 'font',
-    'media': 'media',
-    'ping': 'ping',
-    'websocket': 'websocket',
-    'xhr': 'xhr',
-    'fetch': 'fetch',
-    'document': 'document',
-    'other': 'other',
-};
-
-export function resolve_resource_type(raw: string): NetworkRequestData['resource_type'] {
-    if (!raw) return 'other';
-    const lower = raw.toLowerCase();
-    return RESOURCE_TYPE_MAP[lower] || 'other';
-}
-
 function handle_before_request(details: any): void {
     if (!is_capturing) return;
     // CDP-first: skip requests on the attached tab — CDP handles them directly
@@ -988,7 +898,7 @@ function handle_before_request(details: any): void {
     // 避免 Bridge 响应在 CDP 拿到 body 前结束而污染 cdp_failed 计数。
     if (is_self_origin_url(details.url)) return;
 
-    const { body, status } = extract_request_body(details);
+    const { body, status } = extract_request_body(details, config.capture_request_body, config.max_body_capture_bytes);
 
     const pending: PendingRequest = {
         cdp_request_id: details.requestId,

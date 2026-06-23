@@ -1,9 +1,9 @@
 // dashboard/dashboard_detail.ts — 采集详情页 + 网络检查器
 import {
-    debounce, esc, I, num, delta_pct,
+    debounce, esc, I, num,
     capture_name, capture_dur, format_system_time,
     KIND, KIND_LABEL, rel_time, event_kind, event_detail, event_title,
-    get_user_config, get_captures,
+    get_user_config,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     get_dt_tab, set_dt_tab, get_dt_view, set_dt_view,
     get_dt_quick, set_dt_quick, get_dt_sel, set_dt_sel,
@@ -21,33 +21,16 @@ const DT_TABS: [string, string][] = [
     ['config', '本次配置'],
 ];
 
-function detail_metrics(): { icon: string; lbl: string; val: string; color: string; danger?: boolean; filter?: string; delta?: string; dTone?: string }[] {
-    const detail_capture = get_detail_capture();
-    const captures = get_captures();
-    const st = detail_capture?.stats;
-    let prev: typeof detail_capture = null;
-    if (detail_capture) {
-        const cur = new Date(detail_capture.started_at).getTime();
-        for (const s of captures) {
-            const t = new Date(s.started_at).getTime();
-            if (t < cur && (!prev || t > new Date(prev.started_at).getTime())) prev = s;
-        }
-    }
-    const ps = prev?.stats;
-    const d = (cur: number, p: number | undefined): { delta?: string; dTone?: string } => {
-        if (p == null) return {};
-        const txt = delta_pct(cur, p);
-        if (!txt) return {};
-        return { delta: txt, dTone: txt.startsWith('-') ? 'red' : 'green' };
-    };
+function detail_metrics(): { icon: string; lbl: string; val: string; color: string; danger?: boolean; filter?: string }[] {
+    const st = get_detail_capture()?.stats;
     return [
-        { icon: 'ui', lbl: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', filter: 'user', ...d(st?.user_action_count || 0, ps?.user_action_count) },
-        { icon: 'nav', lbl: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav', ...d(st?.nav_count || 0, ps?.nav_count) },
-        { icon: 'net', lbl: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network', ...d(st?.request_count || 0, ps?.request_count) },
-        { icon: 'console', lbl: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console', ...d(st?.log_count || 0, ps?.log_count) },
-        { icon: 'err', lbl: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'error', ...d(st?.error_count || 0, ps?.error_count) },
-        { icon: 'storage', lbl: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage', ...d(st?.storage_change_count || 0, ps?.storage_change_count) },
-        { icon: 'cookie', lbl: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', filter: 'cookie', ...d(st?.cookie_change_count || 0, ps?.cookie_change_count) },
+        { icon: 'ui', lbl: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', filter: 'user' },
+        { icon: 'nav', lbl: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav' },
+        { icon: 'net', lbl: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network' },
+        { icon: 'console', lbl: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console' },
+        { icon: 'err', lbl: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'error' },
+        { icon: 'storage', lbl: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage' },
+        { icon: 'cookie', lbl: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', filter: 'cookie' },
     ];
 }
 
@@ -88,7 +71,7 @@ function render_detail(): string {
         <div class="dt-metrics">
             ${detail_metrics().map((m) => `<button class="dt-metric${m.danger ? ' danger' : ''}" ${m.filter ? `data-mfilter="${m.filter}"` : ''}>
                 <span class="dt-metric-top"><span class="dt-metric-ic" style="color:${m.color}">${I[m.icon]}</span><span class="dt-metric-lbl">${m.lbl}</span></span>
-                <span class="dt-metric-row"><span class="dt-metric-val mono">${m.val}</span>${m.delta ? `<span class="dt-metric-delta t-${m.dTone}">${m.delta}</span>` : ''}</span>
+                <span class="dt-metric-row"><span class="dt-metric-val mono">${m.val}</span></span>
             </button>`).join('')}
         </div>
         <nav class="dt-tabs">

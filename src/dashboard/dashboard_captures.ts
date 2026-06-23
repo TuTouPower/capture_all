@@ -1,6 +1,6 @@
 // dashboard/dashboard_captures.ts — 采集列表页
 import {
-    is_extension, esc, I, num, fmt_size, est_bytes, pct, delta_pct,
+    is_extension, esc, I, num, fmt_size, est_bytes, pct,
     capture_name, capture_dur, format_system_time,
     get_user_config, get_captures, get_selected,
     load_captures, export_capture,
@@ -17,17 +17,8 @@ function render_captures(): string {
     const withErr = captures.filter((s) => (s.stats?.error_count || 0) > 0).length;
     const completed = captures.filter((s) => s.status === 'completed').length;
     const totalBytes = captures.reduce((a, s) => a + est_bytes(s), 0);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const yest = new Date(today.getTime() - 86400000);
-    const cntDay = (d0: Date, d1: Date) => captures.filter((s) => {
-        const t = new Date(s.started_at).getTime();
-        return t >= d0.getTime() && t < d1.getTime();
-    }).length;
-    const todayN = cntDay(today, new Date(today.getTime() + 86400000));
-    const yestN = cntDay(yest, today);
-    const dDay = delta_pct(todayN, yestN);
     const stats = [
-        { icon: 'navCaptures', lbl: '全部采集', val: num(total), tint: 'blue', sub: dDay ? `较昨日 ${dDay}` : '较昨日 +0%', subTone: 'green' },
+        { icon: 'navCaptures', lbl: '全部采集', val: num(total), tint: 'blue', sub: `${num(captures.length)} 次采集`, subTone: 'green' },
         { icon: 'err', lbl: '有错误', val: num(withErr), tint: 'red', sub: pct(withErr, total) },
         { icon: 'navExport', lbl: '已完成', val: num(completed), tint: 'green', sub: pct(completed, total) },
         { icon: 'storage', lbl: '占用空间', val: fmt_size(totalBytes), tint: 'green', sub: '估算大小' },

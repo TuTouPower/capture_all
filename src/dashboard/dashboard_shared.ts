@@ -106,11 +106,6 @@ export function pct(part: number, whole: number): string {
     if (!whole) return '占比 0%';
     return `占比 ${((part / whole) * 100).toFixed(2)}%`;
 }
-export function delta_pct(cur: number, prev: number): string | null {
-    if (prev === 0) return cur > 0 ? '新增' : null;
-    const d = ((cur - prev) / prev) * 100;
-    return `${d >= 0 ? '+' : ''}${d.toFixed(0)}%`;
-}
 
 // event kind → icon + color
 export const KIND: Record<string, { icon: string; color: string }> = {

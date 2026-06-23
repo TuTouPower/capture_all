@@ -49,9 +49,6 @@
 .dt-metric.danger .dt-metric-lbl { color: var(--red-ink); }
 .dt-metric-row { display: flex; align-items: baseline; gap: 7px; }
 .dt-metric-val { font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
-.dt-metric-delta { font-size: 11px; font-weight: 600; font-family: var(--font-mono); }
-.dt-metric-delta.t-green { color: var(--green-ink); }
-.dt-metric-delta.t-red { color: var(--red-ink); }
 
 /* tabs */
 .dt-tabs { display: flex; gap: 4px; padding: 0 28px; border-bottom: 1px solid var(--border); flex: none; }

@@ -1,6 +1,6 @@
 // content/mouse_capture.ts
 import type { CaptureConfig, CaptureEvent, MouseEventData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 import { truncate_target_text } from '../shared/redaction';
 import { build_xpath } from '../shared/dom_utils';
 
@@ -88,7 +88,7 @@ function build_mouse_event(
 ): void {
     const target = target_override ?? get_target_info(event as MouseEvent);
 
-    const base_event = create_base_event({
+    const base_event = create_content_event({
         capture_id,
         category: 'user_action',
         type: 'mouse_event',

@@ -1,6 +1,6 @@
 // content/content_script.ts
 import type { CaptureConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 import { category_for_event_type } from '../shared/event_category';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
@@ -222,7 +222,7 @@ function stop_capture(): void {
 
 /** Send a fully-typed CaptureEvent for navigation/lifecycle events */
 function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: string, data: unknown): void {
-    const event = create_base_event({
+    const event = create_content_event({
         capture_id,
         category,
         type: type as any,

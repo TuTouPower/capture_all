@@ -1,6 +1,6 @@
 // content/fullscreen_capture.ts
 import type { CaptureEvent, FullscreenChangeData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let _capture_id = '';
@@ -32,7 +32,7 @@ export function stop_fullscreen_capture(): void {
 function handle_fullscreen(): void {
     if (!is_capturing) return;
     const fs_element = document.fullscreenElement;
-    const event = create_base_event({
+    const event = create_content_event({
         capture_id: _capture_id,
         category: 'user_action',
         type: 'fullscreen_change',

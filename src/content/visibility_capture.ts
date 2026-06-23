@@ -1,6 +1,6 @@
 // content/visibility_capture.ts
 import type { CaptureEvent, VisibilityChangeData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let _capture_id = '';
@@ -37,7 +37,7 @@ function handle_visibility_change(): void {
 
     const state = document.visibilityState === 'visible' ? 'visible' : 'hidden';
 
-    const event = create_base_event({
+    const event = create_content_event({
         capture_id: _capture_id,
         category: 'navigation',
         type: 'visibility_change',

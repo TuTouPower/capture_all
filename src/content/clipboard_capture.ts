@@ -1,6 +1,6 @@
 // content/clipboard_capture.ts
 import type { CaptureEvent, ClipboardEventData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let capture_id = '';
@@ -79,7 +79,7 @@ function emit_clipboard(
 ): void {
     if (!is_capturing) return;
 
-    const event = create_base_event({
+    const event = create_content_event({
         capture_id,
         category: 'user_action',
         type: action === 'write' ? 'clipboard_write' : 'clipboard_read',

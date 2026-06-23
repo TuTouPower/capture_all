@@ -1,6 +1,6 @@
 // content/websocket_capture.ts
 import type { CaptureEvent, WsMessageData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let capture_id = '';
@@ -155,7 +155,7 @@ export function start_websocket_capture(
             data_status: d.data_status ?? 'captured',
         };
 
-        const base = create_base_event({
+        const base = create_content_event({
             capture_id,
             category: 'network',
             type: 'ws_message',

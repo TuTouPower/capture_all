@@ -1,6 +1,6 @@
 // content/storage_capture.ts
 import type { CaptureEvent, StorageChangeData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let capture_id = '';
@@ -96,7 +96,7 @@ export function start_storage_capture(
             source_stack: null,
         };
 
-        const base = create_base_event({
+        const base = create_content_event({
             capture_id,
             category: 'storage',
             type: 'storage_change',

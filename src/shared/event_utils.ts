@@ -28,6 +28,8 @@ export function create_base_event(params: {
     url?: string;
     source: EventSource;
     severity?: Severity;
+    page_title?: string | null;
+    top_frame_url?: string | null;
 }): CaptureEvent {
     return {
         event_id: generate_event_id(),
@@ -39,8 +41,8 @@ export function create_base_event(params: {
         tab_id: params.tab_id,
         frame_id: params.frame_id ?? 0,
         url: params.url ?? '',
-        top_frame_url: null,
-        page_title: null,
+        top_frame_url: params.top_frame_url ?? null,
+        page_title: params.page_title ?? null,
         source: params.source,
         severity: params.severity ?? 'info',
         related_event_ids: [],

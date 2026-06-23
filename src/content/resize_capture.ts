@@ -1,6 +1,6 @@
 // content/resize_capture.ts
 import type { CaptureEvent, ResizeEventData } from '../shared/types';
-import { create_base_event, get_relative_time } from '../shared/event_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let _capture_id = '';
@@ -36,7 +36,7 @@ function handle_resize(): void {
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(() => {
         if (!is_capturing) return;
-        const event = create_base_event({
+        const event = create_content_event({
             capture_id: _capture_id,
             category: 'user_action',
             type: 'resize_event',

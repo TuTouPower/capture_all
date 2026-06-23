@@ -105,43 +105,40 @@ import { STORE_NAMES } from '../src/shared/constants';
 import { init_db } from '../src/background/storage';
 
 describe('query_by_store — generic cursor pagination helper', () => {
-    it('get_network_requests uses NETWORK_REQUESTS store', async () => {
-        // We can only verify this works end-to-end in a real IDB environment.
-        // For pure unit test, verify the function signature and store mapping.
-        // The real behavioral coverage comes from E2E tests.
-        // Here we just confirm the function is callable and has correct params.
+    it('get_network_requests accepts capture_id, offset, limit', async () => {
         expect(get_network_requests).toBeInstanceOf(Function);
-        expect(get_network_requests.length).toBe(3); // capture_id, offset, limit
+        // .length counts params before first default — only capture_id is required
+        expect(get_network_requests.length).toBe(1);
     });
 
-    it('get_console_events uses CONSOLE_EVENTS store', async () => {
+    it('get_console_events accepts capture_id, offset, limit', async () => {
         expect(get_console_events).toBeInstanceOf(Function);
-        expect(get_console_events.length).toBe(3);
+        expect(get_console_events.length).toBe(1);
     });
 
-    it('get_error_events uses ERROR_EVENTS store', async () => {
+    it('get_error_events accepts capture_id, offset, limit', async () => {
         expect(get_error_events).toBeInstanceOf(Function);
-        expect(get_error_events.length).toBe(3);
+        expect(get_error_events.length).toBe(1);
     });
 
-    it('get_storage_changes uses STORAGE_CHANGES store', async () => {
+    it('get_storage_changes accepts capture_id, offset, limit', async () => {
         expect(get_storage_changes).toBeInstanceOf(Function);
-        expect(get_storage_changes.length).toBe(3);
+        expect(get_storage_changes.length).toBe(1);
     });
 
-    it('get_cookie_changes uses COOKIE_CHANGES store', async () => {
+    it('get_cookie_changes accepts capture_id, offset, limit', async () => {
         expect(get_cookie_changes).toBeInstanceOf(Function);
-        expect(get_cookie_changes.length).toBe(3);
+        expect(get_cookie_changes.length).toBe(1);
     });
 
-    it('get_lifecycle_events uses CAPTURE_LIFECYCLE_EVENTS store', async () => {
+    it('get_lifecycle_events accepts capture_id, offset, limit', async () => {
         expect(get_lifecycle_events).toBeInstanceOf(Function);
-        expect(get_lifecycle_events.length).toBe(3);
+        expect(get_lifecycle_events.length).toBe(1);
     });
 
-    it('get_events_by_category dispatches to correct store', async () => {
+    it('get_events_by_category accepts capture_id, category, offset, limit', async () => {
         expect(get_events_by_category).toBeInstanceOf(Function);
-        expect(get_events_by_category.length).toBe(4); // capture_id, category, offset, limit
+        expect(get_events_by_category.length).toBe(2); // capture_id + category
     });
 });
 
@@ -157,7 +154,7 @@ describe('query_by_store with mocked IDB', () => {
     async function setup_mock_db(store_name: string, items: any[]) {
         const fake = make_fake_db(store_name, items);
         // Mock init_db to return our fake db
-        vi.doMock('../src/background/storage', () => {
+        vi.doMock('../src/background/storage', async () => {
             const actual = await vi.importActual<typeof import('../src/background/storage')>('../src/background/storage');
             return {
                 ...actual,

@@ -1,7 +1,7 @@
 node_modules/
 artifacts/
 .worktrees/
-.claude/worktrees/
+.claude/
 *.log
 *.zip
 *.Zone.Identifier

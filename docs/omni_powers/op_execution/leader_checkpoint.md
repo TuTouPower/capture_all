@@ -4,14 +4,18 @@
 
 ### current_task
 
+(none)
+
 ### last_completed
 
 T0003
+
 ### next_step
 
-回 /oprun 3.1 选下一 task（或全完成进收尾）
+全部 task 已完成（T0001/T0002/T0003），无待做 task。可选后续动作：/opintake 新需求、/optriage 扫 issues。
+
 ## 关键上下文
 
-- T0001（缩放滑块）+ T0002（标记点击）已完成并落地 main（commit 54d3250），E2E 4/4 PASS
-- T0003 未开始，spec 在 op_execution/specs/T0003_remove-integrations-sidebar.md
-- 历史：T0001/T0002 曾困在 op-dev/op-eval worktree 零 commit，已规整落地 + 清理残留 worktree/分支
+- T0001（缩放滑块）+ T0002（标记点击）已完成（commit 54d3250），E2E 4/4 PASS
+- T0003（移除 Webhook/Issue 卡片 + MCP 侧边栏入口）已完成（commit 8fcfb70），AC 全部 PASS，已归档
+- 累计 issues: 2 项（P2: AC-4 grep 措辞 | P3: AC-1 源码匹配非 E2E）

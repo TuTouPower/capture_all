@@ -4,3 +4,4 @@
 > 格式：`- {TID} | {feature} | {date} | 完成`（与 op_close_post.sh 一致，design §3）
 
 - {TID} | {feature} | YYYY-MM-DD HH:mm:ss UTC+8 | 完成
+- T0003 | dashboard | 2026-07-13 02:48:57 UTC+8 | 完成

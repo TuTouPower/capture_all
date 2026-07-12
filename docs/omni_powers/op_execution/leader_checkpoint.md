@@ -4,15 +4,12 @@
 
 ### current_task
 
-T0003
 ### last_completed
 
-T0002
-
+T0003
 ### next_step
 
-T0003（feat: 移除 Webhook/Issue 卡片 + MCP 侧边栏入口，无依赖可直接开跑）
-
+回 /oprun 3.1 选下一 task（或全完成进收尾）
 ## 关键上下文
 
 - T0001（缩放滑块）+ T0002（标记点击）已完成并落地 main（commit 54d3250），E2E 4/4 PASS

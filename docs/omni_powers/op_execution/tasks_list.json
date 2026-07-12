@@ -30,7 +30,7 @@
     {
       "id": "T0003",
       "title": "feat: 移除 Webhook/Issue 卡片 + MCP 侧边栏入口",
-      "status": "ready",
+      "status": "reviewing",
       "spec": "specs/T0003_remove-integrations-sidebar.md",
       "depends_on": [],
       "workset": [
@@ -39,7 +39,8 @@
         "src/dashboard/dashboard-pages.css",
         "tests/integration_page.test.ts"
       ],
-      "eval": "required"
+      "eval": "required",
+      "blocked_by": null
     }
   ]
 }

@@ -15,7 +15,7 @@ import {
 import { render_captures, wire_captures } from './dashboard_captures';
 import { render_detail, wire_detail, open_detail } from './dashboard_detail';
 import { render_settings, wire_settings } from './dashboard_settings';
-import { render_current, wire_simple_open, render_exports, render_integrations, wire_integrations } from './dashboard_integrations';
+import { render_current, wire_simple_open, render_exports } from './dashboard_integrations';
 
 // ── sidebar / shell ─────────────────────────────────────────────────────
 const NAV = [
@@ -23,7 +23,6 @@ const NAV = [
     { key: 'current', icon: 'navCurrent', lbl: '当前采集' },
     { key: 'exports', icon: 'navExport', lbl: '导出任务' },
     { key: 'settings', icon: 'navSettings', lbl: '设置' },
-    { key: 'integrations', icon: 'navMcp', lbl: 'MCP / 集成' },
 ];
 
 const root = document.getElementById('root')!;
@@ -72,7 +71,7 @@ function render_shell(): void {
     render_content();
 }
 
-function go(p: string): void { set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
+function go(p: string): void { if (p === 'integrations') p = 'captures'; set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
 
 function render_content(): void {
     const page = get_page();
@@ -82,7 +81,7 @@ function render_content(): void {
     else if (page === 'settings') { c.innerHTML = render_settings(); wire_settings(); }
     else if (page === 'current') { c.innerHTML = render_current(); wire_simple_open(); }
     else if (page === 'exports') { c.innerHTML = render_exports(); }
-    else if (page === 'integrations') { c.innerHTML = render_integrations(); wire_integrations(); }
+    else { c.innerHTML = render_captures(); wire_captures(); }
 }
 
 // ── inject router into shared (breaks circular deps) ────────────────────

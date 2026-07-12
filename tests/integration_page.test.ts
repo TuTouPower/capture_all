@@ -1,73 +1,176 @@
 // @vitest-environment jsdom
 // tests/integration_page.test.ts
-import { describe, it, expect } from 'vitest';
+// T0003: 验证 integrations 页/侧边栏入口/死代码已彻底移除
+import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_integrations.ts'), 'utf8');
+// ── 模块级行为测试 ──────────────────────────────────────────────────────
+import * as integrations_mod from '../src/dashboard/dashboard_integrations';
+import { set_page, get_page, set_user_config, router } from '../src/dashboard/dashboard_shared';
+import { DEFAULT_USER_CONFIG } from '../src/shared/constants';
+
+// ── 源码文件（供 AC-1/AC-2/AC-4 验证） ──────────────────────────────────
 const main_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
+const integ_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_integrations.ts'), 'utf8');
+const settings_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_settings.ts'), 'utf8');
 
-function get_integrations_body(): string {
-    const fn_start = src.indexOf('function render_integrations(): string {');
-    if (fn_start === -1) return '';
-    let depth = 0;
-    let fn_end = fn_start;
-    for (let i = fn_start; i < src.length; i++) {
-        if (src[i] === '{') depth++;
-        if (src[i] === '}') { depth--; if (depth === 0) { fn_end = i; break; } }
-    }
-    return src.slice(fn_start, fn_end + 1);
-}
+// ── AC-3 函数调用行为测试的前置 DOM + config 设置 ─────────────────────
+beforeAll(async () => {
+    // dashboard.ts module-level 需要 #root 元素
+    document.body.innerHTML = '<div id="root"></div>';
+    // 设置默认 user config，避免 render_settings() 等渲染函数读取 undefined
+    set_user_config({ ...DEFAULT_USER_CONFIG });
+    // 动态导入 dashboard.ts，触发 router.go = go 赋值（模块级）
+    await import('../src/dashboard/dashboard');
+});
 
-describe('BUG-010: MCP 集成页按钮行为', () => {
-    it('MCP Bridge 和本地 Agent 按钮有 data-action="go-settings"', () => {
-        const body = get_integrations_body();
-        const go_settings_count = (body.match(/data-action="go-settings"/g) || []).length;
-        // 非 disabled 的卡片按钮 + 页面顶部"前往设置"按钮
-        expect(go_settings_count).toBeGreaterThanOrEqual(2);
+// ────────────────────────────────────────────────────────────────────────
+// dashboard_integrations 模块导出 (AC-4 行为层面)
+// ────────────────────────────────────────────────────────────────────────
+describe('T0003: dashboard_integrations 模块导出', () => {
+    it('不再导出 render_integrations', () => {
+        expect(integrations_mod).not.toHaveProperty('render_integrations');
     });
 
-    it('wire_integrations 绑定 click → go("settings") + scrollIntoView', () => {
-        const wire_match = src.match(/function wire_integrations\b[\s\S]*?^\}/m);
-        expect(wire_match).toBeTruthy();
-        const wire_body = wire_match![0];
-        expect(wire_body).toContain("'settings'");
-        expect(wire_body).toContain('set-integrations');
-        expect(wire_body).toContain('addEventListener');
+    it('不再导出 wire_integrations', () => {
+        expect(integrations_mod).not.toHaveProperty('wire_integrations');
     });
 
-    it('render_content 中 integrations 分支调用 wire_integrations', () => {
-        expect(main_src).toMatch(/render_integrations\(\);\s*wire_integrations\(\)/);
+    it('仍然导出 render_current', () => {
+        expect(integrations_mod).toHaveProperty('render_current');
+        expect(typeof integrations_mod.render_current).toBe('function');
+    });
+
+    it('仍然导出 wire_simple_open', () => {
+        expect(integrations_mod).toHaveProperty('wire_simple_open');
+        expect(typeof integrations_mod.wire_simple_open).toBe('function');
+    });
+
+    it('仍然导出 render_exports', () => {
+        expect(integrations_mod).toHaveProperty('render_exports');
+        expect(typeof integrations_mod.render_exports).toBe('function');
     });
 });
 
-describe('BUG-011: Webhook / Issue 平台禁用态', () => {
-    it('Webhook 和 Issue 平台卡片 disabled=true', () => {
-        const body = get_integrations_body();
-        // cards 数组中第 3、4 项的 disabled 标志为 true
-        expect(body).toContain("'即将推出', true");
+// ────────────────────────────────────────────────────────────────────────
+// AC-1: dashboard.ts NAV 数组 (源码级验证，补充 E2E)
+// ────────────────────────────────────────────────────────────────────────
+describe('T0003: dashboard.ts NAV 数组 (AC-1)', () => {
+    it('NAV 数组只有 4 项', () => {
+        const nav_match = main_src.match(/const NAV = \[([\s\S]*?)\];/);
+        expect(nav_match).toBeTruthy();
+        const nav_body = nav_match![1];
+        const items = nav_body.match(/\{ key: '[^']+'/g) || [];
+        expect(items).toHaveLength(4);
     });
 
-    it('disabled 按钮不应有 data-action', () => {
-        const body = get_integrations_body();
-        // 模板中 disabled ? '' : 'data-action="go-settings"' 逻辑
-        expect(body).toContain("!disabled ? 'data-action=\"go-settings\"'");
+    it('NAV 数组不含 integrations key', () => {
+        const nav_match = main_src.match(/const NAV = \[([\s\S]*?)\];/);
+        expect(nav_match).toBeTruthy();
+        expect(nav_match![1]).not.toContain("'integrations'");
+    });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// AC-3: go("integrations") 降级行为 —— 实际函数调用验证
+// spec 可测性契约: 调用 go('integrations') 后验证无异常、内容区降级到 captures 页面
+// ────────────────────────────────────────────────────────────────────────
+describe('T0003: AC-3 go("integrations") 降级行为', () => {
+    it('调用 go("integrations") 不抛异常', () => {
+        expect(() => router.go('integrations')).not.toThrow();
     });
 
-    it('disabled 卡片有 integ-card--disabled class', () => {
-        const body = get_integrations_body();
-        expect(body).toContain('integ-card--disabled');
+    it('go("integrations") 后 get_page() 返回 captures (spec AC-3)', () => {
+        router.go('integrations');
+        expect(get_page()).toBe('captures');
     });
 
-    it('disabled 卡片状态标签为"未实现"', () => {
-        const body = get_integrations_body();
-        expect(body).toContain("disabled ? '未实现'");
+    it('go("captures") 行为不变', () => {
+        router.go('captures');
+        expect(get_page()).toBe('captures');
     });
 
-    it('disabled 按钮文本为"即将推出"', () => {
-        const body = get_integrations_body();
-        // cards 数组中 btn 参数为'即将推出'
-        const matches = body.match(/'即将推出'/g) || [];
-        expect(matches.length).toBe(2);
+    it('go("settings") 行为不变', () => {
+        router.go('settings');
+        expect(get_page()).toBe('settings');
+    });
+
+    it('go("current") 行为不变', () => {
+        router.go('current');
+        expect(get_page()).toBe('current');
+    });
+
+    it('go("exports") 行为不变', () => {
+        router.go('exports');
+        expect(get_page()).toBe('exports');
+    });
+
+    it('go 未知 page（如 "nonexistent"）不抛异常，渲染降级由 render_content else 处理', () => {
+        // go() 只转换 integrations→captures；其他 page 透传 set_page
+        // 未知 page 的渲染降级在 render_content() else 分支实现（非 go() 职责）
+        expect(() => router.go('nonexistent')).not.toThrow();
+        expect(get_page()).toBe('nonexistent');
+    });
+
+    it('router.go 是真实函数（非 no-op 占位）', () => {
+        set_page('settings');
+        expect(get_page()).toBe('settings');
+        router.go('captures');
+        expect(get_page()).toBe('captures');
+    });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// AC-4: 死代码清理 (源码级验证，补充 CLI grep)
+// ────────────────────────────────────────────────────────────────────────
+describe('T0003: 死代码清理 (AC-4)', () => {
+    it('dashboard.ts import 不含 render_integrations', () => {
+        expect(main_src).not.toContain('render_integrations');
+    });
+
+    it('dashboard.ts import 不含 wire_integrations', () => {
+        expect(main_src).not.toContain('wire_integrations');
+    });
+
+    it('dashboard_integrations.ts 不含 render_integrations 函数定义', () => {
+        expect(integ_src).not.toContain('function render_integrations');
+    });
+
+    it('dashboard_integrations.ts 不含 wire_integrations 函数定义', () => {
+        expect(integ_src).not.toContain('function wire_integrations');
+    });
+
+    it('dashboard_integrations.ts export 不含 render_integrations', () => {
+        const export_line = integ_src.match(/export \{[\s\S]*?\};/);
+        expect(export_line).toBeTruthy();
+        expect(export_line![0]).not.toContain('render_integrations');
+        expect(export_line![0]).not.toContain('wire_integrations');
+    });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// AC-2: 设置页集成区保留
+// ────────────────────────────────────────────────────────────────────────
+describe('T0003: 设置页集成区保留 (AC-2)', () => {
+    it('dashboard_settings.ts 保留 #set-integrations 元素', () => {
+        expect(settings_src).toContain('id="set-integrations"');
+    });
+
+    it('dashboard_settings.ts 保留 MCP Bridge 配置开关', () => {
+        expect(settings_src).toContain('启用 MCP bridge');
+        expect(settings_src).toContain('agent_bridge_enabled');
+    });
+
+    it('dashboard_settings.ts 保留 Bridge URL 配置', () => {
+        expect(settings_src).toContain('agent_bridge_url');
+    });
+
+    it('dashboard_settings.ts 保留 Bridge Token 配置', () => {
+        expect(settings_src).toContain('agent_bridge_token');
+    });
+
+    it('dashboard_settings.ts 保留轮询间隔配置', () => {
+        expect(settings_src).toContain('agent_bridge_poll_interval_ms');
     });
 });

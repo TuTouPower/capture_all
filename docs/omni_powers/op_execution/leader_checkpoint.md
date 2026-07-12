@@ -4,6 +4,7 @@
 
 ### current_task
 
+T0003
 ### last_completed
 
 T0002

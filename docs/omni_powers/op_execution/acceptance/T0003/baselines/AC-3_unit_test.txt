@@ -1,0 +1,5 @@
+25 tests passed, 0 failed.
+Key assertions:
+- go('integrations') does not throw
+- get_page() returns 'captures' after go('integrations')
+- go('captures')/go('settings')/go('current')/go('exports') behavior unchanged

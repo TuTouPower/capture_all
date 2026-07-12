@@ -57,7 +57,7 @@ tests/
 - Agent 链路：`agent_bridge_client` / `agent_bridge_server` / `agent_bridge_queue` / `agent_bridge_config` / `agent_command_dispatcher` / `agent_data_queries` / `agent_mcp_client` / `agent_protocol` / `mcp_schema` / `external_cdp_bridge_client` / `live_data_queries`。
 - 数据 / 导出：`redaction` / `escape` / `escape_html` / `export_settings` / `export_utils` / `export_integrity` / `archive_builder` / `archive_config` / `archive_entry` / `body_routing`。
 - 统计 / 分类：`capture_stats` / `label_counts` / `event_category` / `event_utils` / `content_event_utils` / `entry_unification` / `pipeline_consistency`。
-- UI：`popup_layout` / `popup_export` / `popup_immediate_refresh` / `popup_start_timing` / `popup_main_panel_url` / `dashboard_config_sync` / `settings_ui` / `sidebar_resize` / `detail_layout_source` / `detail_render_consistency` / `integration_page` / `ui_strings` / `wcag_contrast` / `extension_icons`。
+- UI：`popup_layout` / `popup_export` / `popup_immediate_refresh` / `popup_start_timing` / `popup_main_panel_url` / `dashboard_config_sync` / `settings_ui` / `sidebar_resize` / `detail_layout_source` / `detail_render_consistency` / `dashboard_timeline_marker` / `integration_page` / `ui_strings` / `wcag_contrast` / `extension_icons`。
 - 协议契约：`sw_action_contract` / `tab_events` / `stop_capture` / `poll_capture_status` / `content_script_uses_poll` / `session_manager`（兼容层）。
 - 历史 P0 回归：`p036_user_action_filter` / `p043_flush_before_read` / `p060_capture_id`。
 - 工具：`system_time` / `logger` / `app_log_storage` / `hash` / `default_config`。

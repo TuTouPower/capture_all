@@ -23,7 +23,7 @@ export default defineConfig({
         },
         {
             name: 'e2e-ext',
-            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina,logging}.spec.ts',
+            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina,logging,T0001*}.spec.ts',
             fullyParallel: false,
             workers: 1,
             retries: 0,

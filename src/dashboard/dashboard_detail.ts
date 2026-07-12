@@ -5,7 +5,7 @@ import {
     KIND, KIND_LABEL, rel_time, event_kind, event_detail, event_title,
     get_user_config,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
-    get_dt_tab, set_dt_tab, get_dt_view, set_dt_view,
+    get_dt_tab, set_dt_tab, get_dt_view, set_dt_view, get_dt_zoom, set_dt_zoom,
     get_dt_quick, set_dt_quick, get_dt_sel, set_dt_sel,
     get_dt_insp_open, set_dt_insp_open, get_dt_play, set_dt_play,
     get_dt_net_sel, set_dt_net_sel, get_dt_net_insp_closed, set_dt_net_insp_closed,
@@ -149,8 +149,9 @@ function filtered_events(): import('../shared/types').CaptureEvent[] {
 function render_dt_list(): string {
     const dt_view = get_dt_view();
     const dt_sel = get_dt_sel();
+    const detail_events = get_detail_events();
     const list = filtered_events();
-    const rows = list.map((e, i) => {
+    const rows = list.map((e) => {
         const k = KIND[event_kind(e)];
         const isErr = event_kind(e) === 'error' || (e.type === 'console_event' && (e.data as Record<string, unknown>)?.level === 'error');
         const d = (e.data || {}) as Record<string, unknown>;
@@ -158,7 +159,7 @@ function render_dt_list(): string {
         const detailCell = status != null
             ? `<span><span class="status-pill" data-ok="${status < 400 ? 1 : 0}">${status}</span><span class="ev-ms">${d.duration_ms != null ? Math.round(d.duration_ms as number) + 'ms' : ''}</span></span>`
             : `<span class="ev-detail" title="${esc(event_detail(e))}">${esc(event_detail(e))}</span>`;
-        return `<tr data-ev="${i}" data-sel="${dt_sel === i ? 1 : 0}">
+        return `<tr data-ev="${detail_events.indexOf(e)}" data-sel="${dt_sel === detail_events.indexOf(e) ? 1 : 0}">
             <td><span class="ev-t">${rel_time(e.relative_time_ms)}</span></td>
             <td><span class="ev-type" style="color:${k.color}">${I[k.icon]} ${KIND_LABEL[event_kind(e)]}</span></td>
             <td><span class="ev-name${isErr ? ' err' : ''}">${esc(event_title(e))}</span></td>
@@ -187,9 +188,46 @@ function fmt_axis(ms: number): string {
     return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
+function slider_to_window_pct(slider_value: number): number {
+    return Math.max(5, 100 - slider_value);
+}
+
+function apply_zoom_filter(): void {
+    const dt_zoom = get_dt_zoom();
+    const dt_play = get_dt_play();
+    const detail_events = get_detail_events();
+    const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
+    const window_pct = slider_to_window_pct(dt_zoom);
+    const win_width_ms = maxT * window_pct / 100;
+    const playhead_ms = (dt_play / 100) * maxT;
+    const win_left = Math.max(0, Math.min(maxT - win_width_ms, playhead_ms - win_width_ms / 2));
+    const win_right = win_left + win_width_ms;
+
+    const tracks = document.querySelectorAll('.tl-lane-track');
+    for (const track of tracks) {
+        const marks = track.querySelectorAll<HTMLElement>('.tl-tick, .tl-dot, .tl-diamond');
+        for (const m of marks) {
+            const left = parseFloat(m.style.left || '0');
+            const ev_ms = (left / 100) * maxT;
+            if (ev_ms >= win_left && ev_ms <= win_right) {
+                m.classList.remove('tl-hidden');
+            } else {
+                m.classList.add('tl-hidden');
+            }
+        }
+    }
+
+    const mm_win = document.querySelector<HTMLElement>('.tl-mm-window');
+    if (mm_win) {
+        mm_win.style.width = `${window_pct}%`;
+        mm_win.style.left = `${(win_left / maxT) * 100}%`;
+    }
+}
+
 function render_trace(): string {
     const detail_events = get_detail_events();
     const dt_play = get_dt_play();
+    const dt_zoom = get_dt_zoom();
     const lanes: [string, string, string][] = [
         ['network', 'net', 'Network / 网络'], ['user', 'ui', 'UI Events / 界面事件'],
         ['console', 'console', 'Console / 控制台'], ['dom', 'dom', 'DOM 变更'],
@@ -200,21 +238,27 @@ function render_trace(): string {
     const TICKN = 8;
     const ticks = Array.from({ length: TICKN }, (_, i) => fmt_axis((maxT * i) / (TICKN - 1)));
     const playMs = (dt_play / 100) * maxT;
+    const window_pct = slider_to_window_pct(dt_zoom);
+    const win_width_ms = maxT * window_pct / 100;
+    const playhead_ms = (dt_play / 100) * maxT;
+    const win_left = Math.max(0, Math.min(maxT - win_width_ms, playhead_ms - win_width_ms / 2));
     const lanesHtml = lanes.map(([k, ic, label]) => {
         const evs = detail_events.filter((e) => event_kind(e) === k);
         const color = KIND[k].color;
         const marks = evs.map((e) => {
             const left = (e.relative_time_ms / maxT) * 100;
-            if (k === 'error') return `<span class="tl-diamond" style="left:${left}%"></span>`;
-            if (k === 'console') return `<span class="tl-dot" style="left:${left}%;background:${color}"></span>`;
-            if (k === 'nav') return `<span class="tl-tick" style="left:${left}%;height:80%;background:${color}"></span>`;
-            return `<span class="tl-tick" style="left:${left}%;height:70%;background:${color}"></span>`;
+            const ev_idx = detail_events.indexOf(e);
+            const data_attr = ` data-event-idx="${ev_idx}"`;
+            if (k === 'error') return `<span class="tl-diamond"${data_attr} style="left:${left}%"></span>`;
+            if (k === 'console') return `<span class="tl-dot"${data_attr} style="left:${left}%;background:${color}"></span>`;
+            if (k === 'nav') return `<span class="tl-tick"${data_attr} style="left:${left}%;height:80%;background:${color}"></span>`;
+            return `<span class="tl-tick"${data_attr} style="left:${left}%;height:70%;background:${color}"></span>`;
         }).join('');
         return `<div class="tl-lane"><div class="tl-lane-hd"><span class="tl-lane-ic" style="color:${color}">${I[ic]}</span><span class="tl-lane-name">${label}</span><span class="tl-lane-count mono">${evs.length}</span></div><div class="tl-lane-track">${marks}</div></div>`;
     }).join('');
     return `<div class="tl">
         <div class="tl-toolbar">
-            <div class="tl-zoom"><span>缩放</span><input type="range" min="0" max="100" value="50" id="tlZoom"></div>
+            <div class="tl-zoom"><span>缩放</span><input type="range" min="0" max="100" value="${dt_zoom}" id="tlZoom"></div>
             <span class="tl-playtime mono" id="tlPlaytime">${fmt_axis(playMs)}</span>
         </div>
         <div class="tl-grid">
@@ -225,7 +269,7 @@ function render_trace(): string {
             </div>
             <div class="tl-minimap">
                 <span class="mono tl-mm-edge">00:00</span>
-                <div class="tl-mm-track"><div class="tl-mm-window" style="left:${Math.max(0, dt_play - 22)}%;width:44%"></div></div>
+                <div class="tl-mm-track"><div class="tl-mm-window" style="left:${(win_left / maxT) * 100}%;width:${window_pct}%"></div></div>
                 <span class="mono tl-mm-edge">${fmt_axis(maxT)}</span>
             </div>
         </div>
@@ -233,8 +277,9 @@ function render_trace(): string {
 }
 
 function render_dt_inspector(): string {
+    const detail_events = get_detail_events();
     const user_config = get_user_config();
-    const e = filtered_events()[get_dt_sel()];
+    const e = detail_events[get_dt_sel()];
     if (!e) return '';
     const d = (e.data || {}) as Record<string, unknown>;
     const k = event_kind(e);
@@ -538,6 +583,7 @@ function wire_trace(): void {
     const head = document.getElementById('tlPlayhead');
     const lbl = head?.querySelector('.tl-playhead-lbl') as HTMLElement | null;
     const time = document.getElementById('tlPlaytime');
+    const zoom = document.getElementById('tlZoom') as HTMLInputElement | null;
     if (!lanes || !head) return;
     const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
     const seek = (clientX: number) => {
@@ -548,17 +594,74 @@ function wire_trace(): void {
         const txt = fmt_axis((p / 100) * maxT);
         if (lbl) lbl.textContent = txt;
         if (time) time.textContent = txt;
+        apply_zoom_filter();
     };
+    const MARKER_SELECTOR = '.tl-tick, .tl-dot, .tl-diamond';
+    let marker_start_x = 0;
+    let marker_start_y = 0;
+    let marker_el: HTMLElement | null = null;
+
     lanes.addEventListener('pointerdown', (e) => {
-        seek((e as PointerEvent).clientX);
+        const pe = e as PointerEvent;
+        const target = pe.target as HTMLElement;
+        const m = target.matches(MARKER_SELECTOR) ? target : target.closest(MARKER_SELECTOR) as HTMLElement | null;
+        if (m) {
+            e.stopPropagation();
+            marker_start_x = pe.clientX;
+            marker_start_y = pe.clientY;
+            marker_el = m;
+            const mv = (ev: PointerEvent) => seek(ev.clientX);
+            const up = (ev: PointerEvent) => {
+                window.removeEventListener('pointermove', mv);
+                window.removeEventListener('pointerup', up);
+                const dx = ev.clientX - marker_start_x;
+                const dy = ev.clientY - marker_start_y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist <= 3 && marker_el) {
+                    const idx_str = marker_el.dataset.eventIdx;
+                    if (idx_str != null) {
+                        const idx = parseInt(idx_str, 10);
+                        const ev = detail_events[idx];
+                        if (ev) {
+                            const p = (ev.relative_time_ms / maxT) * 100;
+                            set_dt_play(p);
+                            head.style.left = `${p}%`;
+                            const txt = fmt_axis(ev.relative_time_ms);
+                            if (lbl) lbl.textContent = txt;
+                            if (time) time.textContent = txt;
+                            apply_zoom_filter();
+                            const same_event = get_dt_sel() === idx && get_dt_insp_open();
+                            set_dt_sel(idx);
+                            set_dt_insp_open(true);
+                            if (!same_event) router.render_content();
+                        }
+                    }
+                }
+                marker_el = null;
+            };
+            window.addEventListener('pointermove', mv);
+            window.addEventListener('pointerup', up);
+            return;
+        }
+        // Normal lanes drag — non-marker area
+        seek(pe.clientX);
+        set_dt_insp_open(false);
+        router.render_content();
         const mv = (ev: PointerEvent) => seek(ev.clientX);
         const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
         window.addEventListener('pointermove', mv);
         window.addEventListener('pointerup', up);
     });
+    if (zoom) {
+        zoom.addEventListener('input', () => {
+            set_dt_zoom(Number(zoom.value));
+            apply_zoom_filter();
+        });
+    }
+    apply_zoom_filter();
 }
 
-export { render_detail, wire_detail, open_detail };
+export { render_detail, wire_detail, open_detail, render_trace };
 
 async function open_detail(id: string): Promise<void> {
     set_page('detail'); set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all'); set_dt_sel(-1); set_dt_insp_open(false);

@@ -1,1 +1,45 @@
-{"tasks":[]}
+{
+  "tasks": [
+    {
+      "id": "T0001",
+      "title": "fix: 轨道视图缩放滑块时间窗口过滤",
+      "status": "done",
+      "spec": "specs/T0001_zoom-slider-fix.md",
+      "depends_on": [],
+      "workset": [
+        "src/dashboard/dashboard_detail.ts",
+        "src/dashboard/dashboard_shared.ts",
+        "src/dashboard/detail-views.css"
+      ],
+      "eval": "required"
+    },
+    {
+      "id": "T0002",
+      "title": "fix: 时间线标记点击 seek + 打开 inspector",
+      "status": "done",
+      "spec": "specs/T0002_timeline-marker-click.md",
+      "depends_on": [
+        "T0001"
+      ],
+      "workset": [
+        "src/dashboard/dashboard_detail.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0003",
+      "title": "feat: 移除 Webhook/Issue 卡片 + MCP 侧边栏入口",
+      "status": "ready",
+      "spec": "specs/T0003_remove-integrations-sidebar.md",
+      "depends_on": [],
+      "workset": [
+        "src/dashboard/dashboard.ts",
+        "src/dashboard/dashboard_integrations.ts",
+        "src/dashboard/dashboard-pages.css",
+        "tests/integration_page.test.ts"
+      ],
+      "eval": "required"
+    }
+  ]
+}

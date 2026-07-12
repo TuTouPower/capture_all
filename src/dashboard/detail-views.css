@@ -45,6 +45,7 @@
 .tl-dot:hover { transform: translate(-50%,-50%) scale(1.4); }
 .tl-diamond { position: absolute; top: 50%; width: 11px; height: 11px; background: var(--red); transform: translate(-50%,-50%) rotate(45deg); cursor: pointer; border-radius: 2px; box-shadow: 0 0 0 3px var(--red-bg); }
 .tl-diamond:hover { transform: translate(-50%,-50%) rotate(45deg) scale(1.2); }
+.tl-hidden { display: none; }
 .tl-seg {
   position: absolute; top: 50%; transform: translateY(-50%); height: 22px;
   border: 1px solid; border-radius: 6px; background: color-mix(in srgb, var(--src-nav) 8%, var(--surface));

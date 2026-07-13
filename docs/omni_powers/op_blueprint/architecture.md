@@ -141,18 +141,18 @@ src/
 │   └── chrome.d.ts               # Chrome API 类型声明
 └── agent/                        # 本地 Agent 基础设施
     ├── bridge/
-    │   ├── main.ts               # Bridge 服务入口
-    │   ├── server.ts             # HTTP 服务器
-    │   ├── command_queue.ts      # 命令队列
-    │   ├── config.ts             # Bridge 配置
-    │   └── cdp_handler.ts        # 外部 CDP 处理
+    │   ├── main.ts               # Bridge 服务入口（`npm run bridge`）
+    │   ├── server.ts             # HTTP 服务器（/health, /mcp/command, /extension/command …）
+    │   ├── command_queue.ts      # 命令队列（enqueue → 扩展轮询取走 → resolve）
+    │   ├── config.ts             # Bridge CLI/环境变量配置
+    │   └── cdp_handler.ts        # 外部 CDP 检测/启动/停止/事件
     ├── mcp/
-    │   ├── main.ts               # MCP Server 入口
-    │   ├── client.ts             # Bridge MCP 客户端
+    │   ├── main.ts               # MCP Server 入口（`npm run mcp`）
+    │   ├── client.ts             # Bridge HTTP 客户端（/mcp/status, /mcp/command）
     │   ├── schemas.ts            # Zod 参数校验 schema
-    │   └── tools.ts              # 工具注册 + 命令映射
+    │   └── tools.ts              # MCP 工具名 → AgentCommandType 映射
     └── shared/
-        └── protocol.ts           # Agent 命令协议类型
+        └── protocol.ts           # AgentCommandType / AgentCommandResult / AgentStatus 类型
 ```
 
 ## 4. 模块职责
@@ -239,8 +239,13 @@ Agent → MCP 工具调用
 
 ## 7. 构建产物与依赖
 
-- 构建输出：`artifacts/dist/`。
+- 扩展输出：`artifacts/dist/`。
 - Vite 多入口：background、content、popup、dashboard、devtools、devtools_panel。
+- Bridge 输出：`artifacts/bridge/bridge.mjs`（esbuild 单文件，`npm run build:bridge`）。
+- MCP Server 输出：`artifacts/mcp/mcp.mjs`（esbuild 单文件，`npm run build:mcp`）。
 - 测试输出：`artifacts/test-results/`。
+
+Bridge/MCP 产物为 esbuild bundled ESM，不依赖 tsx 和 node_modules，可直接 `node bridge.mjs` 运行。
+MCP Server 通过 Claude Code 的 `.claude/settings.json` `mcpServers` 注册，启动后自动加载 12 个 MCP 工具。
 
 依赖与脚本命令的完整清单见 `package.json`；测试/构建/启动命令见 `test.md`。

@@ -69,15 +69,49 @@ tests/
 | 命令 | 说明 |
 |---|---|
 | `npm run dev` | Vite dev |
-| `npm run build` | `tsc && vite build`，输出 `artifacts/dist/` |
+| `npm run build` | `tsc && vite build && npm run build:bridge && npm run build:mcp`，扩展输出 `artifacts/dist/`，Bridge 输出 `artifacts/bridge/bridge.mjs`，MCP Server 输出 `artifacts/mcp/mcp.mjs` |
 | `npm test` | `vitest run`，全量单测 |
 | `npm run test:watch` | vitest watch |
 | `npm run test:e2e` | `playwright test --project=e2e`（仅基础 headless 项目） |
 | `npm run test:e2e:all` | `playwright test`（全部项目） |
 | `npm run test:e2e:server` | 启动 E2E 测试服务器（`tests/fixtures/server.ts`） |
 | `npm run serve:e2e` | `npm run build && vite preview --host 127.0.0.1 --port 4174` |
-| `npm run bridge` | `tsx src/agent/bridge/main.ts` |
-| `npm run mcp` | `tsx src/agent/mcp/main.ts` |
+| `npm run build:bridge` | `esbuild src/agent/bridge/main.ts --bundle --platform=node --format=esm --outfile=artifacts/bridge/bridge.mjs` |
+| `npm run build:mcp` | `esbuild src/agent/mcp/main.ts --bundle --platform=node --format=esm --outfile=artifacts/mcp/mcp.mjs` |
+| `npm run bridge` | `tsx src/agent/bridge/main.ts`（开发）；构建后：`node artifacts/bridge/bridge.mjs` |
+| `npm run mcp` | `tsx src/agent/mcp/main.ts`（开发）；构建后：`node artifacts/mcp/mcp.mjs` |
+
+### 3.1 Bridge / MCP 生产部署
+
+构建产物 `artifacts/bridge/bridge.mjs` 和 `artifacts/mcp/mcp.mjs` 为 esbuild 单文件 bundle，不依赖 tsx 和 node_modules。部署只需复制对应 `.mjs` 文件到目标机器，执行 `node bridge.mjs` 即可。
+
+MCP Server 启动需要环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `CAPTURE_ALL_BRIDGE_URL` | Bridge 地址，默认 `http://127.0.0.1:17831` |
+| `CAPTURE_ALL_BRIDGE_TOKEN` | 与扩展设置 → 集成 → Bridge Token 一致 |
+
+### 3.2 Claude Code MCP 注册
+
+项目 `.claude/settings.json` 已注册 `capture-all` MCP Server：
+
+```json
+{
+  "mcpServers": {
+    "capture-all": {
+      "command": "node",
+      "args": ["artifacts/mcp/mcp.mjs"],
+      "env": {
+        "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831",
+        "CAPTURE_ALL_BRIDGE_TOKEN": "<用户设置的值>"
+      }
+    }
+  }
+}
+```
+
+Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude Code 通过 MCP 工具直接调用 `capture.start`、`captures.list`、`data.list` 等 12 个工具。
 
 ## 4. E2E
 

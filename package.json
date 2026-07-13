@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run build:bridge && npm run build:mcp",
     "test": "vitest run",
     "test:watch": "vitest",
     "serve:e2e": "npm run build && vite preview --host 127.0.0.1 --port 4174",
@@ -13,7 +13,9 @@
     "mcp": "tsx src/agent/mcp/main.ts",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:all": "playwright test",
-    "test:e2e:server": "npx tsx tests/fixtures/server.ts"
+    "test:e2e:server": "npx tsx tests/fixtures/server.ts",
+    "build:bridge": "./node_modules/.bin/esbuild src/agent/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs",
+    "build:mcp": "./node_modules/.bin/esbuild src/agent/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.25",

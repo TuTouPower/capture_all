@@ -97,14 +97,55 @@ Bridge 默认启用。用户必须在设置页填入 token 后才能实际通信
 - `src/agent/bridge/main.ts` — Bridge 服务入口（`npm run bridge`）。
 - `src/agent/bridge/server.ts` — HTTP 服务器。
 - `src/agent/bridge/command_queue.ts` — 命令队列。
-- `src/agent/bridge/config.ts` — Bridge 配置。
+- `src/agent/bridge/config.ts` — Bridge CLI/环境变量配置。
 - `src/agent/bridge/cdp_handler.ts` — 外部 CDP 处理。
 - `src/agent/mcp/main.ts` — MCP Server 入口（`npm run mcp`）。
 - `src/agent/mcp/client.ts` — Bridge MCP 客户端。
 - `src/agent/mcp/schemas.ts` — Zod schema。
-- `src/agent/mcp/tools.ts` — 工具注册 + 命令映射。
-- `src/agent/shared/protocol.ts` — 命令协议类型（10 个命令）。
-- `src/background/agent_bridge_client.ts` — 扩展侧轮询客户端。
+- `src/agent/mcp/tools.ts` — 工具名 → AgentCommandType 映射。
+- `src/agent/shared/protocol.ts` — AgentCommandType / AgentCommandResult / AgentStatus 类型。
+- `src/background/agent_bridge_client.ts` — 扩展侧轮询客户端（export `start_bridge_client`, `stop_bridge_client`, `is_bridge_client_running`）。
 - `src/background/agent_command_dispatcher.ts` — 命令分发。
 - `src/background/agent_data_queries.ts` — 数据查询。
 - `src/shared/agent_bridge_config.ts` — Bridge 配置类型。
+
+## 9. 构建产物
+
+### 9.1 esbuild 单文件
+
+`npm run build` 额外生成：
+
+| 产物 | 命令 | 说明 |
+|------|------|------|
+| `artifacts/bridge/bridge.mjs` | `npm run build:bridge` | Bridge 独立可运行文件 |
+| `artifacts/mcp/mcp.mjs` | `npm run build:mcp` | MCP Server 独立可运行文件 |
+
+两个产物均为 esbuild bundled ESM，不依赖 tsx 和 node_modules。部署只需复制 `.mjs` 到目标机器，`node bridge.mjs` 直接运行。
+
+Bridge 必须持续运行在后台（扩展通过轮询 Bridge 获取命令）。MCP Server 按需启动（Claude Code 自动管理其生命周期）。
+
+### 9.2 Claude Code MCP 注册
+
+项目 `.claude/settings.json` 已注册：
+
+```json
+{
+  "mcpServers": {
+    "capture-all": {
+      "command": "node",
+      "args": ["artifacts/mcp/mcp.mjs"],
+      "env": {
+        "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831",
+        "CAPTURE_ALL_BRIDGE_TOKEN": "<用户设置的值>"
+      }
+    }
+  }
+}
+```
+
+用户流程：
+
+1. 扩展设置 → 集成 → 填 Bridge Token
+2. `node artifacts/bridge/bridge.mjs &`（后台持续运行）
+3. 重开 Claude Code 会话，MCP 工具自动加载
+4. 对话中直接调用 `capture.start`、`captures.list`、`data.list` 等 12 个工具

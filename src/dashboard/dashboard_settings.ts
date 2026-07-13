@@ -12,6 +12,8 @@ import {
     logger,
 } from './dashboard_shared';
 
+declare const __BUILD_TIME__: string;
+
 function seg(name: string, opts: [string, string][], val: string): string {
     return `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-val="${v}" data-on="${val === v ? 1 : 0}">${l}</button>`).join('')}</div>`;
 }
@@ -100,7 +102,7 @@ function render_settings(): string {
                 </section>
             </div>
         </div>
-        <div class="set-footer"><span class="info">${I.agent} 更改即时保存</span></div>
+        <div class="set-footer"><span class="info">${I.agent} 更改即时保存 · build ${esc(typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev')}</span></div>
     </div>`;
 }
 

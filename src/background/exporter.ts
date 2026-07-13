@@ -26,7 +26,7 @@ export async function export_json(capture_id: string): Promise<string> {
     const user_config = await load_user_config();
     const data: ExportableCaptureData = { capture, events: all_events, network_requests, console_events: console_logs };
     const result = add_system_times_to_capture_data(data, user_config);
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
 }
 
 export async function export_jsonl(capture_id: string): Promise<string> {

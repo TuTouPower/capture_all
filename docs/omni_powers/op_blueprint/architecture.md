@@ -109,7 +109,7 @@ src/
 │   ├── dashboard_captures.ts     # 采集列表页
 │   ├── dashboard_detail.ts       # 采集详情页
 │   ├── dashboard_settings.ts     # 设置页
-│   ├── dashboard_integrations.ts # MCP 集成页
+│   ├── dashboard_integrations.ts # 当前采集 / 导出任务
 │   ├── dashboard_shared.ts       # 共享工具
 │   ├── sidebar_resize.ts         # 侧边栏拖拽
 │   ├── icons.ts                  # 图标定义

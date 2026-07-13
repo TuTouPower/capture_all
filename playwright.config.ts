@@ -35,6 +35,19 @@ export default defineConfig({
             },
         },
         {
+            name: 'e2e-t0003',
+            testDir: './e2e/T0003',
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            use: {
+                headless: false,
+                launchOptions: {
+                    args: ['--no-first-run', '--no-default-browser-check', '--disable-gpu'],
+                },
+            },
+        },
+        {
             name: 'e2e-real',
             testMatch: 'e2e-real.spec.ts',
             use: {

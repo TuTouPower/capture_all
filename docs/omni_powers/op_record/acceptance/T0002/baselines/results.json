@@ -1,0 +1,27 @@
+{
+  "round": 2,
+  "revalidated_at": "2026-07-13T05:53:14+08:00",
+  "runner": "e2e/T0002/e2e-final-t0002.cjs",
+  "AC-1": {
+    "result": "PASS",
+    "evidence": "playhead moved: 49.5% -> 4.00031%"
+  },
+  "AC-2": {
+    "result": "PASS",
+    "evidence": "inspector opened with content; text_len=156"
+  },
+  "AC-3": {
+    "result": "PASS",
+    "evidence": "inspector switched: idx=0 vs idx=10; content_same=false"
+  },
+  "AC-4": {
+    "result": "PASS",
+    "evidence": "100px marker drag kept inspector closed; playhead=39.2117%"
+  },
+  "structural_cross_check": {
+    "command": "npx vitest run tests/dashboard_timeline_marker.test.ts",
+    "result": "PASS",
+    "evidence": "22 tests passed",
+    "scope": "structural only; not a substitute for browser E2E"
+  }
+}

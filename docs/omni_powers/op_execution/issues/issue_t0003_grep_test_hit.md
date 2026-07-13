@@ -6,6 +6,7 @@ spec: docs/omni_powers/op_execution/specs/T0003_remove-integrations-sidebar.md
 severity: P2
 tags: [tech-debt, spec-措辞]
 status: open
+triaged: P2
 blocks_merge: false
 created_at: 2026-07-13 04:00:00 UTC+8
 ---

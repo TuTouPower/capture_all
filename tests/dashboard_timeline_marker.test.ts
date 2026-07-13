@@ -32,10 +32,12 @@ function make_event(overrides: Partial<CaptureEvent> & { relative_time_ms: numbe
 }
 
 let render_trace: () => string;
+let wire_detail: () => void;
 
 async function load_module() {
     const mod = await import('../src/dashboard/dashboard_detail');
     render_trace = mod.render_trace as unknown as () => string;
+    wire_detail = mod.wire_detail as unknown as () => void;
 }
 
 // ── data-event-idx attribute ──
@@ -284,5 +286,287 @@ describe('trace view DOM: marker click chain', () => {
         expect(txt).toBe('00:08');
         lbl.textContent = txt;
         expect(lbl.textContent).toBe('00:08');
+    });
+
+    it('playhead renders inside the track-aligned overlay', () => {
+        document.body.innerHTML = render_trace();
+        const overlay = document.getElementById('tlTrackOverlay');
+        const head = document.getElementById('tlPlayhead');
+        expect(overlay).toBeTruthy();
+        expect(overlay?.contains(head)).toBe(true);
+    });
+
+    it('lane pointer seek uses the track overlay geometry', () => {
+        document.body.innerHTML = `<div id="content">${render_trace()}</div>`;
+        const lanes = document.getElementById('tlLanes') as HTMLElement;
+        const overlay = document.getElementById('tlTrackOverlay') as HTMLElement;
+        const head = document.getElementById('tlPlayhead') as HTMLElement;
+        expect(lanes).toBeTruthy();
+        expect(overlay).toBeTruthy();
+
+        lanes.getBoundingClientRect = () => ({
+            x: 100,
+            y: 0,
+            left: 100,
+            top: 0,
+            right: 700,
+            bottom: 200,
+            width: 600,
+            height: 200,
+            toJSON: () => ({}),
+        });
+        overlay.getBoundingClientRect = () => ({
+            x: 288,
+            y: 0,
+            left: 288,
+            top: 0,
+            right: 700,
+            bottom: 200,
+            width: 412,
+            height: 200,
+            toJSON: () => ({}),
+        });
+
+        wire_detail();
+        lanes.dispatchEvent(new PointerEvent('pointerdown', {
+            bubbles: true,
+            clientX: 391,
+            clientY: 20,
+        }));
+        window.dispatchEvent(new PointerEvent('pointerup'));
+
+        expect(get_dt_play()).toBeCloseTo(25, 5);
+        expect(parseFloat(head.style.left)).toBeCloseTo(25, 5);
+    });
+});
+
+// ── minimap 窗口真实 pointer 拖动 ──
+
+describe('trace view DOM: minimap window drag', () => {
+    const track_rect = {
+        x: 100,
+        y: 300,
+        left: 100,
+        top: 300,
+        right: 600,
+        bottom: 322,
+        width: 500,
+        height: 22,
+        toJSON: () => ({}),
+    };
+
+    async function setup_minimap(
+        events: CaptureEvent[],
+        zoom = 80,
+        playhead = 50,
+        overview = false,
+    ): Promise<{
+        mm_track: HTMLElement;
+        mm_window: HTMLElement;
+        capture_calls: number[];
+        release_calls: number[];
+    }> {
+        set_dt_view(overview ? 'list' : 'trace');
+        if (overview) set_dt_view('trace');
+        else set_dt_zoom(zoom);
+        set_dt_play(playhead);
+        set_dt_quick('all');
+        set_dt_sel(-1);
+        set_dt_insp_open(false);
+        set_detail_events(events);
+        await load_module();
+
+        document.body.innerHTML = `<div id="content">${render_trace()}</div>`;
+        const mm_track = document.getElementById('tlMmTrack') as HTMLElement;
+        const mm_window = document.getElementById('tlMmWindow') as HTMLElement;
+        const capture_calls: number[] = [];
+        const release_calls: number[] = [];
+        let captured_pointer_id: number | null = null;
+
+        expect(mm_track).toBeTruthy();
+        expect(mm_window).toBeTruthy();
+        mm_track.getBoundingClientRect = () => track_rect;
+        Object.defineProperties(mm_window, {
+            setPointerCapture: {
+                value: (pointer_id: number) => {
+                    captured_pointer_id = pointer_id;
+                    capture_calls.push(pointer_id);
+                },
+            },
+            hasPointerCapture: {
+                value: (pointer_id: number) => captured_pointer_id === pointer_id,
+            },
+            releasePointerCapture: {
+                value: (pointer_id: number) => {
+                    if (captured_pointer_id === pointer_id) captured_pointer_id = null;
+                    release_calls.push(pointer_id);
+                },
+            },
+        });
+        wire_detail();
+        return { mm_track, mm_window, capture_calls, release_calls };
+    }
+
+    function pointer_event(type: string, pointer_id: number, client_x: number): PointerEvent {
+        return new PointerEvent(type, {
+            bubbles: true,
+            button: type === 'pointerdown' ? 0 : -1,
+            buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
+            clientX: client_x,
+            clientY: 311,
+            pointerId: pointer_id,
+        });
+    }
+
+    const events = [
+        make_event({ relative_time_ms: 1000, type: 'network_request' }),
+        make_event({ relative_time_ms: 5000, type: 'console_event' }),
+        make_event({ relative_time_ms: 8000, type: 'runtime_exception' }),
+        make_event({ relative_time_ms: 10000, type: 'network_request' }),
+    ];
+
+    it('dragging right keeps width and moves playhead plus visible markers', async () => {
+        const { mm_window, capture_calls, release_calls } = await setup_minimap(events);
+        const width_before = mm_window.style.width;
+        const visible_before = Array.from(document.querySelectorAll<HTMLElement>('[data-event-idx]'))
+            .filter((marker) => !marker.classList.contains('tl-hidden'))
+            .map((marker) => marker.dataset.eventIdx);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 7, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 7, 450));
+        mm_window.dispatchEvent(pointer_event('pointerup', 7, 450));
+
+        const visible_after = Array.from(document.querySelectorAll<HTMLElement>('[data-event-idx]'))
+            .filter((marker) => !marker.classList.contains('tl-hidden'))
+            .map((marker) => marker.dataset.eventIdx);
+        expect(capture_calls).toEqual([7]);
+        expect(release_calls).toEqual([7]);
+        expect(mm_window.style.width).toBe(width_before);
+        expect(parseFloat(mm_window.style.left)).toBeCloseTo(60, 5);
+        expect(get_dt_play()).toBeCloseTo(70, 5);
+        expect(visible_before).toContain('1');
+        expect(visible_after).not.toContain('1');
+        expect(visible_after).toContain('2');
+        expect(mm_window.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('clamps minimap drag to both timeline edges', async () => {
+        const { mm_window } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 8, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 8, -500));
+        mm_window.dispatchEvent(pointer_event('pointerup', 8, -500));
+        expect(parseFloat(mm_window.style.left)).toBeCloseTo(0, 5);
+        expect(get_dt_play()).toBeCloseTo(10, 5);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 9, 150));
+        mm_window.dispatchEvent(pointer_event('pointermove', 9, 1000));
+        mm_window.dispatchEvent(pointer_event('pointerup', 9, 1000));
+        expect(parseFloat(mm_window.style.left)).toBeCloseTo(80, 5);
+        expect(get_dt_play()).toBeCloseTo(90, 5);
+    });
+
+    it('100% overview window ignores pointer drag', async () => {
+        const { mm_window, capture_calls } = await setup_minimap(events, 80, 30, true);
+        const left_before = mm_window.style.left;
+        const playhead_before = get_dt_play();
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 10, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 10, 500));
+        mm_window.dispatchEvent(pointer_event('pointerup', 10, 500));
+
+        expect(mm_window.style.width).toBe('100%');
+        expect(mm_window.style.left).toBe(left_before);
+        expect(get_dt_play()).toBe(playhead_before);
+        expect(capture_calls).toEqual([]);
+        expect(mm_window.dataset.draggable).toBe('0');
+    });
+
+    it('pointercancel cleans up the active drag', async () => {
+        const { mm_window, release_calls } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 11, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 11, 400));
+        const left_at_cancel = mm_window.style.left;
+        mm_window.dispatchEvent(pointer_event('pointercancel', 11, 400));
+        mm_window.dispatchEvent(pointer_event('pointermove', 11, 500));
+
+        expect(mm_window.style.left).toBe(left_at_cancel);
+        expect(release_calls).toEqual([11]);
+        expect(mm_window.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('ignores events from another pointer during an active drag', async () => {
+        const { mm_window, release_calls } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 14, 350));
+        const left_before = mm_window.style.left;
+        mm_window.dispatchEvent(pointer_event('pointermove', 15, 500));
+        mm_window.dispatchEvent(pointer_event('pointerup', 15, 500));
+        expect(mm_window.style.left).toBe(left_before);
+        expect(mm_window.classList.contains('is-dragging')).toBe(true);
+
+        mm_window.dispatchEvent(pointer_event('pointerup', 14, 350));
+        expect(release_calls).toEqual([14]);
+        expect(mm_window.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('ignores another pointerdown while a minimap drag is active', async () => {
+        const { mm_window, capture_calls, release_calls } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 17, 350));
+        const left_before_second_pointer = mm_window.style.left;
+        mm_window.dispatchEvent(pointer_event('pointerdown', 18, 450));
+        mm_window.dispatchEvent(pointer_event('pointermove', 18, 550));
+        mm_window.dispatchEvent(pointer_event('pointerup', 18, 550));
+
+        expect(capture_calls).toEqual([17]);
+        expect(mm_window.style.left).toBe(left_before_second_pointer);
+        expect(mm_window.classList.contains('is-dragging')).toBe(true);
+        expect(release_calls).toEqual([]);
+
+        mm_window.dispatchEvent(pointer_event('pointermove', 17, 400));
+        expect(mm_window.style.left).not.toBe(left_before_second_pointer);
+        mm_window.dispatchEvent(pointer_event('pointerup', 17, 400));
+        expect(release_calls).toEqual([17]);
+        expect(mm_window.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('lost pointer capture stops further minimap movement', async () => {
+        const { mm_window } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 16, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 16, 400));
+        const left_at_capture_loss = mm_window.style.left;
+        mm_window.dispatchEvent(pointer_event('lostpointercapture', 16, 400));
+        mm_window.dispatchEvent(pointer_event('pointermove', 16, 500));
+
+        expect(mm_window.style.left).toBe(left_at_capture_loss);
+        expect(mm_window.classList.contains('is-dragging')).toBe(false);
+    });
+
+    it('includes a marker on the right window boundary', async () => {
+        const { mm_window } = await setup_minimap(events);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 13, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 13, 1000));
+        mm_window.dispatchEvent(pointer_event('pointerup', 13, 1000));
+
+        const end_marker = document.querySelector<HTMLElement>('[data-event-idx="3"]');
+        expect(end_marker).toBeTruthy();
+        expect(end_marker?.classList.contains('tl-hidden')).toBe(false);
+    });
+
+    it('empty timeline drag remains finite and error-free', async () => {
+        const { mm_window } = await setup_minimap([]);
+
+        mm_window.dispatchEvent(pointer_event('pointerdown', 12, 350));
+        mm_window.dispatchEvent(pointer_event('pointermove', 12, 450));
+        mm_window.dispatchEvent(pointer_event('pointerup', 12, 450));
+
+        expect(Number.isFinite(parseFloat(mm_window.style.left))).toBe(true);
+        expect(Number.isFinite(parseFloat(mm_window.style.width))).toBe(true);
+        expect(Number.isFinite(get_dt_play())).toBe(true);
+        expect(document.querySelectorAll('[data-event-idx]')).toHaveLength(0);
     });
 });

@@ -34,6 +34,7 @@ let _dt_sel = -1;
 let _dt_insp_open = false;
 let _dt_play = 49.5;
 let _dt_zoom = 50;
+let _dt_zoom_overview = true;
 let _dt_net_sel = -1;
 let _dt_net_insp_closed = false;
 
@@ -57,7 +58,13 @@ export const set_detail_console = (v: ConsoleEventData[]) => { _detail_console =
 export const get_dt_tab = () => _dt_tab;
 export const set_dt_tab = (v: string) => { _dt_tab = v; };
 export const get_dt_view = () => _dt_view;
-export const set_dt_view = (v: 'list' | 'trace') => { _dt_view = v; if (v === 'list') _dt_zoom = 0; };
+export const set_dt_view = (v: 'list' | 'trace') => {
+    _dt_view = v;
+    if (v === 'list') {
+        _dt_zoom = 50;
+        _dt_zoom_overview = true;
+    }
+};
 export const get_dt_quick = () => _dt_quick;
 export const set_dt_quick = (v: string) => { _dt_quick = v; };
 export const get_dt_sel = () => _dt_sel;
@@ -67,7 +74,13 @@ export const set_dt_insp_open = (v: boolean) => { _dt_insp_open = v; };
 export const get_dt_play = () => _dt_play;
 export const set_dt_play = (v: number) => { _dt_play = v; };
 export const get_dt_zoom = () => _dt_zoom;
-export const set_dt_zoom = (v: number) => { _dt_zoom = v; };
+export const set_dt_zoom = (v: number) => {
+    _dt_zoom = v;
+    _dt_zoom_overview = false;
+};
+export const get_dt_zoom_window_pct = () => (
+    _dt_zoom_overview ? 100 : Math.max(5, 100 - _dt_zoom)
+);
 export const get_dt_net_sel = () => _dt_net_sel;
 export const set_dt_net_sel = (v: number) => { _dt_net_sel = v; };
 export const get_dt_net_insp_closed = () => _dt_net_insp_closed;

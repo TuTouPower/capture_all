@@ -76,6 +76,29 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
 });
 
+// Clean up stale capture state on service worker restart
+async function cleanup_stale_capture_state(): Promise<void> {
+    const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
+    if (result.is_capturing) {
+        logger.warn('Detected stale capturing state, cleaning up');
+        const stale_capture = result.current_capture as CaptureRecord | null;
+        if (stale_capture?.capture_id) {
+            await update_capture({
+                ...stale_capture,
+                status: 'completed',
+                ended_at: new Date().toISOString(),
+                duration_ms: stale_capture.started_at
+                    ? Date.now() - new Date(stale_capture.started_at).getTime()
+                    : 0,
+            });
+        }
+        await chrome.storage.local.set({ is_capturing: false, current_capture: null });
+        logger.info('Stale capture state cleaned up');
+    }
+}
+
+setTimeout(() => { cleanup_stale_capture_state().catch(() => {}); }, 0);
+
 // Setup keepalive listener
 setup_keepalive_listener();
 

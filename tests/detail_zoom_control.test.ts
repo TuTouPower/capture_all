@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 // ── 状态层测试：_dt_zoom 存取器行为 ──
 import {
     get_dt_zoom, set_dt_zoom,
-    get_dt_zoom_window_pct,
     get_dt_view, set_dt_view,
     get_dt_play, set_dt_play,
 } from '../src/dashboard/dashboard_shared';
@@ -23,33 +22,16 @@ describe('_dt_zoom 状态存取', () => {
 describe('set_dt_view 联动缩放重置', () => {
     beforeEach(() => { set_dt_zoom(50); });
 
-    it("set_dt_view('list') 重置 slider 为 50 并恢复全时间范围", () => {
+    it("set_dt_view('list') 重置 _dt_zoom 为 0（全时间范围可见）", () => {
         set_dt_zoom(30);
         set_dt_view('list');
-        expect(get_dt_zoom()).toBe(50);
-        expect(get_dt_zoom_window_pct()).toBe(100);
+        expect(get_dt_zoom()).toBe(0);
     });
 
-    it("set_dt_view('trace') 保留重置后的全时间范围", () => {
-        set_dt_view('list');
-        set_dt_view('trace');
-        expect(get_dt_zoom()).toBe(50);
-        expect(get_dt_zoom_window_pct()).toBe(100);
-    });
-
-    it('首次 slider 输入退出全览并恢复普通映射', () => {
-        set_dt_view('list');
-        set_dt_view('trace');
-        set_dt_zoom(50);
-        expect(get_dt_zoom()).toBe(50);
-        expect(get_dt_zoom_window_pct()).toBe(50);
-    });
-
-    it("set_dt_view('trace') 不改变用户缩放", () => {
+    it("set_dt_view('trace') 不改变 _dt_zoom", () => {
         set_dt_zoom(30);
         set_dt_view('trace');
         expect(get_dt_zoom()).toBe(30);
-        expect(get_dt_zoom_window_pct()).toBe(70);
     });
 });
 

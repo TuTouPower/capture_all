@@ -1,10 +1,7 @@
 /* Capture All — Detail workbench: timeline, network, console, overview */
 
 /* ════════ TIMELINE ════════ */
-.tl {
-  --tl-lane-header-width: 188px;
-  display: flex; flex-direction: column; height: 100%; min-height: 0;
-}
+.tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .tl-toolbar {
   display: flex; align-items: center; gap: 14px; padding: 10px 14px;
   border-bottom: 1px solid var(--border);
@@ -17,33 +14,28 @@
 
 .tl-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .tl-axis {
-  position: relative; height: 26px; margin-left: var(--tl-lane-header-width); border-bottom: 1px solid var(--border-2);
+  position: relative; height: 26px; margin-left: 188px; border-bottom: 1px solid var(--border-2);
   flex: none;
 }
 .tl-axis span { position: absolute; top: 7px; transform: translateX(-50%); font-size: 10.5px; color: var(--ink-3); }
 .tl-axis span:first-child { transform: none; }
 .tl-axis span:last-child { transform: translateX(-100%); }
 
-.tl-lanes { flex: 1; min-height: 0; overflow: auto; position: relative; }
-.tl-lanes-content { min-width: 100%; min-height: 100%; position: relative; }
+.tl-lanes { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
 .tl-lane { display: flex; align-items: stretch; border-bottom: 1px solid var(--border-2); height: 46px; }
 [data-density="compact"] .tl-lane { height: 40px; }
 .tl-lane-hd {
-  width: var(--tl-lane-header-width); flex: none; display: flex; align-items: center; gap: 8px;
+  width: 188px; flex: none; display: flex; align-items: center; gap: 8px;
   padding: 0 14px; border-right: 1px solid var(--border-2); background: var(--surface);
-  position: sticky; left: 0; z-index: 4;
+  position: sticky; left: 0; z-index: 2;
 }
 .tl-lane-ic { display: grid; place-items: center; flex: none; }
 .tl-lane-name { font-size: 12px; color: var(--ink); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-lane-count { font-size: 11px; color: var(--ink-3); }
 .tl-lane-track { flex: 1; position: relative; }
 
-/* playhead spans the lane track area */
-.tl-track-overlay {
-  position: absolute; top: 0; right: 0; bottom: 0; left: var(--tl-lane-header-width);
-  z-index: 3; pointer-events: none;
-}
-.tl-playhead { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 1.5px solid var(--red); pointer-events: none; }
+/* playhead spans the lane area */
+.tl-playhead { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 1.5px solid var(--red); z-index: 6; margin-left: 188px; pointer-events: none; }
 .tl-playhead-lbl { position: absolute; top: -22px; left: 0; transform: translateX(-50%); background: var(--red); color: #fff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
 
 /* lane markers */
@@ -65,14 +57,7 @@
 .tl-minimap { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--border-2); }
 .tl-mm-edge { font-size: 10.5px; color: var(--ink-3); }
 .tl-mm-track { flex: 1; height: 22px; background: var(--surface-inset); border: 1px solid var(--border); border-radius: 6px; position: relative; overflow: hidden; }
-.tl-mm-window {
-  position: absolute; top: -1px; bottom: -1px;
-  background: color-mix(in srgb, var(--red) 12%, transparent);
-  border: 1.5px solid var(--red); border-radius: 6px;
-  cursor: grab; touch-action: none; user-select: none;
-}
-.tl-mm-window.is-dragging { cursor: grabbing; }
-.tl-mm-window[data-draggable="0"] { cursor: default; }
+.tl-mm-window { position: absolute; top: -1px; bottom: -1px; background: color-mix(in srgb, var(--red) 12%, transparent); border: 1.5px solid var(--red); border-radius: 6px; }
 
 /* ════════ NETWORK / table-ish ════════ */
 .net, .con { display: flex; flex-direction: column; height: 100%; min-height: 0; }

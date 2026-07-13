@@ -6,7 +6,6 @@ import {
     get_user_config,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     get_dt_tab, set_dt_tab, get_dt_view, set_dt_view, get_dt_zoom, set_dt_zoom,
-    get_dt_zoom_window_pct,
     get_dt_quick, set_dt_quick, get_dt_sel, set_dt_sel,
     get_dt_insp_open, set_dt_insp_open, get_dt_play, set_dt_play,
     get_dt_net_sel, set_dt_net_sel, get_dt_net_insp_closed, set_dt_net_insp_closed,
@@ -189,16 +188,20 @@ function fmt_axis(ms: number): string {
     return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
+function slider_to_window_pct(slider_value: number): number {
+    return Math.max(5, 100 - slider_value);
+}
+
 function apply_zoom_filter(): void {
+    const dt_zoom = get_dt_zoom();
     const dt_play = get_dt_play();
     const detail_events = get_detail_events();
     const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
-    const window_pct = get_dt_zoom_window_pct();
+    const window_pct = slider_to_window_pct(dt_zoom);
     const win_width_ms = maxT * window_pct / 100;
     const playhead_ms = (dt_play / 100) * maxT;
     const win_left = Math.max(0, Math.min(maxT - win_width_ms, playhead_ms - win_width_ms / 2));
     const win_right = win_left + win_width_ms;
-    const boundary_epsilon_ms = Math.max(1e-6, maxT * 1e-9);
 
     const tracks = document.querySelectorAll('.tl-lane-track');
     for (const track of tracks) {
@@ -206,10 +209,7 @@ function apply_zoom_filter(): void {
         for (const m of marks) {
             const left = parseFloat(m.style.left || '0');
             const ev_ms = (left / 100) * maxT;
-            if (
-                ev_ms >= win_left - boundary_epsilon_ms
-                && ev_ms <= win_right + boundary_epsilon_ms
-            ) {
+            if (ev_ms >= win_left && ev_ms <= win_right) {
                 m.classList.remove('tl-hidden');
             } else {
                 m.classList.add('tl-hidden');
@@ -221,7 +221,6 @@ function apply_zoom_filter(): void {
     if (mm_win) {
         mm_win.style.width = `${window_pct}%`;
         mm_win.style.left = `${(win_left / maxT) * 100}%`;
-        mm_win.dataset.draggable = window_pct < 100 ? '1' : '0';
     }
 }
 
@@ -239,7 +238,7 @@ function render_trace(): string {
     const TICKN = 8;
     const ticks = Array.from({ length: TICKN }, (_, i) => fmt_axis((maxT * i) / (TICKN - 1)));
     const playMs = (dt_play / 100) * maxT;
-    const window_pct = get_dt_zoom_window_pct();
+    const window_pct = slider_to_window_pct(dt_zoom);
     const win_width_ms = maxT * window_pct / 100;
     const playhead_ms = (dt_play / 100) * maxT;
     const win_left = Math.max(0, Math.min(maxT - win_width_ms, playhead_ms - win_width_ms / 2));
@@ -265,16 +264,12 @@ function render_trace(): string {
         <div class="tl-grid">
             <div class="tl-axis">${ticks.map((t, i) => `<span class="mono" style="left:${(i / (TICKN - 1)) * 100}%">${t}</span>`).join('')}</div>
             <div class="tl-lanes" id="tlLanes">
-                <div class="tl-lanes-content">
-                    ${lanesHtml}
-                    <div class="tl-track-overlay" id="tlTrackOverlay">
-                        <div class="tl-playhead" id="tlPlayhead" style="left:${dt_play}%"><span class="tl-playhead-lbl mono">${fmt_axis(playMs)}</span></div>
-                    </div>
-                </div>
+                <div class="tl-playhead" id="tlPlayhead" style="left:${dt_play}%"><span class="tl-playhead-lbl mono">${fmt_axis(playMs)}</span></div>
+                ${lanesHtml}
             </div>
             <div class="tl-minimap">
                 <span class="mono tl-mm-edge">00:00</span>
-                <div class="tl-mm-track" id="tlMmTrack"><div class="tl-mm-window" id="tlMmWindow" data-draggable="${window_pct < 100 ? 1 : 0}" style="left:${(win_left / maxT) * 100}%;width:${window_pct}%"></div></div>
+                <div class="tl-mm-track"><div class="tl-mm-window" style="left:${(win_left / maxT) * 100}%;width:${window_pct}%"></div></div>
                 <span class="mono tl-mm-edge">${fmt_axis(maxT)}</span>
             </div>
         </div>
@@ -585,28 +580,21 @@ function wire_network_resize(c: HTMLElement): void {
 function wire_trace(): void {
     const detail_events = get_detail_events();
     const lanes = document.getElementById('tlLanes');
-    const overlay = document.getElementById('tlTrackOverlay');
     const head = document.getElementById('tlPlayhead');
     const lbl = head?.querySelector('.tl-playhead-lbl') as HTMLElement | null;
     const time = document.getElementById('tlPlaytime');
     const zoom = document.getElementById('tlZoom') as HTMLInputElement | null;
-    const mm_track = document.getElementById('tlMmTrack');
-    const mm_window = document.getElementById('tlMmWindow');
-    if (!lanes || !overlay || !head) return;
+    if (!lanes || !head) return;
     const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
-    const update_playhead = (playhead_pct: number) => {
-        const p = Math.min(100, Math.max(0, playhead_pct));
+    const seek = (clientX: number) => {
+        const r = lanes.getBoundingClientRect();
+        const p = Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100));
         set_dt_play(p);
         head.style.left = `${p}%`;
         const txt = fmt_axis((p / 100) * maxT);
         if (lbl) lbl.textContent = txt;
         if (time) time.textContent = txt;
         apply_zoom_filter();
-    };
-    const seek = (clientX: number) => {
-        const r = overlay.getBoundingClientRect();
-        if (r.width <= 0) return;
-        update_playhead(((clientX - r.left) / r.width) * 100);
     };
     const MARKER_SELECTOR = '.tl-tick, .tl-dot, .tl-diamond';
     let marker_start_x = 0;
@@ -635,7 +623,13 @@ function wire_trace(): void {
                         const idx = parseInt(idx_str, 10);
                         const ev = detail_events[idx];
                         if (ev) {
-                            update_playhead((ev.relative_time_ms / maxT) * 100);
+                            const p = (ev.relative_time_ms / maxT) * 100;
+                            set_dt_play(p);
+                            head.style.left = `${p}%`;
+                            const txt = fmt_axis(ev.relative_time_ms);
+                            if (lbl) lbl.textContent = txt;
+                            if (time) time.textContent = txt;
+                            apply_zoom_filter();
                             const same_event = get_dt_sel() === idx && get_dt_insp_open();
                             set_dt_sel(idx);
                             set_dt_insp_open(true);
@@ -658,61 +652,6 @@ function wire_trace(): void {
         window.addEventListener('pointermove', mv);
         window.addEventListener('pointerup', up);
     });
-    if (mm_track && mm_window) {
-        let active_pointer_id: number | null = null;
-        mm_window.addEventListener('pointerdown', (event) => {
-            const pointer_event = event as PointerEvent;
-            const window_pct = get_dt_zoom_window_pct();
-            const track_rect = mm_track.getBoundingClientRect();
-            if (
-                pointer_event.button !== 0
-                || window_pct >= 100
-                || track_rect.width <= 0
-                || active_pointer_id !== null
-            ) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            const pointer_id = pointer_event.pointerId;
-            active_pointer_id = pointer_id;
-            const start_client_x = pointer_event.clientX;
-            const start_left_pct = parseFloat(mm_window.style.left || '0');
-            let is_active = true;
-
-            const finish_drag = () => {
-                if (!is_active) return;
-                is_active = false;
-                active_pointer_id = null;
-                mm_window.removeEventListener('pointermove', move);
-                mm_window.removeEventListener('pointerup', finish);
-                mm_window.removeEventListener('pointercancel', finish);
-                mm_window.removeEventListener('lostpointercapture', finish);
-                if (mm_window.hasPointerCapture(pointer_id)) {
-                    mm_window.releasePointerCapture(pointer_id);
-                }
-                mm_window.classList.remove('is-dragging');
-            };
-            const move = (move_event: PointerEvent) => {
-                if (!is_active || move_event.pointerId !== pointer_id) return;
-                const delta_pct = ((move_event.clientX - start_client_x) / track_rect.width) * 100;
-                const max_left_pct = Math.max(0, 100 - window_pct);
-                const left_pct = Math.min(max_left_pct, Math.max(0, start_left_pct + delta_pct));
-                update_playhead(left_pct + window_pct / 2);
-            };
-            const finish = (finish_event: Event) => {
-                const pointer_finish_event = finish_event as PointerEvent;
-                if (pointer_finish_event.pointerId !== pointer_id) return;
-                finish_drag();
-            };
-
-            mm_window.classList.add('is-dragging');
-            mm_window.setPointerCapture(pointer_id);
-            mm_window.addEventListener('pointermove', move);
-            mm_window.addEventListener('pointerup', finish);
-            mm_window.addEventListener('pointercancel', finish);
-            mm_window.addEventListener('lostpointercapture', finish);
-        });
-    }
     if (zoom) {
         zoom.addEventListener('input', () => {
             set_dt_zoom(Number(zoom.value));

@@ -87,8 +87,7 @@ tests/
 
 - `testDir: ./tests`，`outputDir: artifacts/test-results`。
 - `timeout: 120_000`，`expect.timeout: 15_000`，`actionTimeout: 15_000`。
-- `webServer` 同时启动扩展预览（`npm run serve:e2e`，`127.0.0.1:4174`）和本地测试站点（`npm run test:e2e:server`，`127.0.0.1:17832`）。
-- config 将 `127.0.0.1`、`localhost` 合入 `NO_PROXY` / `no_proxy`，防止本机代理响应导致 `webServer` 健康检查误判。
+- `webServer.command: npm run serve:e2e`，`url: http://127.0.0.1:4174/src/popup/popup.html`。
 - 浏览器：Chromium，`launchPersistentContext` + `--load-extension`（在 `e2e-helpers.ts`），不动用户本地 Chrome 实例。
 
 ### 4.2 Playwright 项目（实际 config）
@@ -96,9 +95,7 @@ tests/
 | 项目名 | 模式 | 文件匹配 | workers |
 |---|---|---|---|
 | `e2e` | headless | `e2e.spec.ts` | 默认 |
-| `e2e-ext` | headed | baidu / states / labels / stop / ui-audit / export / realtime-detail / consistency / dashboard-list / detail-tabs / toutiao / qq / sina / logging / 旧 T0001 测试 | 1 |
-| `e2e-t0001` | headed | `e2e/T0001/*.spec.ts` | 1 |
-| `e2e-t0003` | headed | `e2e/T0003/*.spec.ts` | 1 |
+| `e2e-ext` | headed | baidu / states / labels / stop / ui-audit / export / realtime-detail / consistency / dashboard-list / detail-tabs / toutiao / qq / sina / logging | 1 |
 | `e2e-real` | headed | `e2e-real.spec.ts` | 默认 |
 | `e2e-cdp-capture` | headed | `e2e-cdp-capture.spec.ts` | 默认 |
 | `e2e-mcp` | headed | `e2e-mcp*.spec.ts` | 默认 |
@@ -120,16 +117,12 @@ tests/
 - 流式 / WebSocket（`e2e-streaming`）。
 - 主题与国际化（`e2e-theme-i18n`）。
 - UI 审计（无旧概念、无滚动条）（`e2e-ui-audit`）。
-- 轨道视图缩放与 minimap（`e2e/T0001/zoom-slider.spec.ts`）：顶部 slider 和底部 `.tl-mm-window` 均执行真实 pointer 序列；minimap 拖动验证 width/zoom 不变、left 与 viewport 位置同步、playhead 居中、marker 进入/离开、左右边界 clamp、活动拖动拒绝其他 `pointerId` 和 100% 全览 no-op。主拖动场景附加前/按住中途/右端截图，必须视觉确认红色窗口本体发生位移。
 
 ### 4.4 E2E 纪律
 
 - 禁止 `taskkill /F /IM chrome.exe`（历史事故）。
 - 优先确定性断言（`expect().toBeVisible()`），不依赖 `waitForTimeout`。
 - 每个 E2E 测试独立启动 `launchPersistentContext`，不共享浏览器状态。
-- slider、拖拽、排序等交互 AC 必须执行真实 pointer 序列；禁止用 `fill()`、DOM 赋值或手工 `dispatchEvent()` 代替用户操作。
-- 核心 AC 断言禁止用 `if` 静默跳过；前置数据不足必须显式失败。
-- “增加”与“减少”必须使用严格比较，并同时断言用户可观察结果，不能只验证内部 value 或事件回调。
 
 ## 5. Mock 策略
 

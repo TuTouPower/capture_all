@@ -4,10 +4,17 @@ artifacts/
 data/
 docs/archive/
 .worktrees/
-.claude/
-CLAUDE.md
-README.en.md
+.claude/worktrees/
 *.log
 *.zip
 *.Zone.Identifier
 .DS_Store
+
+# 本地 Claude / OP skill 软链（bind 产物；内容在 OP_HOME）
+.claude/skills/
+.claude/settings.local.json
+
+# E2E 构建产物与浏览器 profile（只固化 *.spec.ts / 小 runner）
+e2e/**/artifacts/
+e2e/**/dist/
+**/e2e-data-*/

@@ -1,0 +1,64 @@
+{
+  "_comment": "omni_powers heavy 项目配置。SessionStart 起 bridge 需环境变量 CAPTURE_ALL_BRIDGE_TOKEN（禁止写死 token）。",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=\"${CLAUDE_PROJECT_DIR:-.}\"; token=\"${CAPTURE_ALL_BRIDGE_TOKEN:-}\"; [ -n \"$token\" ] || exit 0; curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:17831/health 2>/dev/null | grep -q 200 && exit 0; [ -f \"$root/artifacts/bridge/bridge.mjs\" ] || exit 0; nohup node \"$root/artifacts/bridge/bridge.mjs\" --port 17831 --token \"$token\" > /dev/null 2>&1 &'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$OP_HOME/hooks/run-hook.cmd\" pre_tool_use"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$OP_HOME/hooks/run-hook.cmd\" post_tool_use"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$OP_HOME/hooks/run-hook.cmd\" stop"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$OP_HOME/hooks/run-hook.cmd\" stop"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "OP_DOCS_DIR": "docs/omni_powers",
+    "OP_IMPLEMENTER_MODEL": "haiku",
+    "OP_REVIEWER_MODEL": "haiku",
+    "OP_EVALUATOR_MODEL": "haiku",
+    "OP_CLOSER_MODEL": "haiku"
+  }
+}

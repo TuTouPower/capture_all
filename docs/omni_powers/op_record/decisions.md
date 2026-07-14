@@ -30,3 +30,17 @@
 - T0003 merge gate 传入 `HEAD` 后报 `FATAL`（exit 2），随后未创建 task 分支，直接 commit 到 `main`，绕过写入硬底线；对应 commit `8fcfb70`。
 - T0001 + T0002 成果曾困于脏 worktree，后抢救为单个合并 commit `54d3250`，违反 `task=commit`。
 - T0002 已于 2026-07-13 完成真机重验，AC-1~AC-4 全部 PASS；`acceptance_report` 已更新且末行 `verdict: PASS`。
+
+## [hygiene | repo | 2026-07-14 UTC+8] capture_all omni_powers 实践仓卫生
+
+**决策**：对齐 D29/D30 与实践复盘，做项目级卫生而不改业务代码。
+
+**内容**：
+- `op_bind_project_skills.sh --profile heavy` 绑定项目 skill
+- `.claude/settings.json`：补 `OP_DOCS_DIR`；SessionStart 去硬编码 token（改 `CAPTURE_ALL_BRIDGE_TOKEN`）；SubagentStop 去掉仅 `op-implementer` matcher（agent 已 general-purpose 注入）
+- 导航 `index.md`/`README.md` → `op_index.md`/`op_readme.md`
+- 补根 `CLAUDE.md` 门牌与流程红线
+- 删除 `e2e/T0002/artifacts/`；gitignore 扩展 e2e 构建产物
+- `test.md` 增加验收纪律节
+
+**理由**：流程偏差与仓脏会重复「假绿」；卫生是继续 /oprun 的前置。

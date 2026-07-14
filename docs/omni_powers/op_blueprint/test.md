@@ -2,6 +2,18 @@
 
 测试分层、运行命令、Mock 策略、调试入口。命名 / 编码规范见 `conventions.md`，构建命令见本文 §3。
 
+## 0. 流程与验收纪律（omni_powers 实践强制）
+
+> 来源：`docs/archive/WORKFLOW_POSTMORTEM.md` + T0001–T0003 process-deviation。违反则 task 不得标 done。
+
+1. **终态产物优先**：验收看用户可观察结果（导出文件、Dashboard DOM、E2E 截图），禁止仅用「调用了某函数 / 单测全绿」代理指标。
+2. **否证断言**：至少一条证明旧坏行为消失（`not.toMatch` / grep 空 / DOM 无旧文案），禁止只断言「新字段存在」。
+3. **清理类 AC 的 grep 范围默认 `src/`**：`tests/` 内为断言而出现的符号名不算残留；spec 须写清。
+4. **通道对齐**：可测性契约写 CDP/Playwright 的 AC，必须由 evaluator 真机跑；implementer 只写结构层单测。
+5. **禁止批量翻牌**：一个 commit 不得多项 `done` 而无逐项 evidence。
+6. **E2E 固化**：只提交 `e2e/{TID}/*.{ts,cjs,mjs}` 脚本；禁止 `dist/`、Chrome user-data、截图瀑布入库（截图放 `artifacts/` 且 gitignore）。
+7. **关闭闸**：`op_close_post` 前须有 review `verdict: PASS` +（行为型）`acceptance_report.md` 末行 `verdict: PASS`；报告正文不得与 PASS 矛盾的范围内 FAIL 未处理。
+
 ## 1. 测试分层
 
 | 层 | 框架 | 覆盖 | 运行 |

@@ -1,6 +1,6 @@
 # 浏览器扩展商店发布清单
 
-**已包含所有可直接复制粘贴的字段。截图由 Playwright 脚本自动捕获到 `store/screenshots/`。隐私政策直接指向本仓库 `PRIVACY.md`。**
+**已包含所有可直接复制粘贴的字段。截图由 Playwright 脚本自动捕获到 `assets/screenshots/`。隐私政策直接指向本仓库 `PRIVACY.md`。**
 
 隐私政策 URL：`https://github.com/TuTouPower/capture_all/blob/main/PRIVACY.md`
 
@@ -233,7 +233,7 @@ Runs declarative Content Script and observes user behavior and network activity 
 3. 从 popup 触发真实 capture，点击本地 fixture `#btn-click` / `#input-text` / `#btn-error`，并显式 fetch `/api/test?store_screenshot=1` 以确保网络行可确定性定位
 4. 采集中切回 popup，注入 CSS 放大并居中，截图 `02-live-capture.png`
 5. 将 capture 导回 Dashboard，按 tab/region 切换显示：时间线总览、请求检查器（点击目标网络行并激活 inspector）、隐私设置、导出任务
-6. 5 张 PNG 落地 `store/screenshots/`，均为 1280×800、真实扩展画面，非占位数据
+6. 5 张 PNG 落地 `assets/screenshots/`，均为 1280×800、真实扩展画面，非占位数据
 
 运行：
 ```
@@ -254,7 +254,7 @@ node scripts/capture_store_screenshots.mjs
 ### 准备
 
 - [ ] `npm run build` 完成 `artifacts/extension.zip`
-- [ ] 执行 Playwright 截图脚本生成 `store/screenshots/`
+- [ ] 执行 Playwright 截图脚本生成 `assets/screenshots/`
 - [ ] Chrome 开发者账号 2-Step Verification 已开启
 - [ ] Marquee promo tile (1400×560, 可选)
 

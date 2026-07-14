@@ -74,11 +74,11 @@ Capture All is still early stage and has not been released to the Chrome Web Sto
 
 | Timeline overview | Live capture |
 |-------------------|--------------|
-| <img src="store/screenshots/01-timeline-overview.png" width="628" alt="Timeline overview"> | <img src="store/screenshots/02-live-capture.png" width="628" alt="Live capture"> |
+| <img src="assets/screenshots/01-timeline-overview.png" width="628" alt="Timeline overview"> | <img src="assets/screenshots/02-live-capture.png" width="628" alt="Live capture"> |
 
 | Request inspector | Privacy settings | Export tasks |
 |------------------|-----------------|-------------|
-| <img src="store/screenshots/03-request-inspector.png" width="412" alt="Request inspector"> | <img src="store/screenshots/04-privacy-settings.png" width="412" alt="Privacy settings"> | <img src="store/screenshots/05-export-tasks.png" width="412" alt="Export tasks"> |
+| <img src="assets/screenshots/03-request-inspector.png" width="412" alt="Request inspector"> | <img src="assets/screenshots/04-privacy-settings.png" width="412" alt="Privacy settings"> | <img src="assets/screenshots/05-export-tasks.png" width="412" alt="Export tasks"> |
 
 ## Browser support
 

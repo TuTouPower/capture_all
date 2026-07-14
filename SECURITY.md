@@ -8,9 +8,7 @@ The project does not currently provide a compatibility guarantee, long-term supp
 
 ## Reporting a vulnerability
 
-Private Vulnerability Reporting is not yet enabled for this private repository. Until a verified private reporting channel is available, do not send vulnerability details or sensitive evidence through public issues, discussions, pull requests, or repository comments.
-
-After the repository becomes public, the intended private channel is GitHub Private Vulnerability Reporting from the repository's **Security** tab. This policy must be updated only after that channel is enabled and verified.
+GitHub Private Vulnerability Reporting is enabled for this public repository. Submit vulnerability details through the repository's **Security** tab using **Report a vulnerability**.
 
 Do not open a public issue for a suspected vulnerability. Do not post real capture data, Bridge tokens, browser content, request or response bodies, credentials, proof-of-concept data from third parties, or unredacted logs in public discussions.
 
@@ -23,7 +21,7 @@ A useful private report includes:
 - impact and prerequisites; and
 - a minimal proof of concept with all secrets removed.
 
-If no verified private channel is available, retain the report privately and share only non-sensitive notice that a private channel is required. No public security email is currently designated.
+If GitHub Private Vulnerability Reporting is temporarily unavailable, retain the report privately and share only a non-sensitive notice that the private channel is unavailable. No public security email is currently designated.
 
 ## Security boundaries
 

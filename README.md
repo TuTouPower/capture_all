@@ -1,87 +1,87 @@
 <div align="center">
-  <img src="assets/icons/icon128.png" width="96" height="96" alt="Capture All logo">
-  <h1>Capture All</h1>
-  <p><strong>A local-first browser debugging black box for humans and AI agents.</strong></p>
-  <p>Capture browser evidence, inspect it visually, export it, or query it through MCP.</p>
+  <img src="assets/icons/icon128.png" width="96" height="96" alt="Capture All 图标">
+  <h1>Capture All 全采</h1>
+  <p><strong>面向开发者和 AI Agent，本地优先的浏览器调试黑盒。</strong></p>
+  <p>采集浏览器证据、可视化检查、导出文件，或通过 MCP 查询。</p>
   <p>
-    <a href="README.zh-CN.md">简体中文</a> ·
-    <a href="docs/mcp_usage.md">MCP guide</a> ·
-    <a href="PRIVACY.md">Privacy</a> ·
-    <a href="SECURITY.md">Security</a>
+    <a href="README.en.md">English</a> ·
+    <a href="docs/mcp_usage.md">MCP 指南</a> ·
+    <a href="PRIVACY.md">隐私</a> ·
+    <a href="SECURITY.md">安全</a>
   </p>
   <p>
-    <a href="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml"><img src="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 license"></a>
+    <a href="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml"><img src="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml/badge.svg" alt="CI 状态"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 License"></a>
     <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4.svg" alt="Chrome Manifest V3">
   </p>
 </div>
 
-Capture All is a Chrome Manifest V3 extension that turns browser activity into structured, local evidence. It captures user actions, navigation, network requests, console output, runtime errors, Storage changes, and Cookie changes in one timeline.
+Capture All 是 Chrome Manifest V3 扩展，将浏览器活动转换为本地结构化证据，在同一时间线中采集用户行为、页面导航、网络请求、控制台输出、运行时异常、Storage 变更和 Cookie 变更。
 
-Use the popup, dashboard, and DevTools panel for visual inspection. When deeper analysis is needed, connect the authenticated localhost Bridge to an MCP client such as Claude Code and let an AI agent control captures, query individual records, or export results.
+可通过 popup、主面板和 DevTools 面板进行可视化检查。需要深入分析时，可将带鉴权的本地 Bridge 连接到 Claude Code 等 MCP 客户端，由 AI Agent 控制采集、查询单条数据或导出结果。
 
 > [!WARNING]
-> Capture All requests broad browser permissions and can collect sensitive page content. Use it only in browsers, profiles, and sites you are authorized to inspect. Review [Permissions, privacy, and safety](#permissions-privacy-and-safety) before the first capture.
+> Capture All 申请高影响浏览器权限，可能采集页面敏感内容。仅在有权检查的浏览器、Profile 和网站中使用。首次采集前阅读[权限、隐私与安全](#权限隐私与安全)。
 
-## What it captures
+## 采集内容
 
-| Data group | Examples |
+| 数据组 | 示例 |
 |---|---|
-| User actions | Clicks, scrolling, keyboard shortcuts or keys, input changes, viewport changes |
-| Navigation | Page loads, URL changes, tab activation, visibility changes |
-| Network | Request and response metadata, timing, headers, and configured bodies |
-| Console | `console.log`, `console.warn`, `console.error`, and related output |
-| Errors | Uncaught exceptions and unhandled promise rejections |
-| Storage | `localStorage` and `sessionStorage` changes |
-| Cookies | Cookie creation, updates, and deletion |
+| 用户行为 | 点击、滚动、键盘快捷键或按键、输入变化、视口变化 |
+| 页面导航 | 页面加载、URL 变化、标签页激活、可见性变化 |
+| 网络 | 请求和响应元信息、耗时、Header、已配置的 body |
+| 控制台 | `console.log`、`console.warn`、`console.error` 等输出 |
+| 错误异常 | 未捕获异常、未处理的 Promise rejection |
+| Storage | `localStorage`、`sessionStorage` 变更 |
+| Cookie | Cookie 创建、更新和删除 |
 
-## Key capabilities
+## 核心能力
 
-- Correlate seven browser data groups in a unified timeline.
-- Inspect captures through the popup, dashboard, request inspector, and DevTools panel.
-- Export JSON, JSONL, HTML, or HAR files.
-- Control captures and query data through MCP with pagination and time filters.
-- Keep capture data local in IndexedDB unless you explicitly export or query it through MCP.
-- Authenticate local Bridge access with a user-provided token.
-- Redact sensitive URL parameters and headers while enforcing unconditional size limits.
+- 在统一时间线中关联 7 组浏览器数据。
+- 通过 popup、主面板、请求检视器和 DevTools 面板检查采集。
+- 导出 JSON、JSONL、HTML 或 HAR 文件。
+- 通过 MCP 控制采集，并按分页和时间范围查询数据。
+- 采集数据默认保存在本地 IndexedDB；只有主动导出或通过 MCP 查询时才会离开扩展存储。
+- 使用用户提供的 Token 鉴权本地 Bridge。
+- 支持敏感 URL 参数和 Header 脱敏，并始终执行大小限制。
 
-## Architecture
+## 架构
 
 ```text
-Chrome pages and frames
+Chrome 页面和 iframe
         │
         ▼
-Capture All extension
-  ├─ Content scripts          user actions, navigation, Storage
-  ├─ Service worker           network, Cookies, capture lifecycle
-  ├─ Chrome DevTools Protocol console, errors, configured bodies
-  ├─ IndexedDB                local capture data
-  └─ Popup / dashboard / DevTools panel
-        │ authenticated polling on 127.0.0.1
+Capture All 扩展
+  ├─ Content Script           用户行为、导航、Storage
+  ├─ Service Worker           网络、Cookie、采集生命周期
+  ├─ Chrome DevTools Protocol 控制台、异常、已配置的 body
+  ├─ IndexedDB                本地采集数据
+  └─ Popup / 主面板 / DevTools 面板
+        │ 通过 127.0.0.1 鉴权轮询
         ▼
-Local Bridge
+本地 Bridge
         │
         ▼
-MCP server ──► Claude Code or another MCP client
+MCP Server ──► Claude Code 或其他 MCP 客户端
 ```
 
-The Bridge binds only to `127.0.0.1`. The extension, Bridge, and MCP configuration must use the same token.
+Bridge 仅绑定 `127.0.0.1`。扩展、Bridge 和 MCP 配置必须使用同一 Token。
 
-## Project status
+## 项目状态
 
-Capture All is early-stage software. It is not published to the Chrome Web Store or npm; install it as an unpacked extension from a local build. There is no compatibility guarantee or support SLA yet.
+Capture All 仍处于早期阶段，尚未发布到 Chrome Web Store 或 npm。当前安装方式为从源码构建并加载已解压的扩展程序，暂不提供兼容性保证或支持 SLA。
 
-Public screenshots are intentionally omitted until they can be produced without exposing private browser content.
+仓库暂不放置公开产品截图，避免泄露开发采集中的私密浏览器内容。
 
-## Install from source
+## 从源码安装
 
-### Requirements
+### 环境要求
 
-- Chrome or another Chromium browser with Manifest V3 support
-- Node.js `^20.19.0` or `>=22.12.0`
+- 支持 Manifest V3 的 Chrome 或 Chromium 浏览器
+- Node.js `^20.19.0` 或 `>=22.12.0`
 - npm
 
-### Build and load the extension
+### 构建并加载扩展
 
 ```bash
 git clone https://github.com/TuTouPower/capture_all.git
@@ -90,118 +90,118 @@ npm ci
 npm run build
 ```
 
-Then:
+然后：
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose `artifacts/dist` from the repository.
-5. Pin Capture All if you want quick access to the popup.
+1. 打开 `chrome://extensions`。
+2. 开启“开发者模式”。
+3. 点击“加载已解压的扩展程序”。
+4. 选择仓库中的 `artifacts/dist`。
+5. 如需快速打开 popup，可将 Capture All 固定到工具栏。
 
-After rebuilding, reload the extension card on `chrome://extensions` if manifest or service worker changes are not picked up automatically.
+重新构建后，如果 manifest 或 Service Worker 变化未自动生效，在 `chrome://extensions` 中重新加载扩展。
 
-## Basic use
+## 基础使用
 
-1. Open the Capture All popup.
-2. Review capture options, especially input values and request/response bodies.
-3. Start a capture.
-4. Reproduce the browser behavior you want to investigate.
-5. Stop the capture.
-6. Open the capture from the popup or dashboard to inspect its timeline and details.
-7. Export it when a portable artifact is required.
+1. 打开 Capture All popup。
+2. 检查采集选项，尤其是输入值、请求 body 和响应 body。
+3. 开始采集。
+4. 复现需要调查的浏览器行为。
+5. 停止采集。
+6. 从 popup 或主面板打开本次采集，检查时间线和详情。
+7. 需要可移植证据时导出文件。
 
-A capture is limited to 500 MB and 24 hours. An individual captured body is limited to 100 MB.
+单次采集上限为 500 MB、24 小时；单条 body 上限为 100 MB。
 
-## Connect Bridge and MCP
+## 连接 Bridge 与 MCP
 
-Build the project first, then copy the project-local MCP example:
+先构建项目，再复制仅供当前项目使用的 MCP 示例：
 
 ```bash
 cp .mcp.json.example .mcp.json
 ```
 
-Generate a random token yourself, then use that same value in all three places:
+自行生成随机 Token，并在以下三个位置使用同一值：
 
-1. **Extension:** open Capture All settings, enable the Agent Bridge, keep the default URL `http://127.0.0.1:17831`, and enter the token.
-2. **Bridge:** start the local Bridge with the token supplied through the environment.
-3. **MCP client:** replace `<YOUR_BRIDGE_TOKEN>` in the local `.mcp.json`.
+1. **扩展：**打开 Capture All 设置，启用 Agent Bridge，保留默认 URL `http://127.0.0.1:17831`，填写 Token。
+2. **Bridge：**通过环境变量传入 Token，启动本地 Bridge。
+3. **MCP 客户端：**将本地 `.mcp.json` 中的 `<YOUR_BRIDGE_TOKEN>` 替换为同一 Token。
 
 ```bash
-CAPTURE_ALL_BRIDGE_TOKEN='<your token>' \
+CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' \
     node artifacts/bridge/bridge.mjs --port 17831
 ```
 
-Restart the MCP client after creating `.mcp.json`. In Claude Code, the normal flow is:
+创建 `.mcp.json` 后重启 MCP 客户端。在 Claude Code 中，常用流程为：
 
 ```text
-get_status → start_recording → reproduce behavior → stop_recording
+get_status → start_recording → 复现问题 → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-`.mcp.json` is ignored by Git and must remain local. Never put real tokens in source files, documentation, issues, or capture exports. See the [MCP usage guide](docs/mcp_usage.md) for tools, parameters, limits, and troubleshooting.
+`.mcp.json` 已被 Git 忽略，只能保存在本机。禁止把真实 Token 写入源码、文档、Issue 或采集导出文件。完整工具、参数、限制和故障排查见 [MCP 使用指南](docs/mcp_usage.md)。
 
-## Development
+## 开发
 
 ```bash
-npm run dev                # Start Vite development mode
-npm test                   # Run unit and integration tests
-npm run test:watch         # Run Vitest in watch mode
-npm run build              # Build extension, Bridge, and MCP artifacts
-npm run test:e2e           # Run the base headless Playwright suite
-npm run test:e2e:all       # Run all configured Playwright projects
-npm run scan:tracked-tree  # Scan candidate files for secrets and private paths
-npm run bridge             # Run Bridge from TypeScript source
-npm run mcp                # Run MCP server from TypeScript source
+npm run dev                # 启动 Vite 开发模式
+npm test                   # 运行单元和集成测试
+npm run test:watch         # 以 watch 模式运行 Vitest
+npm run build              # 构建扩展、Bridge 和 MCP 产物
+npm run test:e2e           # 运行基础 headless Playwright 测试
+npm run test:e2e:all       # 运行全部 Playwright 项目
+npm run scan:tracked-tree  # 扫描待提交文件中的 Secret 和私有路径
+npm run bridge             # 从 TypeScript 源码启动 Bridge
+npm run mcp                # 从 TypeScript 源码启动 MCP Server
 ```
 
-Build outputs:
+构建输出：
 
-| Artifact | Path |
+| 产物 | 路径 |
 |---|---|
-| Chrome extension | `artifacts/dist` |
+| Chrome 扩展 | `artifacts/dist` |
 | Bridge | `artifacts/bridge/bridge.mjs` |
-| MCP server | `artifacts/mcp/mcp.mjs` |
+| MCP Server | `artifacts/mcp/mcp.mjs` |
 
-Implementation details live in the [architecture](docs/omni_powers/op_blueprint/architecture.md), [domain model](docs/omni_powers/op_blueprint/domain.md), and [test plan](docs/omni_powers/op_blueprint/test.md).
+实现细节见[技术架构](docs/omni_powers/op_blueprint/architecture.md)、[领域模型](docs/omni_powers/op_blueprint/domain.md)和[测试计划](docs/omni_powers/op_blueprint/test.md)。
 
-## Permissions, privacy, and safety
+## 权限、隐私与安全
 
-| Permission | Purpose |
+| 权限 | 用途 |
 |---|---|
-| `storage` | Store user configuration in `chrome.storage.local` |
-| `webRequest` | Observe request and response metadata |
-| `debugger` | Use Chrome DevTools Protocol for console, runtime errors, and configured body capture |
-| `tabs` | Discover tabs and coordinate capture content scripts |
-| `alarms` | Maintain capture lifecycle work in an MV3 service worker |
-| `downloads` | Save local export files |
-| `cookies` | Capture Cookie changes |
-| `<all_urls>` | Run the declared content script and observe authorized pages across origins |
+| `storage` | 将用户配置存入 `chrome.storage.local` |
+| `webRequest` | 观察请求和响应元信息 |
+| `debugger` | 通过 Chrome DevTools Protocol 采集控制台、运行时异常和已配置的 body |
+| `tabs` | 查询标签页并协调 Content Script 采集 |
+| `alarms` | 维持 MV3 Service Worker 中的采集生命周期任务 |
+| `downloads` | 保存本地导出文件 |
+| `cookies` | 采集 Cookie 变更 |
+| `<all_urls>` | 在各来源页面运行声明式 Content Script 并观察授权页面 |
 
-Capture data is stored in the extension's IndexedDB database, `capture_all_db`. Settings are stored in `chrome.storage.local`. Capture All has no telemetry, analytics, advertising SDK, or remote application server.
+采集数据保存在扩展本地 IndexedDB 数据库 `capture_all_db`，设置保存在 `chrome.storage.local`。Capture All 不包含遥测、分析、广告 SDK 或远程应用服务器。
 
-Important boundaries:
+重要边界：
 
-- Input values and request/response body capture are enabled by default. Disable them before the first capture when they are unnecessary.
-- `<all_urls>` and `all_frames: true` allow the content script to run in top-level pages and embedded third-party frames.
-- Redaction reduces exposure but cannot guarantee removal of every credential or personal value.
-- MCP queries may send selected capture data to the connected AI provider or client environment.
-- Exported files are independent copies and must be protected and deleted separately.
-- MCP does not expose capture deletion or database clearing commands.
+- 输入值、请求 body、响应 body 采集默认开启。不需要这些数据时，应在首次采集前关闭。
+- `<all_urls>` 和 `all_frames: true` 允许 Content Script 在顶层页面及嵌入式第三方 iframe 中运行。
+- 脱敏只能降低暴露风险，无法保证清除所有凭据或个人信息。
+- MCP 查询可能将选中的采集数据发送给所连接的 AI Provider 或客户端环境。
+- 导出文件是独立副本，需要单独保护和删除。
+- MCP 不提供删除采集或清空数据库命令。
 
-Delete captures through the dashboard. Removing the extension or clearing its site data removes local extension storage. Read [PRIVACY.md](PRIVACY.md) for the complete data model and [SECURITY.md](SECURITY.md) before reporting a vulnerability. Never publish sensitive evidence in a GitHub issue.
+通过主面板删除采集。移除扩展或清除扩展站点数据会删除本地扩展存储。完整数据规则见 [PRIVACY.md](PRIVACY.md)；报告漏洞前阅读 [SECURITY.md](SECURITY.md)。禁止在 GitHub Issue 中公开敏感证据。
 
-## Known limitations
+## 已知限制
 
-- Broad permissions are required by the current capture model.
-- The Bridge accepts ordinary JSON bodies up to 1 MiB and extension result bodies up to 32 MiB.
-- Large captures should use paginated `list_records` queries or extension-local export rather than an all-data MCP request.
-- Redaction does not scan arbitrary response body text for every possible secret.
-- No Chrome Web Store package, npm release, compatibility guarantee, or support SLA is available yet.
+- 当前采集模型需要高影响浏览器权限。
+- Bridge 普通 JSON body 上限为 1 MiB，扩展结果回传上限为 32 MiB。
+- 大采集应使用分页 `list_records` 或扩展本地导出，不应依赖 MCP 全量数据请求。
+- 脱敏不会扫描任意响应 body 文本中的所有潜在 Secret。
+- 尚无 Chrome Web Store 包、npm 发布、兼容性保证或支持 SLA。
 
-## Contributing
+## 贡献
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Public issues and pull requests must not contain unredacted captures, tokens, request bodies, private URLs, or personal browser data. Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and project changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+修改前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。公开 Issue 和 PR 禁止包含未脱敏采集、Token、请求 body、私有 URL 或个人浏览器数据。参与项目须遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)，项目变化记录在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## License
 
-Licensed under the [Apache-2.0 License](LICENSE).
+项目使用 [Apache-2.0 License](LICENSE)。

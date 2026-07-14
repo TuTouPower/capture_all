@@ -50,7 +50,7 @@ describe('public project entry points', () => {
     test('includes public project, policy, and community files', () => {
         for (const path of [
             'README.md',
-            'README.zh-CN.md',
+            'README.en.md',
             'LICENSE',
             'PRIVACY.md',
             'SECURITY.md',
@@ -67,8 +67,8 @@ describe('public project entry points', () => {
     });
 
     test('documents installation, architecture, permissions, data, and limits', () => {
-        const english_readme = read_project_file('README.md');
-        const chinese_readme = read_project_file('README.zh-CN.md');
+        const chinese_readme = read_project_file('README.md');
+        const english_readme = read_project_file('README.en.md');
 
         for (const content of [english_readme, chinese_readme]) {
             expect(content).toContain('npm ci');
@@ -88,7 +88,7 @@ describe('public project entry points', () => {
     });
 
     test('uses valid local links without private paths', () => {
-        for (const path of ['README.md', 'README.zh-CN.md']) {
+        for (const path of ['README.md', 'README.en.md']) {
             const content = read_project_file(path);
             expect(content).not.toMatch(/\/home\//);
             expect(content).not.toContain('docs/archive');
@@ -98,8 +98,8 @@ describe('public project entry points', () => {
     });
 
     test('keeps the public permission list synchronized with the manifest', () => {
-        const english_readme = read_project_file('README.md');
-        const chinese_readme = read_project_file('README.zh-CN.md');
+        const chinese_readme = read_project_file('README.md');
+        const english_readme = read_project_file('README.en.md');
         const expected_permissions = [
             ...extension_manifest.permissions,
             ...extension_manifest.host_permissions,
@@ -121,10 +121,10 @@ describe('public project entry points', () => {
             capture_response_body: true,
         });
 
-        expect(read_project_file('README.md')).toContain(
+        expect(read_project_file('README.en.md')).toContain(
             'Input values and request/response body capture are enabled by default.',
         );
-        expect(read_project_file('README.zh-CN.md')).toContain(
+        expect(read_project_file('README.md')).toContain(
             '输入值、请求 body、响应 body 采集默认开启',
         );
     });
@@ -144,8 +144,8 @@ describe('public project entry points', () => {
         expect(privacy).toContain('request and response bodies are not content-scanned');
         expect(privacy).toContain('Exported files are independent copies');
 
-        expect(security).toContain('Private Vulnerability Reporting is not yet enabled');
-        expect(security).toContain('GitHub Private Vulnerability Reporting');
+        expect(security).toContain('GitHub Private Vulnerability Reporting is enabled');
+        expect(security).toContain('Report a vulnerability');
         expect(security).toContain('127.0.0.1');
         expect(security).toContain('Bearer token');
         expect(security).toContain('Do not open a public issue');

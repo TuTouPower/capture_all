@@ -21,7 +21,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && npm run build:bridge && npm run build:mcp",
+    "build": "tsc && vite build && npm run build:bridge && npm run build:mcp && npm run build:zip",
     "test": "vitest run",
     "test:watch": "vitest",
     "scan:tracked-tree": "node scripts/scan_tracked_tree.mjs",
@@ -32,7 +32,8 @@
     "test:e2e:all": "playwright test",
     "test:e2e:server": "npx tsx tests/fixtures/server.ts",
     "build:bridge": "esbuild src/agent/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs",
-    "build:mcp": "esbuild src/agent/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs"
+    "build:mcp": "esbuild src/agent/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs",
+    "build:zip": "cd artifacts/dist && zip -r ../extension.zip ."
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",

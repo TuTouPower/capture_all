@@ -1,25 +1,25 @@
 # DevTools 面板
 
-`src/devtools/`。轻量入口，提供 DevTools 集成面板。设计优先级低于 popup 和 dashboard。
+`src/devtools/`。提供 DevTools panel 注册入口。**设计优先级低于 popup 和 dashboard，目前无独立 UI 资产**。
 
 ## 1. 注册
 
-`manifest.json`：
+`manifest.json`:
 
 ```json
 { "devtools_page": "src/devtools/devtools.html" }
 ```
 
-`devtools.html` 加载 `devtools.ts`，后者通过 `chrome.devtools.panels.create` 注册一个面板，指向 `devtools_panel.html`。
+`devtools.html` 加载 `devtools.ts`，后者通过 `chrome.devtools.panels.create` 注册一个面板，**指向 Dashboard**（`src/dashboard/dashboard.html`）。此举复用 Dashboard 能力，避免维护空白 `devtools_panel.html`。
 
 ## 2. 文件
 
 | 文件 | 职责 |
 |---|---|
 | `devtools.html` | devtools_page 入口 |
-| `devtools.ts` | 注册面板 |
-| `devtools_panel.html` | 面板 UI |
-| `devtools_panel.ts` | 面板逻辑 |
+| `devtools.ts` | 注册面板（指向 dashboard） |
+
+`devtools_panel.html` / `devtools_panel.ts` 已删除：面板复用 dashboard 全量能力，无需单独内容。
 
 ## 3. 与 DevTools 的互斥约束
 
@@ -27,4 +27,4 @@
 
 ## 4. 测试覆盖
 
-E2E 优先级 P2，不做强制覆盖（见 `test.md`）。
+行为 mock 测试（`tests/devtools_panel.test.ts`）：直接断言 `chrome.devtools.panels.create` 调用参数，不依赖源码字符串。

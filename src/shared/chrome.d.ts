@@ -81,6 +81,12 @@ declare namespace chrome {
         };
     }
 
+    namespace devtools {
+        namespace panels {
+            function create(title: string, icon_path: string, page_path: string): void;
+        }
+    }
+
     namespace downloads {
         function download(options: { url: string; filename: string; saveAs?: boolean }): Promise<number>;
         function search(query: { id?: number; filename?: string }): Promise<Array<{ id: number; filename: string; state: string }>>;

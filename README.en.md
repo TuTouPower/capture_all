@@ -72,6 +72,14 @@ Capture All is still early stage and has not been released to the Chrome Web Sto
 
 The repository does not publish product screenshots to avoid leaking private browser content being inspected during development.
 
+## Browser support
+
+| Browser | Status | Notes |
+|---------|--------|-------|
+| Chrome | Full support | Manifest V3, Chrome ≥ 88 |
+| Edge | Full support | Chromium-based, same as Chrome |
+| Firefox | **Not supported** | Firefox Remote Debugging Protocol and Service Worker extension model are incompatible with this project's CDP-based capture layer. Would require a separate implementation. |
+
 ## Install from source
 
 ### Requirements
@@ -158,6 +166,7 @@ Build outputs:
 | Artifact | Path |
 |---|---|
 | Chrome extension | `artifacts/dist` |
+| Store bundle | `artifacts/extension.zip` |
 | Bridge | `artifacts/bridge/bridge.mjs` |
 | MCP Server | `artifacts/mcp/mcp.mjs` |
 

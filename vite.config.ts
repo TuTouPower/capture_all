@@ -15,8 +15,7 @@ export default defineConfig({
                 content: 'src/content/content_script.ts',
                 popup: 'src/popup/popup.html',
                 dashboard: 'src/dashboard/dashboard.html',
-                devtools: 'src/devtools/devtools.html',
-                devtools_panel: 'src/devtools/devtools_panel.html'
+                devtools: 'src/devtools/devtools.html'
             }
         }
     }

@@ -4,7 +4,7 @@
   <p><strong>Local-first browser debugging black box for developers and AI Agents.</strong></p>
   <p>Capture browser evidence, visualize and inspect, export files, or query via MCP.</p>
   <p>
-    <a href="README.zh-CN.md">简体中文</a> ·
+    <a href="README.md">简体中文</a> ·
     <a href="docs/mcp_usage.md">MCP Guide</a> ·
     <a href="PRIVACY.md">Privacy</a> ·
     <a href="SECURITY.md">Security</a>

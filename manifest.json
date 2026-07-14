@@ -2,14 +2,12 @@
   "manifest_version": 3,
   "name": "Capture All",
   "version": "0.1.0",
-  "description": "Browser debugging black box — record user actions, navigation, network, console, errors, storage, and cookie evidence for structured review, analysis, export, and AI agent querying",
+  "description": "Browser debugging black box — capture user actions, navigation, network, console, errors, storage, and cookie evidence for structured review, analysis, export, and AI agent querying",
   "permissions": [
     "storage",
     "webRequest",
     "debugger",
-    "scripting",
     "tabs",
-    "activeTab",
     "alarms",
     "downloads",
     "cookies"

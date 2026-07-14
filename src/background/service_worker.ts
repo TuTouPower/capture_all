@@ -23,6 +23,7 @@ import { category_for_event_type } from '../shared/event_category';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../shared/user_config';
+import { normalize_agent_bridge_config } from '../shared/agent_bridge_config';
 import type {
     UserConfig, CaptureConfig, CaptureEvent, CaptureRecord,
     NetworkRequestData, ConsoleEventData, WsFrameData,
@@ -76,6 +77,20 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
 });
 
+async function initialize_agent_bridge(): Promise<void> {
+    const config = normalize_agent_bridge_config(await load_user_config());
+    if (config.agent_bridge_enabled) {
+        start_agent_bridge();
+        logger.info('Agent bridge started');
+    }
+}
+
+setTimeout(() => {
+    initialize_agent_bridge().catch((error: unknown) => {
+        logger.error('Agent bridge initialization failed', serialize_error(error));
+    });
+}, 0);
+
 // Clean up stale capture state on service worker restart
 async function cleanup_stale_capture_state(): Promise<void> {
     const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
@@ -97,7 +112,11 @@ async function cleanup_stale_capture_state(): Promise<void> {
     }
 }
 
-setTimeout(() => { cleanup_stale_capture_state().catch(() => {}); }, 0);
+setTimeout(() => {
+    cleanup_stale_capture_state().catch((error: unknown) => {
+        logger.error('Stale capture cleanup failed', serialize_error(error));
+    });
+}, 0);
 
 // Setup keepalive listener
 setup_keepalive_listener();

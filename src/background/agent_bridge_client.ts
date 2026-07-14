@@ -5,6 +5,7 @@ import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 
 const logger = new Logger('background/bridge', get_app_log_transport());
+const BRIDGE_ERROR_LOG_INTERVAL_MS = 60_000;
 
 export interface AgentBridgeClientDeps {
     get_user_config: () => Promise<AgentBridgeUserConfig>;
@@ -21,8 +22,25 @@ interface PendingCommand {
     created_at: number;
 }
 
+type BridgeErrorStage =
+    | 'config'
+    | 'heartbeat'
+    | 'command_fetch'
+    | 'command_dispatch'
+    | 'result_delivery';
+
+type BridgeErrorCategory = 'polling' | 'result_delivery';
+
+interface BridgeErrorDetails {
+    stage: BridgeErrorStage;
+    failure_kind: 'http' | 'exception';
+    http_status?: number;
+}
+
 let poll_timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
+let lifecycle_id = 0;
+let last_error_log_at = create_error_log_state();
 
 export function is_bridge_client_running(): boolean {
     return running;
@@ -31,30 +49,44 @@ export function is_bridge_client_running(): boolean {
 export function start_bridge_client(deps: AgentBridgeClientDeps): void {
     if (running) return;
     running = true;
+    lifecycle_id += 1;
+    last_error_log_at = create_error_log_state();
     logger.info('Bridge client started');
-    schedule_poll(deps);
+    schedule_poll(deps, lifecycle_id);
 }
 
 export function stop_bridge_client(): void {
     if (!running) return;
     logger.info('Bridge client stopped');
     running = false;
+    lifecycle_id += 1;
     if (poll_timer !== null) {
         clearTimeout(poll_timer);
         poll_timer = null;
     }
 }
 
-function schedule_poll(deps: AgentBridgeClientDeps): void {
-    if (!running) return;
-    poll_timer = setTimeout(() => poll_cycle(deps), 0);
+function schedule_poll(
+    deps: AgentBridgeClientDeps,
+    active_lifecycle_id: number
+): void {
+    if (!is_active_lifecycle(active_lifecycle_id)) return;
+    poll_timer = setTimeout(
+        () => poll_cycle(deps, active_lifecycle_id),
+        0
+    );
 }
 
-async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
+async function poll_cycle(
+    deps: AgentBridgeClientDeps,
+    active_lifecycle_id: number
+): Promise<void> {
     let interval_ms = 1000;
+    let stage: BridgeErrorStage = 'config';
 
     try {
         const config = normalize_agent_bridge_config(await deps.get_user_config());
+        if (!is_active_lifecycle(active_lifecycle_id)) return;
         interval_ms = config.agent_bridge_poll_interval_ms;
 
         if (!config.agent_bridge_enabled) {
@@ -69,23 +101,47 @@ async function poll_cycle(deps: AgentBridgeClientDeps): Promise<void> {
             get_status: deps.get_status
         };
 
+        stage = 'heartbeat';
         await send_heartbeat(agent_bridge_url, agent_bridge_token, deps);
+        if (!is_active_lifecycle(active_lifecycle_id)) return;
 
+        stage = 'command_fetch';
         const command = await fetch_command(agent_bridge_url, agent_bridge_token);
+        if (!is_active_lifecycle(active_lifecycle_id)) return;
+
         if (command) {
+            stage = 'command_dispatch';
             const result = await dispatch_agent_command(
                 { command_id: command.command_id, type: command.type as any, payload: command.payload ?? {}, created_at: command.created_at },
                 handlers
             );
-            await send_result(agent_bridge_url, agent_bridge_token, result);
+            if (!is_active_lifecycle(active_lifecycle_id)) return;
+
+            try {
+                await send_result(agent_bridge_url, agent_bridge_token, result);
+            } catch (error) {
+                if (!is_active_lifecycle(active_lifecycle_id)) return;
+                log_bridge_error(
+                    'result_delivery',
+                    'Bridge result delivery failed',
+                    to_error_details('result_delivery', error)
+                );
+            }
         }
-    } catch {
-        // network/config error — next poll will retry
+    } catch (error) {
+        if (!is_active_lifecycle(active_lifecycle_id)) return;
+        log_bridge_error(
+            'polling',
+            'Bridge polling failed',
+            to_error_details(stage, error)
+        );
     }
 
-    // schedule next poll with configured interval
-    if (running) {
-        poll_timer = setTimeout(() => poll_cycle(deps), interval_ms);
+    if (is_active_lifecycle(active_lifecycle_id)) {
+        poll_timer = setTimeout(
+            () => poll_cycle(deps, active_lifecycle_id),
+            interval_ms
+        );
     }
 }
 
@@ -100,7 +156,7 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
         })
     });
 
-    if (!response.ok) throw new Error(`heartbeat ${response.status}`);
+    if (!response.ok) throw new BridgeHttpError(response.status);
 }
 
 async function fetch_command(url: string, token: string): Promise<PendingCommand | null> {
@@ -110,7 +166,7 @@ async function fetch_command(url: string, token: string): Promise<PendingCommand
     });
 
     if (response.status === 204) return null;
-    if (!response.ok) throw new Error(`fetch command ${response.status}`);
+    if (!response.ok) throw new BridgeHttpError(response.status);
 
     return response.json();
 }
@@ -122,5 +178,57 @@ async function send_result(url: string, token: string, result: unknown): Promise
         body: JSON.stringify(result)
     });
 
-    if (!response.ok) throw new Error(`send result ${response.status}`);
+    if (!response.ok) throw new BridgeHttpError(response.status);
+}
+
+function is_active_lifecycle(active_lifecycle_id: number): boolean {
+    return running && lifecycle_id === active_lifecycle_id;
+}
+
+function create_error_log_state(): Record<BridgeErrorCategory, number> {
+    return {
+        polling: Number.NEGATIVE_INFINITY,
+        result_delivery: Number.NEGATIVE_INFINITY,
+    };
+}
+
+function log_bridge_error(
+    category: BridgeErrorCategory,
+    message: string,
+    details: BridgeErrorDetails
+): void {
+    const now = Date.now();
+    if (now - last_error_log_at[category] < BRIDGE_ERROR_LOG_INTERVAL_MS) {
+        return;
+    }
+
+    last_error_log_at = {
+        ...last_error_log_at,
+        [category]: now,
+    };
+    logger.error(message, details);
+}
+
+function to_error_details(
+    stage: BridgeErrorStage,
+    error: unknown
+): BridgeErrorDetails {
+    if (error instanceof BridgeHttpError) {
+        return {
+            stage,
+            failure_kind: 'http',
+            http_status: error.status,
+        };
+    }
+
+    return {
+        stage,
+        failure_kind: 'exception',
+    };
+}
+
+class BridgeHttpError extends Error {
+    constructor(readonly status: number) {
+        super('Bridge HTTP request failed');
+    }
 }

@@ -1,0 +1,103 @@
+name: Bug report
+description: Report reproducible incorrect behavior in Capture All
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Suspected security vulnerabilities must follow SECURITY.md instead of this public form.
+
+        Do not attach unredacted captures, real browser data, request or response bodies, credentials, Bridge tokens, cookies, authorization headers, or private URLs. Reproduce with synthetic data.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the incorrect behavior and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reproducible sequence using synthetic data.
+      placeholder: |
+        1. Build and load the extension
+        2. Configure ...
+        3. Start a capture
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Extension popup or dashboard
+        - Content capture
+        - Network or CDP capture
+        - Storage or Cookie capture
+        - Export
+        - Bridge
+        - MCP server
+        - Build or tests
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.1.0 or commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Chrome 140"
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11, macOS 15, Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Paste only minimal logs or screenshots created with synthetic data and verified to contain no secrets or private browser content.
+
+  - type: checkboxes
+    id: sensitive_data
+    attributes:
+      label: Sensitive-data confirmation
+      options:
+        - label: I verified that this report contains no real tokens, credentials, cookies, private URLs, request or response bodies, unredacted captures, or personal data.
+          required: true

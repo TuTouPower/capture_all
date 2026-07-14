@@ -2,10 +2,30 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { clamp_body_size_bytes } from '../src/dashboard/dashboard_settings'
+import { DEFAULT_USER_CONFIG } from '../src/shared/constants'
+import { set_user_config } from '../src/dashboard/dashboard_shared'
+import {
+    clamp_body_size_bytes,
+    render_settings,
+} from '../src/dashboard/dashboard_settings'
 
 const project_root = resolve(__dirname, '..')
 const src = readFileSync(resolve(project_root, 'src/dashboard/dashboard_settings.ts'), 'utf8')
+
+describe('隐私风险提示', () => {
+    it('在设置页渲染默认敏感采集项和脱敏边界', () => {
+        set_user_config(DEFAULT_USER_CONFIG)
+        const container = document.createElement('div')
+        container.innerHTML = render_settings()
+        const privacy_section = container.querySelector('#set-privacy')
+
+        expect(privacy_section).not.toBeNull()
+        expect(privacy_section?.textContent).toContain('请求体、响应体和输入值采集默认开启')
+        expect(privacy_section?.textContent).toContain('可能包含凭据、Token、私密消息或个人信息')
+        expect(privacy_section?.textContent).toContain('请求体和响应体只限制大小，不扫描内容中的敏感信息')
+        expect(privacy_section?.textContent).toContain('密码输入始终不采集')
+    });
+});
 
 describe('BUG-006: 采集上限 / 内联文本上限单位', () => {
     const BODY_MAX = 1024 * 1048576

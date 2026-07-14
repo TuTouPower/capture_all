@@ -4,10 +4,13 @@
 
 ## 快速开始
 
-1. 启动 Bridge：`node artifacts/bridge/bridge.mjs --port 17831 --token <你的token> &`
-2. 确认扩展在线：`get_status`
-3. 开始采集：`start_recording`，结束采集：`stop_recording`
-4. 查看结果：`list_captures` → `get_all_capture_data`
+1. 构建产物：`npm run build`
+2. 复制项目配置：`cp .mcp.json.example .mcp.json`
+3. 将 `.mcp.json` 中 `<YOUR_BRIDGE_TOKEN>` 替换为扩展设置中的 Bridge Token。`.mcp.json` 仅供本机使用，不提交到 Git。示例启动脚本通过 Claude Code 注入的 `CLAUDE_PROJECT_DIR` 定位构建产物，不依赖当前工作目录
+4. 使用同一 Token 启动 Bridge：`CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' node artifacts/bridge/bridge.mjs --port 17831 &`。兼容参数 `--token` 仍可用；同时配置时 `--token` 优先
+5. 重开 Claude Code 会话，确认扩展在线：`get_status`
+6. 开始采集：`start_recording`，结束采集：`stop_recording`
+7. 查看结果：`list_captures` → `get_all_capture_data`
 
 ## 工具列表
 
@@ -61,6 +64,14 @@
 
 所有工具支持 `timeout_ms` 参数（单位 ms）。大采集建议加到 60000-120000。
 
+### 结果大小限制
+
+- `timeout_ms` 只控制等待时间，不会绕过请求体大小限制
+- Bridge 普通 JSON 请求体上限为 1 MiB；`/extension/result` 回传上限为 32 MiB
+- 上限按完整 JSON HTTP body 的 UTF-8 字节数计算
+- 超过 32 MiB 时 Bridge 向扩展返回 HTTP 413 / `PAYLOAD_TOO_LARGE`，扩展写入脱敏错误日志；当前 MCP 调用仍会等待命令超时
+- 大采集优先使用 `list_data_sources` → `list_records` 分页 → `get_record` 获取单条完整数据，或使用扩展本地导出
+
 ## 采集配置
 
 `start_recording` 的 `config` 参数：
@@ -94,6 +105,8 @@
 ## 安全
 
 - Bridge 仅绑定 `127.0.0.1`,不暴露公网
-- Token 由用户提供，禁止硬编码，无效 token → 401
+- 浏览器请求只允许格式合法的 `chrome-extension://` Origin；Node / MCP 等无 Origin 本地客户端保持可用
+- Token 由用户提供，禁止硬编码，无效 token → 401；Bridge 使用恒时摘要比较
+- 推荐通过 `CAPTURE_ALL_BRIDGE_TOKEN` 启动 Bridge，避免 Token 出现在进程参数；兼容的 `--token` 参数会将 Token 暴露在本机进程参数列表中，仅用于受控兼容场景；扩展设置、Bridge 和 `.mcp.json` 必须使用同一 Token
 - MCP 不提供删除采集 / 清空数据功能
 - MCP 不自动脱敏 / 摘要 — 工具层不替模型判断

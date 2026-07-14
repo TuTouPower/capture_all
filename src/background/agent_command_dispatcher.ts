@@ -90,7 +90,7 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
     const capture_id = typeof payload.capture_id === 'string'
         ? payload.capture_id
         : generate_capture_id();
-    const config = is_capture_config(payload.config) ? payload.config : DEFAULT_CONFIG;
+    const config = get_capture_config(payload.config);
     const result = await handlers.start_capture(capture_id, config);
 
     if (!result.success) {
@@ -190,8 +190,62 @@ function get_optional_sources(payload: Record<string, unknown>): AgentDataSource
     return payload.sources as AgentDataSource[];
 }
 
-function is_capture_config(value: unknown): value is CaptureConfig {
-    return typeof value === 'object' && value !== null;
+const capture_config_keys = new Set<keyof CaptureConfig>([
+    'mouse_precision',
+    'capture_console',
+    'capture_network',
+    'keyboard_capture_mode',
+    'capture_input_values',
+    'capture_request_body',
+    'capture_response_body',
+    'max_body_capture_bytes',
+    'inline_text_max_bytes',
+    'redact_sensitive_headers',
+    'redact_url_query',
+    'redact_data',
+    'sample_rate_ms'
+]);
+
+function get_capture_config(value: unknown): CaptureConfig {
+    if (value === undefined) {
+        return { ...DEFAULT_CONFIG };
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new AgentCommandError('INVALID_QUERY', 'config must be an object');
+    }
+
+    const config = value as Record<string, unknown>;
+    if (Object.keys(config).some(key => !capture_config_keys.has(key as keyof CaptureConfig))) {
+        throw new AgentCommandError('INVALID_QUERY', 'config contains unsupported fields');
+    }
+
+    const merged = { ...DEFAULT_CONFIG, ...config };
+    if (!has_valid_capture_config_values(merged)) {
+        throw new AgentCommandError('INVALID_QUERY', 'config contains invalid values');
+    }
+    return merged as CaptureConfig;
+}
+
+function has_valid_capture_config_values(value: Record<string, unknown>): boolean {
+    return (
+        ['clicks', 'clicks_scroll_drag', 'full_trajectory'].includes(String(value.mouse_precision))
+        && typeof value.capture_console === 'boolean'
+        && typeof value.capture_network === 'boolean'
+        && ['none', 'shortcuts', 'all'].includes(String(value.keyboard_capture_mode))
+        && typeof value.capture_input_values === 'boolean'
+        && typeof value.capture_request_body === 'boolean'
+        && typeof value.capture_response_body === 'boolean'
+        && is_non_negative_integer(value.max_body_capture_bytes)
+        && is_non_negative_integer(value.inline_text_max_bytes)
+        && typeof value.redact_sensitive_headers === 'boolean'
+        && typeof value.redact_url_query === 'boolean'
+        && typeof value.redact_data === 'boolean'
+        && is_non_negative_integer(value.sample_rate_ms)
+    );
+}
+
+function is_non_negative_integer(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function to_agent_error(error: unknown): AgentError {

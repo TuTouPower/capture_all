@@ -6,7 +6,7 @@ const base_config = {
     ...DEFAULT_USER_CONFIG,
     agent_bridge_enabled: true,
     agent_bridge_url: 'http://127.0.0.1:17831',
-    agent_bridge_token: 'token-123',
+    agent_bridge_token: '<TEST_BRIDGE_TOKEN>',
     agent_bridge_poll_interval_ms: 1000
 };
 
@@ -15,7 +15,7 @@ describe('agent bridge user config', () => {
         expect(normalize_agent_bridge_config(base_config)).toEqual({
             agent_bridge_enabled: true,
             agent_bridge_url: 'http://127.0.0.1:17831',
-            agent_bridge_token: 'token-123',
+            agent_bridge_token: '<TEST_BRIDGE_TOKEN>',
             agent_bridge_poll_interval_ms: 1000
         });
     });

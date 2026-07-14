@@ -4,6 +4,7 @@
 
 import http from 'node:http';
 import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
+import { redact_headers, redact_url } from '../../shared/redaction';
 
 interface CdpSession {
     session_key: string;
@@ -14,6 +15,8 @@ interface CdpSession {
     events: CdpStoredEvent[];
     created_at: number;
     max_body_bytes: number;
+    redact_sensitive_headers: boolean;
+    redact_url_query: boolean;
 }
 
 interface CdpStoredEvent {
@@ -86,6 +89,10 @@ export async function handle_cdp_start(
     const max_body_bytes = typeof body.max_body_capture_bytes === 'number'
         ? body.max_body_capture_bytes
         : MAX_BODY_CAPTURE_BYTES;
+    const redact_data = body.redact_data !== false;
+    const redact_sensitive_headers = redact_data
+        && body.redact_sensitive_headers !== false;
+    const redact_url_query = redact_data && body.redact_url_query !== false;
 
     if (!port || port < 1 || port > 65535) {
         return { status: 400, body: { ok: false, error: { code: 'INVALID_QUERY', message: 'Invalid port' } } };
@@ -116,7 +123,9 @@ export async function handle_cdp_start(
             target_id: target.id,
             events: [],
             created_at: Date.now(),
-            max_body_bytes
+            max_body_bytes,
+            redact_sensitive_headers,
+            redact_url_query,
         };
 
         // Connect to CDP WebSocket
@@ -143,7 +152,10 @@ export async function handle_cdp_start(
                             session.events.push({
                                 request_id: req_id,
                                 tab_id: 0,
-                                url: response.url || '',
+                                url: redact_url(
+                                    response.url || '',
+                                    session.redact_url_query,
+                                ).url,
                                 method: '',
                                 status_code: response.status || 0,
                                 timestamp: Date.now(),
@@ -153,12 +165,18 @@ export async function handle_cdp_start(
                                 request_body: null,
                                 request_body_status: 'not_enabled',
                                 request_headers: {},
-                                response_headers: headers_from_cdp(response.headers || {}),
+                                response_headers: redact_headers(
+                                    headers_from_cdp(response.headers || {}),
+                                    session.redact_sensitive_headers,
+                                ).headers,
                                 seq: ++seq
                             });
                         } else {
                             existing.status_code = response.status || 0;
-                            existing.response_headers = headers_from_cdp(response.headers || {});
+                            existing.response_headers = redact_headers(
+                                headers_from_cdp(response.headers || {}),
+                                session.redact_sensitive_headers,
+                            ).headers;
                         }
                     }
                 } else if (msg.method === 'Network.requestWillBeSent') {
@@ -171,7 +189,10 @@ export async function handle_cdp_start(
                             session.events.push({
                                 request_id: req_id,
                                 tab_id: 0,
-                                url: request.url || '',
+                                url: redact_url(
+                                    request.url || '',
+                                    session.redact_url_query,
+                                ).url,
                                 method: request.method || 'GET',
                                 status_code: 0,
                                 timestamp: Date.now(),
@@ -180,13 +201,19 @@ export async function handle_cdp_start(
                                 response_body_status: 'pending',
                                 request_body: null,
                                 request_body_status: 'not_enabled',
-                                request_headers: headers_from_cdp(request.headers || {}),
+                                request_headers: redact_headers(
+                                    headers_from_cdp(request.headers || {}),
+                                    session.redact_sensitive_headers,
+                                ).headers,
                                 response_headers: {},
                                 seq: ++seq
                             });
                         } else {
                             existing.method = request.method || 'GET';
-                            existing.request_headers = headers_from_cdp(request.headers || {});
+                            existing.request_headers = redact_headers(
+                                headers_from_cdp(request.headers || {}),
+                                session.redact_sensitive_headers,
+                            ).headers;
                         }
                     }
                 } else if (msg.method === 'Network.loadingFinished') {

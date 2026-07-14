@@ -17,8 +17,8 @@ const query_range_schema = {
     order: order_schema,
 };
 
-// CaptureConfig — all fields optional with宽松 defaults;
-// MCP clients may send partial config, the dispatcher applies defaults
+// CaptureConfig fields are optional; the dispatcher merges missing fields with
+// DEFAULT_CONFIG before starting a capture.
 const capture_config_schema = z.object({
     mouse_precision: z.enum(['clicks', 'clicks_scroll_drag', 'full_trajectory']).optional(),
     capture_console: z.boolean().optional(),
@@ -33,7 +33,7 @@ const capture_config_schema = z.object({
     redact_url_query: z.boolean().optional(),
     redact_data: z.boolean().optional(),
     sample_rate_ms: z.number().int().min(0).optional(),
-}).passthrough();
+}).strict();
 
 // Per-tool schemas
 const get_status_schema = z.object({

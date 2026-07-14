@@ -10,7 +10,7 @@ import {
 
 const MOCK_CONFIG: ExternalCdpBridgeConfig = {
     bridge_url: 'http://127.0.0.1:17831',
-    bridge_token: 'test-token',
+    bridge_token: '<TEST_BRIDGE_TOKEN>',
     cdp_ports: [9222]
 };
 
@@ -63,7 +63,7 @@ describe('detect_external_cdp', () => {
 
         const config_no_ports: ExternalCdpBridgeConfig = {
             bridge_url: 'http://127.0.0.1:17831',
-            bridge_token: 'test-token',
+            bridge_token: '<TEST_BRIDGE_TOKEN>',
             cdp_ports: []
         };
 
@@ -92,7 +92,7 @@ describe('detect_external_cdp', () => {
 
         const config_multi_port: ExternalCdpBridgeConfig = {
             bridge_url: 'http://127.0.0.1:17831',
-            bridge_token: 'test-token',
+            bridge_token: '<TEST_BRIDGE_TOKEN>',
             cdp_ports: [9222, 9223]
         };
 
@@ -123,7 +123,7 @@ describe('start_external_cdp', () => {
         expect(url).toBe('http://127.0.0.1:17831/cdp/start');
         expect(init.method).toBe('POST');
         expect(init.headers).toEqual({
-            'Authorization': 'Bearer test-token',
+            'Authorization': 'Bearer <TEST_BRIDGE_TOKEN>',
             'Content-Type': 'application/json'
         });
         const body = JSON.parse(init.body as string);
@@ -132,6 +132,8 @@ describe('start_external_cdp', () => {
             session_id: 'session-1',
             tab_url: 'https://example.com',
             redact_data: false,
+            redact_sensitive_headers: true,
+            redact_url_query: true,
             max_body_capture_bytes: 1048576
         });
     });
@@ -217,7 +219,7 @@ describe('poll_external_cdp_events', () => {
         const [url, init] = fetch_mock.mock.calls[0] as [string, RequestInit];
         expect(url).toBe('http://127.0.0.1:17831/cdp/events?session_key=sk-abc123');
         expect(init.method).toBe('GET');
-        expect(init.headers).toEqual({ 'Authorization': 'Bearer test-token' });
+        expect(init.headers).toEqual({ 'Authorization': 'Bearer <TEST_BRIDGE_TOKEN>' });
     });
 
     it('returns empty array when response is not ok', async () => {
@@ -274,7 +276,7 @@ describe('stop_external_cdp', () => {
         expect(url).toBe('http://127.0.0.1:17831/cdp/stop');
         expect(init.method).toBe('POST');
         expect(init.headers).toEqual({
-            'Authorization': 'Bearer test-token',
+            'Authorization': 'Bearer <TEST_BRIDGE_TOKEN>',
             'Content-Type': 'application/json'
         });
         const body = JSON.parse(init.body as string);

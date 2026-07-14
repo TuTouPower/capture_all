@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
@@ -19,24 +20,36 @@ interface CommandRequest {
 const EXTENSION_TTL_MS = 5000;
 const BRIDGE_VERSION = '0.1.0';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
+const MAX_EXTENSION_RESULT_BODY_BYTES = 32 * 1024 * 1024;
 
 export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
     const queue = new AgentCommandQueue();
     let heartbeat: ExtensionHeartbeat | null = null;
 
     const server = http.createServer(async (request, response) => {
-        // CORS for extension bridge access
-        response.setHeader('Access-Control-Allow-Origin', '*');
-        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-
-        if (request.method === 'OPTIONS') {
-            response.writeHead(204);
-            response.end();
-            return;
-        }
-
         try {
+            const origin = request.headers.origin;
+
+            if (origin && !is_allowed_extension_origin(origin)) {
+                return send_json(response, 403, {
+                    ok: false,
+                    error: {
+                        code: 'ORIGIN_NOT_ALLOWED',
+                        message: 'Origin is not allowed',
+                    },
+                });
+            }
+
+            if (origin) {
+                set_cors_headers(response, origin);
+            }
+
+            if (request.method === 'OPTIONS') {
+                response.writeHead(204);
+                response.end();
+                return;
+            }
+
             if (request.method === 'GET' && request.url === '/health') {
                 return send_json(response, 200, { ok: true });
             }
@@ -56,7 +69,10 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/result') {
-                const body = await read_json(request) as AgentCommandResult;
+                const body = await read_json(
+                    request,
+                    MAX_EXTENSION_RESULT_BODY_BYTES,
+                ) as AgentCommandResult;
                 queue.resolve(body);
                 return send_json(response, 200, { ok: true });
             }
@@ -138,8 +154,32 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     };
 }
 
+function is_allowed_extension_origin(origin: string): boolean {
+    return /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+}
+
+function set_cors_headers(
+    response: http.ServerResponse,
+    origin: string,
+): void {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.setHeader(
+        'Access-Control-Allow-Headers',
+        'Authorization, Content-Type',
+    );
+    response.setHeader('Vary', 'Origin');
+}
+
 function is_authorized(request: http.IncomingMessage, token: string): boolean {
-    return request.headers.authorization === `Bearer ${token}`;
+    const actual = createHash('sha256')
+        .update(request.headers.authorization || '')
+        .digest();
+    const expected = createHash('sha256')
+        .update(`Bearer ${token}`)
+        .digest();
+
+    return timingSafeEqual(actual, expected);
 }
 
 function is_extension_online(heartbeat: ExtensionHeartbeat | null): boolean {
@@ -208,7 +248,10 @@ function is_plain_object(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function read_json(request: http.IncomingMessage): Promise<unknown> {
+async function read_json(
+    request: http.IncomingMessage,
+    max_body_bytes = MAX_JSON_BODY_BYTES,
+): Promise<unknown> {
     const chunks: Buffer[] = [];
     let size = 0;
 
@@ -216,7 +259,7 @@ async function read_json(request: http.IncomingMessage): Promise<unknown> {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += buffer.byteLength;
 
-        if (size > MAX_JSON_BODY_BYTES) {
+        if (size > max_body_bytes) {
             throw new BridgeHttpError(413, 'PAYLOAD_TOO_LARGE', 'JSON body is too large');
         }
 

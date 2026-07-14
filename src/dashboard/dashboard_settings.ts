@@ -66,7 +66,8 @@ function render_settings(): string {
                 <section class="set-section" id="set-privacy">
                     <div class="set-subhead"><h2>隐私与脱敏</h2>${sw('redact_data', cfg.redact_data)}</div>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field"><span class="field-lbl">脱敏敏感数据</span><span style="font-size:12px;color:var(--ink-3)">遮蔽密码、令牌，截断长文本</span></div>
+                        <div class="field span2"><span class="field-lbl">敏感采集提醒</span><span style="font-size:12px;color:var(--ink-3)">请求体、响应体和输入值采集默认开启，可能包含凭据、Token、私密消息或个人信息。不需要时请在首次采集前关闭。</span></div>
+                        <div class="field span2"><span class="field-lbl">脱敏边界</span><span style="font-size:12px;color:var(--ink-3)">密码输入始终不采集。Header、URL 查询和输入值按规则脱敏；请求体和响应体只限制大小，不扫描内容中的敏感信息。</span></div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-export">

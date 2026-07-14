@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { dispatch_agent_command, type AgentRuntimeHandlers } from '../src/background/agent_command_dispatcher';
 import type { AgentCommand } from '../src/agent/shared/protocol';
+import { DEFAULT_CONFIG } from '../src/shared/constants';
 import type { CaptureConfig } from '../src/shared/types';
 
 vi.mock('../src/background/exporter', () => ({
@@ -62,7 +63,48 @@ describe('agent command dispatcher', () => {
         }), handlers);
 
         expect(result.ok).toBe(true);
-        expect(handlers.start_capture).toHaveBeenCalledWith('capture_2', config);
+        expect(handlers.start_capture).toHaveBeenCalledWith('capture_2', {
+            ...DEFAULT_CONFIG,
+            ...config
+        });
+    });
+
+    test('merges partial config with safe capture defaults', async () => {
+        const start_capture = vi.fn(async () => ({ success: true }));
+
+        const result = await dispatch_agent_command(command('capture.start', {
+            capture_id: 'capture_partial',
+            config: { capture_input_values: false }
+        }), {
+            ...handlers,
+            start_capture
+        });
+
+        expect(result.ok).toBe(true);
+        expect(start_capture).toHaveBeenCalledWith('capture_partial', {
+            ...DEFAULT_CONFIG,
+            capture_input_values: false
+        });
+    });
+
+    test('rejects invalid partial capture config', async () => {
+        const start_capture = vi.fn(async () => ({ success: true }));
+
+        const result = await dispatch_agent_command(command('capture.start', {
+            config: {
+                redact_data: 'false',
+                unexpected_field: true
+            }
+        }), {
+            ...handlers,
+            start_capture
+        });
+
+        expect(result).toMatchObject({
+            ok: false,
+            error: { code: 'INVALID_QUERY' }
+        });
+        expect(start_capture).not.toHaveBeenCalled();
     });
 
     test('maps capture already running errors', async () => {

@@ -57,6 +57,23 @@ describe('MCP tool schemas', () => {
         expect(result.capture_id).toBe('abc-123');
     });
 
+    it('start_recording: rejects unknown config fields', () => {
+        fail('start_recording', {
+            config: {
+                capture_network: true,
+                unexpected_field: true,
+            },
+        });
+    });
+
+    it('start_recording: rejects invalid partial config values', () => {
+        fail('start_recording', {
+            config: {
+                redact_data: 'false',
+            },
+        });
+    });
+
     it('start_recording: rejects empty capture_id', () => {
         fail('start_recording', { capture_id: '' });
     });

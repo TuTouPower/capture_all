@@ -103,7 +103,7 @@ function compute_value_fields(target: HTMLInputElement | HTMLTextAreaElement | H
     if (config.redact_data) {
         return {
             value_status: 'redacted',
-            value_preview: value || null,
+            value_preview: value ? '[REDACTED]' : null,
             value_length: value ? value.length : null,
         };
     }

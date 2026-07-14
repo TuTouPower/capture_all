@@ -221,7 +221,9 @@ async function try_external_cdp_bridge(
             capture_id,
             tab_url,
             config.redact_data,
-            config.max_body_capture_bytes
+            config.max_body_capture_bytes,
+            config.redact_sensitive_headers,
+            config.redact_url_query,
         );
         if (!start_result.success || !start_result.session_key) {
             return null;

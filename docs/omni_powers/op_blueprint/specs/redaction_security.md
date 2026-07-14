@@ -60,7 +60,9 @@ inline_text_max_bytes: 32KB
 ## 4. Agent Bridge 安全
 
 - Bridge 仅绑定 `127.0.0.1`，禁止 `0.0.0.0` / 公网。
-- 所有 API 必须带 token；token 用户提供，禁止硬编码 / 默认 / 示例值。无效 / 缺失 → 401。
+- 浏览器请求只允许格式合法的 `chrome-extension://<extension-id>` Origin；HTTP/HTTPS 页面和 `Origin: null` 返回 403。Node / MCP 等无 Origin 本地客户端保持可用。
+- 除 `/health` 外所有 API 必须带 token；token 用户提供，禁止硬编码 / 默认 / 示例值。无效 / 缺失 → 401，校验使用 SHA-256 固定长度摘要和 `timingSafeEqual`。
+- Bridge Token 推荐通过 `CAPTURE_ALL_BRIDGE_TOKEN` 环境变量注入；`--token` 保持兼容且优先级更高。真实 Token 禁止写入受版本控制配置。
 - URL 仅允许 `127.0.0.1` / `localhost`（`agent_bridge_config.test.ts` 验证）。
 - token 缺失不发起请求（`agent_bridge_client.test.ts`）。
 - 不提供删除采集 / 清空数据 MCP 能力。

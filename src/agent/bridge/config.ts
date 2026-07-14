@@ -21,7 +21,7 @@ export function parse_bridge_config(raw: RawBridgeConfig): AgentBridgeConfig {
         throw new Error('Invalid bridge port');
     }
 
-    if (!raw.token) {
+    if (!raw.token?.trim()) {
         throw new Error('Bridge token is required');
     }
 
@@ -34,8 +34,13 @@ export function parse_bridge_config(raw: RawBridgeConfig): AgentBridgeConfig {
     };
 }
 
-export function parse_bridge_cli_args(argv: string[]): RawBridgeConfig {
-    const raw: RawBridgeConfig = {};
+export function parse_bridge_cli_args(
+    argv: string[],
+    env: { CAPTURE_ALL_BRIDGE_TOKEN?: string } = process.env,
+): RawBridgeConfig {
+    const raw: RawBridgeConfig = {
+        token: env.CAPTURE_ALL_BRIDGE_TOKEN || undefined,
+    };
 
     for (let index = 0; index < argv.length; index += 1) {
         const arg = argv[index];

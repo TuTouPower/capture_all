@@ -5,6 +5,8 @@ data/
 docs/archive/
 .worktrees/
 .claude/
+CLAUDE.md
+README.en.md
 *.log
 *.zip
 *.Zone.Identifier

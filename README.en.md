@@ -1,83 +1,82 @@
 <div align="center">
-  <img src="assets/icons/icon128.png" width="96" height="96" alt="Capture All logo">
+  <img src="assets/icons/icon128.png" width="96" height="96" alt="Capture All icon">
   <h1>Capture All</h1>
-  <p><strong>A local-first browser debugging black box for humans and AI agents.</strong></p>
-  <p>Capture browser evidence, inspect it visually, export it, or query it through MCP.</p>
+  <p><strong>Local-first browser debugging black box for developers and AI Agents.</strong></p>
+  <p>Capture browser evidence, visualize and inspect, export files, or query via MCP.</p>
   <p>
-    <a href="README.md">简体中文</a> ·
-    <a href="docs/mcp_usage.md">MCP guide</a> ·
+    <a href="README.zh-CN.md">简体中文</a> ·
+    <a href="docs/mcp_usage.md">MCP Guide</a> ·
     <a href="PRIVACY.md">Privacy</a> ·
     <a href="SECURITY.md">Security</a>
   </p>
   <p>
     <a href="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml"><img src="https://github.com/TuTouPower/capture_all/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 license"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 License"></a>
     <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4.svg" alt="Chrome Manifest V3">
   </p>
 </div>
 
-Capture All is a Chrome Manifest V3 extension that turns browser activity into structured, local evidence. It captures user actions, navigation, network requests, console output, runtime errors, Storage changes, and Cookie changes in one timeline.
+Capture All is a Chrome Manifest V3 extension that turns browser activity into local structured evidence, capturing user behavior, page navigation, network requests, console output, runtime exceptions, storage changes, and cookie changes on a single timeline.
 
-Use the popup, dashboard, and DevTools panel for visual inspection. When deeper analysis is needed, connect the authenticated localhost Bridge to an MCP client such as Claude Code and let an AI agent control captures, query individual records, or export results.
+Visualize and inspect via popup, main panel, and DevTools panel. For deeper analysis, connect the authorized local Bridge to an MCP client such as Claude Code, and let an AI Agent control capture, query individual records, or export results.
 
 > [!WARNING]
-> Capture All requests broad browser permissions and can collect sensitive page content. Use it only in browsers, profiles, and sites you are authorized to inspect. Review [Permissions, privacy, and safety](#permissions-privacy-and-safety) before the first capture.
+> Capture All requests high-impact browser permissions and may capture sensitive page content. Use only on browsers, profiles, and sites you are authorized to inspect. Read [Permissions, privacy, and security](#permissions-privacy-and-security) before first capture.
 
-## What it captures
+## What gets captured
 
 | Data group | Examples |
 |---|---|
-| User actions | Clicks, scrolling, keyboard shortcuts or keys, input changes, viewport changes |
-| Navigation | Page loads, URL changes, tab activation, visibility changes |
-| Network | Request and response metadata, timing, headers, and configured bodies |
-| Console | `console.log`, `console.warn`, `console.error`, and related output |
-| Errors | Uncaught exceptions and unhandled promise rejections |
-| Storage | `localStorage` and `sessionStorage` changes |
-| Cookies | Cookie creation, updates, and deletion |
+| User behavior | Clicks, scrolls, keyboard shortcuts or keys, input changes, viewport changes |
+| Page navigation | Page loads, URL changes, tab activation, visibility changes |
+| Network | Request and response metadata, timing, headers, configured body |
+| Console | `console.log`, `console.warn`, `console.error`, and other output |
+| Errors and exceptions | Uncaught exceptions, unhandled Promise rejections |
+| Storage | `localStorage`, `sessionStorage` changes |
+| Cookies | Cookie creation, updates, and deletions |
 
-## Key capabilities
+## Core capabilities
 
-- Correlate seven browser data groups in a unified timeline.
-- Inspect captures through the popup, dashboard, request inspector, and DevTools panel.
+- Correlate 7 browser data groups on a unified timeline.
+- Inspect captures via popup, main panel, request inspector, and DevTools panel.
 - Export JSON, JSONL, HTML, or HAR files.
-- Control captures and query data through MCP with pagination and time filters.
-- Keep capture data local in IndexedDB unless you explicitly export or query it through MCP.
-- Authenticate local Bridge access with a user-provided token.
-- Redact sensitive URL parameters and headers while enforcing unconditional size limits.
+- Control capture via MCP, and query data in pages and time ranges.
+- Captured data stays in local IndexedDB by default; it only leaves extension storage on explicit export or MCP query.
+- Authorize the local Bridge with a user-supplied token.
+- Support redacting sensitive URL params and headers, with size limits always enforced.
 
 ## Architecture
 
 ```text
-Chrome pages and frames
+Chrome pages and iframes
         │
         ▼
 Capture All extension
-  ├─ Content scripts          user actions, navigation, Storage
-  ├─ Service worker           network, Cookies, capture lifecycle
-  ├─ Chrome DevTools Protocol console, errors, configured bodies
-  ├─ IndexedDB                local capture data
-  └─ Popup / dashboard / DevTools panel
-        │ authenticated polling on 127.0.0.1
+  ├─ Content Script           user behavior, navigation, storage
+  ├─ Service Worker          network, cookies, capture lifecycle
+  ├─ Chrome DevTools Protocol console, exceptions, configured body
+  ├─ IndexedDB               local capture data
+  └─ Popup / main panel / DevTools panel
+        │ via 127.0.0.1 authorized polling
         ▼
 Local Bridge
-        │
-        ▼
-MCP server ──► Claude Code or another MCP client
+        │        ▼
+MCP Server ──► Claude Code or other MCP clients
 ```
 
-The Bridge binds only to `127.0.0.1`. The extension, Bridge, and MCP configuration must use the same token.
+Bridge binds `127.0.0.1` only. The extension, Bridge, and MCP config must use the same token.
 
 ## Project status
 
-Capture All is early-stage software. It is not published to the Chrome Web Store or npm; install it as an unpacked extension from a local build. There is no compatibility guarantee or support SLA yet.
+Capture All is still early stage and has not been released to the Chrome Web Store or npm. The current install path is building from source and loading the unpacked extension. Compatibility guarantees and support SLA are not provided.
 
-Public screenshots are intentionally omitted until they can be produced without exposing private browser content.
+The repository does not publish product screenshots to avoid leaking private browser content being inspected during development.
 
 ## Install from source
 
 ### Requirements
 
-- Chrome or another Chromium browser with Manifest V3 support
+- Chrome or Chromium that supports Manifest V3
 - Node.js `^20.19.0` or `>=22.12.0`
 - npm
 
@@ -93,65 +92,65 @@ npm run build
 Then:
 
 1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose `artifacts/dist` from the repository.
-5. Pin Capture All if you want quick access to the popup.
+2. Enable Developer mode.
+3. Click "Load unpacked extension".
+4. Select `artifacts/dist` in the repository.
+5. Optional: pin Capture All to the toolbar to open the popup quickly.
 
-After rebuilding, reload the extension card on `chrome://extensions` if manifest or service worker changes are not picked up automatically.
+After rebuilding, reload the extension in `chrome://extensions` if manifest or Service Worker changes do not take effect automatically.
 
-## Basic use
+## Basic usage
 
 1. Open the Capture All popup.
-2. Review capture options, especially input values and request/response bodies.
-3. Start a capture.
-4. Reproduce the browser behavior you want to investigate.
-5. Stop the capture.
-6. Open the capture from the popup or dashboard to inspect its timeline and details.
-7. Export it when a portable artifact is required.
+2. Check capture options, especially input values, request bodies, and response bodies.
+3. Start capture.
+4. Reproduce the browser behavior under investigation.
+5. Stop capture.
+6. Open the capture from the popup or main panel and inspect the timeline and details.
+7. Export files when portable evidence is needed.
 
-A capture is limited to 500 MB and 24 hours. An individual captured body is limited to 100 MB.
+A single capture is capped at 500 MB and 24 hours; a single body is capped at 100 MB.
 
 ## Connect Bridge and MCP
 
-Build the project first, then copy the project-local MCP example:
+Build the project first, then copy the MCP example scoped to the current project:
 
 ```bash
 cp .mcp.json.example .mcp.json
 ```
 
-Generate a random token yourself, then use that same value in all three places:
+Generate a random token yourself and use the same value in all three places:
 
-1. **Extension:** open Capture All settings, enable the Agent Bridge, keep the default URL `http://127.0.0.1:17831`, and enter the token.
-2. **Bridge:** start the local Bridge with the token supplied through the environment.
-3. **MCP client:** replace `<YOUR_BRIDGE_TOKEN>` in the local `.mcp.json`.
+1. **Extension:** open Capture All settings, enable Agent Bridge, keep the default URL `http://127.0.0.1:17831`, then fill in the token.
+2. **Bridge:** pass the token via environment variable and start the local Bridge.
+3. **MCP client:** replace `<YOUR_BRIDGE_TOKEN>` in the local `.mcp.json` with the same token.
 
 ```bash
 CAPTURE_ALL_BRIDGE_TOKEN='<your token>' \
     node artifacts/bridge/bridge.mjs --port 17831
 ```
 
-Restart the MCP client after creating `.mcp.json`. In Claude Code, the normal flow is:
+Restart the MCP client after creating `.mcp.json`. In Claude Code, the typical flow is:
 
 ```text
-get_status → start_recording → reproduce behavior → stop_recording
+get_status → start_recording → reproduce the issue → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-`.mcp.json` is ignored by Git and must remain local. Never put real tokens in source files, documentation, issues, or capture exports. See the [MCP usage guide](docs/mcp_usage.md) for tools, parameters, limits, and troubleshooting.
+`.mcp.json` is gitignored and must stay on the local machine. Never write real tokens into source, documentation, issue threads, or capture exports. For full tools, parameters, limits, and troubleshooting, see the [MCP usage guide](docs/mcp_usage.md).
 
 ## Development
 
 ```bash
-npm run dev                # Start Vite development mode
+npm run dev                # Start Vite dev mode
 npm test                   # Run unit and integration tests
 npm run test:watch         # Run Vitest in watch mode
-npm run build              # Build extension, Bridge, and MCP artifacts
-npm run test:e2e           # Run the base headless Playwright suite
-npm run test:e2e:all       # Run all configured Playwright projects
-npm run scan:tracked-tree  # Scan candidate files for secrets and private paths
-npm run bridge             # Run Bridge from TypeScript source
-npm run mcp                # Run MCP server from TypeScript source
+npm run build              # Build the extension, Bridge, and MCP artifacts
+npm run test:e2e           # Run baseline headless Playwright tests
+npm run test:e2e:all       # Run all Playwright projects
+npm run scan:tracked-tree  # Scan tracked files for secrets and private paths
+npm run bridge             # Start Bridge from TypeScript sources
+npm run mcp                # Start MCP Server from TypeScript sources
 ```
 
 Build outputs:
@@ -160,47 +159,47 @@ Build outputs:
 |---|---|
 | Chrome extension | `artifacts/dist` |
 | Bridge | `artifacts/bridge/bridge.mjs` |
-| MCP server | `artifacts/mcp/mcp.mjs` |
+| MCP Server | `artifacts/mcp/mcp.mjs` |
 
-Implementation details live in the [architecture](docs/omni_powers/op_blueprint/architecture.md), [domain model](docs/omni_powers/op_blueprint/domain.md), and [test plan](docs/omni_powers/op_blueprint/test.md).
+Implementation details in [technical architecture](docs/omni_powers/op_blueprint/architecture.md), [domain model](docs/omni_powers/op_blueprint/domain.md), and [test plan](docs/omni_powers/op_blueprint/test.md).
 
-## Permissions, privacy, and safety
+## Permissions, privacy, and security
 
 | Permission | Purpose |
 |---|---|
-| `storage` | Store user configuration in `chrome.storage.local` |
+| `storage` | Persist user config in `chrome.storage.local` |
 | `webRequest` | Observe request and response metadata |
-| `debugger` | Use Chrome DevTools Protocol for console, runtime errors, and configured body capture |
-| `tabs` | Discover tabs and coordinate capture content scripts |
-| `alarms` | Maintain capture lifecycle work in an MV3 service worker |
-| `downloads` | Save local export files |
-| `cookies` | Capture Cookie changes |
-| `<all_urls>` | Run the declared content script and observe authorized pages across origins |
+| `debugger` | Capture console, runtime exceptions, and configured body via Chrome DevTools Protocol |
+| `tabs` | Query tabs and coordinate Content Script capture |
+| `alarms` | Maintain capture lifecycle tasks in the MV3 Service Worker |
+| `downloads` | Save locally exported files |
+| `cookies` | Capture cookie changes |
+| `<all_urls>` | Run declarative Content Script and observe authorized pages across origins |
 
-Capture data is stored in the extension's IndexedDB database, `capture_all_db`. Settings are stored in `chrome.storage.local`. Capture All has no telemetry, analytics, advertising SDK, or remote application server.
+Captured data lives in the extension-local IndexedDB database `capture_all_db`, with settings in `chrome.storage.local`. Capture All does not include telemetry, analytics, ad SDKs, or remote application servers.
 
 Important boundaries:
 
-- Input values and request/response body capture are enabled by default. Disable them before the first capture when they are unnecessary.
-- `<all_urls>` and `all_frames: true` allow the content script to run in top-level pages and embedded third-party frames.
-- Redaction reduces exposure but cannot guarantee removal of every credential or personal value.
-- MCP queries may send selected capture data to the connected AI provider or client environment.
-- Exported files are independent copies and must be protected and deleted separately.
-- MCP does not expose capture deletion or database clearing commands.
+- Input values, request bodies, and response bodies are captured by default. Turn them off before first capture if not needed.
+- `<all_urls>` and `all_frames: true` allow the Content Script to run on top-level pages and embedded third-party iframes.
+- Redaction reduces exposure risk but does not guarantee removal of all credentials or personal data.
+- MCP queries may forward selected capture data to the connected AI Provider or client environment.
+- Exported files are standalone copies and need separate protection and deletion.
+- MCP does not provide commands to delete captures or clear the database.
 
-Delete captures through the dashboard. Removing the extension or clearing its site data removes local extension storage. Read [PRIVACY.md](PRIVACY.md) for the complete data model and [SECURITY.md](SECURITY.md) before reporting a vulnerability. Never publish sensitive evidence in a GitHub issue.
+Delete captures from the main panel. Removing the extension or clearing extension site data deletes local extension storage. For full data practices, see [PRIVACY.md](PRIVACY.md). Read [SECURITY.md](SECURITY.md) before reporting vulnerabilities. Do not publish sensitive evidence in GitHub issues.
 
 ## Known limitations
 
-- Broad permissions are required by the current capture model.
-- The Bridge accepts ordinary JSON bodies up to 1 MiB and extension result bodies up to 32 MiB.
-- Large captures should use paginated `list_records` queries or extension-local export rather than an all-data MCP request.
-- Redaction does not scan arbitrary response body text for every possible secret.
-- No Chrome Web Store package, npm release, compatibility guarantee, or support SLA is available yet.
+- The current capture model requires high-impact browser permissions.
+- Bridge JSON body limit is 1 MiB; extension result reply limit is 32 MiB.
+- Large captures should use paginated `list_records` or local export, not rely on full-data MCP queries.
+- Redaction does not scan all potential secrets inside arbitrary response body text.
+- No Chrome Web Store package, npm release, compatibility guarantee, or support SLA yet.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Public issues and pull requests must not contain unredacted captures, tokens, request bodies, private URLs, or personal browser data. Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and project changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Public issues and PRs must not contain unredacted captures, tokens, request bodies, private URLs, or personal browser data. Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Project changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

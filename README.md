@@ -71,7 +71,15 @@ Bridge 仅绑定 `127.0.0.1`。扩展、Bridge 和 MCP 配置必须使用同一 
 
 Capture All 仍处于早期阶段，尚未发布到 Chrome Web Store 或 npm。当前安装方式为从源码构建并加载已解压的扩展程序，暂不提供兼容性保证或支持 SLA。
 
-仓库暂不放置公开产品截图，避免泄露开发采集中的私密浏览器内容。
+## 截图
+
+| 时间线总览 | 实时采集 |
+|------------|---------|
+| <img src="store/screenshots/01-timeline-overview.png" width="628" alt="时间线总览"> | <img src="store/screenshots/02-live-capture.png" width="628" alt="实时采集"> |
+
+| 请求检查器 | 隐私设置 | 导出任务 |
+|-----------|---------|---------|
+| <img src="store/screenshots/03-request-inspector.png" width="412" alt="请求检查器"> | <img src="store/screenshots/04-privacy-settings.png" width="412" alt="隐私设置"> | <img src="store/screenshots/05-export-tasks.png" width="412" alt="导出任务"> |
 
 ## 浏览器支持
 

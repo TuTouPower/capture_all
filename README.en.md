@@ -72,13 +72,17 @@ Capture All is still early stage and has not been released to the Chrome Web Sto
 
 ## Screenshots
 
-| Timeline overview | Live capture |
-|-------------------|--------------|
-| <img src="assets/screenshots/01-timeline-overview.png" width="628" alt="Timeline overview"> | <img src="assets/screenshots/02-live-capture.png" width="628" alt="Live capture"> |
+| Live capture | Completed capture |
+|--------------|-------------------|
+| <img src="assets/screenshots/01-live-capture.png" width="628" alt="Live capture"> | <img src="assets/screenshots/02-completed-capture.png" width="628" alt="Completed capture"> |
 
-| Request inspector | Privacy settings | Export tasks |
-|------------------|-----------------|-------------|
-| <img src="assets/screenshots/03-request-inspector.png" width="412" alt="Request inspector"> | <img src="assets/screenshots/04-privacy-settings.png" width="412" alt="Privacy settings"> | <img src="assets/screenshots/05-export-tasks.png" width="412" alt="Export tasks"> |
+| Timeline overview | Request inspector |
+|-------------------|-------------------|
+| <img src="assets/screenshots/03-timeline-overview.png" width="628" alt="Timeline overview"> | <img src="assets/screenshots/04-request-inspector.png" width="628" alt="Request inspector"> |
+
+| Privacy settings | Export tasks |
+|------------------|--------------|
+| <img src="assets/screenshots/05-privacy-settings.png" width="628" alt="Privacy settings"> | <img src="assets/screenshots/06-export-tasks.png" width="628" alt="Export tasks"> |
 
 ## Browser support
 

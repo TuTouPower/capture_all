@@ -153,7 +153,6 @@ Runs declarative Content Script and observes user behavior and network activity 
 
 - **Extension name**（扩展名称）：自动从 manifest 读取。
 - **Extension logo**（扩展图标）：推荐 300×300，最小 128×128，宽高比 1:1。上传 `artifacts/dist/assets/icons/icon300.png` 或 `icon128.png`。
-- **Search terms** 约束：最多 **7** 个 term；每个 term 最多 **30** 字符；全部 term 合计不超过 **21** 个独立单词（以空格分隔计）。
 
 ---
 

@@ -3,6 +3,7 @@ import type { CaptureEvent, RuntimeExceptionData } from '../shared/types';
 import { create_base_event, get_relative_time } from '../shared/event_utils';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
+import { register_session, unregister_session } from './cdp_event_router';
 
 const logger = new Logger('background/exception', get_app_log_transport());
 
@@ -77,6 +78,33 @@ export async function stop_exception_capture(): Promise<void> {
 
 function handle_debugger_event(_source: any, method: string, params: any): void {
     if (!is_capturing) return;
+
+    // 与 console_capture 一致：network_capture 的 setAutoAttach 会拉起
+    // worker/iframe/OOPIF 子目标；子目标默认未 Runtime.enable，exceptionThrown 不会到。
+    if (method === 'Target.attachedToTarget') {
+        const child_session = params?.sessionId;
+        if (child_session) {
+            register_session(child_session);
+            const child_target = { tabId: tab_id, sessionId: child_session } as any;
+            chrome.dbg.sendCommand(child_target, 'Runtime.enable').catch((err: any) => {
+                logger.debug('sub_target_runtime_enable_failed', {
+                    sessionId: child_session,
+                    error: String(err).slice(0, 80),
+                });
+            });
+            logger.debug('sub_target_exception_runtime_enabled', { sessionId: child_session });
+        }
+        return;
+    }
+
+    if (method === 'Target.detachedFromTarget') {
+        const child_session = params?.sessionId;
+        if (child_session) {
+            unregister_session(child_session);
+        }
+        return;
+    }
+
     if (method !== 'Runtime.exceptionThrown') return;
 
     const details = params.exceptionDetails || {};

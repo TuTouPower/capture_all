@@ -5,7 +5,8 @@ source: docs/archive/TASKS.md
 spec: docs/omni_powers/op_blueprint/specs/network_body_capture.md
 severity: P2
 tags: [bug, gap, cdp]
-status: open
+status: closed
+triaged: closed
 blocks_merge: false
 created_at: 2026-07-12 04:08:27 UTC+8
 ---
@@ -17,3 +18,7 @@ exception_capture.ts 只对主 tab 发 `Runtime.enable`，无 `Target.attachedTo
 参照 console_capture.ts 修复模式：接入 cdp_event_router 的 register/unregister，子目标 attach 时发 `Runtime.enable`，detach 时清理。
 
 原文明示「独立立项」「超出 BUG-003 范围」。
+
+## 关闭说明
+
+2026-07-14: exception_capture 已对 Target.attachedToTarget 发 Runtime.enable（对齐 console_capture）。

@@ -141,14 +141,15 @@ describe('execute_mcp_tool', () => {
 
         const tool_promise = execute_mcp_tool(client, {
             name: 'start_recording',
-            arguments: { url: 'https://example.com', mode: 'standard' }
+            arguments: { url: 'https://example.com' }
         });
         const command = await take_next_command(server.url);
 
         expect(command).toMatchObject({
             type: 'capture.start',
-            payload: { url: 'https://example.com', mode: 'standard' },
+            payload: { url: 'https://example.com' },
         });
+        expect(command.payload).not.toHaveProperty('mode');
 
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',

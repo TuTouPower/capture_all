@@ -1,5 +1,11 @@
 import type { CaptureStats, CategoryKey } from './types';
 
+/**
+ * 两套计数口径（勿混用）：
+ * - `stats.*`：service_worker 实时累加（写入 CaptureRecord.stats）
+ * - 归档 `counts.*`：导出时按数组长度重算（可含 capture_method=unknown 等 stats 未计项）
+ * 消费者应固定一种口径；跨口径比较前须看 archive/manifest 语义说明。
+ */
 export const VISIBLE_CAPTURE_STAT_KEYS = [
     'user_action_count',
     'nav_count',

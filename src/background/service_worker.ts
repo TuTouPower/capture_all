@@ -42,6 +42,34 @@ function serialize_error(error: unknown): Record<string, unknown> {
     return { message: String(error) };
 }
 
+/** content script 尚未注入时 sendMessage 常失败；短延迟重试，与 poll_capture_status 双保险。 */
+async function tabs_send_message_retry(
+    tab_id: number,
+    message: unknown,
+    opts: { retries?: number; delay_ms?: number; label?: string } = {}
+): Promise<boolean> {
+    const retries = opts.retries ?? 3;
+    const delay_ms = opts.delay_ms ?? 200;
+    const label = opts.label ?? 'message';
+    let last_err: unknown;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            await chrome.tabs.sendMessage(tab_id, message);
+            if (attempt > 1) {
+                logger.debug(`sendMessage ${label} ok after retry`, { tab_id, attempt });
+            }
+            return true;
+        } catch (err) {
+            last_err = err;
+            if (attempt < retries) {
+                await new Promise((r) => setTimeout(r, delay_ms * attempt));
+            }
+        }
+    }
+    logger.warn(`Failed to send ${label} to tab ${tab_id} after ${retries} tries`, last_err);
+    return false;
+}
+
 async function run_stop_step(name: string, step: () => void | Promise<void>): Promise<void> {
     try {
         await step();
@@ -426,17 +454,15 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
     logger.info(`Notifying ${capturable_tabs.length} tabs to start (of ${all_tabs.length} total)`);
     for (const tab of capturable_tabs) {
         if (tab.id) {
-            try {
-                await chrome.tabs.sendMessage(tab.id, {
-                    action: 'start',
-                    config,
-                    capture_id: capture_id,
-                    capture_start_epoch_ms: start_time,
-                    tab_id: tab.id,
-                });
+            const ok = await tabs_send_message_retry(tab.id, {
+                action: 'start',
+                config,
+                capture_id: capture_id,
+                capture_start_epoch_ms: start_time,
+                tab_id: tab.id,
+            }, { label: 'start' });
+            if (ok) {
                 logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
-            } catch (err) {
-                logger.warn(`Failed to send start to tab ${tab.id}`, err);
             }
         }
     }
@@ -513,11 +539,11 @@ async function stop_capture(): Promise<{ success: boolean }> {
         const all_tabs = await chrome.tabs.query({});
         for (const tab of all_tabs) {
             if (tab.id) {
-                try {
-                    await chrome.tabs.sendMessage(tab.id, { action: 'stop' });
-                } catch {
-                    // Tab might not have content script
-                }
+                await tabs_send_message_retry(tab.id, { action: 'stop' }, {
+                    retries: 2,
+                    delay_ms: 100,
+                    label: 'stop',
+                });
             }
         }
     });
@@ -747,18 +773,16 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     // Update tracking
     last_active_tab.set(activeInfo.windowId, { tab_id: activeInfo.tabId, url: tab_url });
 
-    // Send start to the newly activated tab
-    try {
-        await chrome.tabs.sendMessage(activeInfo.tabId, {
-            action: 'start',
-            config: current_config,
-            capture_id: current_capture_id,
-            capture_start_epoch_ms: start_time,
-            tab_id: activeInfo.tabId,
-        });
+    // Send start to the newly activated tab（content script 可能尚未 ready，重试）
+    const start_ok = await tabs_send_message_retry(activeInfo.tabId, {
+        action: 'start',
+        config: current_config,
+        capture_id: current_capture_id,
+        capture_start_epoch_ms: start_time,
+        tab_id: activeInfo.tabId,
+    }, { label: 'start-on-activate' });
+    if (start_ok) {
         logger.debug(`Sent start to tab ${activeInfo.tabId}`);
-    } catch (err) {
-        logger.warn(`Failed to send start to tab ${activeInfo.tabId}`, err);
     }
 
     // Retry CDP-based capture on tab switch if previously failed (e.g. chrome:// URL at start)

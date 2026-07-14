@@ -5,7 +5,8 @@ source: docs/archive/TASKS.md
 spec: docs/omni_powers/op_blueprint/specs/content_events.md
 severity: P2
 tags: [bug, robustness, messaging]
-status: open
+status: closed
+triaged: closed
 blocks_merge: false
 created_at: 2026-07-12 04:08:27 UTC+8
 ---
@@ -17,3 +18,7 @@ service_worker.ts 在 `chrome.tabs.sendMessage(tab.id, {action:'start'})` 失败
 当前靠 content_script 轮询（poll_capture_status）兜底，但轮询有 2 秒间隔，首次同步可能延迟。建议 SW 端加 2-3 次短延迟重试，与轮询形成双保险。
 
 原文明示「独立立项」「建议主代理评估」。
+
+## 关闭说明
+
+2026-07-14: service_worker tabs_send_message_retry 启动/停止/切 tab 均 2–3 次短延迟重试。

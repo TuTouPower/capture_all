@@ -205,3 +205,27 @@ MCP智能体
 控制台日志
 Cookie监控
 ```
+
+---
+
+## Submit / Publish
+
+### Notes for certification / 认证说明（审核员可见，用户不可见）
+
+给商店审核员的测试说明，限制 2000 字符以内。写清：扩展用途、复现步骤、敏感权限、数据是否出本机。可直接粘贴：
+
+```
+This is a browser debugging black box extension. To test:
+
+1. Click the extension icon to open the Capture All popup.
+2. Check the capture options (user actions, network, console, storage, cookies, etc.).
+3. Click "Start Capture" to begin collecting browser activity locally.
+4. Click "Stop Capture".
+5. Open the capture row to view the unified timeline, then expand any row to see details.
+6. Click "Export" to save the capture as JSON / JSONL / HTML / HAR locally.
+7. (Optional) To test AI integration: start the local Bridge with a self-generated random token, point your MCP client at http://127.0.0.1:17831, then run get_status / start_recording / stop_recording / list_captures from the agent.
+
+All data stays in the browser's local IndexedDB — nothing is uploaded unless the user explicitly exports a file or runs an MCP query. The local Bridge listens on 127.0.0.1 only.
+
+Permission note: chrome.debugger is used only for local DevTools Protocol capture (console, exceptions, optional response bodies). It does not inject remote code and is not used for any cloud upload.
+```

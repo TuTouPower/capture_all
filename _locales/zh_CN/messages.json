@@ -1,0 +1,8 @@
+{
+    "name": {
+        "message": "Capture All 全采"
+    },
+    "description": {
+        "message": "采集浏览器全部活动：点击、网络、控制台、异常、Storage、Cookie。支持导出或通过 AI Agent 查询。"
+    }
+}

@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Capture All",
+  "default_locale": "en",
+  "name": "__MSG_name__",
   "version": "0.1.0",
-  "description": "Capture all browser activity: clicks, network, console, errors, storage, cookies. Export or query via AI Agent.",
+  "description": "__MSG_description__",
   "permissions": [
     "storage",
     "webRequest",

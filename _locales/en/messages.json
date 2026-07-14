@@ -1,0 +1,8 @@
+{
+    "name": {
+        "message": "Capture All"
+    },
+    "description": {
+        "message": "Capture all browser activity: clicks, network, console, errors, storage, cookies. Export or query via AI Agent."
+    }
+}

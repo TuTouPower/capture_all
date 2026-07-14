@@ -8,8 +8,8 @@
 |---|---|
 | 运行时 | Chrome Extension Manifest V3 |
 | 语言 | TypeScript（strict mode） |
-| 构建 | Vite 5 + @crxjs/vite-plugin（v2.0.0-beta.25） |
-| 单元测试 | Vitest 2.x |
+| 构建 | Vite 8 + @crxjs/vite-plugin 2.7 |
+| 单元测试 | Vitest 4.x |
 | E2E 测试 | Playwright 1.60 |
 | Agent 协议 | MCP（@modelcontextprotocol/sdk ^1.29.0） |
 | Agent 传输 | 本地 HTTP bridge（监听 127.0.0.1，Node.js + tsx） |
@@ -235,7 +235,7 @@ Agent → MCP 工具调用
 
 ## 6. Chrome 权限
 
-`manifest.json` 声明：`storage`、`webRequest`、`debugger`、`scripting`、`tabs`、`activeTab`、`alarms`、`downloads`、`cookies`；`host_permissions: ["<all_urls>"]`。CSP：`script-src 'self'; object-src 'self'`。
+`manifest.json` 声明：`storage`、`webRequest`、`debugger`、`tabs`、`alarms`、`downloads`、`cookies`；`host_permissions: ["<all_urls>"]`。`tabs` 用于读取和广播全部标签页；内容脚本通过 `content_scripts` 声明式注入，因此不需要 `activeTab` 或 `scripting`。CSP：`script-src 'self'; object-src 'self'`。
 
 ## 7. 构建产物与依赖
 

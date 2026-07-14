@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const EXTENSION_PATH = path.resolve(__dirname, '../artifacts/dist');
 
 const BRIDGE_PORT = 18732;
-const BRIDGE_TOKEN = 'e2e-full-test-token-xyz789';
+const BRIDGE_TOKEN = '<E2E_BRIDGE_TOKEN>';
 
 let browser: Awaited<ReturnType<typeof chromium.launchPersistentContext>>;
 let extension_id: string;

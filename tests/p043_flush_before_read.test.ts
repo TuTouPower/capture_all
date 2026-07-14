@@ -1,6 +1,6 @@
 // tests/p043_flush_before_read.test.ts
 // P0.43: get_capture_data 读取 IndexedDB 前 flush 缓冲区，确保 stats 与 events 数据一致
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { category_for_event_type } from '../src/shared/event_category';
 import { increment_capture_event_stats, create_empty_capture_stats } from '../src/shared/capture_stats';
 
@@ -86,13 +86,11 @@ describe('P0.43: flush before read ensures data consistency', () => {
         expect(new Set(render_types)).toEqual(new Set(detail_types));
     });
 
-    it('flush_all must be callable before reading events (API shape check)', () => {
+    it('flush_all must be callable before reading events (API shape check)', async () => {
         // 验证 flush_all 作为函数存在，可被 get_capture_data 调用
         // 此测试不实际调用 flush_all（需要 IndexedDB 环境），仅验证导入路径
-        const import_path = '../src/background/storage';
-        expect(async () => {
-            const mod = await import(import_path);
-            expect(typeof mod.flush_all).toBe('function');
-        }).not.toThrow();
+        const storage_module = await import('../src/background/storage');
+
+        expect(typeof storage_module.flush_all).toBe('function');
     });
 });

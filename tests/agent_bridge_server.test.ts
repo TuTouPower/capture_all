@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { create_bridge_server } from '../src/agent/bridge/server';
 
-const token = 'test-token-123';
+const token = '<TEST_BRIDGE_TOKEN>';
 let cleanup: (() => Promise<void>) | null = null;
 
 async function start_test_server() {
@@ -70,6 +71,57 @@ function post_command(server_url: string, body: unknown): Promise<{ status: numb
     });
 }
 
+function post_partial_body(
+    server_url: string,
+    headers: Record<string, string>,
+): Promise<{ status: number; data: unknown }> {
+    return new Promise((resolve, reject) => {
+        const url = new URL('/extension/result', server_url);
+        const request = http.request(
+            {
+                hostname: url.hostname,
+                port: url.port,
+                path: url.pathname,
+                method: 'POST',
+                agent: false,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...headers,
+                },
+            },
+            (response) => {
+                const chunks: Buffer[] = [];
+
+                response.on(
+                    'data',
+                    (chunk: Buffer) => chunks.push(chunk),
+                );
+                response.on('end', () => {
+                    clearTimeout(timeout_id);
+                    request.destroy();
+                    resolve({
+                        status: response.statusCode || 0,
+                        data: JSON.parse(
+                            Buffer.concat(chunks).toString(),
+                        ) as unknown,
+                    });
+                });
+            },
+        );
+        const timeout_id = setTimeout(() => {
+            request.destroy();
+            reject(new Error('Bridge waited for unfinished body'));
+        }, 1000);
+
+        request.on('error', (error) => {
+            clearTimeout(timeout_id);
+            reject(error);
+        });
+        request.flushHeaders();
+        request.write('{');
+    });
+}
+
 /**
  * GET /extension/command using raw http.get (agent:false) to bypass
  * undici's connection pool for compatibility with concurrent tests.
@@ -134,6 +186,155 @@ describe('bridge server', () => {
         expect(response.status).toBe(401);
     });
 
+    it('allows authenticated requests without an Origin header', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('allows requests from a Chrome extension origin', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Origin: origin,
+            },
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+        expect(response.headers.get('Vary')).toContain('Origin');
+    });
+
+    it('rejects requests from a web page origin', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Origin: 'https://example.com',
+            },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+        expect(await response.json()).toEqual({
+            ok: false,
+            error: {
+                code: 'ORIGIN_NOT_ALLOWED',
+                message: 'Origin is not allowed',
+            },
+        });
+    });
+
+    it('rejects health checks from a web page origin', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/health`, {
+            headers: { Origin: 'http://localhost:3000' },
+        });
+
+        expect(response.status).toBe(403);
+    });
+
+    it('accepts preflight from a Chrome extension origin', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'OPTIONS',
+            headers: {
+                Origin: origin,
+                'Access-Control-Request-Method': 'POST',
+                'Access-Control-Request-Headers': 'authorization,content-type',
+            },
+        });
+
+        expect(response.status).toBe(204);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+        expect(response.headers.get('Access-Control-Allow-Methods')).toBe(
+            'GET, POST, OPTIONS',
+        );
+        expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
+            'Authorization, Content-Type',
+        );
+    });
+
+    it('accepts preflight without an Origin header', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'OPTIONS',
+        });
+
+        expect(response.status).toBe(204);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('rejects preflight from an invalid browser origin', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'OPTIONS',
+            headers: { Origin: 'null' },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it('rejects preflight from a web page origin', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'OPTIONS',
+            headers: { Origin: 'https://example.com' },
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    });
+
+    it.each([
+        'null',
+        'chrome-extension://short-id',
+        'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/path',
+        'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaq',
+    ])('rejects invalid browser origin %s', async (origin) => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Origin: origin,
+            },
+        });
+
+        expect(response.status).toBe(403);
+    });
+
+    it.each([
+        undefined,
+        'Basic dGVzdA==',
+        'Bearer wrong-token-12',
+        'Bearer short',
+        `Bearer ${token}extra`,
+        'Bearer test-token-999',
+    ])('rejects invalid authorization header %s', async (authorization) => {
+        const server = await start_test_server();
+        const headers = authorization
+            ? { Authorization: authorization }
+            : undefined;
+        const response = await fetch(`${server.url}/mcp/status`, { headers });
+
+        expect(response.status).toBe(401);
+        expect(await response.json()).toEqual({
+            ok: false,
+            error: {
+                code: 'TOKEN_INVALID',
+                message: 'Invalid token',
+            },
+        });
+    });
+
     it('returns 400 for invalid json body', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/heartbeat`, {
@@ -166,6 +367,200 @@ describe('bridge server', () => {
             error: {
                 code: 'PAYLOAD_TOO_LARGE',
                 message: 'JSON body is too large',
+            },
+        });
+    });
+
+    it('accepts extension results larger than the default limit', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        const command_response = fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: 'captures.list',
+                payload: {},
+                timeout_ms: 5000,
+            }),
+        });
+        const command = await take_next_command(server.url);
+        const large_value = 'x'.repeat(2 * 1024 * 1024);
+        const result_body = JSON.stringify({
+            command_id: command.command_id,
+            ok: true,
+            data: { value: large_value },
+        });
+        let result_response: Response | undefined;
+
+        try {
+            expect(Buffer.byteLength(result_body)).toBeGreaterThan(
+                1024 * 1024,
+            );
+            result_response = await fetch(`${server.url}/extension/result`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: result_body,
+            });
+        } finally {
+            if (!result_response?.ok) {
+                await fetch(`${server.url}/extension/result`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        command_id: command.command_id,
+                        ok: true,
+                        data: { value: '' },
+                    }),
+                });
+            }
+        }
+
+        expect(result_response?.status).toBe(200);
+        const command_result = await command_response;
+        const result = await command_result.json() as {
+            command_id: string;
+            ok: boolean;
+            data: { value: string };
+        };
+
+        expect(command_result.status).toBe(200);
+        expect(result.command_id).toBe(command.command_id);
+        expect(result.ok).toBe(true);
+        expect(result.data.value).toHaveLength(large_value.length);
+        expect(createHash('sha256').update(result.data.value).digest('hex'))
+            .toBe(createHash('sha256').update(large_value).digest('hex'));
+    });
+
+    it('accepts an exact 32 MiB extension result', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        const command_response = fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: 'captures.list',
+                payload: {},
+                timeout_ms: 5000,
+            }),
+        });
+        const command = await take_next_command(server.url);
+        const limit_bytes = 32 * 1024 * 1024;
+        const result_json = JSON.stringify({
+            command_id: command.command_id,
+            ok: true,
+            data: { accepted: true },
+        });
+        const body = result_json.padEnd(limit_bytes, ' ');
+
+        expect(Buffer.byteLength(body)).toBe(limit_bytes);
+        const response = await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body,
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ ok: true });
+        expect(await (await command_response).json()).toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { accepted: true },
+        });
+    }, 30000);
+
+    it('rejects extension results larger than 32 MiB', async () => {
+        const server = await start_test_server();
+        const oversized_bytes = 32 * 1024 * 1024 + 1;
+        const body = `${' '.repeat(oversized_bytes - 1)}{`;
+
+        expect(Buffer.byteLength(body)).toBe(oversized_bytes);
+        const response = await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body,
+        });
+
+        expect(response.status).toBe(413);
+        expect(await response.json()).toEqual({
+            ok: false,
+            error: {
+                code: 'PAYLOAD_TOO_LARGE',
+                message: 'JSON body is too large',
+            },
+        });
+    }, 30000);
+
+    it('authenticates extension results before reading the body', async () => {
+        const server = await start_test_server();
+        const response = await post_partial_body(server.url, {
+            Authorization: 'Bearer invalid-token',
+        });
+
+        expect(response.status).toBe(401);
+        expect(response.data).toEqual({
+            ok: false,
+            error: {
+                code: 'TOKEN_INVALID',
+                message: 'Invalid token',
+            },
+        });
+    });
+
+    it('checks extension result Origin before reading the body', async () => {
+        const server = await start_test_server();
+        const response = await post_partial_body(server.url, {
+            Authorization: `Bearer ${token}`,
+            Origin: 'https://example.com',
+        });
+
+        expect(response.status).toBe(403);
+        expect(response.data).toEqual({
+            ok: false,
+            error: {
+                code: 'ORIGIN_NOT_ALLOWED',
+                message: 'Origin is not allowed',
             },
         });
     });

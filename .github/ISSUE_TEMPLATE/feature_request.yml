@@ -1,0 +1,70 @@
+name: Feature request
+description: Propose a focused Capture All improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem before proposing implementation details. Do not include real capture data, credentials, private URLs, or browser content.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What authorized debugging or analysis workflow is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior and success criteria.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional implementation or UI direction.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Extension popup or dashboard
+        - Capture pipeline
+        - Network or CDP capture
+        - Export
+        - Bridge
+        - MCP server
+        - Privacy or security
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy_security
+    attributes:
+      label: Privacy, permission, and security impact
+      description: Explain whether this changes captured data, defaults, browser permissions, Bridge access, MCP exposure, export behavior, or retention.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: checkboxes
+    id: sensitive_data
+    attributes:
+      label: Sensitive-data confirmation
+      options:
+        - label: This request uses only synthetic examples and contains no real tokens, credentials, private browser data, or unredacted captures.
+          required: true

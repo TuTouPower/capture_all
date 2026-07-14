@@ -3,7 +3,7 @@ import { create_bridge_server } from '../src/agent/bridge/server';
 import { BridgeMcpClient } from '../src/agent/mcp/client';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from '../src/agent/mcp/tools';
 
-const token = 'test-token-123';
+const token = '<TEST_BRIDGE_TOKEN>';
 let cleanup: (() => Promise<void>) | null = null;
 
 async function start_test_server() {

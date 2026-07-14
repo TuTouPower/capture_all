@@ -1,9 +1,19 @@
 // @vitest-environment jsdom
 // tests/integration_page.test.ts
 // T0003: 验证 integrations 页/侧边栏入口/死代码已彻底移除
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+
+vi.mock('../src/background/app_log_storage', () => ({
+    get_app_log_transport: () => ({
+        write: vi.fn(),
+        flush: vi.fn(),
+        get_entries: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+        clear: vi.fn(),
+    }),
+}));
 
 // ── 模块级行为测试 ──────────────────────────────────────────────────────
 import * as integrations_mod from '../src/dashboard/dashboard_integrations';

@@ -1,0 +1,15 @@
+{
+    "mcpServers": {
+        "capture-all": {
+            "command": "node",
+            "args": [
+                "-e",
+                "const { resolve } = require('node:path'); const { pathToFileURL } = require('node:url'); const project_dir = process.env.CLAUDE_PROJECT_DIR || process.cwd(); import(pathToFileURL(resolve(project_dir, 'artifacts/mcp/mcp.mjs')).href);"
+            ],
+            "env": {
+                "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831",
+                "CAPTURE_ALL_BRIDGE_TOKEN": "<YOUR_BRIDGE_TOKEN>"
+            }
+        }
+    }
+}

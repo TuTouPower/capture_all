@@ -89,8 +89,4 @@ declare namespace chrome {
             removeListener(callback: (delta: { id: number; state?: { current: string } }) => void): void;
         };
     }
-
-    namespace scripting {
-        function executeScript(options: { target: { tabId: number }; files: string[] }): Promise<any>;
-    }
 }

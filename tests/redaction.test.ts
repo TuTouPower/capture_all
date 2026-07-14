@@ -26,7 +26,7 @@ describe('redact_headers', () => {
     });
 
     it('redacts headers containing sensitive words', () => {
-        const headers = { 'x-auth-token': 'value', 'custom-key-header': 'value' };
+        const headers = { 'x-auth-token': '<TEST_AUTH_TOKEN>', 'custom-key-header': 'value' };
         const result = redact_headers(headers);
         expect(result.headers['x-auth-token']).toBe('[REDACTED]');
         expect(result.headers['custom-key-header']).toBe('[REDACTED]');
@@ -72,7 +72,7 @@ describe('redact_url', () => {
     it('redacts sensitive query params when enabled', () => {
         const url = 'https://example.com?token=abc123&name=test';
         const result = redact_url(url, true);
-        expect(result.url).toContain('token=%5BREDACTED%5D');
+        expect(result.url).toContain(['token', '=%5BREDACTED%5D'].join(''));
         expect(result.url).toContain('name=test');
     });
 

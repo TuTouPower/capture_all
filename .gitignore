@@ -1,9 +1,11 @@
+.mcp.json
 node_modules/
 artifacts/
+data/
+docs/archive/
 .worktrees/
 .claude/
 *.log
 *.zip
 *.Zone.Identifier
 .DS_Store
-data/

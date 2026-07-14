@@ -28,7 +28,8 @@ export type AgentErrorCode =
     | 'NO_ACTIVE_RECORDING'
     | 'EXPORT_FAILED'
     | 'STORAGE_READ_FAILED'
-    | 'PAYLOAD_TOO_LARGE';
+    | 'PAYLOAD_TOO_LARGE'
+    | 'ORIGIN_NOT_ALLOWED';
 
 export interface AgentError {
     code: AgentErrorCode;

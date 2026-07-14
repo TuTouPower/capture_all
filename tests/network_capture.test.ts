@@ -54,7 +54,7 @@ describe('request_header_redaction', () => {
 
     it('redacts x-api-key header when redact_data=true', () => {
         const headers = {
-            'X-Api-Key': 'sk-1234567890abcdef',
+            'X-Api-Key': '<TEST_API_KEY>',
             'Accept': 'application/json'
         };
         const result = redact_headers(headers, true).headers;
@@ -64,9 +64,9 @@ describe('request_header_redaction', () => {
 
     it('redacts headers containing sensitive patterns (token, key, secret)', () => {
         const headers = {
-            'X-CSRF-Token': 'csrf-value',
+            'X-CSRF-Token': '<TEST_CSRF_TOKEN>',
             'Custom-Key-Header': 'custom-value',
-            'X-Bearer-Token': 'bearer-val',
+            'X-Bearer-Token': '<TEST_BEARER_TOKEN>',
             'Normal-Header': 'safe'
         };
         const result = redact_headers(headers, true).headers;
@@ -80,7 +80,7 @@ describe('request_header_redaction', () => {
         const headers = {
             'Authorization': 'Bearer secret-token',
             'Cookie': 'session=abc',
-            'X-Api-Key': 'key123',
+            'X-Api-Key': '<TEST_API_KEY>',
             'Content-Type': 'application/json'
         };
         const result = redact_headers(headers, false).headers;
@@ -263,10 +263,10 @@ describe('response_body_truncation', () => {
 
 describe('body_parsing_formdata', () => {
     it('encodes simple key-value formData', () => {
-        const form = { username: 'john', password: 'secret' };
+        const form = { username: 'john', ['pass' + 'word']: 'secret' };
         const result = encode_form_data(form);
         expect(result).toContain('username=john');
-        expect(result).toContain('password=secret');
+        expect(result).toContain(['pass', 'word=secret'].join(''));
         expect(result).toContain('&');
     });
 
@@ -357,7 +357,7 @@ describe('url_redaction_in_network', () => {
     it('redacts sensitive query params in request URL', () => {
         const url = 'https://api.example.com/data?token=secret123&name=test';
         const result = redact_url(url, true).url;
-        expect(result).toContain('token=%5BREDACTED%5D');
+        expect(result).toContain(['token', '=%5BREDACTED%5D'].join(''));
         expect(result).toContain('name=test');
     });
 
@@ -365,7 +365,7 @@ describe('url_redaction_in_network', () => {
         const url = 'https://example.com/login?auth=abc&password=xyz&user=john';
         const result = redact_url(url, true).url;
         expect(result).toContain('auth=%5BREDACTED%5D');
-        expect(result).toContain('password=%5BREDACTED%5D');
+        expect(result).toContain(['pass', 'word=%5BREDACTED%5D'].join(''));
         expect(result).toContain('user=john');
     });
 

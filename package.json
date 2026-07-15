@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "scan:tracked-tree": "node scripts/scan_tracked_tree.mjs",
+    "generate:icons": "node scripts/generate_icons.mjs",
     "serve:e2e": "npm run build && vite preview --host 127.0.0.1 --port 4174",
     "bridge": "tsx src/agent/bridge/main.ts",
     "mcp": "tsx src/agent/mcp/main.ts",

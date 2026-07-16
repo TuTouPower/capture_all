@@ -10,6 +10,7 @@ docs/archive/
 *.zip
 *.Zone.Identifier
 .DS_Store
+coverage/
 
 # 本地 Claude / OP skill 软链（bind 产物；内容在 OP_HOME）
 .claude/skills/

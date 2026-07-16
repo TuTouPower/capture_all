@@ -19,15 +19,16 @@ async function start_test_server() {
 }
 
 async function take_next_command(bridge_url: string) {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
         const response = await fetch(`${bridge_url}/extension/command`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
         });
         const command = await response.json();
 
         if (command) {
             return command;
         }
+        await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     throw new Error('No command queued');
@@ -57,8 +58,8 @@ describe('BridgeMcpClient', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const command_response = client.send_command('captures.get', { session_id: 'session-1' }, 5000);
@@ -71,7 +72,7 @@ describe('BridgeMcpClient', () => {
 
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 'session-1' } }),
         });
 
@@ -135,8 +136,8 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -153,7 +154,7 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 'sess-1' } }),
         });
 
@@ -170,8 +171,8 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, { name: 'list_sessions' });
@@ -185,7 +186,7 @@ describe('execute_mcp_tool', () => {
         const sessions = [{ session_id: 's1', name: 'Test 1' }, { session_id: 's2', name: 'Test 2' }];
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { sessions } }),
         });
 
@@ -202,8 +203,8 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -220,7 +221,7 @@ describe('execute_mcp_tool', () => {
         const sources = [{ source: 'network_requests', count: 5 }];
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { sources } }),
         });
 
@@ -237,8 +238,8 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -255,7 +256,7 @@ describe('execute_mcp_tool', () => {
         const timeline = { total: 2, records: [{ record_id: 'r1' }, { record_id: 'r2' }] };
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: timeline }),
         });
 
@@ -272,8 +273,8 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const tool_promise = execute_mcp_tool(client, {
@@ -289,7 +290,7 @@ describe('execute_mcp_tool', () => {
 
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { export_url: 'blob:...' } }),
         });
 

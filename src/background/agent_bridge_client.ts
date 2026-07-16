@@ -6,6 +6,18 @@ import { get_app_log_transport } from './app_log_storage';
 
 const logger = new Logger('background/bridge', get_app_log_transport());
 const BRIDGE_ERROR_LOG_INTERVAL_MS = 60_000;
+const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
+
+// Stable per-service-worker lifetime id until T0006 persists browser_no/instance.
+let runtime_instance_id = `inst_${Math.random().toString(36).slice(2, 10)}`;
+
+export function set_bridge_instance_id_for_tests(instance_id: string): void {
+    runtime_instance_id = instance_id;
+}
+
+export function get_bridge_instance_id(): string {
+    return runtime_instance_id;
+}
 
 export interface AgentBridgeClientDeps {
     get_user_config: () => Promise<AgentBridgeUserConfig>;
@@ -151,6 +163,7 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
+            instance_id: runtime_instance_id,
             extension_version: deps.extension_version,
             active_capture_id: status.active_capture_id
         })
@@ -162,7 +175,10 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
 async function fetch_command(url: string, token: string): Promise<PendingCommand | null> {
     const response = await fetch(`${url}/extension/command`, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            [INSTANCE_HEADER]: runtime_instance_id,
+        }
     });
 
     if (response.status === 204) return null;
@@ -174,7 +190,11 @@ async function fetch_command(url: string, token: string): Promise<PendingCommand
 async function send_result(url: string, token: string, result: unknown): Promise<void> {
     const response = await fetch(`${url}/extension/result`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            [INSTANCE_HEADER]: runtime_instance_id,
+        },
         body: JSON.stringify(result)
     });
 

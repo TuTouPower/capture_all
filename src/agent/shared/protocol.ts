@@ -29,7 +29,9 @@ export type AgentErrorCode =
     | 'EXPORT_FAILED'
     | 'STORAGE_READ_FAILED'
     | 'PAYLOAD_TOO_LARGE'
-    | 'ORIGIN_NOT_ALLOWED';
+    | 'ORIGIN_NOT_ALLOWED'
+    | 'TARGET_REQUIRED'
+    | 'TARGET_NOT_FOUND';
 
 export interface AgentError {
     code: AgentErrorCode;
@@ -101,13 +103,28 @@ export interface AgentRecordDetail<TData = unknown> {
     data: TData;
 }
 
-export interface AgentStatus {
-    bridge_version: string;
-    bridge_url: string;
-    extension_online: boolean;
+export interface AgentExtensionStatus {
+    instance_id: string;
+    browser_no: number | null;
+    browser_label: string | null;
+    online: boolean;
     extension_version: string | null;
     active_capture_id: string | null;
     pending_commands: number;
+}
+
+export interface AgentStatus {
+    bridge_version: string;
+    bridge_url: string;
+    /** @deprecated use extensions; true if any instance online */
+    extension_online: boolean;
+    /** @deprecated use extensions */
+    extension_version: string | null;
+    /** @deprecated use extensions */
+    active_capture_id: string | null;
+    pending_commands: number;
+    extensions: AgentExtensionStatus[];
+    online_count: number;
 }
 
 export function build_record_id(source: string, native_id: string): string {

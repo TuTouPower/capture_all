@@ -4,6 +4,7 @@
 
 ### current_task
 
+（无 in_progress；T0004–T0010 均为 `awaiting_gate`，待闸门 A）
 
 ### last_completed
 
@@ -11,11 +12,41 @@ T0003
 
 ### next_step
 
-全部 task 已完成（T0001/T0002/T0003）。2026-07-14 卫生：skill bind heavy、settings 去硬编码 token、导航改 op_*、清 e2e/T0002/artifacts、补 CLAUDE/test 纪律。可选：/optriage 扫剩余 open issues、/opintake 新需求。
+1. **闸门 A**：人审 `op_execution/specs/T0004_*.md` … `T0010_*.md` 与 `tasks_list.json` 切分
+2. 人批后：各 spec `status: approved`，task `awaiting_gate` → `ready`
+3. `/oprun` 按 depends_on 领取（一 TID 一 commit；禁止跳 merge gate）
+
+推荐顺序：`T0004 → T0005 → T0006 → T0009`；`T0007` 可在 T0004 后与 T0005/T0006 并行；`T0008` 在 T0005 后；`T0010` 收口。
+
+## 本批次（2026-07-16 intake）
+
+主题：**MCP/Bridge 边界重构 + 多浏览器自动绑定（用户只设浏览器编号）**
+
+| TID | 标题 | status | depends_on |
+|---|---|---|---|
+| T0004 | Bridge 多实例注册表 + 每实例队列 | awaiting_gate | — |
+| T0005 | Bridge enroll + instance_token hash | awaiting_gate | T0004 |
+| T0006 | 扩展 browser_no + 自动连接 | awaiting_gate | T0005 |
+| T0007 | MCP list_browsers + browser_no 透传 + schema 瘦身 | awaiting_gate | T0004 |
+| T0008 | SessionStart 自动 bridge + 注入 mcp token | awaiting_gate | T0005 |
+| T0009 | 本机配对批准 S1 | awaiting_gate | T0005, T0006 |
+| T0010 | 文档对齐 agent_mcp 边界 | awaiting_gate | T0006–T0009 |
+
+### 产品默认决策（写入 draft spec，待闸门 A 确认）
+
+1. MCP 不存浏览器 token；只持 bridge 通道配置
+2. Bridge 存注册表与 token hash，负责路由/顶替
+3. 用户只设 `browser_no`；对话用编号
+4. 多 online 写操作必须指定编号（`TARGET_REQUIRED`）
+5. 安全默认 S1 配对批准；S0 仅 dev
+6. 同号 re-enroll 顶替旧连接
+
+### 代码侧已合入、待 T0010 写入 blueprint
+
+- 大导出 `output_path` / 瘦身 / **>1MB 自动落盘**（`da722d5`, `5649916`）
 
 ## 关键上下文
 
-- T0001（缩放滑块）+ T0002（标记点击）已完成（历史合并 commit 54d3250，流程有偏差已记 decisions）
-- T0003 已完成（8fcfb70 曾绕 gate，已记 process-deviation）
-- 本机：`.claude/skills` 已 bind；`OP_DOCS_DIR=docs/omni_powers`；Bridge 用 `CAPTURE_ALL_BRIDGE_TOKEN`
-- open issues 仍多（archive 捞取的 P2/P3 gap）——下次 /optriage
+- T0001–T0003 已 done（历史流程偏差见 decisions）
+- 本机：`.claude/skills` heavy bind；`OP_DOCS_DIR=docs/omni_powers`
+- open issues 仍多——可另 `/optriage`，与本批次解耦

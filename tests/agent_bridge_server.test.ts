@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { create_bridge_server } from '../src/agent/bridge/server';
 
 const token = '<TEST_BRIDGE_TOKEN>';
+const DEFAULT_INSTANCE_ID = 'inst_test_1';
+const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
 let cleanup: (() => Promise<void>) | null = null;
 
 async function start_test_server() {
@@ -21,10 +23,10 @@ async function start_test_server() {
     return server;
 }
 
-async function take_next_command(server_url: string) {
+async function take_next_command(server_url: string, instance_id = DEFAULT_INSTANCE_ID) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
         const response = await fetch(`${server_url}/extension/command`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, [INSTANCE_HEADER]: instance_id },
         });
         const command = await response.json();
 
@@ -129,7 +131,7 @@ function post_partial_body(
  * GET /extension/command using raw http.get (agent:false) to bypass
  * undici's connection pool for compatibility with concurrent tests.
  */
-function get_command(server_url: string): Promise<unknown> {
+function get_command(server_url: string, instance_id = DEFAULT_INSTANCE_ID): Promise<unknown> {
     return new Promise((resolve, reject) => {
         const url = new URL('/extension/command', server_url);
         http.get(
@@ -138,7 +140,7 @@ function get_command(server_url: string): Promise<unknown> {
                 port: url.port,
                 path: url.pathname,
                 agent: false,
-                headers: { Authorization: `Bearer ${token}` },
+                headers: { Authorization: `Bearer ${token}`, [INSTANCE_HEADER]: instance_id },
             },
             (res) => {
                 const chunks: Buffer[] = [];
@@ -361,7 +363,7 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1'.repeat(1024 * 1024), active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1'.repeat(1024 * 1024), active_capture_id: null }),
         });
 
         expect(response.status).toBe(413);
@@ -384,6 +386,7 @@ describe('bridge server', () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                instance_id: DEFAULT_INSTANCE_ID,
                 extension_version: '1.0.0',
                 active_capture_id: null,
             }),
@@ -415,21 +418,25 @@ describe('bridge server', () => {
                 1024 * 1024,
             );
             result_response = await fetch(`${server.url}/extension/result`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+            },
                 body: result_body,
             });
         } finally {
             if (!result_response?.ok) {
                 await fetch(`${server.url}/extension/result`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+            },
                     body: JSON.stringify({
                         command_id: command.command_id,
                         ok: true,
@@ -465,6 +472,7 @@ describe('bridge server', () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                instance_id: DEFAULT_INSTANCE_ID,
                 extension_version: '1.0.0',
                 active_capture_id: null,
             }),
@@ -497,6 +505,8 @@ describe('bridge server', () => {
             headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
             },
             body,
         });
@@ -521,6 +531,8 @@ describe('bridge server', () => {
             headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
             },
             body,
         });
@@ -574,7 +586,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const response = await fetch(`${server.url}/mcp/command`, {
@@ -617,7 +629,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const command_response = fetch(`${server.url}/mcp/command`, {
@@ -630,7 +642,7 @@ describe('bridge server', () => {
 
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID },
             body: JSON.stringify({ command_id: command.command_id, ok: true, data: { sessions: [] } }),
         });
 
@@ -660,7 +672,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
         });
 
         // Fire 3 concurrent POSTs using separate TCP connections (agent:false).
@@ -685,17 +697,17 @@ describe('bridge server', () => {
         // Resolve all three (order is non-deterministic with concurrent connections)
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID },
             body: JSON.stringify({ command_id: cmd1.command_id, ok: true, data: {} }),
         });
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID },
             body: JSON.stringify({ command_id: cmd2.command_id, ok: true, data: {} }),
         });
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID },
             body: JSON.stringify({ command_id: cmd3.command_id, ok: true, data: {} }),
         });
 
@@ -714,7 +726,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
         });
 
         // Fire a request that will be enqueued but never resolved
@@ -744,7 +756,7 @@ describe('bridge server', () => {
             await fetch(`${server.url}/extension/heartbeat`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+                body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
             });
 
             const command_response = fetch(`${server.url}/mcp/command`, {
@@ -761,7 +773,11 @@ describe('bridge server', () => {
             const large_content = 'x'.repeat(1 * 1024 * 1024 + 10);
             await fetch(`${server.url}/extension/result`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                },
                 body: JSON.stringify({
                     command_id: command.command_id,
                     ok: true,
@@ -791,7 +807,7 @@ describe('bridge server', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
         });
 
         const command_response = fetch(`${server.url}/mcp/command`, {
@@ -807,7 +823,11 @@ describe('bridge server', () => {
         const command = await take_next_command(server.url);
         await fetch(`${server.url}/extension/result`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+            },
             body: JSON.stringify({
                 command_id: command.command_id,
                 ok: true,
@@ -819,6 +839,93 @@ describe('bridge server', () => {
             command_id: command.command_id,
             ok: true,
             data: { format: 'json', content: '{"ok":true}' },
+        });
+    });
+
+    it('multi-instance: status lists two online extensions', async () => {
+        const server = await start_test_server();
+        for (const id of ['inst_a', 'inst_b']) {
+            await fetch(`${server.url}/extension/heartbeat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instance_id: id,
+                    browser_no: id === 'inst_a' ? 1 : 2,
+                    extension_version: '1.0.0',
+                    active_capture_id: null,
+                }),
+            });
+        }
+        const status = await (await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })).json() as any;
+        expect(status.online_count).toBe(2);
+        expect(status.extensions.filter((e: any) => e.online)).toHaveLength(2);
+        expect(status.extensions.map((e: any) => e.instance_id).sort()).toEqual(['inst_a', 'inst_b']);
+    });
+
+    it('multi-instance: commands route per instance and isolation', async () => {
+        const server = await start_test_server();
+        for (const [id, no] of [['inst_a', 1], ['inst_b', 2]] as const) {
+            await fetch(`${server.url}/extension/heartbeat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instance_id: id,
+                    browser_no: no,
+                    extension_version: '1.0.0',
+                    active_capture_id: null,
+                }),
+            });
+        }
+
+        const cmd_p = fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'captures.list', payload: { browser_no: 1 } }),
+        });
+        const for_a = await take_next_command(server.url, 'inst_a');
+        expect(for_a.type).toBe('captures.list');
+        // B should not see A's command
+        const b_poll = await fetch(`${server.url}/extension/command`, {
+            headers: { Authorization: `Bearer ${token}`, [INSTANCE_HEADER]: 'inst_b' },
+        });
+        expect(await b_poll.json()).toBeNull();
+
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: 'inst_a',
+            },
+            body: JSON.stringify({ command_id: for_a.command_id, ok: true, data: { captures: [] } }),
+        });
+        expect((await (await cmd_p).json()).ok).toBe(true);
+    });
+
+    it('multi-instance: write without target returns TARGET_REQUIRED', async () => {
+        const server = await start_test_server();
+        for (const id of ['inst_a', 'inst_b']) {
+            await fetch(`${server.url}/extension/heartbeat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instance_id: id,
+                    extension_version: '1.0.0',
+                    active_capture_id: null,
+                }),
+            });
+        }
+        const response = await fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'capture.start', payload: {} }),
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+            ok: false,
+            error: { code: 'TARGET_REQUIRED' },
         });
     });
 });

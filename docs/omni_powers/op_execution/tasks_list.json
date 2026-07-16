@@ -41,6 +41,138 @@
       ],
       "eval": "required",
       "blocked_by": null
+    },
+    {
+      "id": "T0004",
+      "title": "feat: Bridge 多扩展实例注册表与按实例命令队列",
+      "status": "done",
+      "spec": "specs/T0004_bridge-multi-instance-registry.md",
+      "depends_on": [],
+      "workset": [
+        "src/agent/bridge/server.ts",
+        "src/agent/bridge/command_queue.ts",
+        "src/agent/shared/protocol.ts",
+        "tests/agent_bridge_server.test.ts",
+        "tests/agent_bridge_queue.test.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0005",
+      "title": "feat: Bridge 自动 enroll 与 instance_token（hash 存储）",
+      "status": "ready",
+      "spec": "specs/T0005_bridge-auto-enroll-token.md",
+      "depends_on": [
+        "T0004"
+      ],
+      "workset": [
+        "src/agent/bridge/server.ts",
+        "src/agent/bridge/config.ts",
+        "src/agent/shared/protocol.ts",
+        "tests/agent_bridge_server.test.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0006",
+      "title": "feat: 扩展浏览器编号设置 + 自动连接 enroll（主路径去手贴 token）",
+      "status": "ready",
+      "spec": "specs/T0006_extension-browser-no-auto-connect.md",
+      "depends_on": [
+        "T0005"
+      ],
+      "workset": [
+        "src/background/agent_bridge_client.ts",
+        "src/shared/agent_bridge_config.ts",
+        "src/shared/constants.ts",
+        "src/dashboard/dashboard.ts",
+        "src/dashboard/dashboard_settings.ts",
+        "src/shared/ui_strings.ts",
+        "tests/agent_bridge_client.test.ts",
+        "tests/agent_bridge_config.test.ts",
+        "tests/settings_ui.test.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0007",
+      "title": "feat: MCP list_browsers + browser_no 路由透传 + schema 瘦身",
+      "status": "ready",
+      "spec": "specs/T0007_mcp-browser-no-and-schema-slim.md",
+      "depends_on": [
+        "T0004"
+      ],
+      "workset": [
+        "src/agent/mcp/main.ts",
+        "src/agent/mcp/tools.ts",
+        "src/agent/mcp/schemas.ts",
+        "src/agent/mcp/client.ts",
+        "src/agent/shared/protocol.ts",
+        "tests/mcp_schema.test.ts",
+        "tests/agent_mcp_client.test.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0008",
+      "title": "feat: SessionStart 自动拉起 Bridge 并注入 mcp 通道 token",
+      "status": "ready",
+      "spec": "specs/T0008_sessionstart-auto-bridge-mcp-token.md",
+      "depends_on": [
+        "T0005"
+      ],
+      "workset": [
+        "src/agent/bridge/main.ts",
+        "src/agent/bridge/config.ts",
+        ".mcp.json.example",
+        "docs/mcp_usage.md"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0009",
+      "title": "feat: 本机配对批准（S1）保护 enroll",
+      "status": "ready",
+      "spec": "specs/T0009_local-pair-approval.md",
+      "depends_on": [
+        "T0005",
+        "T0006"
+      ],
+      "workset": [
+        "src/agent/bridge/server.ts",
+        "src/background/agent_bridge_client.ts",
+        "src/dashboard/dashboard_settings.ts",
+        "tests/agent_bridge_server.test.ts",
+        "tests/agent_bridge_client.test.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0010",
+      "title": "docs: 对齐 agent_mcp 蓝图与边界（多浏览器/自动绑定/大导出）",
+      "status": "ready",
+      "spec": "specs/T0010_docs-agent-mcp-boundary.md",
+      "depends_on": [
+        "T0006",
+        "T0007",
+        "T0008",
+        "T0009"
+      ],
+      "workset": [
+        "docs/omni_powers/op_blueprint/specs/agent_mcp.md",
+        "docs/omni_powers/op_blueprint/domain.md",
+        "docs/omni_powers/op_blueprint/conventions.md",
+        "docs/mcp_usage.md",
+        "docs/omni_powers/op_readme.md"
+      ],
+      "eval": "required",
+      "blocked_by": null
     }
   ]
 }

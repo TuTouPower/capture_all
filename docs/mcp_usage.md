@@ -5,12 +5,11 @@
 ## 快速开始
 
 1. 构建产物：`npm run build`
-2. 复制项目配置：`cp .mcp.json.example .mcp.json`
-3. 将 `.mcp.json` 中 `<YOUR_BRIDGE_TOKEN>` 替换为扩展设置中的 Bridge Token。`.mcp.json` 仅供本机使用，不提交到 Git。示例启动脚本通过 Claude Code 注入的 `CLAUDE_PROJECT_DIR` 定位构建产物，不依赖当前工作目录
-4. 使用同一 Token 启动 Bridge：`CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' node artifacts/bridge/bridge.mjs --port 17831 &`。兼容参数 `--token` 仍可用；同时配置时 `--token` 优先
-5. 重开 Claude Code 会话，确认扩展在线：`get_status`
-6. 开始采集：`start_recording`，结束采集：`stop_recording`
-7. 查看结果：`list_captures` → `get_all_capture_data`
+2. 复制项目配置：`cp .mcp.json.example .mcp.json`。Bridge 首次启动自动生成 mcp 通道 token 并保存到 `.local/bridge_token`，无需手动填写 token。如需自定义 token，设置环境变量 `CAPTURE_ALL_BRIDGE_TOKEN` 或通过 `--token` 参数传入。`.mcp.json` 仅供本机使用，不提交到 Git。示例启动脚本通过 Claude Code 注入的 `CLAUDE_PROJECT_DIR` 定位构建产物，不依赖当前工作目录
+3. 启动 Bridge：`CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' node artifacts/bridge/bridge.mjs --port 17831 &`（可选，SessionStart hook 会自动拉起；若未设置 token 则自动生成并持久化）。兼容参数 `--token` 仍可用；同时配置时 `--token` 优先
+4. 重开 Claude Code 会话，确认扩展在线：`get_status`
+5. 开始采集：`start_recording`，结束采集：`stop_recording`
+6. 查看结果：`list_captures` → `get_all_capture_data`
 
 ## 工具列表
 

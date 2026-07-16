@@ -8,7 +8,7 @@
             ],
             "env": {
                 "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831",
-                "CAPTURE_ALL_BRIDGE_TOKEN": "<YOUR_BRIDGE_TOKEN>"
+                "CAPTURE_ALL_BRIDGE_TOKEN": "<AUTO_GENERATED_BY_BRIDGE>"
             }
         }
     }

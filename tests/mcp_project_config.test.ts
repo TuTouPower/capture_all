@@ -64,6 +64,6 @@ describe('project MCP example', () => {
 
         expect(config_values).not.toContain(expect.stringMatching(local_path));
         expect(server.env.CAPTURE_ALL_BRIDGE_URL).toBe('http://127.0.0.1:17831');
-        expect(server.env.CAPTURE_ALL_BRIDGE_TOKEN).toBe('<YOUR_BRIDGE_TOKEN>');
+        expect(server.env.CAPTURE_ALL_BRIDGE_TOKEN).toBe('<AUTO_GENERATED_BY_BRIDGE>');
     });
 });

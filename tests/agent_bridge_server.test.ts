@@ -11,13 +11,14 @@ const DEFAULT_INSTANCE_ID = 'inst_test_1';
 const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
 let cleanup: (() => Promise<void>) | null = null;
 
-async function start_test_server() {
+async function start_test_server(overrides?: { dev_mode?: boolean }) {
     const server = await create_bridge_server({
         host: '127.0.0.1',
         port: 0,
         token,
         command_timeout_ms: 30000,
         full_data_timeout_ms: 120000,
+        dev_mode: overrides?.dev_mode ?? false,
     });
     cleanup = server.close;
     return server;
@@ -1479,5 +1480,286 @@ describe('bridge server', () => {
         expect(json.pairable).toBe(true);
         expect(typeof json.bridge_version).toBe('string');
         expect(json.enroll_path).toBe('/extension/enroll');
+    });
+
+    // ─── T0009 local pair approval S1 ───
+
+    it('AC-1: S1 default rejects extension enroll without pairing', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(403);
+        const json = await response.json();
+        expect(json.ok).toBe(false);
+        expect(json.error.code).toBe('PAIRING_REQUIRED');
+        expect(json.error.message).toContain('pair');
+    });
+
+    it('AC-1: MCP token enroll bypasses pairing check', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(typeof json.data.instance_token).toBe('string');
+    });
+
+    it('AC-1: S0 dev_mode allows extension enroll without pairing', async () => {
+        const server = await start_test_server({ dev_mode: true });
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(typeof json.data.instance_token).toBe('string');
+    });
+
+    it('pair status returns closed initially', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair/status`);
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.open).toBe(false);
+    });
+
+    it('POST /pair/open opens pairing and returns code', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ duration_minutes: 5 }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.pairing_code).toMatch(/^\d{6}$/);
+        expect(typeof json.data.expires_at).toBe('number');
+        expect(json.data.expires_at).toBeGreaterThan(Date.now());
+    });
+
+    it('POST /pair/open requires MCP auth', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('POST /pair/close closes pairing', async () => {
+        const server = await start_test_server();
+        await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        await fetch(`${server.url}/pair/close`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const status = await (await fetch(`${server.url}/pair/status`)).json();
+        expect(status.data.open).toBe(false);
+    });
+
+    it('POST /pair/close requires MCP auth', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair/close`, {
+            method: 'POST',
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('AC-2: pair approve allows enroll for approved browser_no', async () => {
+        const server = await start_test_server();
+        await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        await fetch(`${server.url}/pair/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_no: 3 }),
+        });
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 3, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.browser_no).toBe(3);
+        expect(typeof json.data.instance_token).toBe('string');
+    });
+
+    it('AC-2: non-approved browser_no still rejected after approve for another', async () => {
+        const server = await start_test_server();
+        await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        await fetch(`${server.url}/pair/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_no: 3 }),
+        });
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 4, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(403);
+        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+    });
+
+    it('AC-3: enroll with correct pairing_code succeeds', async () => {
+        const server = await start_test_server();
+        const open_res = await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const { pairing_code } = (await open_res.json()).data;
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 5, extension_version: '1.0.0', pairing_code }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(json.data.browser_no).toBe(5);
+    });
+
+    it('AC-3: enroll with wrong pairing_code is rejected', async () => {
+        const server = await start_test_server();
+        await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0', pairing_code: '000000' }),
+        });
+        expect(response.status).toBe(403);
+        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+    });
+
+    it('AC-3: enroll with pairing_code after pairing expires is rejected', async () => {
+        const server = await start_test_server();
+        const open_res = await fetch(`${server.url}/pair/open`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ duration_minutes: 0 }),
+        });
+        const { pairing_code } = (await open_res.json()).data;
+        await new Promise((r) => setTimeout(r, 10));
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0', pairing_code }),
+        });
+        expect(response.status).toBe(403);
+    });
+
+    it('AC-4: existing heartbeat with valid token bypasses pairing', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ instance_id, extension_version: '1.0.0', active_capture_id: null }),
+        });
+        expect(response.status).toBe(200);
+    });
+
+    it('approve reject when pairing is closed', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_no: 1 }),
+        });
+        expect(response.status).toBe(403);
+        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+    });
+
+    it('pair page returns HTML', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/pair`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/html');
     });
 });

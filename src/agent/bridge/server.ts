@@ -8,6 +8,20 @@ import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, t
 import { AgentCommandQueue } from './command_queue';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
 
+interface PairingState {
+    open: boolean;
+    code: string | null;
+    expires_at: number;
+    allowlist: Set<number>;
+}
+
+const PAIRING_DEFAULT_DURATION_MS = 5 * 60 * 1000;
+
+function generate_pairing_code(): string {
+    const n = randomBytes(4).readUInt32BE(0) % 900000 + 100000;
+    return String(n);
+}
+
 interface ExtensionInstance {
     instance_id: string;
     extension_version: string;
@@ -44,6 +58,13 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     const instances = new Map<string, ExtensionInstance>();
     const queues = new Map<string, AgentCommandQueue>();
     const command_owners = new Map<string, string>();
+    const pairing_state: PairingState = {
+        open: false,
+        code: null,
+        expires_at: 0,
+        allowlist: new Set(),
+    };
+    const is_s0 = Boolean(config.dev_mode);
 
     function get_or_create_queue(instance_id: string): AgentCommandQueue {
         let queue = queues.get(instance_id);
@@ -183,6 +204,72 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 });
             }
 
+            if (request.method === 'GET' && request.url === '/pair') {
+                return serve_pair_page(response, pairing_state, config.host, actual_port(server));
+            }
+
+            if (request.method === 'GET' && request.url === '/pair/status') {
+                return send_json(response, 200, { ok: true, data: build_pairing_status(pairing_state) });
+            }
+
+            if (request.method === 'POST' && request.url === '/pair/open') {
+                if (!is_authorized(request, config.token)) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+                    });
+                }
+                const body = await read_json(request).catch(() => ({}));
+                const duration_ms = typeof (body as Record<string, unknown>).duration_minutes === 'number'
+                    ? (body as Record<string, unknown>).duration_minutes as number * 60 * 1000
+                    : PAIRING_DEFAULT_DURATION_MS;
+                const now = Date.now();
+                pairing_state.open = true;
+                pairing_state.code = generate_pairing_code();
+                pairing_state.expires_at = now + duration_ms;
+                pairing_state.allowlist.clear();
+                return send_json(response, 200, {
+                    ok: true,
+                    data: {
+                        pairing_code: pairing_state.code,
+                        expires_at: pairing_state.expires_at,
+                    },
+                });
+            }
+
+            if (request.method === 'POST' && request.url === '/pair/close') {
+                if (!is_authorized(request, config.token)) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+                    });
+                }
+                pairing_state.open = false;
+                pairing_state.code = null;
+                pairing_state.expires_at = 0;
+                pairing_state.allowlist.clear();
+                return send_json(response, 200, { ok: true, data: { open: false } });
+            }
+
+            if (request.method === 'POST' && request.url === '/pair/approve') {
+                const body = await read_json(request).catch(() => ({}));
+                const browser_no = (body as Record<string, unknown>).browser_no;
+                if (typeof browser_no !== 'number' || !Number.isInteger(browser_no) || browser_no < 1) {
+                    return send_json(response, 400, {
+                        ok: false,
+                        error: { code: 'INVALID_QUERY', message: 'browser_no must be a positive integer' },
+                    });
+                }
+                if (!pairing_state.open || pairing_state.expires_at < Date.now()) {
+                    return send_json(response, 403, {
+                        ok: false,
+                        error: { code: 'PAIRING_REQUIRED', message: 'Pairing is not open. Open /pair page first.' },
+                    });
+                }
+                pairing_state.allowlist.add(browser_no);
+                return send_json(response, 200, { ok: true, data: { browser_no, approved: true } });
+            }
+
             if (request.method === 'POST' && request.url === '/extension/enroll') {
                 // S0: trust loopback + allowed chrome-extension origin (or mcp token bootstrap).
                 const has_mcp = is_authorized(request, config.token);
@@ -196,6 +283,21 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
                 const body = validate_enroll(await read_json(request));
                 const instance_id = body.instance_id || `inst_${randomBytes(8).toString('hex')}`;
+
+                // T0009 S1: extension origin must pass pairing check (MCP bypasses)
+                if (!has_mcp && !is_s0) {
+                    const allowed = is_enroll_allowed(pairing_state, body.browser_no, body.pairing_code);
+                    if (!allowed) {
+                        return send_json(response, 403, {
+                            ok: false,
+                            error: {
+                                code: 'PAIRING_REQUIRED',
+                                message: 'Local pair approval required. Open /pair page on this machine to allow this browser.',
+                            },
+                        });
+                    }
+                }
+
                 const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
                 const token_hash = hash_token(instance_token);
 
@@ -495,6 +597,7 @@ function validate_enroll(value: unknown): {
     browser_label?: string | null;
     extension_version: string;
     instance_id?: string;
+    pairing_code?: string;
 } {
     if (!is_plain_object(value)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Enroll body must be an object');
@@ -511,11 +614,15 @@ function validate_enroll(value: unknown): {
     if (value.browser_label !== undefined && value.browser_label !== null && typeof value.browser_label !== 'string') {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'browser_label must be a string or null');
     }
+    if (value.pairing_code !== undefined && typeof value.pairing_code !== 'string') {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'pairing_code must be a string');
+    }
     return {
         browser_no: value.browser_no,
         browser_label: value.browser_label as string | null | undefined,
         extension_version: value.extension_version,
         instance_id: value.instance_id as string | undefined,
+        pairing_code: value.pairing_code as string | undefined,
     };
 }
 
@@ -537,6 +644,79 @@ function read_instance_id(request: http.IncomingMessage): string | null {
 
 function actual_port(server: http.Server): number {
     return (server.address() as AddressInfo).port;
+}
+
+function is_enroll_allowed(state: PairingState, browser_no: number, pairing_code?: string): boolean {
+    const now = Date.now();
+    if (!state.open || state.expires_at < now) {
+        return false;
+    }
+    if (state.allowlist.has(browser_no)) {
+        return true;
+    }
+    if (pairing_code && state.code && pairing_code === state.code) {
+        state.allowlist.add(browser_no);
+        return true;
+    }
+    return false;
+}
+
+function build_pairing_status(state: PairingState): { open: boolean; code: string | null; expires_at: number; allowlist: number[] } {
+    const now = Date.now();
+    const open = state.open && state.expires_at > now;
+    return {
+        open,
+        code: open ? state.code : null,
+        expires_at: open ? state.expires_at : 0,
+        allowlist: open ? [...state.allowlist] : [],
+    };
+}
+
+function serve_pair_page(
+    response: http.ServerResponse,
+    state: PairingState,
+    host: string,
+    port: number,
+): void {
+    const html = `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capture All - Pair</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;max-width:480px;margin:40px auto;padding:20px;color:#333}
+h1{font-size:22px;margin:0 0 8px}
+.meta{color:#666;font-size:13px;margin-bottom:24px}
+code{display:inline-block;background:#f5f5f5;padding:6px 14px;border-radius:6px;font-size:28px;letter-spacing:6px;font-family:monospace}
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;margin-bottom:16px}
+.card h2{font-size:16px;margin:0 0 12px}
+.row{display:flex;gap:8px;align-items:center}
+input{padding:8px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px;flex:1}
+button{padding:8px 20px;border:none;border-radius:6px;font-size:15px;cursor:pointer;background:#1a73e8;color:#fff}
+button:active{opacity:.8}
+.msg{margin-top:8px;font-size:13px}
+.msg.ok{color:#1e8e3e}
+.msg.err{color:#d93025}
+.closed{color:#999;text-align:center;padding:40px 0;font-size:15px}
+</style>
+</head>
+<body>
+<h1>Capture All Pair</h1>
+<div id="root">Loading...</div>
+<script>
+const ROOT = document.getElementById('root');
+async function refresh(){try{const r=await fetch('/pair/status');const d=await r.json();const s=d.data;if(!s.open){ROOT.innerHTML='<div class="closed">Pairing is closed.<br><small>Run <code style="font-size:14px;letter-spacing:0">POST /pair/open</code> via MCP to enable.</small></div>';return}const exp=new Date(s.expires_at).toLocaleTimeString();let allowlist='';if(s.allowlist.length>0)allowlist='<p style="font-size:13px;color:#666">Approved browsers: '+s.allowlist.join(', ')+'</p>';
+ROOT.innerHTML='<div class="card"><h2>Pairing Code</h2><code>'+s.code+'</code><p class="meta">Expires at '+exp+'</p>'+allowlist+'</div><div class="card"><h2>Approve Browser</h2><div class="row"><input id="bno" type="number" placeholder="Browser No" min="1"><button onclick="approve()">Approve</button></div><div id="msg" class="msg"></div></div>';
+}catch(e){ROOT.innerHTML='<div class="closed">Error loading status</div>'}}
+async function approve(){const v=parseInt(document.getElementById('bno').value);const m=document.getElementById('msg');if(!v){m.className='msg err';m.textContent='Enter a browser number';return}try{const r=await fetch('/pair/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({browser_no:v})});const d=await r.json();if(d.ok){m.className='msg ok';m.textContent='Approved browser '+v;refresh()}else{m.className='msg err';m.textContent=d.error?.message||'Failed'}}catch(e){m.className='msg err';m.textContent='Error: '+e.message}}
+refresh();
+</script>
+</body>
+</html>`;
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(html);
 }
 
 class BridgeHttpError extends Error {

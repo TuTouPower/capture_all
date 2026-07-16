@@ -59,6 +59,7 @@ export interface AgentBridgeConfig {
     token: string;
     command_timeout_ms: number;
     full_data_timeout_ms: number;
+    dev_mode?: boolean;
 }
 
 export interface ExtensionBridgeConfig {

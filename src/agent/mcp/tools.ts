@@ -26,12 +26,18 @@ const TOOL_COMMANDS: Record<string, AgentCommandType> = {
 
 export const MCP_TOOL_NAMES = [
     'get_status',
+    'list_browsers',
     ...Object.keys(TOOL_COMMANDS),
 ] as const;
 
 export async function execute_mcp_tool(client: BridgeMcpClient, call: McpToolCall): Promise<unknown> {
     if (call.name === 'get_status') {
         return await client.get_status();
+    }
+
+    if (call.name === 'list_browsers') {
+        const status = await client.get_status();
+        return { browsers: status.extensions };
     }
 
     const command_type = TOOL_COMMANDS[call.name];

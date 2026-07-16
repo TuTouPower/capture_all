@@ -102,6 +102,7 @@ describe('execute_mcp_tool', () => {
     it('registers the expected MCP tool names', () => {
         expect(MCP_TOOL_NAMES).toEqual([
             'get_status',
+            'list_browsers',
             'start_recording',
             'stop_recording',
             'list_captures',
@@ -298,6 +299,65 @@ describe('execute_mcp_tool', () => {
             command_id: command.command_id,
             ok: true,
             data: { export_url: 'blob:...' },
+        });
+    });
+
+    it('list_browsers returns extensions from bridge status', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_a' },
+            body: JSON.stringify({ instance_id: 'inst_a', extension_version: '1.0.0', active_capture_id: 'cap-1', browser_no: 1 }),
+        });
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_b' },
+            body: JSON.stringify({ instance_id: 'inst_b', extension_version: '2.0.0', active_capture_id: null, browser_no: 2 }),
+        });
+
+        const result = await execute_mcp_tool(client, { name: 'list_browsers' });
+        expect(result).toHaveProperty('browsers');
+        const browsers = (result as { browsers: unknown[] }).browsers;
+        expect(Array.isArray(browsers)).toBe(true);
+        expect(browsers.length).toBe(2);
+        for (const b of browsers) {
+            expect(b).toHaveProperty('browser_no');
+            expect(typeof (b as Record<string, unknown>).browser_no).toBe('number');
+            expect(b).toHaveProperty('online');
+            expect(typeof (b as Record<string, unknown>).online).toBe('boolean');
+            expect(b).toHaveProperty('browser_label');
+            expect(b).toHaveProperty('active_capture_id');
+        }
+    });
+
+    it('passes browser_no through to bridge payload', async () => {
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null, browser_no: 2 }),
+        });
+
+        const tool_promise = execute_mcp_tool(client, {
+            name: 'start_recording',
+            arguments: { browser_no: 2 }
+        });
+        const command = await take_next_command(server.url);
+
+        expect(command.payload).toHaveProperty('browser_no', 2);
+
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 'sess-1' } }),
+        });
+
+        await expect(tool_promise).resolves.toMatchObject({
+            ok: true,
         });
     });
 

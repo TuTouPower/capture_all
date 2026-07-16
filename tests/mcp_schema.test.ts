@@ -57,13 +57,14 @@ describe('MCP tool schemas', () => {
         expect(result.capture_id).toBe('abc-123');
     });
 
-    it('start_recording: rejects unknown config fields', () => {
-        fail('start_recording', {
+    it('start_recording: allows unknown config fields (passthrough)', () => {
+        const result = pass('start_recording', {
             config: {
                 capture_network: true,
                 unexpected_field: true,
             },
         });
+        expect(result.config).toMatchObject({ capture_network: true, unexpected_field: true });
     });
 
     it('start_recording: rejects invalid partial config values', () => {
@@ -218,8 +219,8 @@ describe('MCP tool schemas', () => {
         }
     });
 
-    it('export_capture: rejects invalid format', () => {
-        fail('export_capture', { capture_id: 'cap-001', format: 'csv' });
+    it('export_capture: allows any format string (passthrough)', () => {
+        expect(pass('export_capture', { capture_id: 'cap-001', format: 'csv' }).format).toBe('csv');
     });
 
     it('export_capture: rejects missing format', () => {
@@ -244,10 +245,57 @@ describe('MCP tool schemas', () => {
         expect(pass('export_session', { capture_id: 'cap-001', format: 'har' }).format).toBe('har');
     });
 
+    // --- list_browsers ---
+    it('list_browsers: accepts empty object', () => {
+        expect(pass('list_browsers', {})).toBeDefined();
+    });
+
+    it('list_browsers: accepts timeout_ms', () => {
+        expect(pass('list_browsers', { timeout_ms: 5000 }).timeout_ms).toBe(5000);
+    });
+
+    // --- browser_no passthrough ---
+    it('all tools accept optional browser_no', () => {
+        const tools_without_capture_id = ['get_status', 'stop_recording', 'list_browsers', 'list_captures', 'list_sessions', 'start_recording'];
+        for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
+            const base_input = tools_without_capture_id.includes(tool)
+                ? {}
+                : tool === 'list_records'
+                    ? { capture_id: 'cap-001', source: 'network' }
+                    : tool === 'get_record'
+                        ? { capture_id: 'cap-001', source: 'network', record_id: 'r1' }
+                        : tool === 'get_timeline_item'
+                            ? { capture_id: 'cap-001', item_id: 'tl1' }
+                            : tool === 'export_capture' || tool === 'export_session'
+                                ? { capture_id: 'cap-001', format: 'json' }
+                                : { capture_id: 'cap-001' };
+            const result = MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, browser_no: 2 });
+            expect(result.browser_no).toBe(2);
+        }
+    });
+
+    it('all tools passthrough unknown fields', () => {
+        for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
+            const base_input = tool === 'list_records'
+                ? { capture_id: 'cap-001', source: 'network' }
+                : tool === 'get_record'
+                    ? { capture_id: 'cap-001', source: 'network', record_id: 'r1' }
+                    : tool === 'get_timeline_item'
+                        ? { capture_id: 'cap-001', item_id: 'tl1' }
+                        : tool === 'export_capture' || tool === 'export_session'
+                            ? { capture_id: 'cap-001', format: 'json' }
+                            : tool === 'get_status' || tool === 'stop_recording' || tool === 'list_browsers' || tool === 'list_captures' || tool === 'list_sessions' || tool === 'start_recording'
+                                ? {}
+                                : { capture_id: 'cap-001' };
+            const result = MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, future_field: 42 });
+            expect(result.future_field).toBe(42);
+        }
+    });
+
     // --- timeout_ms is allowed on every tool ---
     it('all tools accept optional timeout_ms', () => {
         for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
-            const base_input = tool === 'get_status' || tool === 'stop_recording'
+            const base_input = tool === 'get_status' || tool === 'stop_recording' || tool === 'list_browsers'
                 ? {}
                 : tool === 'list_captures' || tool === 'list_sessions'
                     ? {}

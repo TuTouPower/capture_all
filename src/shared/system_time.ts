@@ -70,6 +70,7 @@ function get_locale_formatter(_user_offset_minutes: number | null, user_tz: stri
 // ============================================================
 export function format_system_time(ts: string | number, config: SystemTimeConfig): string {
     const ms = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+    if (!Number.isFinite(ms)) return String(ts);
     const tz = config.system_time_timezone;
 
     // browser path: keep using system local time

@@ -109,6 +109,12 @@ export function resolve_resource_type(raw: string): NetworkRequestData['resource
     return RESOURCE_TYPE_MAP[lower] || 'other';
 }
 
+export function extract_mime_type(headers: Record<string, string>): string | null {
+    const ct = headers['content-type'] || headers['Content-Type'] || null;
+    if (!ct) return null;
+    return ct.split(';')[0].trim() || null;
+}
+
 // ─── webRequest event handlers (need context) ───
 
 export function create_webrequest_handlers(ctx: NetworkCaptureContext) {
@@ -175,12 +181,4 @@ export function create_webrequest_handlers(ctx: NetworkCaptureContext) {
         handle_headers_received,
         handle_error,
     };
-}
-
-// ─── Internal helpers ───
-
-function extract_mime_type(headers: Record<string, string>): string | null {
-    const ct = headers['content-type'] || headers['Content-Type'] || null;
-    if (!ct) return null;
-    return ct.split(';')[0].trim() || null;
 }

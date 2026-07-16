@@ -15,7 +15,7 @@ import { should_handle_event, clear_sessions, register_session, unregister_sessi
 import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
-import { extract_request_body, headers_array_to_map, resolve_resource_type } from './network_webrequest';
+import { extract_request_body, headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
@@ -865,12 +865,6 @@ function schedule_orphan_check(req_id: string): void {
 
 function headers_map_from_cdp(headers: Record<string, string>): Record<string, string> {
     return { ...headers };
-}
-
-function extract_mime_type(headers: Record<string, string>): string | null {
-    const ct = headers['content-type'] || headers['Content-Type'] || null;
-    if (!ct) return null;
-    return ct.split(';')[0].trim() || null;
 }
 
 /**

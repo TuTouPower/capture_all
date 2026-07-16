@@ -37,7 +37,7 @@ The Bridge is restricted to `127.0.0.1`. It rejects other bind addresses, requir
 
 Localhost binding does not protect against every process running on the same machine. Treat the Bridge token as a secret, use a random value supplied by the user, keep `.mcp.json` local, and stop the Bridge when it is not needed.
 
-Ordinary Bridge JSON bodies are limited to 1 MiB. Extension result bodies are limited to 32 MiB. These are availability limits, not confidentiality controls.
+Ordinary Bridge JSON bodies are limited to 1 MiB. Extension result bodies are limited to 64 MiB. These are availability limits, not confidentiality controls.
 
 ### MCP and AI agents
 

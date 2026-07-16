@@ -4,25 +4,28 @@
 
 ### current_task
 
+全部完成
+
 ### last_completed
 
 T0010
+
 ### next_step
 
-回 /oprun 3.1 选下一 task（或全完成进收尾）
+批次完成，可进行收尾或启动新批次
 ## 本批次（2026-07-16 intake）
 
 主题：**MCP/Bridge 边界重构 + 多浏览器自动绑定（用户只设浏览器编号）**
 
 | TID | 标题 | status | depends_on |
 |---|---|---|---|
-| T0004 | Bridge 多实例注册表 + 每实例队列 | awaiting_gate | — |
-| T0005 | Bridge enroll + instance_token hash | awaiting_gate | T0004 |
-| T0006 | 扩展 browser_no + 自动连接 | awaiting_gate | T0005 |
-| T0007 | MCP list_browsers + browser_no 透传 + schema 瘦身 | awaiting_gate | T0004 |
-| T0008 | SessionStart 自动 bridge + 注入 mcp token | awaiting_gate | T0005 |
-| T0009 | 本机配对批准 S1 | awaiting_gate | T0005, T0006 |
-| T0010 | 文档对齐 agent_mcp 边界 | awaiting_gate | T0006–T0009 |
+| T0004 | Bridge 多实例注册表 + 每实例队列 | done | — |
+| T0005 | Bridge enroll + instance_token hash | done | T0004 |
+| T0006 | 扩展 browser_no + 自动连接 | done | T0005 |
+| T0007 | MCP list_browsers + browser_no 透传 + schema 瘦身 | done | T0004 |
+| T0008 | SessionStart 自动 bridge + 注入 mcp token | done | T0005 |
+| T0009 | 本机配对批准 S1 | done | T0005, T0006 |
+| T0010 | 文档对齐 agent_mcp 边界 | done | T0006–T0009 |
 
 ### 产品默认决策（写入 draft spec，待闸门 A 确认）
 

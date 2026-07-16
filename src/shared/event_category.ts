@@ -8,7 +8,7 @@ export function category_for_event_type(type: string): CategoryKey {
     if (USER_ACTION_TYPES.has(type)) return 'user_action';
     if (NAVIGATION_TYPES.has(type)) return 'navigation';
     if (ERROR_TYPES.has(type)) return 'error';
-    if (type === 'network_request' || type === 'ws_message') return 'network';
+    if (type === 'network_request' || type === 'ws_message' || type === 'ws_frame') return 'network';
     if (type === 'console_event') return 'console';
     if (type === 'storage_change') return 'storage';
     if (type === 'cookie_change') return 'cookie';

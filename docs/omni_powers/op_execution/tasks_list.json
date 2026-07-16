@@ -142,7 +142,7 @@
     {
       "id": "T0009",
       "title": "feat: 本机配对批准（S1）保护 enroll",
-      "status": "in_progress",
+      "status": "done",
       "spec": "specs/T0009_local-pair-approval.md",
       "depends_on": [
         "T0005",

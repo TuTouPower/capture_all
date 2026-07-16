@@ -61,7 +61,7 @@
     {
       "id": "T0005",
       "title": "feat: Bridge 自动 enroll 与 instance_token（hash 存储）",
-      "status": "ready",
+      "status": "done",
       "spec": "specs/T0005_bridge-auto-enroll-token.md",
       "depends_on": [
         "T0004"

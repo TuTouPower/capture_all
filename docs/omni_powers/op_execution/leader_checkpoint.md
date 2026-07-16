@@ -4,11 +4,11 @@
 
 ### current_task
 
-（无 in_progress；T0004–T0010 均为 `awaiting_gate`，待闸门 A）
+T0006（下一批：T0006/T0007 并行）
 
 ### last_completed
 
-T0003
+T0005
 
 ### next_step
 

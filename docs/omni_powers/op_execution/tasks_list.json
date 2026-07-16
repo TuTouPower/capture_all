@@ -92,7 +92,11 @@
         "src/shared/ui_strings.ts",
         "tests/agent_bridge_client.test.ts",
         "tests/agent_bridge_config.test.ts",
-        "tests/settings_ui.test.ts"
+        "tests/settings_ui.test.ts",
+        "src/shared/types.ts",
+        "src/shared/i18n.ts",
+        "src/shared/chrome.d.ts",
+        "src/background/service_worker.ts"
       ],
       "eval": "required",
       "blocked_by": null

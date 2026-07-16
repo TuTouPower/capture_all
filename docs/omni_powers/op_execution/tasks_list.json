@@ -133,7 +133,8 @@
         "src/agent/bridge/main.ts",
         "src/agent/bridge/config.ts",
         ".mcp.json.example",
-        "docs/mcp_usage.md"
+        "docs/mcp_usage.md",
+        ".gitignore"
       ],
       "eval": "required",
       "blocked_by": null

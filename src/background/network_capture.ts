@@ -1,8 +1,6 @@
 // background/network_capture.ts
-// Network capture with CDP response body support.
-// webRequest captures headers/status/timing/request body.
-// CDP (chrome.dbg) captures response bodies via Network.getResponseBody
-// triggered on Network.loadingFinished.
+// Network capture orchestrator.
+// Delegates to specialized handlers: cdp_handler, webrequest_handler, ws_handler
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
@@ -16,40 +14,18 @@ import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { extract_request_body, headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
+import { handle_cdp_event as handle_cdp_event_impl, base64_decoded_size, is_self_origin_url, build_cdp_body_result, is_streaming_response, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS } from './cdp_handler';
+import type { CdpHandlerState, NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
+import { handle_before_request as handle_before_request_impl, handle_before_send_headers as handle_before_send_headers_impl, handle_headers_received as handle_headers_received_impl, handle_completed as handle_completed_impl, handle_error as handle_error_impl, build_network_event, find_matching_cdp_request, find_cdp_candidates } from './webrequest_handler';
+import type { WebRequestHandlerState } from './webrequest_handler';
+import { send_ws_connection_event, send_ws_frame, handle_ws_created, handle_ws_handshake_request, handle_ws_handshake_response, handle_ws_frame_error, handle_ws_closed } from './ws_handler';
+import type { WsHandlerState } from './ws_handler';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
-function base64_decoded_size(b64: string | undefined | null): number {
-    if (typeof b64 !== 'string' || b64.length === 0) return 0;
-    const trimmed = b64.replace(/\s/g, '');
-    const padding = trimmed.endsWith('==') ? 2 : trimmed.endsWith('=') ? 1 : 0;
-    return Math.floor(trimmed.length * 3 / 4) - padding;
-}
-// 导出供单测验证 fault injection 边界
+// Re-export for tests
 export const _base64_decoded_size_for_test = base64_decoded_size;
-
-/**
- * 判断 URL 是否属于扩展自身或本地 Bridge 的 origin。
- *
- * 这些 URL（chrome-extension://、http(s)://127.0.0.1、http(s)://localhost）
- * 不应进入网络采集范围：Bridge 响应在 CDP 拿到 body 前可能已结束，
- * 且扩展自身请求无业务价值，纳入采集会产生大量 cdp_failed 污染 stats。
- *
- * BUG-005: Bridge 日志上报端点 http://127.0.0.1:<port>/log 之前
- * 未被排除，导致 117 个 cdp_failed。
- */
-export function is_self_origin_url(raw_url: string): boolean {
-    if (!raw_url || typeof raw_url !== 'string') return false;
-    // 扩展自身 origin（MV3 content/background 内部跳转）
-    if (raw_url.startsWith('chrome-extension://')) return true;
-    // 本地 Bridge / 开发服务器：覆盖所有端口，不硬编码
-    try {
-        const parsed = new URL(raw_url);
-        return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
-    } catch {
-        return false;
-    }
-}
+export { is_self_origin_url } from './cdp_handler';
 
 interface NetworkCaptureConfig {
     redact_sensitive_headers: boolean;

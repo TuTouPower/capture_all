@@ -674,9 +674,9 @@ function build_pairing_status(state: PairingState): { open: boolean; code: strin
 
 function serve_pair_page(
     response: http.ServerResponse,
-    state: PairingState,
-    host: string,
-    port: number,
+    _state: PairingState,
+    _host: string,
+    _port: number,
 ): void {
     const html = `<!DOCTYPE html>
 <html lang="zh">

@@ -2,6 +2,8 @@
 
 浏览器扩展：全量捕获网络/UI/控制台等事件，Dashboard 回放与导出。MCP / Bridge 对接 Agent。
 
+> 补充文档见 [AGENTS.md](AGENTS.md)（E2E 项目表、导航、关键约束）。
+
 ## 命令
 
 | 命令 | 说明 |

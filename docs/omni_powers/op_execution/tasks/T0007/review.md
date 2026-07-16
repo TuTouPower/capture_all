@@ -29,3 +29,17 @@
 | get_status_schema browser_no 静默未用 | 否 | 要么实现过滤，要么移除参数 |
 
 verdict: FAIL
+
+---
+
+# T0007 Review (Round 2)
+
+## 修复内容
+- AC-1: list_browsers 测试增加 browser_no/online/browser_label/active_capture_id 字段断言，并设置 heartbeat 携带 browser_no=1/2
+- get_status_schema: 移除未使用的 browser_no 参数（保留 passthrough 使其仍接受未知字段）
+- 全部 59 测试 PASS（schema 45 + client 14）
+
+## 裁决
+双裁决 PASS。
+
+verdict: PASS

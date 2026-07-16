@@ -4,20 +4,12 @@
 
 ### current_task
 
-T0006（下一批：T0006/T0007 并行）
-
 ### last_completed
 
 T0005
-
 ### next_step
 
-1. **闸门 A**：人审 `op_execution/specs/T0004_*.md` … `T0010_*.md` 与 `tasks_list.json` 切分
-2. 人批后：各 spec `status: approved`，task `awaiting_gate` → `ready`
-3. `/oprun` 按 depends_on 领取（一 TID 一 commit；禁止跳 merge gate）
-
-推荐顺序：`T0004 → T0005 → T0006 → T0009`；`T0007` 可在 T0004 后与 T0005/T0006 并行；`T0008` 在 T0005 后；`T0010` 收口。
-
+回 /oprun 3.1 选下一 task（或全完成进收尾）
 ## 本批次（2026-07-16 intake）
 
 主题：**MCP/Bridge 边界重构 + 多浏览器自动绑定（用户只设浏览器编号）**

@@ -104,7 +104,7 @@
     {
       "id": "T0007",
       "title": "feat: MCP list_browsers + browser_no 路由透传 + schema 瘦身",
-      "status": "ready",
+      "status": "done",
       "spec": "specs/T0007_mcp-browser-no-and-schema-slim.md",
       "depends_on": [
         "T0004"

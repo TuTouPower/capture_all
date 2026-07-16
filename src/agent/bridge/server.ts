@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,7 @@ interface ExtensionInstance {
     active_capture_id: string | null;
     browser_no: number | null;
     browser_label: string | null;
+    token_hash: string | null;
     seen_at: number;
 }
 
@@ -172,12 +173,99 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 return send_json(response, 200, { ok: true });
             }
 
-            if (!is_authorized(request, config.token)) {
-                return send_json(response, 401, { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } });
+            if (request.method === 'GET' && request.url === '/extension/discover') {
+                // Local discovery: no secret; only useful on loopback + extension origin checks above.
+                return send_json(response, 200, {
+                    ok: true,
+                    pairable: true,
+                    bridge_version: BRIDGE_VERSION,
+                    enroll_path: '/extension/enroll',
+                });
+            }
+
+            if (request.method === 'POST' && request.url === '/extension/enroll') {
+                // S0: trust loopback + allowed chrome-extension origin (or mcp token bootstrap).
+                const has_mcp = is_authorized(request, config.token);
+                const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
+                if (!has_mcp && !has_ext_origin) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'Enroll requires chrome-extension origin or mcp token' },
+                    });
+                }
+
+                const body = validate_enroll(await read_json(request));
+                const instance_id = body.instance_id || `inst_${randomBytes(8).toString('hex')}`;
+                const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
+                const token_hash = hash_token(instance_token);
+
+                // Replace any existing binding for same browser_no.
+                for (const [id, inst] of [...instances.entries()]) {
+                    if (inst.browser_no === body.browser_no && id !== instance_id) {
+                        instances.delete(id);
+                        queues.delete(id);
+                    }
+                }
+
+                instances.set(instance_id, {
+                    instance_id,
+                    extension_version: body.extension_version,
+                    active_capture_id: null,
+                    browser_no: body.browser_no,
+                    browser_label: body.browser_label ?? null,
+                    token_hash,
+                    seen_at: Date.now(),
+                });
+                get_or_create_queue(instance_id);
+
+                return send_json(response, 200, {
+                    ok: true,
+                    data: {
+                        instance_id,
+                        instance_token,
+                        browser_no: body.browser_no,
+                    },
+                });
+            }
+
+            const path = request.url?.split('?')[0] || '';
+            const is_extension_data_path = path === '/extension/heartbeat'
+                || path === '/extension/command'
+                || path === '/extension/result';
+            const is_mcp_path = path.startsWith('/mcp/') || path.startsWith('/cdp/');
+
+            let auth_instance_id: string | null = null;
+            if (is_extension_data_path) {
+                const resolved = resolve_extension_auth(request, config.token, instances);
+                if (!resolved.ok) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+                    });
+                }
+                auth_instance_id = resolved.instance_id;
+            } else if (is_mcp_path) {
+                if (!is_authorized(request, config.token)) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+                    });
+                }
+            } else if (!is_authorized(request, config.token)) {
+                return send_json(response, 401, {
+                    ok: false,
+                    error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+                });
             }
 
             if (request.method === 'POST' && request.url === '/extension/heartbeat') {
                 const body = validate_heartbeat(await read_json(request));
+                if (auth_instance_id && auth_instance_id !== body.instance_id) {
+                    return send_json(response, 401, {
+                        ok: false,
+                        error: { code: 'TOKEN_INVALID', message: 'instance_id does not match token' },
+                    });
+                }
                 const prev = instances.get(body.instance_id);
                 instances.set(body.instance_id, {
                     instance_id: body.instance_id,
@@ -185,6 +273,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     active_capture_id: body.active_capture_id,
                     browser_no: body.browser_no ?? prev?.browser_no ?? null,
                     browser_label: body.browser_label ?? prev?.browser_label ?? null,
+                    token_hash: prev?.token_hash ?? null,
                     seen_at: Date.now(),
                 });
                 get_or_create_queue(body.instance_id);
@@ -192,7 +281,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'GET' && (request.url === '/extension/command' || request.url?.startsWith('/extension/command?'))) {
-                const instance_id = read_instance_id(request);
+                const instance_id = auth_instance_id || read_instance_id(request);
                 if (!instance_id) {
                     return send_json(response, 400, {
                         ok: false,
@@ -211,7 +300,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/result') {
-                const instance_id = read_instance_id(request);
+                const instance_id = auth_instance_id || read_instance_id(request);
                 if (!instance_id) {
                     return send_json(response, 400, {
                         ok: false,
@@ -359,6 +448,75 @@ function is_authorized(request: http.IncomingMessage, token: string): boolean {
         .digest();
 
     return timingSafeEqual(actual, expected);
+}
+
+function hash_token(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+}
+
+function read_bearer_token(request: http.IncomingMessage): string | null {
+    const auth = request.headers.authorization;
+    if (typeof auth !== 'string' || !auth.startsWith('Bearer ')) return null;
+    const token = auth.slice('Bearer '.length).trim();
+    return token.length > 0 ? token : null;
+}
+
+function resolve_extension_auth(
+    request: http.IncomingMessage,
+    mcp_token: string,
+    instances: Map<string, ExtensionInstance>,
+): { ok: true; instance_id: string | null } | { ok: false } {
+    // Bootstrap / tests: shared mcp token still allowed for extension routes.
+    if (is_authorized(request, mcp_token)) {
+        return { ok: true, instance_id: read_instance_id(request) };
+    }
+
+    const bearer = read_bearer_token(request);
+    if (!bearer) return { ok: false };
+
+    const bearer_hash = hash_token(bearer);
+    for (const inst of instances.values()) {
+        if (!inst.token_hash) continue;
+        const a = Buffer.from(bearer_hash, 'hex');
+        const b = Buffer.from(inst.token_hash, 'hex');
+        if (a.length === b.length && timingSafeEqual(a, b)) {
+            const header_id = read_instance_id(request);
+            if (header_id && header_id !== inst.instance_id) {
+                return { ok: false };
+            }
+            return { ok: true, instance_id: inst.instance_id };
+        }
+    }
+    return { ok: false };
+}
+
+function validate_enroll(value: unknown): {
+    browser_no: number;
+    browser_label?: string | null;
+    extension_version: string;
+    instance_id?: string;
+} {
+    if (!is_plain_object(value)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'Enroll body must be an object');
+    }
+    if (typeof value.browser_no !== 'number' || !Number.isInteger(value.browser_no) || value.browser_no < 1) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'browser_no must be a positive integer');
+    }
+    if (typeof value.extension_version !== 'string' || value.extension_version.length === 0) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'extension_version is required');
+    }
+    if (value.instance_id !== undefined && (typeof value.instance_id !== 'string' || value.instance_id.length === 0)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'instance_id must be a non-empty string');
+    }
+    if (value.browser_label !== undefined && value.browser_label !== null && typeof value.browser_label !== 'string') {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'browser_label must be a string or null');
+    }
+    return {
+        browser_no: value.browser_no,
+        browser_label: value.browser_label as string | null | undefined,
+        extension_version: value.extension_version,
+        instance_id: value.instance_id as string | undefined,
+    };
 }
 
 function read_instance_id(request: http.IncomingMessage): string | null {

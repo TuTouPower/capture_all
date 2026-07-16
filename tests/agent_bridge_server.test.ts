@@ -928,4 +928,556 @@ describe('bridge server', () => {
             error: { code: 'TARGET_REQUIRED' },
         });
     });
+
+    // ─── T0005 bridge auto-enroll ───
+
+    it('enroll returns 400 when browser_no is missing', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.code).toBe('INVALID_QUERY');
+    });
+
+    it.each([0, -1, 1.5, null, 'abc'])(
+        'enroll returns 400 for invalid browser_no: %s',
+        async (val) => {
+            const server = await start_test_server();
+            const response = await fetch(`${server.url}/extension/enroll`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ browser_no: val, extension_version: '1.0.0' }),
+            });
+            expect(response.status).toBe(400);
+            expect((await response.json()).error.code).toBe('INVALID_QUERY');
+        },
+    );
+
+    it('enroll returns 400 when extension_version is missing', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1 }),
+        });
+        expect(response.status).toBe(400);
+        expect((await response.json()).error.code).toBe('INVALID_QUERY');
+    });
+
+    it('AC-1: enroll returns 200 with instance_id, instance_token, browser_no', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(typeof json.data.instance_id).toBe('string');
+        expect(json.data.instance_id.length).toBeGreaterThan(0);
+        expect(typeof json.data.instance_token).toBe('string');
+        expect(json.data.instance_token.startsWith('ext_')).toBe(true);
+        expect(json.data.browser_no).toBe(1);
+    });
+
+    it('enroll accepts optional instance_id', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                browser_no: 1,
+                extension_version: '1.0.0',
+                instance_id: 'my-custom-instance',
+            }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.data.instance_id).toBe('my-custom-instance');
+    });
+
+    it('enroll accepts optional browser_label', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                browser_no: 1,
+                extension_version: '1.0.0',
+                browser_label: 'Chrome 127',
+            }),
+        });
+        expect(response.status).toBe(200);
+    });
+
+    it('enroll rejects without auth', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('AC-2: heartbeat succeeds with instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ ok: true });
+    });
+
+    it('AC-2: command poll succeeds with instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        const response = await fetch(`${server.url}/extension/command`, {
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                [INSTANCE_HEADER]: instance_id,
+            },
+        });
+        expect(response.status).toBe(200);
+        // No command queued — expect null body
+        expect(await response.json()).toBeNull();
+    });
+
+    it('AC-2: full command cycle with instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        const cmd_promise = fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ type: 'captures.list', payload: {} }),
+        });
+
+        const command = await take_next_command(server.url, instance_id);
+        expect(command.type).toBe('captures.list');
+
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: instance_id,
+            },
+            body: JSON.stringify({
+                command_id: command.command_id,
+                ok: true,
+                data: { captures: [] },
+            }),
+        });
+
+        const cmd_result = await (await cmd_promise).json();
+        expect(cmd_result.ok).toBe(true);
+        expect(cmd_result.data).toEqual({ captures: [] });
+    });
+
+    it('AC-3: heartbeat fails with wrong instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id } = (await enroll_res.json()).data;
+
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ext_wrong_token_123456789',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(response.status).toBe(401);
+        expect(await response.json()).toEqual({
+            ok: false,
+            error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
+        });
+    });
+
+    it('AC-3: command poll fails with wrong instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_id } = (await enroll_res.json()).data;
+
+        const response = await fetch(`${server.url}/extension/command`, {
+            headers: {
+                Authorization: 'Bearer ext_wrong_token_123456789',
+                [INSTANCE_HEADER]: instance_id,
+            },
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('AC-3: result post fails with wrong instance_token', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ext_wrong_token_123456789',
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: 'irrelevant_id',
+            },
+            body: JSON.stringify({
+                command_id: 'cmd_1',
+                ok: true,
+                data: {},
+            }),
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('AC-4: same browser_no re-enroll invalidates old token', async () => {
+        const server = await start_test_server();
+        const enroll1 = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const data1 = (await enroll1.json()).data;
+
+        // Old token works
+        const hb1 = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${data1.instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id: data1.instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(hb1.status).toBe(200);
+
+        // Re-enroll same browser_no
+        const enroll2 = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '2.0.0' }),
+        });
+        const data2 = (await enroll2.json()).data;
+
+        // Old token invalid
+        const hb_old = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${data1.instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id: data1.instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(hb_old.status).toBe(401);
+
+        // New token works
+        const hb_new = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${data2.instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id: data2.instance_id,
+                extension_version: '2.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(hb_new.status).toBe(200);
+    });
+
+    it('AC-4: status shows only new instance after re-enroll', async () => {
+        const server = await start_test_server();
+
+        // Enroll first instance
+        const enroll1 = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const data1 = (await enroll1.json()).data;
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${data1.instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id: data1.instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        // Re-enroll same browser_no
+        await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '2.0.0' }),
+        });
+
+        const status = await (await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })).json() as any;
+
+        // Only one instance with browser_no=1
+        const browser1_instances = status.extensions.filter(
+            (e: any) => e.browser_no === 1,
+        );
+        expect(browser1_instances).toHaveLength(1);
+    });
+
+    it('AC-5: mcp/status extensions do not expose instance_token', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_token, instance_id } = (await enroll_res.json()).data;
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+
+        const status = await (await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })).json() as any;
+
+        for (const ext of status.extensions) {
+            expect(ext).not.toHaveProperty('token');
+            expect(ext).not.toHaveProperty('instance_token');
+            expect(ext).not.toHaveProperty('token_hash');
+        }
+
+        const status_json = JSON.stringify(status);
+        expect(status_json).not.toContain(instance_token);
+    });
+
+    it('instance_token cannot access /mcp/status', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_token } = (await enroll_res.json()).data;
+
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${instance_token}` },
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('instance_token cannot access /mcp/command', async () => {
+        const server = await start_test_server();
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+        });
+        const { instance_token } = (await enroll_res.json()).data;
+
+        const response = await fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ type: 'captures.list', payload: {} }),
+        });
+        expect(response.status).toBe(401);
+    });
+
+    it('heartbeat rejects when instance_id does not match token instance', async () => {
+        const server = await start_test_server();
+
+        // Enroll two instances
+        const e1 = await (
+            await fetch(`${server.url}/extension/enroll`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            })
+        ).json();
+        const e2 = await (
+            await fetch(`${server.url}/extension/enroll`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ browser_no: 2, extension_version: '1.0.0' }),
+            })
+        ).json();
+
+        // Use instance 1's token but claim instance 2's id
+        const response = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${e1.data.instance_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instance_id: e2.data.instance_id,
+                extension_version: '1.0.0',
+                active_capture_id: null,
+            }),
+        });
+        expect(response.status).toBe(401);
+        expect((await response.json()).error.code).toBe('TOKEN_INVALID');
+    });
+
+    it('/extension/discover returns bridge info without auth', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/discover`);
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+        expect(json.pairable).toBe(true);
+        expect(typeof json.bridge_version).toBe('string');
+        expect(json.enroll_path).toBe('/extension/enroll');
+    });
 });

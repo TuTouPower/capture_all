@@ -124,7 +124,7 @@
     {
       "id": "T0008",
       "title": "feat: SessionStart 自动拉起 Bridge 并注入 mcp 通道 token",
-      "status": "in_progress",
+      "status": "done",
       "spec": "specs/T0008_sessionstart-auto-bridge-mcp-token.md",
       "depends_on": [
         "T0005"

@@ -16,7 +16,9 @@ describe('agent bridge user config', () => {
             agent_bridge_enabled: true,
             agent_bridge_url: 'http://127.0.0.1:17831',
             agent_bridge_token: '<TEST_BRIDGE_TOKEN>',
-            agent_bridge_poll_interval_ms: 1000
+            agent_bridge_poll_interval_ms: 1000,
+            browser_no: 0,
+            browser_label: '',
         });
     });
 
@@ -63,5 +65,83 @@ describe('agent bridge user config', () => {
             ...base_config,
             agent_bridge_url: 'http://localhost'
         })).toThrow('Bridge URL must include a port');
+    });
+});
+
+describe('T0006: browser_no auto-enroll config', () => {
+    const base = {
+        agent_bridge_enabled: true,
+        agent_bridge_url: 'http://127.0.0.1:17831',
+        agent_bridge_token: '',
+        agent_bridge_poll_interval_ms: 1000,
+        browser_no: 0,
+        browser_label: '',
+    };
+
+    test('AC-1: enables bridge when browser_no > 0 without token', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            browser_no: 2,
+        });
+        expect(result.agent_bridge_enabled).toBe(true);
+        expect(result.browser_no).toBe(2);
+        expect(result.browser_label).toBe('');
+    });
+
+    test('disables bridge when browser_no is 0 and token is empty', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+        });
+        expect(result.agent_bridge_enabled).toBe(false);
+    });
+
+    test('normalizes non-integer browser_no to 0', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            browser_no: NaN as any,
+        });
+        expect(result.browser_no).toBe(0);
+        expect(result.agent_bridge_enabled).toBe(false);
+    });
+
+    test('normalizes negative browser_no to 0', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            browser_no: -1,
+        });
+        expect(result.browser_no).toBe(0);
+    });
+
+    test('normalizes browser_no 0 to 0', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            browser_no: 0,
+        });
+        expect(result.browser_no).toBe(0);
+    });
+
+    test('AC-5: legacy config with token but no browser_no does not crash', () => {
+        const result = normalize_agent_bridge_config({
+            agent_bridge_enabled: true,
+            agent_bridge_url: 'http://127.0.0.1:17831',
+            agent_bridge_token: '<LEGACY_TOKEN>',
+            agent_bridge_poll_interval_ms: 1000,
+            browser_no: undefined as any,
+            browser_label: undefined as any,
+        });
+        expect(result.agent_bridge_enabled).toBe(true);
+        expect(result.browser_no).toBe(0);
+        expect(result.browser_label).toBe('');
+    });
+
+    test('legacy token and browser_no both set still work', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            agent_bridge_token: '<TOKEN>',
+            browser_no: 5,
+        });
+        expect(result.agent_bridge_enabled).toBe(true);
+        expect(result.browser_no).toBe(5);
+        expect(result.agent_bridge_token).toBe('<TOKEN>');
     });
 });

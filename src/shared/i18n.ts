@@ -92,6 +92,18 @@ export interface I18nStrings {
     agentBridgeToken: string;
     agentBridgePollInterval: string;
     agentBridgeDesc: string;
+    agentBridgeBrowserNo: string;
+    agentBridgeBrowserLabel: string;
+    agentBridgeBrowserLabelPlaceholder: string;
+    agentBridgeStatus: string;
+    agentBridgeEnrolling: string;
+    agentBridgeEnrolled: string;
+    agentBridgeNotConnected: string;
+    agentBridgeBridgeNotFound: string;
+    agentBridge401Retry: string;
+    agentBridgeLegacy: string;
+    agentBridgeLegacyToken: string;
+    agentBridgeLegacyDesc: string;
 
     // Popup (Capture All redesign)
     mainPanel: string;
@@ -195,6 +207,18 @@ const en: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: 'Poll Interval (ms)',
     agentBridgeDesc: 'Local bridge only; token is required before connecting',
+    agentBridgeBrowserNo: 'Browser No.',
+    agentBridgeBrowserLabel: 'Label (optional)',
+    agentBridgeBrowserLabelPlaceholder: 'e.g. Mac Chrome Dev',
+    agentBridgeStatus: 'Status',
+    agentBridgeEnrolling: 'Enrolling...',
+    agentBridgeEnrolled: 'Connected',
+    agentBridgeNotConnected: 'Not connected',
+    agentBridgeBridgeNotFound: 'Bridge not reachable — check that Bridge is running',
+    agentBridge401Retry: 'Auth expired, re-enrolling...',
+    agentBridgeLegacy: 'Advanced / Legacy',
+    agentBridgeLegacyToken: 'Legacy Bridge Token',
+    agentBridgeLegacyDesc: 'For troubleshooting only. The browser number auto-enroll is recommended.',
 
     mainPanel: 'Main Panel',
     captureDone: 'Capture Complete',
@@ -302,6 +326,18 @@ const zh: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: '轮询间隔（毫秒）',
     agentBridgeDesc: '仅连接本地 bridge；必须填写 token 才会连接',
+    agentBridgeBrowserNo: '浏览器编号',
+    agentBridgeBrowserLabel: '备注名（可选）',
+    agentBridgeBrowserLabelPlaceholder: '如：Mac Chrome Dev',
+    agentBridgeStatus: '状态',
+    agentBridgeEnrolling: '连接中...',
+    agentBridgeEnrolled: '已连接',
+    agentBridgeNotConnected: '未连接',
+    agentBridgeBridgeNotFound: 'Bridge 未启动 — 请检查 Bridge 是否运行',
+    agentBridge401Retry: '认证过期，重新连接中...',
+    agentBridgeLegacy: '高级 / 兼容',
+    agentBridgeLegacyToken: '兼容 Bridge Token',
+    agentBridgeLegacyDesc: '仅用于故障排查。推荐使用浏览器编号自动连接。',
 
     mainPanel: '主面板',
     captureDone: '采集完成',

@@ -45,6 +45,7 @@ declare namespace chrome {
         namespace local {
             function get(keys: string | string[]): Promise<Record<string, any>>;
             function set(items: Record<string, any>): Promise<void>;
+            function remove(keys: string | string[]): Promise<void>;
         }
     }
 

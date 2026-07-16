@@ -1,6 +1,6 @@
 // dashboard/dashboard_settings.ts — 设置页
 import type { UserConfig, ThemeMode } from '../shared/types';
-import { set_locale, type Locale } from '../shared/i18n';
+import { set_locale, type Locale, t } from '../shared/i18n';
 import { set_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { save_user_config } from '../shared/user_config';
@@ -96,9 +96,19 @@ function render_settings(): string {
                     <div class="set-card"><div class="set-grid">
                         <div class="field"><span class="field-lbl">启用 MCP bridge</span>${sw('agent_bridge_enabled', cfg.agent_bridge_enabled)}</div>
                         <div class="field span2"><span class="field-lbl">Bridge URL</span><input class="input mono" data-cfg="agent_bridge_url" value="${esc(cfg.agent_bridge_url)}" placeholder="http://127.0.0.1:17831"></div>
-                        <div class="field span2"><span class="field-lbl">Bridge Token</span><input class="input mono" type="password" data-cfg="agent_bridge_token" value="${esc(cfg.agent_bridge_token)}"></div>
+                        <div class="field"><span class="field-lbl">${t('agentBridgeBrowserNo')}</span><input class="input mono" type="number" data-cfg="browser_no" value="${esc(String(cfg.browser_no || ''))}" placeholder="1" min="1" step="1"></div>
+                        <div class="field"><span class="field-lbl">${t('agentBridgeBrowserLabel')}</span><input class="input mono" data-cfg="browser_label" value="${esc(cfg.browser_label || '')}" placeholder="${esc(t('agentBridgeBrowserLabelPlaceholder'))}"></div>
                         <div class="field"><span class="field-lbl">轮询间隔 (ms)</span><input class="input mono" type="number" data-cfg="agent_bridge_poll_interval_ms" value="${esc(cfg.agent_bridge_poll_interval_ms)}"></div>
-                        <div class="field span2"><span class="field-lbl error-text" id="bridgeErr" style="display:none;color:var(--red-ink)"></span></div>
+                        <div class="field span2" id="bridge-status-area"><span class="field-lbl">${t('agentBridgeStatus')}</span><span class="info mono" id="bridgeStatus">${t('agentBridgeNotConnected')}</span></div>
+                        <div class="field span2 error-text" id="bridgeErr" style="display:none;color:var(--red-ink)"></div>
+                        <div class="field span2" id="bridge-advanced">
+                            <button class="btn sm" id="bridgeAdvToggle" type="button">▸ ${t('agentBridgeLegacy')}</button>
+                            <div id="bridgeAdvContent" style="display:none;margin-top:8px">
+                                <span class="field-lbl" style="display:block;margin-top:4px">${t('agentBridgeLegacyToken')}</span>
+                                <input class="input mono" type="password" data-cfg="agent_bridge_token" value="${esc(cfg.agent_bridge_token)}" style="margin-top:4px">
+                                <span style="font-size:11px;color:var(--ink-3);display:block;margin-top:4px">${t('agentBridgeLegacyDesc')}</span>
+                            </div>
+                        </div>
                     </div></div>
                 </section>
             </div>
@@ -116,11 +126,15 @@ async function persist_bridge(): Promise<void> {
     const c = document.getElementById('content')!;
     const errEl = c.querySelector('#bridgeErr') as HTMLElement | null;
     try {
+        const browser_no_raw = (c.querySelector('[data-cfg="browser_no"]') as HTMLInputElement)?.value || '';
+        const browser_no = browser_no_raw.length > 0 ? Number(browser_no_raw) : 0;
         const patch = normalize_agent_bridge_config({
             agent_bridge_enabled: (c.querySelector('[data-sw="agent_bridge_enabled"]') as HTMLElement)?.dataset.on === '1',
             agent_bridge_url: (c.querySelector('[data-cfg="agent_bridge_url"]') as HTMLInputElement)?.value || '',
             agent_bridge_token: (c.querySelector('[data-cfg="agent_bridge_token"]') as HTMLInputElement)?.value || '',
             agent_bridge_poll_interval_ms: Number((c.querySelector('[data-cfg="agent_bridge_poll_interval_ms"]') as HTMLInputElement)?.value),
+            browser_no,
+            browser_label: (c.querySelector('[data-cfg="browser_label"]') as HTMLInputElement)?.value || '',
         });
         await persist(patch);
         if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
@@ -184,12 +198,22 @@ function wire_settings(): void {
             const v = (el as HTMLInputElement).value;
             if (name === 'locale') { set_locale(v as Locale); await persist({ locale: v as Locale }); }
             else if (name.startsWith('agent_bridge')) await persist_bridge();
+            else if (name === 'browser_no' || name === 'browser_label') await persist_bridge();
             else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes, 1024 * 1048576) } as Partial<UserConfig>);
             else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes, 1024 * 1024) } as Partial<UserConfig>);
             else await persist({ [name]: v } as Partial<UserConfig>);
         });
+    });
+    c.querySelector('#bridgeAdvToggle')?.addEventListener('click', () => {
+        const content = c.querySelector('#bridgeAdvContent') as HTMLElement | null;
+        const toggle = c.querySelector('#bridgeAdvToggle') as HTMLElement | null;
+        if (content && toggle) {
+            const expanded = content.style.display !== 'none';
+            content.style.display = expanded ? 'none' : 'block';
+            toggle.textContent = (expanded ? '\u25b8 ' : '\u25be ') + t('agentBridgeLegacy');
+        }
     });
     wire_diagnostics_settings(c);
 }

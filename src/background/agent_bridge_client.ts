@@ -1,5 +1,12 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
-import { normalize_agent_bridge_config, type AgentBridgeUserConfig } from '../shared/agent_bridge_config';
+import {
+    normalize_agent_bridge_config,
+    type AgentBridgeUserConfig,
+    load_bridge_session,
+    save_bridge_session,
+    clear_bridge_session,
+    generate_instance_id,
+} from '../shared/agent_bridge_config';
 import type { CaptureConfig } from '../shared/types';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
@@ -8,8 +15,9 @@ const logger = new Logger('background/bridge', get_app_log_transport());
 const BRIDGE_ERROR_LOG_INTERVAL_MS = 60_000;
 const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
 
-// Stable per-service-worker lifetime id until T0006 persists browser_no/instance.
-let runtime_instance_id = `inst_${Math.random().toString(36).slice(2, 10)}`;
+let runtime_instance_id = '';
+let session_token: string | null = null;
+let enrolled = false;
 
 export function set_bridge_instance_id_for_tests(instance_id: string): void {
     runtime_instance_id = instance_id;
@@ -17,6 +25,11 @@ export function set_bridge_instance_id_for_tests(instance_id: string): void {
 
 export function get_bridge_instance_id(): string {
     return runtime_instance_id;
+}
+
+export function set_bridge_session_for_tests(token: string | null): void {
+    session_token = token;
+    if (token) enrolled = true;
 }
 
 export interface AgentBridgeClientDeps {
@@ -36,6 +49,7 @@ interface PendingCommand {
 
 type BridgeErrorStage =
     | 'config'
+    | 'enroll'
     | 'heartbeat'
     | 'command_fetch'
     | 'command_dispatch'
@@ -72,6 +86,8 @@ export function stop_bridge_client(): void {
     logger.info('Bridge client stopped');
     running = false;
     lifecycle_id += 1;
+    session_token = null;
+    enrolled = false;
     if (poll_timer !== null) {
         clearTimeout(poll_timer);
         poll_timer = null;
@@ -106,7 +122,16 @@ async function poll_cycle(
             return;
         }
 
-        const { agent_bridge_url, agent_bridge_token } = config;
+        const { agent_bridge_url } = config;
+
+        const token = await resolve_token(config, deps);
+        if (!is_active_lifecycle(active_lifecycle_id)) return;
+
+        if (!token) {
+            schedule_poll(deps, active_lifecycle_id);
+            return;
+        }
+
         const handlers: AgentRuntimeHandlers = {
             start_capture: deps.start_capture,
             stop_capture: deps.stop_capture,
@@ -114,11 +139,11 @@ async function poll_cycle(
         };
 
         stage = 'heartbeat';
-        await send_heartbeat(agent_bridge_url, agent_bridge_token, deps);
+        await send_heartbeat(agent_bridge_url, token, deps);
         if (!is_active_lifecycle(active_lifecycle_id)) return;
 
         stage = 'command_fetch';
-        const command = await fetch_command(agent_bridge_url, agent_bridge_token);
+        const command = await fetch_command(agent_bridge_url, token);
         if (!is_active_lifecycle(active_lifecycle_id)) return;
 
         if (command) {
@@ -130,7 +155,7 @@ async function poll_cycle(
             if (!is_active_lifecycle(active_lifecycle_id)) return;
 
             try {
-                await send_result(agent_bridge_url, agent_bridge_token, result);
+                await send_result(agent_bridge_url, token, result);
             } catch (error) {
                 if (!is_active_lifecycle(active_lifecycle_id)) return;
                 log_bridge_error(
@@ -142,6 +167,16 @@ async function poll_cycle(
         }
     } catch (error) {
         if (!is_active_lifecycle(active_lifecycle_id)) return;
+
+        if (error instanceof BridgeHttpError && error.status === 401) {
+            const config = normalize_agent_bridge_config(await deps.get_user_config());
+            if (!is_active_lifecycle(active_lifecycle_id)) return;
+            await handle_401(config, deps);
+            if (!is_active_lifecycle(active_lifecycle_id)) return;
+            schedule_poll(deps, active_lifecycle_id);
+            return;
+        }
+
         log_bridge_error(
             'polling',
             'Bridge polling failed',
@@ -155,6 +190,86 @@ async function poll_cycle(
             interval_ms
         );
     }
+}
+
+async function resolve_token(config: AgentBridgeUserConfig, deps: AgentBridgeClientDeps): Promise<string | null> {
+    if (session_token) return session_token;
+
+    const session = await load_bridge_session();
+    if (session) {
+        runtime_instance_id = session.instance_id;
+        session_token = session.instance_token;
+        enrolled = true;
+        return session_token;
+    }
+
+    if (config.browser_no > 0) {
+        try {
+            const instance_id = await generate_instance_id();
+            const result = await enroll(config.agent_bridge_url, config.browser_no, config.browser_label, deps.extension_version, instance_id);
+            runtime_instance_id = result.instance_id;
+            session_token = result.instance_token;
+            enrolled = true;
+            await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
+            logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_no: config.browser_no });
+            return session_token;
+        } catch (error) {
+            log_bridge_error(
+                'polling',
+                'Bridge polling failed',
+                { stage: 'enroll', failure_kind: error instanceof BridgeHttpError ? 'http' : 'exception', http_status: error instanceof BridgeHttpError ? error.status : undefined }
+            );
+            return null;
+        }
+    }
+
+    if (config.agent_bridge_token.length > 0) {
+        session_token = config.agent_bridge_token;
+        runtime_instance_id = runtime_instance_id || `inst_${Math.random().toString(36).slice(2, 10)}`;
+        return session_token;
+    }
+
+    return null;
+}
+
+async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClientDeps): Promise<void> {
+    if (!enrolled) return;
+
+    await clear_bridge_session();
+    session_token = null;
+    enrolled = false;
+
+    if (config.browser_no < 1) return;
+
+    try {
+        const instance_id = runtime_instance_id || await generate_instance_id();
+        const result = await enroll(config.agent_bridge_url, config.browser_no, config.browser_label, deps.extension_version, instance_id);
+        runtime_instance_id = result.instance_id;
+        session_token = result.instance_token;
+        enrolled = true;
+        await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
+        logger.info('Bridge re-enrolled after 401', { instance_id: result.instance_id });
+    } catch (error) {
+        log_bridge_error(
+            'polling',
+            'Bridge polling failed',
+            { stage: 'enroll', failure_kind: error instanceof BridgeHttpError ? 'http' : 'exception', http_status: error instanceof BridgeHttpError ? error.status : undefined }
+        );
+    }
+}
+
+async function enroll(url: string, browser_no: number, browser_label: string, extension_version: string, instance_id: string): Promise<{ instance_id: string; instance_token: string }> {
+    const response = await fetch(`${url}/extension/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ browser_no, browser_label: browser_label || null, extension_version, instance_id }),
+    });
+
+    if (!response.ok) throw new BridgeHttpError(response.status);
+
+    const body = await response.json();
+    if (!body.ok) throw new Error(body.error?.message || 'Enroll failed');
+    return body.data;
 }
 
 async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps): Promise<void> {

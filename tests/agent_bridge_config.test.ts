@@ -14,7 +14,7 @@ describe('parse_bridge_config', () => {
             port: 17831,
             token: '<TEST_BRIDGE_TOKEN>',
             command_timeout_ms: 120000,
-            full_data_timeout_ms: 120000,
+            full_data_timeout_ms: 300000,
         });
     });
 

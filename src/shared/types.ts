@@ -673,6 +673,8 @@ export interface UserConfig {
     agent_bridge_url: string;
     agent_bridge_token: string;
     agent_bridge_poll_interval_ms: number;
+    browser_no: number;
+    browser_label: string;
     log_level: LogLevel;
     log_max_size_mb: number;
 }

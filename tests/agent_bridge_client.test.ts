@@ -3,10 +3,15 @@ import {
     is_bridge_client_running,
     start_bridge_client,
     stop_bridge_client,
+    set_bridge_session_for_tests,
     type AgentBridgeClientDeps,
 } from '../src/background/agent_bridge_client';
+import { clear_bridge_session, save_bridge_session } from '../src/shared/agent_bridge_config';
 
 const log_write = vi.hoisted(() => vi.fn());
+const storage_get = vi.hoisted(() => vi.fn());
+const storage_set = vi.hoisted(() => vi.fn());
+const storage_remove = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
@@ -17,6 +22,26 @@ vi.mock('../src/background/app_log_storage', () => ({
         clear: vi.fn(),
     }),
 }));
+
+const chrome_mock = {
+    runtime: {
+        id: 'test-ext-id',
+        getManifest: () => ({ version: '0.1.0' }),
+    },
+    storage: {
+        local: {
+            get: storage_get,
+            set: storage_set,
+            remove: storage_remove,
+        },
+    },
+};
+
+Object.defineProperty(globalThis, 'chrome', {
+    value: chrome_mock,
+    writable: true,
+    configurable: true,
+});
 
 const enabled_config = {
     agent_bridge_enabled: true,
@@ -30,6 +55,17 @@ const disabled_config = {
     agent_bridge_url: 'http://127.0.0.1:17831',
     agent_bridge_token: '',
     agent_bridge_poll_interval_ms: 250,
+    browser_no: 0,
+    browser_label: '',
+};
+
+const browser_enrolled_config = {
+    agent_bridge_enabled: true,
+    agent_bridge_url: 'http://127.0.0.1:17831',
+    agent_bridge_token: '',
+    agent_bridge_poll_interval_ms: 250,
+    browser_no: 2,
+    browser_label: '',
 };
 
 function create_deps(
@@ -82,8 +118,15 @@ function create_deferred<T>(): {
 
 beforeEach(() => {
     stop_bridge_client();
+    set_bridge_session_for_tests(null);
     vi.useFakeTimers();
     log_write.mockClear();
+    storage_get.mockClear();
+    storage_set.mockClear();
+    storage_remove.mockClear();
+    storage_get.mockResolvedValue({});
+    storage_set.mockResolvedValue(undefined);
+    storage_remove.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -207,7 +250,7 @@ describe('agent bridge client', () => {
         vi.spyOn(global, 'fetch').mockImplementation(
             async (input: string | URL | Request) => {
                 if (input.toString().endsWith('/extension/command')) {
-                    return new Response('{}', { status: 401 });
+                    return new Response('{}', { status: 500 });
                 }
                 return new Response('{}', { status: 200 });
             },
@@ -223,7 +266,7 @@ describe('agent bridge client', () => {
                 details: {
                     stage: 'command_fetch',
                     failure_kind: 'http',
-                    http_status: 401,
+                    http_status: 500,
                 },
             }),
         ]);
@@ -536,5 +579,160 @@ describe('agent bridge client', () => {
         await vi.advanceTimersByTimeAsync(60_000);
 
         expect(fetch_spy).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('T0006: auto-enroll and session management', () => {
+    function create_enroll_deps(
+        get_user_config: AgentBridgeClientDeps['get_user_config'] = vi.fn(
+            async () => browser_enrolled_config,
+        ),
+    ): AgentBridgeClientDeps {
+        return {
+            get_user_config,
+            start_capture: vi.fn(async () => ({ success: true })),
+            stop_capture: vi.fn(async () => ({ success: true })),
+            get_status: vi.fn(() => ({ active_capture_id: null })),
+            extension_version: '0.1.0',
+        };
+    }
+
+    function mock_enroll_response(ok: boolean): ReturnType<typeof vi.spyOn> {
+        return vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/enroll') && init?.method === 'POST') {
+                    if (!ok) return new Response('{}', { status: 400 });
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: {
+                            instance_id: 'inst_test_uuid_001',
+                            instance_token: 'ext_test_token_001',
+                            browser_no: 2,
+                        },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+    }
+
+    test('AC-4: logs enroll error when bridge is not reachable', async () => {
+        const fetch_spy = vi.spyOn(global, 'fetch').mockRejectedValue(
+            new Error('fetch failed'),
+        );
+
+        start_bridge_client(create_enroll_deps());
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(fetch_spy.mock.calls.some(
+            ([input]) => input.toString().endsWith('/extension/enroll'),
+        )).toBe(true);
+        expect(get_error_entries().some(
+            (e) => e.message === 'Bridge polling failed' && e.details?.stage === 'enroll',
+        )).toBe(true);
+    });
+
+    test('AC-2: enroll succeeds, session saved, heartbeat uses instance_token', async () => {
+        mock_enroll_response(true);
+
+        start_bridge_client(create_enroll_deps());
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(storage_set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                agent_bridge_session: expect.objectContaining({
+                    instance_id: 'inst_test_uuid_001',
+                    instance_token: 'ext_test_token_001',
+                }),
+            }),
+        );
+
+        const heartbeat_calls = vi.spyOn(global, 'fetch').mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/heartbeat'),
+        );
+        expect(heartbeat_calls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('AC-3: restart recovers session from storage, no re-enroll needed', async () => {
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_restored_001',
+                instance_token: 'ext_restored_token_001',
+            },
+        });
+
+        const fetch_spy = vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps());
+        await run_initial_poll();
+        stop_bridge_client();
+
+        const enroll_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/enroll'),
+        );
+        expect(enroll_calls).toHaveLength(0);
+
+        const heartbeat_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/heartbeat'),
+        );
+        expect(heartbeat_calls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('401 on enrolled session triggers re-enroll', async () => {
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_old_001',
+                instance_token: 'ext_old_token_001',
+            },
+        });
+
+        let enroll_count = 0;
+        let call_count = 0;
+        vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                call_count += 1;
+                if (url.endsWith('/extension/enroll') && init?.method === 'POST') {
+                    enroll_count += 1;
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: {
+                            instance_id: 'inst_new_001',
+                            instance_token: 'ext_new_token_001',
+                            browser_no: 2,
+                        },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                if (call_count === 1) {
+                    return new Response('{}', { status: 401 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps());
+        await run_initial_poll();
+
+        expect(storage_remove).toHaveBeenCalledWith('agent_bridge_session');
+        expect(enroll_count).toBeGreaterThanOrEqual(1);
+
+        stop_bridge_client();
     });
 });

@@ -103,3 +103,63 @@ describe('BUG-008: 当前日志大小用 input 而非 span', () => {
         expect(fn_match![0]).not.toMatch(/logSize[\s\S]*?\.textContent\s*=/)
     })
 })
+
+describe('T0006: browser_no settings UI', () => {
+    it('AC-1: 设置页集成区有浏览器编号输入（正整数），无 Token 必填提示', () => {
+        set_user_config(DEFAULT_USER_CONFIG)
+        const container = document.createElement('div')
+        container.innerHTML = render_settings()
+        const integrations = container.querySelector('#set-integrations')
+
+        expect(integrations).not.toBeNull()
+
+        const browser_no_input = integrations?.querySelector('[data-cfg="browser_no"]') as HTMLInputElement | null
+        expect(browser_no_input).not.toBeNull()
+        expect(browser_no_input?.type).toBe('number')
+        expect(browser_no_input?.getAttribute('min')).toBe('1')
+        expect(browser_no_input?.getAttribute('step')).toBe('1')
+
+        const browser_label_input = integrations?.querySelector('[data-cfg="browser_label"]') as HTMLInputElement | null
+        expect(browser_label_input).not.toBeNull()
+
+        const advanced = integrations?.querySelector('#bridge-advanced')
+        expect(advanced).not.toBeNull()
+        const adv_content = advanced?.querySelector('#bridgeAdvContent')
+        expect(adv_content).not.toBeNull()
+
+        const status_area = integrations?.querySelector('#bridge-status-area')
+        expect(status_area).not.toBeNull()
+
+        expect(integrations?.textContent).not.toContain('必须填写')
+    })
+
+    it('AC-5: 旧配置仅有手贴 token 无 browser_no，升级后渲染不崩溃', () => {
+        const legacy_config = {
+            ...DEFAULT_USER_CONFIG,
+            agent_bridge_enabled: true,
+            agent_bridge_url: 'http://127.0.0.1:17831',
+            agent_bridge_token: '<LEGACY_TOKEN>',
+            agent_bridge_poll_interval_ms: 1000,
+            browser_no: 0,
+            browser_label: '',
+        }
+        set_user_config(legacy_config)
+        const container = document.createElement('div')
+        container.innerHTML = render_settings()
+
+        const integrations = container.querySelector('#set-integrations')
+        expect(integrations).not.toBeNull()
+
+        const browser_no_input = integrations?.querySelector('[data-cfg="browser_no"]') as HTMLInputElement | null
+        expect(browser_no_input).not.toBeNull()
+        expect(browser_no_input?.value).toBe('')
+
+        const token_input = integrations?.querySelector('[data-cfg="agent_bridge_token"]') as HTMLInputElement | null
+        expect(token_input).not.toBeNull()
+        expect(token_input?.value).toBe('<LEGACY_TOKEN>')
+
+        const adv_toggle = integrations?.querySelector('#bridgeAdvToggle')
+        expect(adv_toggle).not.toBeNull()
+        expect(adv_toggle?.textContent).toContain('Legacy')
+    })
+})

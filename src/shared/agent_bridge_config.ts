@@ -2,25 +2,67 @@ import type { UserConfig } from './types';
 
 export type AgentBridgeUserConfig = Pick<
     UserConfig,
-    'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token' | 'agent_bridge_poll_interval_ms'
+    'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token'
+    | 'agent_bridge_poll_interval_ms' | 'browser_no' | 'browser_label'
 >;
 
+export interface BridgeSession {
+    instance_id: string;
+    instance_token: string;
+}
+
+const SESSION_STORAGE_KEY = 'agent_bridge_session';
 const MIN_POLL_INTERVAL_MS = 250;
 const MAX_POLL_INTERVAL_MS = 300000;
 
 export function normalize_agent_bridge_config(config: AgentBridgeUserConfig): AgentBridgeUserConfig {
     const url = parse_local_bridge_url(config.agent_bridge_url);
     const token = config.agent_bridge_token.trim();
+    const browser_no = Number.isFinite(config.browser_no) && config.browser_no > 0 ? config.browser_no : 0;
     const poll_interval_ms = Number.isFinite(config.agent_bridge_poll_interval_ms)
         ? Math.min(MAX_POLL_INTERVAL_MS, Math.max(MIN_POLL_INTERVAL_MS, Math.floor(config.agent_bridge_poll_interval_ms)))
         : MIN_POLL_INTERVAL_MS;
 
     return {
-        agent_bridge_enabled: config.agent_bridge_enabled && token.length > 0,
+        agent_bridge_enabled: config.agent_bridge_enabled && (browser_no > 0 || token.length > 0),
         agent_bridge_url: url.toString().replace(/\/$/, ''),
         agent_bridge_token: token,
-        agent_bridge_poll_interval_ms: poll_interval_ms
+        agent_bridge_poll_interval_ms: poll_interval_ms,
+        browser_no,
+        browser_label: config.browser_label || '',
     };
+}
+
+export async function load_bridge_session(): Promise<BridgeSession | null> {
+    try {
+        const result = await chrome.storage.local.get(SESSION_STORAGE_KEY);
+        const session = result[SESSION_STORAGE_KEY] as BridgeSession | undefined;
+        if (session && session.instance_id && session.instance_token) {
+            return session;
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+export async function save_bridge_session(session: BridgeSession): Promise<void> {
+    await chrome.storage.local.set({ [SESSION_STORAGE_KEY]: session });
+}
+
+export async function clear_bridge_session(): Promise<void> {
+    await chrome.storage.local.remove(SESSION_STORAGE_KEY);
+}
+
+export async function generate_instance_id(): Promise<string> {
+    const existing = await load_bridge_session();
+    if (existing) return existing.instance_id;
+    const instance_id = crypto.randomUUID();
+    return instance_id;
+}
+
+export function browser_no_valid(value: number): boolean {
+    return Number.isInteger(value) && value >= 1;
 }
 
 function parse_local_bridge_url(raw_url: string): URL {

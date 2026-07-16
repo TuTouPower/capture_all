@@ -47,6 +47,8 @@ IndexedDB
 | `/extension/command` | GET | 扩展 | 轮询取命令 |
 | `/extension/result` | POST | 扩展 | 回传结果 |
 | `/extension/heartbeat` | POST | 扩展 | 在线状态 + extension_version + active_capture_id |
+| `/extension/enroll` | POST | 扩展 | 自动登记，返回 instance_id + instance_token + browser_no |
+| `/extension/discover` | GET | 扩展 | 本地发现（bridge 版本、enroll 路径，无需 auth） |
 | `/health` | GET | 任意 | 健康检查 |
 | `/cdp/detect` | POST | 扩展 | 探测外部 CDP 端口 |
 | `/cdp/start` | POST | 扩展 | 启动外部 CDP 采集 |
@@ -82,7 +84,12 @@ IndexedDB
 
 - Bridge 只监听 `127.0.0.1`，不绑定 `0.0.0.0` / 公网。
 - 浏览器请求只允许格式合法的 `chrome-extension://<extension-id>` Origin；HTTP/HTTPS 页面和 `Origin: null` 返回 403。Node / MCP 等无 Origin 本地客户端允许访问。
-- 除 `/health` 外所有 API 必须带 token；token 用户提供，禁止硬编码 / 默认值 / 示例值。无效 / 缺失 → 401，校验使用固定长度摘要恒时比较。
+- 除 `/health` 和 `/extension/discover` 外所有 API 必须带 token；token 用户提供，禁止硬编码 / 默认值 / 示例值。无效 / 缺失 → 401，校验使用固定长度摘要恒时比较。
+- 扩展三大数据端点（heartbeat/command/result）同时支持 MCP token 和 instance_token 鉴权。`resolve_extension_auth` 优先级：MCP token → 注册表中 instance_token sha256 hash 恒时比较。
+- MCP 路由（`/mcp/*`、`/cdp/*`）仅校验 MCP token，拒绝 instance_token（401 TOKEN_INVALID）。
+- enroll 仅接受本机 loopback（MCP token）或合法 `chrome-extension://` Origin；无 Origin 的远程请求不可 enroll。
+- Bridge 仅存储 instance_token 的 sha256 hex hash，不保留明文。enroll 响应是 instance_token 唯一一次可见明文。
+- 同 browser_no 再次 enroll 删除旧实例及其命令队列（顶替），保证编号唯一路由。
 - Bridge Token 推荐通过 `CAPTURE_ALL_BRIDGE_TOKEN` 环境变量传入，避免出现在进程参数。`--token` 保持兼容，同时提供时 CLI 优先。
 - 端口用户配置，禁止硬编码。
 - Bridge 不存储日志、不脱敏、不摘要替代详情。

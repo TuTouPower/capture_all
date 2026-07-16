@@ -749,7 +749,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
     // Write tab_switch event with from/to tracking
     const prev = last_active_tab.get(activeInfo.windowId);
-    const tab = await (chrome.tabs as any).get(activeInfo.tabId) as { url?: string; id?: number; windowId?: number };
+    const tab = await chrome.tabs.get(activeInfo.tabId);
     const tab_url = tab.url || '';
 
     const switch_data: TabSwitchData = {

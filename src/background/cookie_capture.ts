@@ -16,11 +16,10 @@ let capture_id: string;
 let capture_start_epoch_ms: number;
 let send_to_background: (event: CookieCaptureEvent) => void;
 
-// chrome.cookies types are not in the ambient namespace for this project,
-// so we use `any` for callback params (same pattern as network_capture.ts).
-const cookies_api: any = (chrome as any).cookies;
+// chrome.cookies types are now declared in shared/chrome.d.ts
+const cookies_api = chrome.cookies;
 
-function map_cause(info: any): CookieChangeData['cause'] {
+function map_cause(info: { cookie: { name: string; domain: string; path: string; secure: boolean; httpOnly: boolean; sameSite?: string; expirationDate?: number; storeId?: string }; removed: boolean; cause: string }): CookieChangeData['cause'] {
     if (!info.removed) return 'explicit';
     const c = info.cause;
     switch (c) {
@@ -32,7 +31,7 @@ function map_cause(info: any): CookieChangeData['cause'] {
     }
 }
 
-function handle_cookie_changed(info: any): void {
+function handle_cookie_changed(info: { cookie: { name: string; domain: string; path: string; secure: boolean; httpOnly: boolean; sameSite?: string; expirationDate?: number; storeId?: string }; removed: boolean; cause: string }): void {
     if (!is_capturing) return;
 
     const data: CookieChangeData = {

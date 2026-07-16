@@ -17,6 +17,7 @@ declare namespace chrome {
 
     namespace tabs {
         function create(options: { url: string }): Promise<any>;
+        function get(tabId: number): Promise<{ id?: number; url?: string; title?: string; windowId?: number }>;
         function query(queryInfo: { active?: boolean; currentWindow?: boolean }): Promise<Array<{ id?: number; url?: string; title?: string }>>;
         function sendMessage(tabId: number, message: any): Promise<any>;
         const onActivated: {
@@ -94,6 +95,13 @@ declare namespace chrome {
         const onChanged: {
             addListener(callback: (delta: { id: number; state?: { current: string } }) => void): void;
             removeListener(callback: (delta: { id: number; state?: { current: string } }) => void): void;
+        };
+    }
+
+    namespace cookies {
+        const onChanged: {
+            addListener(callback: (info: { cookie: { name: string; domain: string; path: string; secure: boolean; httpOnly: boolean; sameSite?: string; expirationDate?: number; storeId?: string }; removed: boolean; cause: string }) => void): void;
+            removeListener(callback: (info: { cookie: { name: string; domain: string; path: string; secure: boolean; httpOnly: boolean; sameSite?: string; expirationDate?: number; storeId?: string }; removed: boolean; cause: string }) => void): void;
         };
     }
 }

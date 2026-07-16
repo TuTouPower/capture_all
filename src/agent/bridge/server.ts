@@ -1,6 +1,8 @@
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
@@ -22,6 +24,8 @@ const EXTENSION_TTL_MS = 5000;
 const BRIDGE_VERSION = '0.1.0';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
 const MAX_EXTENSION_RESULT_BODY_BYTES = 64 * 1024 * 1024;
+// MCP 文本通道不适配大 payload；超过阈值自动写文件，只回元数据。
+const INLINE_RESULT_MAX_BYTES = 1 * 1024 * 1024;
 
 const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture.get_all_data']);
 
@@ -108,10 +112,18 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || default_timeout);
                 const result = await pending.result;
 
-                const output_path = body.payload.output_path;
-                if (result.ok && typeof output_path === 'string' && output_path.length > 0) {
-                    const written = await write_result_to_file(result, output_path);
-                    return send_json(response, 200, written);
+                if (result.ok && FULL_DATA_COMMANDS.has(body.type)) {
+                    const explicit_path = typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0
+                        ? body.payload.output_path
+                        : null;
+                    const content = extract_result_content(result);
+                    const size_bytes = Buffer.byteLength(content, 'utf-8');
+
+                    if (explicit_path || size_bytes > INLINE_RESULT_MAX_BYTES) {
+                        const output_path = explicit_path || await resolve_auto_output_path(body.payload);
+                        const written = await write_result_to_file(result, output_path, content);
+                        return send_json(response, 200, written);
+                    }
                 }
 
                 return send_json(response, 200, result);
@@ -219,9 +231,36 @@ interface FileOutputResult {
     data: { file_path: string; size_bytes: number };
 }
 
-async function write_result_to_file(result: AgentCommandResult, output_path: string): Promise<FileOutputResult> {
+function extract_result_content(result: AgentCommandResult): string {
     const data = result.data as Record<string, unknown> | undefined;
-    const content = typeof data?.content === 'string' ? data.content : JSON.stringify(data ?? {});
+    return typeof data?.content === 'string' ? data.content : JSON.stringify(data ?? {});
+}
+
+function default_export_dir(): string {
+    const from_env = process.env.CAPTURE_ALL_EXPORT_DIR?.trim();
+    if (from_env) return from_env;
+    return join(tmpdir(), 'capture-all-exports');
+}
+
+async function resolve_auto_output_path(payload: Record<string, unknown>): Promise<string> {
+    const dir = default_export_dir();
+    await mkdir(dir, { recursive: true });
+
+    const capture_id = typeof payload.capture_id === 'string' && payload.capture_id.length > 0
+        ? payload.capture_id
+        : `export_${Date.now()}`;
+    const format = typeof payload.format === 'string' && payload.format.length > 0
+        ? payload.format
+        : 'json';
+    const safe_id = capture_id.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return join(dir, `${safe_id}.${format}`);
+}
+
+async function write_result_to_file(
+    result: AgentCommandResult,
+    output_path: string,
+    content = extract_result_content(result),
+): Promise<FileOutputResult> {
     try {
         await writeFile(output_path, content, 'utf-8');
     } catch (error) {

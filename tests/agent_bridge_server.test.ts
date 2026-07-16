@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import http from 'node:http';
 import { createHash } from 'node:crypto';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { create_bridge_server } from '../src/agent/bridge/server';
 
 const token = '<TEST_BRIDGE_TOKEN>';
@@ -452,7 +455,7 @@ describe('bridge server', () => {
             .toBe(createHash('sha256').update(large_value).digest('hex'));
     });
 
-    it('accepts an exact 32 MiB extension result', async () => {
+    it('accepts an exact 64 MiB extension result', async () => {
         const server = await start_test_server();
 
         await fetch(`${server.url}/extension/heartbeat`, {
@@ -480,7 +483,7 @@ describe('bridge server', () => {
             }),
         });
         const command = await take_next_command(server.url);
-        const limit_bytes = 32 * 1024 * 1024;
+        const limit_bytes = 64 * 1024 * 1024;
         const result_json = JSON.stringify({
             command_id: command.command_id,
             ok: true,
@@ -505,11 +508,11 @@ describe('bridge server', () => {
             ok: true,
             data: { accepted: true },
         });
-    }, 30000);
+    }, 60000);
 
-    it('rejects extension results larger than 32 MiB', async () => {
+    it('rejects extension results larger than 64 MiB', async () => {
         const server = await start_test_server();
-        const oversized_bytes = 32 * 1024 * 1024 + 1;
+        const oversized_bytes = 64 * 1024 * 1024 + 1;
         const body = `${' '.repeat(oversized_bytes - 1)}{`;
 
         expect(Buffer.byteLength(body)).toBe(oversized_bytes);
@@ -530,7 +533,7 @@ describe('bridge server', () => {
                 message: 'JSON body is too large',
             },
         });
-    }, 30000);
+    }, 60000);
 
     it('authenticates extension results before reading the body', async () => {
         const server = await start_test_server();
@@ -729,5 +732,93 @@ describe('bridge server', () => {
 
         // The pending request should be rejected
         await expect(req).rejects.toThrow();
+    });
+
+    it('auto-writes large export results when output_path is omitted', async () => {
+        const server = await start_test_server();
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-auto-export-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            await fetch(`${server.url}/extension/heartbeat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+            });
+
+            const command_response = fetch(`${server.url}/mcp/command`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'capture.export',
+                    payload: { capture_id: 'session-big', format: 'json' },
+                    timeout_ms: 5000,
+                }),
+            });
+
+            const command = await take_next_command(server.url);
+            const large_content = 'x'.repeat(1 * 1024 * 1024 + 10);
+            await fetch(`${server.url}/extension/result`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    command_id: command.command_id,
+                    ok: true,
+                    data: { format: 'json', content: large_content },
+                }),
+            });
+
+            const result = await (await command_response).json() as {
+                command_id: string;
+                ok: boolean;
+                data: { file_path: string; size_bytes: number };
+            };
+
+            expect(result.ok).toBe(true);
+            expect(result.data.size_bytes).toBe(Buffer.byteLength(large_content, 'utf-8'));
+            expect(result.data.file_path).toBe(join(export_dir, 'session-big.json'));
+            expect(await readFile(result.data.file_path, 'utf-8')).toBe(large_content);
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
+    it('keeps small export results inline when output_path is omitted', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0', active_capture_id: null }),
+        });
+
+        const command_response = fetch(`${server.url}/mcp/command`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'capture.export',
+                payload: { capture_id: 'session-small', format: 'json' },
+                timeout_ms: 5000,
+            }),
+        });
+
+        const command = await take_next_command(server.url);
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                command_id: command.command_id,
+                ok: true,
+                data: { format: 'json', content: '{"ok":true}' },
+            }),
+        });
+
+        expect(await (await command_response).json()).toEqual({
+            command_id: command.command_id,
+            ok: true,
+            data: { format: 'json', content: '{"ok":true}' },
+        });
     });
 });

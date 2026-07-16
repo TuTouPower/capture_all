@@ -46,7 +46,11 @@
 |------|------|---------|
 | `export_capture` | 导出采集数据 | `capture_id`, `format`（json / jsonl / html / har）, `output_path`（选填）, `include_response_body`（选填，默认 true） |
 
-大采集优先写文件，不要把完整 JSON 塞回 MCP 文本通道：
+Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
+
+- 结果 ≤ 1 MiB：内联返回完整内容
+- 结果 > 1 MiB 且未指定 `output_path`：自动写到 `CAPTURE_ALL_EXPORT_DIR`（默认系统临时目录 `capture-all-exports/`），MCP 只回 `{ file_path, size_bytes }`
+- 指定 `output_path`：始终写文件
 
 ```json
 {
@@ -59,7 +63,7 @@
 
 - `output_path`：Bridge 将导出内容写入本地文件，MCP 只返回 `{ file_path, size_bytes }`
 - `include_response_body: false`：省略 `network_requests[].response_body`（HAR 省略 `entries[].response.content.text`），体积通常从几十 MB 降到 1MB 量级
-- `get_all_capture_data` 也支持 `output_path`，行为同上
+- `get_all_capture_data` 也支持 `output_path` / 自动分流，行为同上
 
 ### 数据源
 
@@ -90,10 +94,11 @@
 - 上限按完整 JSON HTTP body 的 UTF-8 字节数计算
 - 超过 64 MiB 时 Bridge 向扩展返回 HTTP 413 / `PAYLOAD_TOO_LARGE`，扩展写入脱敏错误日志；当前 MCP 调用仍会等待命令超时
 - 大采集优先：
-  1. `export_capture` + `output_path`（写文件旁路）
+  1. `export_capture`（>1 MiB 自动写文件；可显式传 `output_path`）
   2. `include_response_body: false`（瘦身）
   3. `list_data_sources` → `list_records` 分页 → `get_record`
   4. 扩展 Dashboard 本地导出
+- 自动导出目录：环境变量 `CAPTURE_ALL_EXPORT_DIR`；未设置时用系统临时目录下的 `capture-all-exports/`
 
 ## 采集配置
 

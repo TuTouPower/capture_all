@@ -162,7 +162,7 @@
     {
       "id": "T0010",
       "title": "docs: 对齐 agent_mcp 蓝图与边界（多浏览器/自动绑定/大导出）",
-      "status": "ready",
+      "status": "done",
       "spec": "specs/T0010_docs-agent-mcp-boundary.md",
       "depends_on": [
         "T0006",

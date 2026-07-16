@@ -12,3 +12,4 @@
 - T0007 | mcp list_browsers + schema slim | 2026-07-16 11:36:29 UTC+8 | 完成
 - T0008 | sessionstart auto-bridge + mcp token | 2026-07-16 11:37:13 UTC+8 | 完成
 - T0009 | local pair approval S1 | 2026-07-16 11:45:59 UTC+8 | 完成
+- T0010 | docs alignment blueprint + boundary | 2026-07-16 11:51:22 UTC+8 | 完成

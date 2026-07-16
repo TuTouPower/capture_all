@@ -8,3 +8,4 @@
 - T0002 | timeline marker click（历史补录） | 2026-07-13 UTC+8 | 完成
 - T0003 | dashboard | 2026-07-13 02:48:57 UTC+8 | 完成
 - T0005 | bridge auto-enroll + instance_token hash | 2026-07-16 10\:47\:48 UTC+8 | 完成
+- T0006 | extension browser_no + auto-enroll | 2026-07-16 11:36:10 UTC+8 | 完成

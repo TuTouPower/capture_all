@@ -142,7 +142,7 @@
     {
       "id": "T0009",
       "title": "feat: 本机配对批准（S1）保护 enroll",
-      "status": "ready",
+      "status": "in_progress",
       "spec": "specs/T0009_local-pair-approval.md",
       "depends_on": [
         "T0005",
@@ -153,7 +153,8 @@
         "src/background/agent_bridge_client.ts",
         "src/dashboard/dashboard_settings.ts",
         "tests/agent_bridge_server.test.ts",
-        "tests/agent_bridge_client.test.ts"
+        "tests/agent_bridge_client.test.ts",
+        "src/agent/shared/protocol.ts"
       ],
       "eval": "required",
       "blocked_by": null

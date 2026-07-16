@@ -7,11 +7,22 @@ import { add_absolute_system_time, add_capture_system_times, add_system_times_to
 import type { NetworkRequestData, CaptureRecord, UserConfig, LogLevel } from '../shared/types';
 import type { ExportableCaptureData } from '../shared/system_time';
 
-export async function export_json(capture_id: string): Promise<string> {
+export interface ExportOptions {
+    include_response_body?: boolean;
+}
+
+function strip_response_body(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {
+    if (options?.include_response_body === false) {
+        return requests.map(({ response_body: _omit, ...rest }) => rest as NetworkRequestData);
+    }
+    return requests;
+}
+
+export async function export_json(capture_id: string, options?: ExportOptions): Promise<string> {
     const capture = await get_capture(capture_id);
     if (!capture) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
         get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
@@ -21,6 +32,7 @@ export async function export_json(capture_id: string): Promise<string> {
         get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
+    const network_requests = strip_response_body(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
 
     const user_config = await load_user_config();
@@ -29,11 +41,11 @@ export async function export_json(capture_id: string): Promise<string> {
     return JSON.stringify(result);
 }
 
-export async function export_jsonl(capture_id: string): Promise<string> {
+export async function export_jsonl(capture_id: string, options?: ExportOptions): Promise<string> {
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
         get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
@@ -43,6 +55,7 @@ export async function export_jsonl(capture_id: string): Promise<string> {
         get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
+    const network_requests = strip_response_body(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
 
     const user_config = await load_user_config();
@@ -62,11 +75,11 @@ export async function export_jsonl(capture_id: string): Promise<string> {
     return lines.join('\n');
 }
 
-export async function export_html(capture_id: string): Promise<string> {
+export async function export_html(capture_id: string, options?: ExportOptions): Promise<string> {
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
         get_events_by_category(capture_id, 'user_action', 0, 100000),
         get_events_by_category(capture_id, 'navigation', 0, 100000),
         get_network_requests(capture_id, 0, 100000),
@@ -76,6 +89,7 @@ export async function export_html(capture_id: string): Promise<string> {
         get_events_by_category(capture_id, 'cookie', 0, 100000)
     ]);
 
+    const network_requests = strip_response_body(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
 
     const user_config = await load_user_config();
@@ -150,11 +164,12 @@ document.getElementById('jsonData').textContent = JSON.stringify(data, null, 2);
 </html>`;
 }
 
-export async function export_har(capture_id: string): Promise<string> {
+export async function export_har(capture_id: string, options?: ExportOptions): Promise<string> {
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const network_requests = await get_network_requests(capture_id, 0, 100000);
+    const network_requests_raw = await get_network_requests(capture_id, 0, 100000);
+    const network_requests = strip_response_body(network_requests_raw, options);
     const user_config = await load_user_config();
     const har = build_har(session, network_requests, user_config);
     return JSON.stringify(har, null, 2);
@@ -268,7 +283,7 @@ function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 's
             headers: res_headers,
             cookies: [],
             content: {
-                size: r.response_body ? r.response_body.length : 0,
+                size: r.response_body ? r.response_body.length : (r.response_body_bytes ?? 0),
                 mimeType: res_mime,
                 ...(r.response_body ? { text: r.response_body } : {})
             },

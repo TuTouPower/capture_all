@@ -82,7 +82,9 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'capture.get_all_data':
             return load_agent_capture_data(get_required_capture_id(payload));
         case 'capture.export':
-            return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'));
+            return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'), {
+                include_response_body: get_optional_boolean(payload, 'include_response_body'),
+            });
     }
 }
 
@@ -134,16 +136,16 @@ async function get_capture_metadata(capture_id: string): Promise<unknown> {
     return capture;
 }
 
-async function export_capture(capture_id: string, format: string): Promise<unknown> {
+async function export_capture(capture_id: string, format: string, options?: { include_response_body?: boolean }): Promise<unknown> {
     switch (format) {
         case 'json':
-            return { format, content: await export_json(capture_id) };
+            return { format, content: await export_json(capture_id, options) };
         case 'jsonl':
-            return { format, content: await export_jsonl(capture_id) };
+            return { format, content: await export_jsonl(capture_id, options) };
         case 'html':
-            return { format, content: await export_html(capture_id) };
+            return { format, content: await export_html(capture_id, options) };
         case 'har':
-            return { format, content: await export_har(capture_id) };
+            return { format, content: await export_har(capture_id, options) };
         default:
             throw new AgentCommandError('INVALID_QUERY', 'Unsupported export format');
     }
@@ -169,6 +171,15 @@ function get_optional_number(payload: Record<string, unknown>, key: string): num
     if (value === undefined) return undefined;
     if (typeof value !== 'number' || !Number.isFinite(value)) {
         throw new AgentCommandError('INVALID_QUERY', `${key} must be a number`);
+    }
+    return value;
+}
+
+function get_optional_boolean(payload: Record<string, unknown>, key: string): boolean | undefined {
+    const value = payload[key];
+    if (value === undefined) return undefined;
+    if (typeof value !== 'boolean') {
+        throw new AgentCommandError('INVALID_QUERY', `${key} must be a boolean`);
     }
     return value;
 }

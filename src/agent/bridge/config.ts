@@ -30,7 +30,7 @@ export function parse_bridge_config(raw: RawBridgeConfig): AgentBridgeConfig {
         port,
         token: raw.token,
         command_timeout_ms: raw.command_timeout_ms ?? 120000,
-        full_data_timeout_ms: raw.full_data_timeout_ms ?? 120000,
+        full_data_timeout_ms: raw.full_data_timeout_ms ?? 300000,
     };
 }
 

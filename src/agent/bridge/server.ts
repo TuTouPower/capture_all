@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
@@ -20,7 +21,9 @@ interface CommandRequest {
 const EXTENSION_TTL_MS = 5000;
 const BRIDGE_VERSION = '0.1.0';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
-const MAX_EXTENSION_RESULT_BODY_BYTES = 32 * 1024 * 1024;
+const MAX_EXTENSION_RESULT_BODY_BYTES = 64 * 1024 * 1024;
+
+const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture.get_all_data']);
 
 export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
     const queue = new AgentCommandQueue();
@@ -99,8 +102,18 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 }
 
                 const body = validate_command_request(await read_json(request));
-                const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || config.command_timeout_ms);
+                const default_timeout = FULL_DATA_COMMANDS.has(body.type)
+                    ? config.full_data_timeout_ms
+                    : config.command_timeout_ms;
+                const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || default_timeout);
                 const result = await pending.result;
+
+                const output_path = body.payload.output_path;
+                if (result.ok && typeof output_path === 'string' && output_path.length > 0) {
+                    const written = await write_result_to_file(result, output_path);
+                    return send_json(response, 200, written);
+                }
+
                 return send_json(response, 200, result);
             }
 
@@ -193,11 +206,32 @@ function actual_port(server: http.Server): number {
 class BridgeHttpError extends Error {
     constructor(
         readonly status: number,
-        readonly code: 'INVALID_QUERY' | 'PAYLOAD_TOO_LARGE',
+        readonly code: 'INVALID_QUERY' | 'PAYLOAD_TOO_LARGE' | 'BRIDGE_UNAVAILABLE',
         message: string,
     ) {
         super(message);
     }
+}
+
+interface FileOutputResult {
+    command_id: string;
+    ok: true;
+    data: { file_path: string; size_bytes: number };
+}
+
+async function write_result_to_file(result: AgentCommandResult, output_path: string): Promise<FileOutputResult> {
+    const data = result.data as Record<string, unknown> | undefined;
+    const content = typeof data?.content === 'string' ? data.content : JSON.stringify(data ?? {});
+    try {
+        await writeFile(output_path, content, 'utf-8');
+    } catch (error) {
+        throw new BridgeHttpError(500, 'BRIDGE_UNAVAILABLE', error instanceof Error ? error.message : 'Failed to write file');
+    }
+    return {
+        command_id: result.command_id,
+        ok: true,
+        data: { file_path: output_path, size_bytes: Buffer.byteLength(content, 'utf-8') },
+    };
 }
 
 function validate_heartbeat(value: unknown): Omit<ExtensionHeartbeat, 'seen_at'> {

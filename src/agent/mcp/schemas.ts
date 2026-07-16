@@ -94,12 +94,15 @@ const get_timeline_item_schema = z.object({
 
 const get_all_capture_data_schema = z.object({
     capture_id: capture_id_schema,
+    output_path: z.string().min(1).optional(),
     timeout_ms: timeout_ms_schema,
 });
 
 const export_capture_schema = z.object({
     capture_id: capture_id_schema,
     format: z.enum(['json', 'jsonl', 'html', 'har']),
+    output_path: z.string().min(1).optional(),
+    include_response_body: z.boolean().optional(),
     timeout_ms: timeout_ms_schema,
 });
 

@@ -38,13 +38,28 @@
 | `get_record` | 单条完整原始记录 | `capture_id`, `source`, `record_id` |
 | `get_timeline` | 合并时间线 | `capture_id`, `sources`, `offset`, `limit` |
 | `get_timeline_item` | 时间线条目详情 | `capture_id`, `item_id` |
-| `get_all_capture_data` | 全量数据（谨慎使用） | `capture_id` |
+| `get_all_capture_data` | 全量数据（谨慎使用） | `capture_id`, `output_path`（选填） |
 
 ### 导出
 
 | 工具 | 说明 | 关键参数 |
 |------|------|---------|
-| `export_capture` | 导出采集数据 | `capture_id`, `format`（json / jsonl / html / har） |
+| `export_capture` | 导出采集数据 | `capture_id`, `format`（json / jsonl / html / har）, `output_path`（选填）, `include_response_body`（选填，默认 true） |
+
+大采集优先写文件，不要把完整 JSON 塞回 MCP 文本通道：
+
+```json
+{
+  "capture_id": "session-xxx",
+  "format": "json",
+  "output_path": "/absolute/path/export.json",
+  "include_response_body": false
+}
+```
+
+- `output_path`：Bridge 将导出内容写入本地文件，MCP 只返回 `{ file_path, size_bytes }`
+- `include_response_body: false`：省略 `network_requests[].response_body`（HAR 省略 `entries[].response.content.text`），体积通常从几十 MB 降到 1MB 量级
+- `get_all_capture_data` 也支持 `output_path`，行为同上
 
 ### 数据源
 
@@ -62,15 +77,23 @@
 
 ### timeout_ms
 
-所有工具支持 `timeout_ms` 参数（单位 ms）。大采集建议加到 60000-120000。
+所有工具支持 `timeout_ms` 参数（单位 ms）。
+
+- 普通命令默认 `command_timeout_ms` = 120s
+- `export_capture` / `get_all_capture_data` 默认 `full_data_timeout_ms` = 300s
+- 显式传入的 `timeout_ms` 始终优先
 
 ### 结果大小限制
 
 - `timeout_ms` 只控制等待时间，不会绕过请求体大小限制
-- Bridge 普通 JSON 请求体上限为 1 MiB；`/extension/result` 回传上限为 32 MiB
+- Bridge 普通 JSON 请求体上限为 1 MiB；`/extension/result` 回传上限为 64 MiB
 - 上限按完整 JSON HTTP body 的 UTF-8 字节数计算
-- 超过 32 MiB 时 Bridge 向扩展返回 HTTP 413 / `PAYLOAD_TOO_LARGE`，扩展写入脱敏错误日志；当前 MCP 调用仍会等待命令超时
-- 大采集优先使用 `list_data_sources` → `list_records` 分页 → `get_record` 获取单条完整数据，或使用扩展本地导出
+- 超过 64 MiB 时 Bridge 向扩展返回 HTTP 413 / `PAYLOAD_TOO_LARGE`，扩展写入脱敏错误日志；当前 MCP 调用仍会等待命令超时
+- 大采集优先：
+  1. `export_capture` + `output_path`（写文件旁路）
+  2. `include_response_body: false`（瘦身）
+  3. `list_data_sources` → `list_records` 分页 → `get_record`
+  4. 扩展 Dashboard 本地导出
 
 ## 采集配置
 

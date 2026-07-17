@@ -1,5 +1,5 @@
 // content/content_script.ts
-import type { CaptureConfig, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
+import type { CaptureConfig, CaptureEvent, EventType, RouteChangeData, DomReadyData, PageLoadData } from '../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
 import { category_for_event_type } from '../shared/event_category';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
@@ -19,6 +19,9 @@ import { start_websocket_capture, stop_websocket_capture } from './websocket_cap
 import { DEFAULT_CONFIG } from '../shared/constants';
 import { Logger, MessageLogTransport } from '../shared/logger';
 import { start_status_poll, type CaptureStatusResponse } from '../shared/poll_capture_status';
+
+/** Unified sender type accepted by all content capture modules. */
+type ContentSender = (event: CaptureEvent, data?: unknown) => void;
 
 const log_transport = new MessageLogTransport();
 const logger = new Logger('content/script', log_transport);
@@ -94,32 +97,22 @@ function start_capture(config: CaptureConfig): void {
     send_capture_event('navigation', 'page_load', page_load_data);
 
     // Start capture modules based on config
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, send_event as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, send_event as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_scroll_capture(send_event as any, { capture_id, capture_start_epoch_ms, tab_id });
+    // Wrapper adapts send_event's union-param signature to the typed sender each module expects.
+    const sender: ContentSender = (event, data) => send_event(event, data);
+    start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
+    start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
+    start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
     start_dom_capture(config, send_event);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_storage_capture(send_event as any, capture_id, capture_start_epoch_ms);
+    start_storage_capture(sender, capture_id, capture_start_epoch_ms);
     start_network_hook(send_event);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_clipboard_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_form_submit_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_focus_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_visibility_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_resize_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_fullscreen_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_print_capture(send_event as any, capture_id, capture_start_epoch_ms, tab_id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    start_websocket_capture(send_event as any, capture_id, capture_start_epoch_ms);
+    start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_visibility_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_fullscreen_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_print_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_websocket_capture(sender, capture_id, capture_start_epoch_ms);
 
     logger.debug('All capture modules started', {
         modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook', 'clipboard', 'form_submit', 'focus', 'visibility', 'resize', 'fullscreen', 'print', 'websocket'],
@@ -221,11 +214,11 @@ function stop_capture(): void {
 }
 
 /** Send a fully-typed CaptureEvent for navigation/lifecycle events */
-function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: string, data: unknown): void {
+function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: EventType, data: unknown): void {
     const event = create_content_event({
         capture_id,
         category,
-        type: type as any,
+        type,
         relative_time_ms: get_relative_time(capture_start_epoch_ms),
         tab_id,
         frame_id,
@@ -240,7 +233,7 @@ function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: 
     });
 }
 
-function send_event(type_or_event: string | Record<string, unknown>, data?: unknown): void {
+function send_event(type_or_event: string | CaptureEvent, data?: unknown): void {
     if (!is_capturing) return;
 
     // New format: called with (CaptureEvent, data) from migrated modules

@@ -1,4 +1,5 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
+import type { AgentCommandType } from '../agent/shared/protocol';
 import {
     normalize_agent_bridge_config,
     type AgentBridgeUserConfig,
@@ -149,7 +150,7 @@ async function poll_cycle(
         if (command) {
             stage = 'command_dispatch';
             const result = await dispatch_agent_command(
-                { command_id: command.command_id, type: command.type as any, payload: command.payload ?? {}, created_at: command.created_at },
+                { command_id: command.command_id, type: command.type as AgentCommandType, payload: command.payload ?? {}, created_at: command.created_at },
                 handlers
             );
             if (!is_active_lifecycle(active_lifecycle_id)) return;

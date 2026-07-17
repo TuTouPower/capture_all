@@ -131,6 +131,7 @@ export async function handle_cdp_start(
         // Connect to CDP WebSocket
         const ws = new WebSocket(target.webSocketDebuggerUrl);
         let seq = 0;
+        const body_seq_to_req_id = new Map<number, string>();
 
         ws.onopen = () => {
             session.cdp_ws = ws;
@@ -227,10 +228,7 @@ export async function handle_cdp_start(
                         }));
 
                         // Store the seq mapping so we can match the response
-                        const event = session.events.find(e => e.request_id === req_id);
-                        if (event) {
-                            (event as any)._body_seq = seq;
-                        }
+                        body_seq_to_req_id.set(seq, req_id);
                     }
                 } else if (msg.method === 'Network.loadingFailed') {
                     const req_id = msg.params?.requestId;
@@ -243,9 +241,11 @@ export async function handle_cdp_start(
                 } else if (msg.id && typeof msg.id === 'number') {
                     // Response to a command — likely getResponseBody
                     // Find the event that was waiting for this response
-                    const waiting_event = session.events.find(
-                        e => (e as any)._body_seq === msg.id && e.response_body_status === 'pending'
-                    );
+                    const pending_req_id = body_seq_to_req_id.get(msg.id);
+                    const waiting_event = pending_req_id
+                        ? session.events.find(e => e.request_id === pending_req_id && e.response_body_status === 'pending')
+                        : undefined;
+                    body_seq_to_req_id.delete(msg.id);
                     if (waiting_event && msg.result) {
                         if (msg.result.body && typeof msg.result.body === 'string') {
                             if (msg.result.base64Encoded) {
@@ -265,7 +265,6 @@ export async function handle_cdp_start(
                         } else {
                             waiting_event.response_body_status = 'cdp_failed';
                         }
-                        delete (waiting_event as any)._body_seq;
                     }
                 }
             } catch {

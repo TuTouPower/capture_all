@@ -341,7 +341,7 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
         url: start_url,
         source: 'background',
     });
-    await write_events([{ ...started_event, data: started_data } as any]);
+    await write_events([{ ...started_event, data: started_data }]);
 
     // Start keepalive
     start_keepalive();
@@ -504,7 +504,7 @@ async function stop_capture(): Promise<{ success: boolean }> {
             duration_ms,
             stats: current_capture.stats,
         };
-        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data } as any]));
+        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data }]));
 
         // Update capture end fields
         await run_stop_step('update_capture', async () => {
@@ -768,7 +768,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         url: tab_url,
         source: 'background',
     });
-    await write_events([{ ...switch_event, data: switch_data } as any]);
+    await write_events([{ ...switch_event, data: switch_data }]);
 
     // Update tracking
     last_active_tab.set(activeInfo.windowId, { tab_id: activeInfo.tabId, url: tab_url });
@@ -852,7 +852,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         url: tab.url || tab.pendingUrl || '',
         source: 'background',
     });
-    await write_events([{ ...event, data } as any]);
+    await write_events([{ ...event, data }]);
 });
 
 // Tab URL change listener
@@ -882,7 +882,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         url: new_url,
         source: 'background',
     });
-    await write_events([{ ...event, data } as any]);
+    await write_events([{ ...event, data }]);
 
     // Retry CDP-based capture if navigating from restricted URL to normal page
     const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');

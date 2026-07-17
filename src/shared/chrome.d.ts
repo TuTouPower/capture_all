@@ -74,12 +74,12 @@ declare namespace chrome {
     }
 
     namespace dbg {
-        function attach(target: { tabId: number }, version: string): Promise<void>;
-        function detach(target: { tabId: number }): Promise<void>;
-        function sendCommand(target: { tabId: number }, method: string, params?: any): Promise<any>;
+        function attach(target: { tabId: number; sessionId?: string }, version: string): Promise<void>;
+        function detach(target: { tabId: number; sessionId?: string }): Promise<void>;
+        function sendCommand(target: { tabId: number; sessionId?: string }, method: string, params?: any): Promise<any>;
         const onEvent: {
-            addListener(callback: (source: any, method: string, params: any) => void): void;
-            removeListener(callback: (source: any, method: string, params: any) => void): void;
+            addListener(callback: (source: { tabId?: number; sessionId?: string }, method: string, params: any) => void): void;
+            removeListener(callback: (source: { tabId?: number; sessionId?: string }, method: string, params: any) => void): void;
         };
     }
 

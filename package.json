@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.10",
     "esbuild": "^0.28.1",

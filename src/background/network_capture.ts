@@ -167,19 +167,19 @@ export function start_network_capture(
     chrome.webRequest.onBeforeRequest.addListener(
         handle_before_request,
         { urls: ['<all_urls>'] },
-        ['requestBody'] as any
+        ['requestBody']
     );
 
     chrome.webRequest.onBeforeSendHeaders.addListener(
         handle_before_send_headers,
         { urls: ['<all_urls>'] },
-        ['requestHeaders', 'extraHeaders'] as any
+        ['requestHeaders', 'extraHeaders']
     );
 
     chrome.webRequest.onHeadersReceived.addListener(
         handle_headers_received,
         { urls: ['<all_urls>'] },
-        ['responseHeaders', 'extraHeaders'] as any
+        ['responseHeaders', 'extraHeaders']
     );
 
     chrome.webRequest.onCompleted.addListener(
@@ -211,7 +211,7 @@ export function stop_network_capture(): void {
         // M3 safety valve: release all sub-targets before detaching
         for (const session_id of get_attached_sessions()) {
             chrome.dbg.sendCommand(
-                { tabId: tab, sessionId: session_id } as any,
+                { tabId: tab, sessionId: session_id },
                 'Runtime.runIfWaitingForDebugger'
             ).catch(() => { /* best-effort */ });
         }
@@ -410,7 +410,7 @@ function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: a
     send_to_background({ event, data: frame_data });
 }
 
-function handle_cdp_event(source: any, method: string, params: any): void {
+function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
     if (!is_capturing || dbg_tab_id === null) return;
     if (!should_handle_event(source, dbg_tab_id)) return;
 
@@ -419,7 +419,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
         const child_session = params?.sessionId;
         if (child_session) {
             register_session(child_session);
-            const child_target = { tabId: dbg_tab_id!, sessionId: child_session } as any;
+            const child_target = { tabId: dbg_tab_id!, sessionId: child_session };
             chrome.dbg.sendCommand(
                 child_target,
                 'Network.enable',
@@ -550,7 +550,7 @@ function handle_cdp_event(source: any, method: string, params: any): void {
     }
 
     if (method === 'Network.dataReceived' && streaming_requests.has(req_id)) {
-        const chunk = (params as any)?.data;
+        const chunk = params?.data;
         if (chunk && stream_buffer_instance) {
             stream_buffer_instance.append(req_id, chunk);
         }

@@ -25,12 +25,12 @@ export function clear_sessions(): void {
 }
 
 export function should_handle_event(
-    source: { tabId?: number } | undefined,
+    source: { tabId?: number; sessionId?: string } | undefined,
     dbg_tab_id: number | null
 ): boolean {
     if (dbg_tab_id === null) return false;
     if (source?.tabId !== dbg_tab_id) return false;
-    const session_id = (source as any)?.sessionId as string | undefined;
+    const session_id = source?.sessionId;
     if (session_id && !attached_sessions.has(session_id)) return false;
     return true;
 }

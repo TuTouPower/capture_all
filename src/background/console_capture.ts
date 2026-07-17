@@ -96,7 +96,7 @@ function map_severity(level: string): 'info' | 'warning' | 'error' {
     return 'info';
 }
 
-function handle_debugger_event(_source: any, method: string, params: any): void {
+function handle_debugger_event(_source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
     if (!is_capturing) return;
 
     // ── Sub-target lifecycle (BUG-003 fix) ──
@@ -110,7 +110,7 @@ function handle_debugger_event(_source: any, method: string, params: any): void 
         const child_session = params?.sessionId;
         if (child_session) {
             register_session(child_session);
-            const child_target = { tabId: tab_id, sessionId: child_session } as any;
+            const child_target = { tabId: tab_id, sessionId: child_session };
             chrome.dbg.sendCommand(child_target, 'Runtime.enable').catch((err: any) => {
                 logger.debug('sub_target_runtime_enable_failed', { sessionId: child_session, error: String(err).slice(0, 80) });
             });

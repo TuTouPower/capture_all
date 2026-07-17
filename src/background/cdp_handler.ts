@@ -107,7 +107,7 @@ export interface DeferredEntry {
     pending_cdp_ids: Set<string>;
 }
 
-export function handle_cdp_event(source: any, method: string, params: any, state: CdpHandlerState): void {
+export function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method: string, params: any, state: CdpHandlerState): void {
     if (!state.is_capturing || state.dbg_tab_id === null) return;
     if (!should_handle_event(source, state.dbg_tab_id)) return;
 
@@ -179,7 +179,7 @@ function handle_sub_target_attached(params: any, state: CdpHandlerState): void {
     const child_session = params?.sessionId;
     if (child_session) {
         register_session(child_session);
-        const child_target = { tabId: state.dbg_tab_id!, sessionId: child_session } as any;
+        const child_target = { tabId: state.dbg_tab_id!, sessionId: child_session };
         chrome.dbg.sendCommand(
             child_target,
             'Network.enable',
@@ -306,7 +306,7 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
 
 function handle_data_received(req_id: string, params: any, state: CdpHandlerState): void {
     if (state.streaming_requests.has(req_id)) {
-        const chunk = (params as any)?.data;
+        const chunk = params?.data;
         if (chunk && state.stream_buffer_instance) {
             state.stream_buffer_instance.append(req_id, chunk);
         }

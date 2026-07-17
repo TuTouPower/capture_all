@@ -209,7 +209,7 @@ test.describe('T0001 轨道视图缩放滑块', () => {
             return document.querySelectorAll('#tlLanes .tl-hidden').length;
         });
         // 硬门断言：若有 hidden 标记则 FAIL
-        expect(hidden_count, '复位后不应有任何隐藏标记——AC-3 要求所有标记重新可见').toBe(50);
+        expect(hidden_count, '复位后不应有任何隐藏标记——AC-3 要求所有标记重新可见').toBe(0);
 
         await detail.close();
     });

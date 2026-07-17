@@ -178,6 +178,10 @@ test.describe('日志系统', () => {
         await dash.locator('[data-setnav="set-diagnostics"]').click();
         await dash.waitForTimeout(300);
 
+        // 禁用 showSaveFilePicker 让代码走 chrome.downloads.download 路径
+        await dash.evaluate(() => {
+            delete (globalThis as any).showSaveFilePicker;
+        });
         // P0.61: 默认 export_log_directory 为空，filename 无 '/'
         // → saveAs=true，dash.waitForEvent('download') 在 headed 环境下不可靠。
         // 用 chrome.downloads.download mock 捕获调用（参考 e2e-export.spec.ts:255）。
@@ -327,6 +331,10 @@ test.describe('日志系统', () => {
         await dash.locator('[data-setnav="set-diagnostics"]').click();
         await dash.waitForTimeout(300);
 
+        // 禁用 showSaveFilePicker 让代码走 chrome.downloads.download 路径
+        await dash.evaluate(() => {
+            delete (globalThis as any).showSaveFilePicker;
+        });
         // P0.61: saveAs=true 时 download event 不可靠 → mock chrome.downloads.download
         await dash.evaluate(() => {
             const calls: Array<{ url: string; filename: string }> = [];
@@ -394,6 +402,10 @@ test.describe('日志系统', () => {
         await set_log_level(dash, 'debug');
         await dash.waitForTimeout(300);
 
+        // 禁用 showSaveFilePicker 让代码走 chrome.downloads.download 路径
+        await dash.evaluate(() => {
+            delete (globalThis as any).showSaveFilePicker;
+        });
         // P0.61: saveAs=true 时 download event 不可靠 → mock chrome.downloads.download
         await dash.evaluate(() => {
             const calls: Array<{ filename: string }> = [];
@@ -432,18 +444,36 @@ test.describe('日志系统', () => {
         await set_log_level(dash, 'debug');
         await dash.waitForTimeout(300);
 
-        const [download] = await Promise.all([
-            dash.waitForEvent('download', { timeout: 8000 }),
-            dash.locator('#exportLog').click(),
-        ]);
+        // 禁用 showSaveFilePicker 让代码走 chrome.downloads.download 路径
+        await dash.evaluate(() => {
+            delete (globalThis as any).showSaveFilePicker;
+            const calls: Array<{ url: string; filename: string }> = [];
+            (window as any).__log_dl_calls = calls;
+            const orig = chrome.downloads.download;
+            (window as any).__orig_dl = orig;
+            chrome.downloads.download = ((opts: any) => {
+                calls.push({
+                    url: String(opts.url ?? ''),
+                    filename: String(opts.filename ?? ''),
+                });
+                return Promise.resolve(1);
+            }) as typeof chrome.downloads.download;
+        });
+        dash.on('dialog', (d) => d.dismiss());
 
-        const path = await download.path();
-        expect(path).toBeTruthy();
+        await dash.locator('#exportLog').click();
+        await dash.waitForTimeout(2000);
 
-        const fs = await import('fs');
-        const content = fs.readFileSync(path!, 'utf-8');
-        // 内容应为可读文本，不是 JSON
-        expect(content.length).toBeGreaterThan(0);
+        const result = await dash.evaluate(async () => {
+            const calls = (window as any).__log_dl_calls as Array<{ url: string; filename: string }>;
+            chrome.downloads.download = (window as any).__orig_dl;
+            if (calls.length === 0) return { filename: '', content: '' };
+            const blob = await fetch(calls[0].url).then(r => r.text());
+            return { filename: calls[0].filename, content: blob };
+        });
+
+        expect(result.content.length, '内容长度应大于 0').toBeGreaterThan(0);
+        const content = result.content;
         // 不应是 JSON 格式
         expect(() => JSON.parse(content)).toThrow();
 

@@ -7,11 +7,12 @@ import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus, WsFrameData }
 import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
 import type { CdpBodyEvent } from './network_correlator';
-import { should_handle_event, clear_sessions, register_session, unregister_session, get_attached_sessions } from './cdp_event_router';
+import { should_handle_event, register_session, unregister_session } from './cdp_event_router';
 import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
-import { headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
+import { resolve_resource_type, extract_mime_type } from './network_webrequest';
+import { build_network_event } from './webrequest_handler';
 
 const logger = new Logger('background/cdp', get_app_log_transport());
 
@@ -23,6 +24,7 @@ export interface CdpHandlerState {
     config: NetworkCaptureConfig;
     dbg_tab_id: number | null;
     dbg_attached_externally: boolean;
+    pending_requests: Map<string, PendingRequest>;
     cdp_request_meta: Map<string, CdpRequestMeta>;
     cdp_body_results: Map<string, CdpBodyResult>;
     cdp_primary_emitted: Set<string>;
@@ -313,7 +315,7 @@ function handle_data_received(req_id: string, params: any, state: CdpHandlerStat
     }
 }
 
-function handle_loading_finished(req_id: string, params: any, state: CdpHandlerState): void {
+function handle_loading_finished(req_id: string, _params: any, state: CdpHandlerState): void {
     if (state.dbg_tab_id === null) return;
     state.finished_before_stream.add(req_id);
     const meta_for_method = state.cdp_request_meta.get(req_id);
@@ -426,7 +428,7 @@ function handle_loading_finished(req_id: string, params: any, state: CdpHandlerS
     });
 }
 
-function handle_loading_failed(req_id: string, params: any, state: CdpHandlerState): void {
+function handle_loading_failed(req_id: string, _params: any, state: CdpHandlerState): void {
     const fail_meta = state.cdp_request_meta.get(req_id);
     const fail_method = fail_meta?.method?.toUpperCase() || '';
     const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
@@ -748,7 +750,7 @@ function try_resolve_deferred(cdp_req_id: string, state: CdpHandlerState): void 
             state.cdp_request_meta.delete(cdp_req_id);
             state._deferred_cdp_index.delete(cdp_req_id);
             state.send_to_background(build_network_event(
-                entry.pending, entry.details, body_result.body, body_result.status, body_result.preview, state
+                entry.pending, entry.details, body_result.body, body_result.status, state, body_result.preview
             ));
             return;
         }

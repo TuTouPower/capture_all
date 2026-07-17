@@ -34,8 +34,12 @@ test.describe('T0003 dashboard 导航与设置集成', () => {
         await expect(dashboard.locator('#set-integrations')).toBeVisible();
         await expect(dashboard.locator('[data-sw="agent_bridge_enabled"]')).toBeVisible();
         await expect(dashboard.locator('[data-cfg="agent_bridge_url"]')).toBeVisible();
-        await expect(dashboard.locator('[data-cfg="agent_bridge_token"]')).toBeVisible();
         await expect(dashboard.locator('[data-cfg="agent_bridge_poll_interval_ms"]')).toBeVisible();
+
+        // agent_bridge_token 在折叠的高级选项中，需先展开
+        await dashboard.locator('#bridgeAdvToggle').click();
+        await dashboard.waitForTimeout(300);
+        await expect(dashboard.locator('[data-cfg="agent_bridge_token"]')).toBeVisible();
 
         await dashboard.close();
     });

@@ -133,7 +133,7 @@ async function bridge_post(path: string, body: unknown): Promise<any> {
     return res.json();
 }
 
-test.describe('MCP Bridge E2E', () => {
+test.describe.serial('MCP Bridge E2E', () => {
     test('bridge health check', async () => {
         const res = await fetch(`http://127.0.0.1:${BRIDGE_PORT}/health`);
         const data = await res.json() as Record<string, unknown>;
@@ -162,7 +162,7 @@ test.describe('MCP Bridge E2E', () => {
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
-        expect(data.data).toHaveProperty('capture_id', 'e2e_session_1');
+        expect(data.data).toHaveProperty('capture_id', 'e2e_capture_1');
     });
 
     test('MCP: sources.list', async () => {
@@ -179,7 +179,7 @@ test.describe('MCP Bridge E2E', () => {
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
-        expect(data.data).toHaveProperty('session');
+        expect(data.data).toHaveProperty('capture');
     });
 
     test('MCP: session.export json', async () => {
@@ -206,7 +206,7 @@ test.describe('MCP Bridge E2E', () => {
             payload: { capture_id: 'e2e_capture_1' }, created_at: Date.now()
         });
         expect(data.ok).toBe(true);
-        expect(data.data).toHaveProperty('id', 'e2e_session_1');
+        expect(data.data).toHaveProperty('capture_id', 'e2e_capture_1');
     });
 
     test('unauthenticated request is rejected', async () => {

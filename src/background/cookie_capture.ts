@@ -42,7 +42,7 @@ function handle_cookie_changed(info: { cookie: { name: string; domain: string; p
         removed: info.removed,
         secure: info.cookie.secure ?? null,
         http_only: info.cookie.httpOnly ?? null,
-        same_site: info.cookie.sameSite ?? null,
+        same_site: (info.cookie.sameSite as 'unspecified' | 'no_restriction' | 'lax' | 'strict' | undefined) ?? null,
         expiration_date: info.cookie.expirationDate ?? null,
         store_id: info.cookie.storeId ?? null,
         value_status: 'not_captured',

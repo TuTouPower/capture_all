@@ -122,7 +122,7 @@ export function handle_completed(details: any, state: WebRequestHandlerState): v
                 body_len: body_result.body?.length ?? 0,
             });
             state.send_to_background(build_network_event(
-                pending, details, body_result.body, body_result.status, body_result.preview, state
+                pending, details, body_result.body, body_result.status, state, body_result.preview
             ));
             return;
         }

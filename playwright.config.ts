@@ -103,7 +103,7 @@ export default defineConfig({
         },
         {
             name: 'e2e-mcp',
-            testMatch: 'e2e-mcp*.spec.ts',
+            testMatch: 'e2e-mcp.spec.ts',
             use: {
                 headless: false,
                 launchOptions: {

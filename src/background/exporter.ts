@@ -33,7 +33,8 @@ export async function export_json(capture_id: string, options?: ExportOptions): 
     ]);
 
     const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+        .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
     const data: ExportableCaptureData = { capture, events: all_events, network_requests, console_events: console_logs };
@@ -56,7 +57,8 @@ export async function export_jsonl(capture_id: string, options?: ExportOptions):
     ]);
 
     const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+        .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
     const lines: string[] = [];
@@ -90,7 +92,8 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
     ]);
 
     const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes];
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+        .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
     const data: ExportableCaptureData = { capture: session, events: all_events, network_requests, console_events: console_logs };

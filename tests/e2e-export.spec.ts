@@ -259,6 +259,11 @@ test.describe('导出四格式', () => {
         await dashboard.goto(fix.dashboard_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await dashboard.waitForTimeout(1000);
 
+        // 禁用 showSaveFilePicker 让代码走 chrome.downloads.download 路径
+        await dashboard.evaluate(() => {
+            delete (globalThis as any).showSaveFilePicker;
+        });
+
         // Mock chrome.downloads.download 捕获调用参数
         await dashboard.evaluate(() => {
             const calls: Array<{ url: string; filename: string; saveAs: boolean }> = [];

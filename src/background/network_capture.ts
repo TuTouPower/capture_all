@@ -4,7 +4,7 @@
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
-import type { CaptureEvent, NetworkRequestData, BodyCaptureStatus, WsFrameData } from '../shared/types';
+import type { NetworkRequestData, BodyCaptureStatus, WsFrameData } from '../shared/types';
 import { create_base_event } from '../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../shared/redaction';
 import { DEFAULT_CONFIG } from '../shared/constants';
@@ -14,33 +14,16 @@ import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { extract_request_body, headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
-import { handle_cdp_event as handle_cdp_event_impl, base64_decoded_size, is_self_origin_url, build_cdp_body_result, is_streaming_response, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS } from './cdp_handler';
-import type { CdpHandlerState, NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
-import { handle_before_request as handle_before_request_impl, handle_before_send_headers as handle_before_send_headers_impl, handle_headers_received as handle_headers_received_impl, handle_completed as handle_completed_impl, handle_error as handle_error_impl, build_network_event, find_matching_cdp_request, find_cdp_candidates } from './webrequest_handler';
-import type { WebRequestHandlerState } from './webrequest_handler';
-import { send_ws_connection_event, send_ws_frame, handle_ws_created, handle_ws_handshake_request, handle_ws_handshake_response, handle_ws_frame_error, handle_ws_closed } from './ws_handler';
-import type { WsHandlerState } from './ws_handler';
+import { base64_decoded_size, is_self_origin_url, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS } from './cdp_handler';
+import type { NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
+import {} from './webrequest_handler';
+import {} from './ws_handler';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
 // Re-export for tests
 export const _base64_decoded_size_for_test = base64_decoded_size;
 export { is_self_origin_url } from './cdp_handler';
-
-interface NetworkCaptureConfig {
-    redact_sensitive_headers: boolean;
-    redact_url_query: boolean;
-    redact_data: boolean;
-    capture_request_body: boolean;
-    capture_response_body: boolean;
-    max_body_capture_bytes: number;
-    inline_text_max_bytes: number;
-}
-
-interface NetworkEventPayload {
-    event: CaptureEvent;
-    data: NetworkRequestData | WsFrameData;
-}
 
 let is_capturing = false;
 let capture_id: string;
@@ -53,52 +36,12 @@ let config: NetworkCaptureConfig = DEFAULT_CONFIG;
 let dbg_tab_id: number | null = null;
 let dbg_attached_externally = false;
 
-// webRequest.requestId -> pending request metadata
-interface PendingRequest {
-    cdp_request_id: string;
-    tab_id: number;
-    method: string;
-    url: string;
-    timestamp: number;
-    request_headers: Record<string, string>;
-    response_headers: Record<string, string>;
-    request_body: string | null;
-    request_body_status: BodyCaptureStatus;
-    resource_type: string;
-    mime_type: string | null;
-}
 const pending_requests: Map<string, PendingRequest> = new Map();
 export const _pending_requests_for_test = pending_requests;
 
-// CDP requestId -> metadata collected before loadingFinished
-interface CdpRequestMeta {
-    url: string;
-    method: string;
-    status_code: number;
-    resource_type: string;
-    response_headers: Record<string, string>;
-    request_headers: Record<string, string>;
-    timestamp: number;
-    request_body: string | null;
-    request_body_status: BodyCaptureStatus;
-    request_body_mime: string | null;
-    mime_type: string | null;
-    response_body?: string | null;
-    response_body_status?: BodyCaptureStatus;
-    stream_mode?: 'none' | 'sse' | 'chunked';
-}
 const cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
 export const _cdp_request_meta_for_test = cdp_request_meta;
 
-// CDP requestId -> body result (after loadingFinished)
-interface CdpBodyResult {
-    body: string | null;
-    status: BodyCaptureStatus;
-    timestamp: number;
-    preview: string | null;
-    encoding: 'utf8' | 'base64' | null;
-    byte_size: number | null;
-}
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 export const _cdp_body_results_for_test = cdp_body_results;
 
@@ -106,15 +49,6 @@ export const _cdp_body_results_for_test = cdp_body_results;
 // webRequest handlers skip these to avoid duplicates.
 const cdp_primary_emitted: Set<string> = new Set();
 
-// WebSocket connection tracking
-interface WsConnectionMeta {
-    url: string;
-    request_headers: Record<string, string>;
-    response_headers: Record<string, string>;
-    status_code: number;
-    ws_status: 'connecting' | 'open' | 'closed' | 'error';
-    created_ts: number;
-}
 const ws_connections: Map<string, WsConnectionMeta> = new Map();
 export const _ws_connections_for_test = ws_connections;
 
@@ -126,17 +60,6 @@ const finished_before_stream: Set<string> = new Set();
 export const _finished_before_stream_for_test = finished_before_stream;
 let stream_buffer_instance: ReturnType<typeof create_stream_buffer> | null = null;
 
-// Orphan CDP body events: entries that haven't been matched by webRequest within timeout
-const ORPHAN_TIMEOUT_MS = 3000;
-
-// Deferred webRequest writes: webRequest arrived but CDP body hasn't yet
-const DEFERRED_TIMEOUT_MS = 1500;
-interface DeferredEntry {
-    pending: PendingRequest;
-    details: any;
-    timer: ReturnType<typeof setTimeout>;
-    pending_cdp_ids: Set<string>;
-}
 const deferred_web_requests: Map<string, DeferredEntry> = new Map();
 export const _deferred_web_requests_for_test = deferred_web_requests;
 

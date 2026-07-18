@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentCommandQueue } from '../src/agent/bridge/command_queue';
+import { AgentCommandQueue } from '../src/bridge/command_queue';
 
 describe('AgentCommandQueue', () => {
     it('queues commands and lets extension take them FIFO', () => {

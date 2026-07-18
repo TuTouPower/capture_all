@@ -1,4 +1,4 @@
-import type { AgentCommand, AgentCommandResult, AgentCommandType } from '../../shared/protocol';
+import type { AgentCommand, AgentCommandResult, AgentCommandType } from '../shared/protocol';
 
 interface PendingCommand {
     command: AgentCommand;

@@ -256,13 +256,13 @@ describe('MCP schema: output_path / include_response_body', () => {
 // ------------------------------------------------------------------
 describe('config: full_data_timeout_ms default', () => {
     it('defaults full_data_timeout_ms to 300000', async () => {
-        const { parse_bridge_config } = await import('../src/agent/bridge/config');
+        const { parse_bridge_config } = await import('../src/bridge/config');
         const cfg = parse_bridge_config({ port: 17831, token: 'tok' });
         expect(cfg.full_data_timeout_ms).toBe(300000);
     });
 
     it('keeps command_timeout_ms default at 120000', async () => {
-        const { parse_bridge_config } = await import('../src/agent/bridge/config');
+        const { parse_bridge_config } = await import('../src/bridge/config');
         const cfg = parse_bridge_config({ port: 17831, token: 'tok' });
         expect(cfg.command_timeout_ms).toBe(120000);
     });
@@ -273,7 +273,7 @@ describe('config: full_data_timeout_ms default', () => {
 // ------------------------------------------------------------------
 describe('server: MAX_EXTENSION_RESULT_BODY_BYTES', () => {
     const server_src = (): string =>
-        readFileSync(resolve(__dirname, '..', 'src/agent/bridge/server.ts'), 'utf8');
+        readFileSync(resolve(__dirname, '..', 'src/bridge/server.ts'), 'utf8');
 
     it('sets MAX_EXTENSION_RESULT_BODY_BYTES to 64MB', () => {
         const src = server_src();

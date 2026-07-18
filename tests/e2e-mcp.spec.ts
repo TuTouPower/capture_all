@@ -3,8 +3,8 @@
 import { test, expect, chromium } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { create_bridge_server } from '../src/agent/bridge/server';
-import { parse_bridge_config } from '../src/agent/bridge/config';
+import { create_bridge_server } from '../src/bridge/server';
+import { parse_bridge_config } from '../src/bridge/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

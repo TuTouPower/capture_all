@@ -3,7 +3,7 @@ import {
     handle_cdp_events,
     handle_cdp_start,
     handle_cdp_stop,
-} from '../src/agent/bridge/cdp_handler';
+} from '../src/bridge/cdp_handler';
 
 class MockWebSocket {
     static instance: MockWebSocket | null = null;

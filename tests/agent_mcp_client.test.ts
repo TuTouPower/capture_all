@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { create_bridge_server } from '../src/agent/bridge/server';
+import { create_bridge_server } from '../src/bridge/server';
 import { BridgeMcpClient } from '../src/agent/mcp/client';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from '../src/agent/mcp/tools';
 

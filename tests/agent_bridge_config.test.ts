@@ -10,7 +10,7 @@ import {
     parse_bridge_config,
     persist_bridge_token,
     resolve_bridge_token,
-} from '../src/agent/bridge/config';
+} from '../src/bridge/config';
 
 describe('parse_bridge_config', () => {
     it('parses valid user config', () => {

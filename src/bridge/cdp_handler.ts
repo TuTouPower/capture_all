@@ -1,10 +1,10 @@
-// agent/bridge/cdp_handler.ts
+// bridge/cdp_handler.ts
 // CDP bridge handler — connects to external Chrome DevTools Protocol,
 // captures Network events, and serves body events to the extension.
 
 import http from 'node:http';
-import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
-import { redact_headers, redact_url } from '../../shared/redaction';
+import { MAX_BODY_CAPTURE_BYTES } from '../shared/constants';
+import { redact_headers, redact_url } from '../shared/redaction';
 
 interface CdpSession {
     session_key: string;

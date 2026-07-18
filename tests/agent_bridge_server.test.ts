@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { create_bridge_server } from '../src/agent/bridge/server';
+import { create_bridge_server } from '../src/bridge/server';
 
 const token = '<TEST_BRIDGE_TOKEN>';
 const DEFAULT_INSTANCE_ID = 'inst_test_1';

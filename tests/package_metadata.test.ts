@@ -72,7 +72,7 @@ describe('package metadata', () => {
 
     test('uses cross-platform esbuild commands without changing outputs', () => {
         expect(package_json.scripts['build:bridge']).toBe(
-            'esbuild src/agent/bridge/main.ts --bundle --platform=node '
+            'esbuild src/bridge/main.ts --bundle --platform=node '
             + '--format=esm --external:ws '
             + '--outfile=artifacts/bridge/bridge.mjs',
         );

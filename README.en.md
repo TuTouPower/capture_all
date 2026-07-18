@@ -5,7 +5,7 @@
   <p>Capture browser evidence, visualize and inspect, export files, or query via MCP.</p>
   <p>
     <a href="README.md">简体中文</a> ·
-    <a href="docs/mcp_usage.md">MCP Guide</a> ·
+    <a href="docs/guides/mcp_usage.md">MCP Guide</a> ·
     <a href="PRIVACY.md">Privacy</a> ·
     <a href="SECURITY.md">Security</a>
   </p>
@@ -157,7 +157,7 @@ get_status → start_recording → reproduce the issue → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-`.mcp.json` is gitignored and must stay on the local machine. Never write real tokens into source, documentation, issue threads, or capture exports. For full tools, parameters, limits, and troubleshooting, see the [MCP usage guide](docs/mcp_usage.md).
+`.mcp.json` is gitignored and must stay on the local machine. Never write real tokens into source, documentation, issue threads, or capture exports. For full tools, parameters, limits, and troubleshooting, see the [MCP usage guide](docs/guides/mcp_usage.md).
 
 ## Development
 
@@ -182,7 +182,7 @@ Build outputs:
 | Bridge | `artifacts/bridge/bridge.mjs` |
 | MCP Server | `artifacts/mcp/mcp.mjs` |
 
-Implementation details in [technical architecture](docs/omni_powers/op_blueprint/architecture.md), [domain model](docs/omni_powers/op_blueprint/domain.md), and [test plan](docs/omni_powers/op_blueprint/test.md).
+Implementation details in [technical architecture](docs/blueprint/architecture.md), [domain model](docs/blueprint/domain.md), and [test plan](docs/guides/test.md).
 
 ## Permissions, privacy, and security
 

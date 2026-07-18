@@ -5,7 +5,7 @@
   <p>采集浏览器证据、可视化检查、导出文件，或通过 MCP 查询。</p>
   <p>
     <a href="README.en.md">English</a> ·
-    <a href="docs/mcp_usage.md">MCP 指南</a> ·
+    <a href="docs/guides/mcp_usage.md">MCP 指南</a> ·
     <a href="PRIVACY.md">隐私</a> ·
     <a href="SECURITY.md">安全</a>
   </p>
@@ -158,7 +158,7 @@ get_status → start_recording → 复现问题 → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-`.mcp.json` 已被 Git 忽略，只能保存在本机。禁止把真实 Token 写入源码、文档、Issue 或采集导出文件。完整工具、参数、限制和故障排查见 [MCP 使用指南](docs/mcp_usage.md)。
+`.mcp.json` 已被 Git 忽略，只能保存在本机。禁止把真实 Token 写入源码、文档、Issue 或采集导出文件。完整工具、参数、限制和故障排查见 [MCP 使用指南](docs/guides/mcp_usage.md)。
 
 ## 开发
 
@@ -183,7 +183,7 @@ npm run mcp                # 从 TypeScript 源码启动 MCP Server
 | Bridge | `artifacts/bridge/bridge.mjs` |
 | MCP Server | `artifacts/mcp/mcp.mjs` |
 
-实现细节见[技术架构](docs/omni_powers/op_blueprint/architecture.md)、[领域模型](docs/omni_powers/op_blueprint/domain.md)和[测试计划](docs/omni_powers/op_blueprint/test.md)。
+实现细节见[技术架构](docs/blueprint/architecture.md)、[领域模型](docs/blueprint/domain.md)和[测试计划](docs/guides/test.md)。
 
 ## 权限、隐私与安全
 

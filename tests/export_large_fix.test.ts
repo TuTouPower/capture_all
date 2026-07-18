@@ -1,5 +1,5 @@
 // tests/export_large_fix.test.ts — 大文件导出修复 Spec 的红测试
-// Spec: docs/specs/export_large_fix.md
+// Spec: docs/archive/omni_powers/op_record/specs/export_large_fix.md
 //
 // 覆盖：
 //   路径 B（瘦身导出）— exporter 各函数接受 ExportOptions{include_response_body}

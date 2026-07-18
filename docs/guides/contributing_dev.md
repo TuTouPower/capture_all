@@ -54,25 +54,27 @@ npm run test:e2e:all        # 全部 E2E
 capture_all/
 ├── src/
 │   ├── agent/              # MCP/Bridge Agent 层
-│   │   ├── bridge/         # Bridge 服务器（WebSocket + HTTP）
+│   │   ├── bridge/         # Bridge 服务器（HTTP + 命令队列）
 │   │   ├── mcp/            # MCP 工具/Schema
 │   │   └── shared/         # 协议定义
-│   ├── background/         # Service Worker（17 个模块）
-│   ├── content/            # Content Script（16 个捕获模块）
+│   ├── background/         # Service Worker
+│   ├── content/            # Content Script
 │   ├── dashboard/          # 仪表盘 UI
 │   ├── devtools/           # DevTools 面板
 │   ├── popup/              # 弹出窗口
-│   └── shared/             # 跨层共享（24 个模块）
-├── tests/                  # 单元/集成测试（89 文件）
+│   └── shared/             # 跨层共享
+├── tests/                  # 单元/集成测试
 ├── e2e/                    # E2E 测试（按任务分目录）
 ├── docs/
-│   ├── omni_powers/        # 项目管理文档
-│   │   ├── op_blueprint/   # 规格文档
-│   │   ├── op_execution/   # 任务执行
-│   │   └── op_record/      # 历史记录
-│   └── specs/              # 技术规格
-└── artifacts/              # 构建产物
+│   ├── blueprint/          # 架构 / 领域 / 约定 / 决策
+│   ├── guides/             # 人读指南
+│   ├── tasks/              # 活动任务
+│   ├── archive/            # 历史归档（含 omni_powers 旧工作流）
+│   └── refactor_plan.md    # 重构计划（活动）
+└── artifacts/              # 构建产物（不入库）
 ```
+
+> 目录即将按 `docs/refactor_plan.md` 重构为 `src/{extension,bridge,mcp,shared}` 三产品结构。本页描述现状。
 
 ## 核心模块
 
@@ -232,4 +234,4 @@ describe('my_capture', () => {
 - [部署指南](deployment.md)
 - [故障排查](troubleshooting.md)
 - [API 文档](mcp_usage.md)
-- [测试指南](../docs/omni_powers/op_blueprint/test.md)
+- 测试指南（历史）：[`../archive/omni_powers/op_blueprint/test.md`](../archive/omni_powers/op_blueprint/test.md)（omni_powers 工作流已归档；当前活动流程见 [`../../AGENTS.md`](../../AGENTS.md)）

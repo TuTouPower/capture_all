@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 in_progress：用户于 2026-07-19 一次性授权第 8-15 轮 implementer/reviewer。Round 8 范围：POSIX shell `${VAR:-secret}`/`:=`/`:?` 双字符 default、TS `as const` 类型断言拼接、字面 `${...}` 字符串 secret 三类绕过；每轮 FAIL 自动进入下一轮，PASS 或第 15 轮结束前不得进入 evaluator、merge gate 或 T0012。
+T0011 pending evaluator：Round 8 review PASS（commit 0e8a03b）。AC-1/2/3/4 全过，1128 测试无回归，scanner 409 文件 PASS。下一步：evaluator 真机验收（DB v3/14-store、Bridge/MCP 闭环、HTML XSS、基础 Playwright）、固化 `e2e/T0011/*.spec.ts`、rebase、merge gate、squash merge、closer/archive。T0012 解除阻塞待 T0011 done。
 
 ## 本批次（2026-07-18 intake）
 

@@ -356,3 +356,45 @@ verdict: FAIL
 第 7 轮独立 review 仍 FAIL。Round 6 两个 blocker 已关闭，但 POSIX shell 双字符 default、TS `as const` 拼接、字面 `${...}` 字符串 secret 仍可绕过。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
 
 verdict: FAIL
+
+# T0011 Review (Round 8)
+
+## 裁决一：规格合规
+
+### Round 7 blocker 复核
+
+- POSIX shell default 正则扩展：已关闭。`${VAR:-default}`/`${VAR:=default}`/`${VAR:?default}`/`${VAR-default}`/`${VAR?default}`/`${VAR=default}` 全操作符组合均拦；嵌套 `${VAR:-${OTHER:-realsecret}}` 也命中。
+- `concatenate_string_literals` 跳过 `as <type>`：已关闭。`as string`/`as const`/`as Array<T>`/`as Foo.Bar` 各 TS 断言均能跳过并合并判定。
+- 非 template 字面量单独 placeholder：已关闭。单/双引号 `"${LEGIT}"` 视为字面 secret；反引号 `` `${LEGIT}` `` 视为合法 placeholder；`<...>`、`process.env.X`、`import.meta.env.X` 放行。
+
+### 不变量检查
+
+- INV-1 至 INV-5：守住。
+- AC-1、AC-2、AC-3、AC-4、AC-5：全部通过。
+
+## 裁决二：测试可信
+
+### 主动 mutation 覆盖
+
+- 31 类硬编码 secret 模式均 exit 1（shell 全操作符、嵌套 default、TS as 断言链、括号嵌套拼接、ternary、对象/数组嵌套、logical assignment、函数默认参数、destructure、class field、JSON 结构化、template 字面量混合）。
+- 合法 placeholder / 动态 token / allowlist 字面量 / 反引号模板表达式 / source expression 均正确 exit 0。
+
+### 全量验证
+
+```
+npx vitest run tests/scan_tracked_tree.test.ts tests/baseline_smoke.test.ts → PASS (49)
+npm test → PASS (1128) / 92 files
+node scripts/scan_tracked_tree.mjs → passed (409 file(s))
+```
+
+### 边界缺陷（非 blocker）
+
+`${VAR:-${OTHER}}` 嵌套 shell default 误报：正则 `[^}]*?` 非贪婪匹配到第一个 `}` 即止。当前仓库 baseline 不含该模式（scanner 409 文件 PASS），不阻塞 T0011 AC-5。建议后续作为 P2 改进项。
+
+## 问题清单
+
+无 blocker。
+
+verdict: PASS
+
+Round 7 三个 blocker 均真实关闭，反例覆盖充分，AC-1/2/3/4 基线全过，全量 1128 测试无回归，scanner 当前仓库 409 文件 PASS。可进入 evaluator 真机验收与 merge gate。

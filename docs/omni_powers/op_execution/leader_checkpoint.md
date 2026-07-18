@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 in_progress：用户于 2026-07-19 明确授权第 7 轮 implementer/reviewer。范围固定为 `concatenate_string_literals` 剥首尾 `()`、`extract_assignments` 识别 `||=`/`&&=`/`??=`，并补真实 CLI 反例；通过独立 review 前不得进入 evaluator、merge gate 或 T0012。
+T0011 blocked_by=quality：第 7 轮独立 review FAIL。Round 6 两 blocker 关闭；新增 POSIX shell `${VAR:-secret}`/`:=`/`:?`、TS `as const` 类型断言拼接、字面 `${...}` 字符串 secret 三类绕过。当前授权轮次已用尽；用户再次明确授权前不得继续 implementer/reviewer，不得进入 evaluator、merge gate 或 T0012。
 
 ## 本批次（2026-07-18 intake）
 

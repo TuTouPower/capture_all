@@ -306,3 +306,53 @@ verdict: FAIL
 第 6 轮独立 review 仍 FAIL。Round 5 三 blocker 字面已关闭，但字符串拼接合并判定的精神未完整关闭（括号包裹），且 `||=`/`??=` 类 logical assignment 完全不解析。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
 
 verdict: FAIL
+
+# T0011 Review (Round 7)
+
+## 裁决一：规格合规
+
+### Round 6 blocker 复核
+
+- `concatenate_string_literals` 入口与每个引号片段允许任意层 `()` 包裹：已关闭，`("super" + "secret")`、`(("super") + (("secret")))` 均合并后判定。
+- `extract_assignments` 新增 `||=`、`&&=`、`??=` 识别：已关闭，三种 logical assignment 形式均触发。
+
+### 不变量检查
+
+- INV-1 至 INV-5：守住。
+- AC-1、AC-2、AC-3、AC-4：通过。
+- AC-5：POSIX shell 双字符 default、TS `as const` 拼接、字面 `${...}` 字符串仍可绕过。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- focused Vitest 42 tests、full Vitest 92 files / 1123 tests、build、409-file scanner 均通过。
+- Round 6 两个 blocker 5/5 反例实测 exit 1。
+- DB v4、legacy schema、Bridge build 入口、删除基础 E2E discovery mutation 均按预期 FAIL。
+
+### 剩余阻断
+
+1. POSIX shell 双字符 default 操作符漏报：
+   - `` const TOKEN = `${ENV:-realsecret}`; `` exit 0
+   - `` const TOKEN = `${ENV:=realsecret}`; `` exit 0
+   - `` const TOKEN = `${ENV:?realsecret}`; `` exit 0
+   - `rhs_contains_hardcoded_secret` shell default 正则仅匹配 `${VAR:default}` 或 `${VAR?default}`，不识别 POSIX `${VAR:-}`/`${VAR:=}`/`${VAR:?}` 双字符操作符。
+2. TS 类型断言拼接漏报：
+   - `const PASSWORD = ("super" as string) + ("secret" as const);` exit 0
+   - `concatenate_string_literals` piece 内非引号字符（`as string)`）返回 null；fallback 走逐字面量，每个子串 < 8 字符不被识别。
+3. 字面 `${...}` 字符串 secret 漏报：
+   - `const API_KEY = process.env.TOKEN ?? "${LEGIT}";` exit 0
+   - 字面字符串 `"${LEGIT}"`（含字面 `${...}` 字符，非 shell 替换）应被抓，实际 miss。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| POSIX shell 双字符 default 漏报 | 否 | shell default 正则扩展为 `(?::[-?=]+|[-?])`；新增反例否证。 |
+| TS 类型断言拼接漏报 | 否 | `concatenate_string_literals` piece 解析跳过 `as <type>` 子句；或 fallback 路径对 `allow_source_expressions=true` 时拼接两侧均判 secret-like。 |
+| 字面 `${...}` 字符串 secret 漏报 | 否 | 调查 `??` 链 RHS 截断；字面字符串含 `${...}` 字符应被 `is_secret_like_value` 抓住。 |
+| method 调用形式拼接 | 是 | Round 6 已暂存；要求 AST 才能解，列为后续 issue。 |
+
+第 7 轮独立 review 仍 FAIL。Round 6 两个 blocker 已关闭，但 POSIX shell 双字符 default、TS `as const` 拼接、字面 `${...}` 字符串 secret 仍可绕过。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
+
+verdict: FAIL

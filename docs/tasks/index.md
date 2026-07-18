@@ -15,4 +15,4 @@
 | T005 | refactor: move extension surfaces + manifest + _locales (Phase 3c) | done | — | task_t002_shared_protocol_relocate | commit `cc399a4` |
 | T006 | refactor: sink remaining extension-only shared into src/extension/shared/ | backlog | — | — | §4.3 表剩余 10 个文件；不阻塞 |
 | T007 | test: reorganize tests into unit/integration/e2e (Phase 4) | backlog | — | — | 测试树重组；质量优化 |
-| T008 | chore: finalize repo layout refactor (Phase 5 partial) | done | — | task_t002_shared_protocol_relocate | commit pending；blueprint + scanner + settings.json 收口；T006/T007 留 backlog |
+| T008 | chore: finalize repo layout refactor (Phase 5 partial) | done | — | task_t002_shared_protocol_relocate | commit `0cfc760`；blueprint + scanner + settings.json 收口；T006/T007 留 backlog |

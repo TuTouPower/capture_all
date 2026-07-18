@@ -190,7 +190,7 @@
         "scripts/scan_tracked_tree.mjs"
       ],
       "eval": "required",
-      "blocked_by": "quality"
+      "blocked_by": null
     },
     {
       "id": "T0012",

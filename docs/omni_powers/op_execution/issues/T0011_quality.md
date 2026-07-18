@@ -38,7 +38,7 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 再次恢复条件
 
-需要用户再次明确授权后，才可启动下一轮 implementer/reviewer。修复不得降低 AC-1/AC-5：
+用户于 2026-07-18 明确授权第 5 轮 implementer/reviewer。修复不得降低 AC-1/AC-5：
 
 - scanner 必须按完整 assignment 值或可靠语法范围判断，拒绝跨行、标点后缀、fallback、模板表达式内硬编码 secret；不得新增宽泛文件/目录 exemption。
 - 新增 reviewer 全部反例为真实 CLI 否证。

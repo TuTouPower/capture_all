@@ -7,7 +7,7 @@
 ## 范围
 
 - `git mv src/agent/shared/protocol.ts src/shared/protocol.ts`
-- 同步改 5 处 import（`src/background/agent_bridge_client.ts`、`src/background/agent_command_dispatcher.ts`、`src/background/agent_data_queries.ts`、`tests/agent_protocol.test.ts`、`tests/agent_command_dispatcher.test.ts`）
+- 同步改 5 处 import（`src/extension/background/agent_bridge_client.ts`、`src/extension/background/agent_command_dispatcher.ts`、`src/extension/background/agent_data_queries.ts`、`tests/agent_protocol.test.ts`、`tests/agent_command_dispatcher.test.ts`）
 - 删除空目录 `src/agent/shared/`
 - 跑 `npm test` 与 `npm run build` 全绿
 

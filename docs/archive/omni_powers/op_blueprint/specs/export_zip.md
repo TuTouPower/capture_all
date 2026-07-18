@@ -1,6 +1,6 @@
 # 导出
 
-JSON / JSONL / HAR / HTML 四格式。实现：`src/background/exporter.ts`。
+JSON / JSONL / HAR / HTML 四格式。实现：`src/extension/background/exporter.ts`。
 
 ## 1. 格式
 
@@ -48,7 +48,7 @@ superpowers 设计文档规划了 zip 归档导出（`docs/archive_valid/superpo
 
 ## 7. 关键文件
 
-- `src/background/exporter.ts` — 主导出逻辑。
+- `src/extension/background/exporter.ts` — 主导出逻辑。
 - `src/shared/export_settings.ts` — 导出设置。
 - `src/shared/export_utils.ts` — 导出工具函数。
 - `src/shared/archive_builder.ts` — 归档构建。

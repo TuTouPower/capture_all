@@ -73,7 +73,7 @@ describe('start_capture storage timing (BUG-015)', () => {
 
         // 动态 import popup 模块以触发初始化
         try {
-            await import('../src/popup/popup.ts');
+            await import('../src/extension/popup/popup.ts');
         } catch {
             // popup 可能因 DOM 不完整报错，不影响测试逻辑
         }
@@ -92,7 +92,7 @@ describe('start_capture storage timing (BUG-015)', () => {
         const fs = await import('fs');
         const path = await import('path');
         const src = fs.readFileSync(
-            path.resolve(__dirname, '../src/popup/popup.ts'),
+            path.resolve(__dirname, '../src/extension/popup/popup.ts'),
             'utf-8',
         );
 
@@ -123,7 +123,7 @@ describe('start_capture storage timing (BUG-015)', () => {
         const fs = await import('fs');
         const path = await import('path');
         const src = fs.readFileSync(
-            path.resolve(__dirname, '../src/popup/popup.ts'),
+            path.resolve(__dirname, '../src/extension/popup/popup.ts'),
             'utf-8',
         );
 

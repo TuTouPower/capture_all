@@ -48,11 +48,11 @@ record_all/
 
 | Current | Target | Reason |
 |---|---|---|
-| `background/` | `src/background/` | Source code belongs under `src/` |
-| `content/` | `src/content/` | Source code belongs under `src/` |
-| `popup/` | `src/popup/` | Source code belongs under `src/` |
+| `background/` | `src/extension/background/` | Source code belongs under `src/` |
+| `content/` | `src/extension/content/` | Source code belongs under `src/` |
+| `popup/` | `src/extension/popup/` | Source code belongs under `src/` |
 | `detail/` | `src/detail/` | Source code belongs under `src/` |
-| `devtools/` | `src/devtools/` | Source code belongs under `src/` |
+| `devtools/` | `src/extension/devtools/` | Source code belongs under `src/` |
 | `shared/` | `src/shared/` | Shared source code belongs under `src/` |
 | `agent/` | `src/agent/` | MCP/bridge source code belongs under `src/` |
 | `icons/` | `assets/icons/` | Static resources belong under `assets/` |
@@ -262,11 +262,11 @@ Expected: commit succeeds.
 ### Task 3: Move Extension Source Under `src/`
 
 **Files:**
-- Move: `background/` → `src/background/`
-- Move: `content/` → `src/content/`
-- Move: `popup/` → `src/popup/`
+- Move: `background/` → `src/extension/background/`
+- Move: `content/` → `src/extension/content/`
+- Move: `popup/` → `src/extension/popup/`
 - Move: `detail/` → `src/detail/`
-- Move: `devtools/` → `src/devtools/`
+- Move: `devtools/` → `src/extension/devtools/`
 - Move: `shared/` → `src/shared/`
 - Modify: `manifest.json`
 - Modify: `vite.config.ts`
@@ -320,26 +320,26 @@ To:
 
 ```json
 "background": {
-  "service_worker": "src/background/service_worker.ts",
+  "service_worker": "src/extension/background/service_worker.ts",
   "type": "module"
 },
 "content_scripts": [
   {
     "matches": ["<all_urls>"],
-    "js": ["src/content/content_script.ts"],
+    "js": ["src/extension/content/content_script.ts"],
     "run_at": "document_start",
     "all_frames": true
   }
 ],
 "action": {
-  "default_popup": "src/popup/popup.html",
+  "default_popup": "src/extension/popup/popup.html",
   "default_icon": {
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
     "128": "assets/icons/icon128.png"
   }
 },
-"devtools_page": "src/devtools/devtools.html"
+"devtools_page": "src/extension/devtools/devtools.html"
 ```
 
 - [ ] **Step 3: Update Vite inputs in `vite.config.ts`**
@@ -361,12 +361,12 @@ To:
 
 ```ts
 input: {
-    background: 'src/background/service_worker.ts',
-    content: 'src/content/content_script.ts',
-    popup: 'src/popup/popup.html',
+    background: 'src/extension/background/service_worker.ts',
+    content: 'src/extension/content/content_script.ts',
+    popup: 'src/extension/popup/popup.html',
     detail: 'src/detail/detail.html',
-    devtools: 'src/devtools/devtools.html',
-    devtools_panel: 'src/devtools/devtools_panel.html'
+    devtools: 'src/extension/devtools/devtools.html',
+    devtools_panel: 'src/extension/devtools/devtools_panel.html'
 }
 ```
 
@@ -402,7 +402,7 @@ If build fails for a moved source import, update that import path in the moved s
 import { escape_for_html_embed } from '../shared/escape';
 ```
 
-should remain unchanged in `src/background/exporter.ts` because `src/background` and `src/shared` are still siblings.
+should remain unchanged in `src/extension/background/exporter.ts` because `src/background` and `src/shared` are still siblings.
 
 - [ ] **Step 6: Commit**
 
@@ -546,7 +546,7 @@ For every test import that starts with:
 change it to:
 
 ```ts
-'../src/background/
+'../src/extension/background/
 ```
 
 Concrete example:
@@ -558,7 +558,7 @@ import { export_json } from '../background/exporter';
 becomes:
 
 ```ts
-import { export_json } from '../src/background/exporter';
+import { export_json } from '../src/extension/background/exporter';
 ```
 
 - [ ] **Step 3: Replace content imports in tests**
@@ -572,7 +572,7 @@ For every test import that starts with:
 change it to:
 
 ```ts
-'../src/content/
+'../src/extension/content/
 ```
 
 Concrete example:
@@ -584,7 +584,7 @@ import { build_css_path } from '../content/dom_capture';
 becomes:
 
 ```ts
-import { build_css_path } from '../src/content/dom_capture';
+import { build_css_path } from '../src/extension/content/dom_capture';
 ```
 
 - [ ] **Step 4: Replace agent imports in tests**

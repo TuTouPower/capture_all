@@ -1,6 +1,6 @@
 # 采集核心
 
-Service Worker（`src/background/service_worker.ts`）协调采集生命周期、消息路由、CDP attach、数据持久化。命名见 `../conventions.md`，术语见 `../domain.md`。
+Service Worker（`src/extension/background/service_worker.ts`）协调采集生命周期、消息路由、CDP attach、数据持久化。命名见 `../conventions.md`，术语见 `../domain.md`。
 
 ## 1. 接口
 
@@ -99,8 +99,8 @@ Content Script / Background 各 capture 模块产出原始事件 → `service_wo
 
 ## 6. 关键文件
 
-- `src/background/service_worker.ts` — 入口，消息路由，生命周期。
-- `src/background/keepalive.ts` — chrome.alarms 保活。
+- `src/extension/background/service_worker.ts` — 入口，消息路由，生命周期。
+- `src/extension/background/keepalive.ts` — chrome.alarms 保活。
 - `src/shared/event_utils.ts` — event_id 生成 + 公共字段。
 - `src/shared/event_category.ts` — type → category 映射。
 - `src/shared/capture_stats.ts` — 7 标签实时计数。

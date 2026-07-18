@@ -11,7 +11,7 @@ eval: required
 - INV-1: MCP Bridge 和本地 Agent 功能不受影响 —— 这两个集成项的功能入口（设置页集成分区）保持不变
 - INV-2: 设置页的"集成"分区（`#set-integrations`）保留，用户仍可在设置中配置 MCP Bridge（启用/禁用、URL、Token、轮询间隔） —— 这是 Bridge 功能的唯一配置入口
 - INV-3: 侧边栏导航项数量从 5 项减少为 4 项（采集记录、当前采集、导出任务、设置），移除后不影响其他导航项的样式和交互
-- INV-4: 后端 MCP Bridge / Agent 通信代码（`src/agent/`、`src/background/agent_bridge_client.ts` 等）不做任何修改 —— 移除的是 UI 入口，不是功能
+- INV-4: 后端 MCP Bridge / Agent 通信代码（`src/agent/`、`src/extension/background/agent_bridge_client.ts` 等）不做任何修改 —— 移除的是 UI 入口，不是功能
 - INV-5: 行为等价 —— `go('captures')`/`go('settings')`/`go('current')`/`go('exports')` 行为不变；`go('integrations')` 降级为 `go('captures')`
 
 ## 验收场景（验收标准 AC）
@@ -26,7 +26,7 @@ eval: required
 - 测试文件为空: 若 `integration_page.test.ts` 删除全部内容后文件为空，删除该文件
 
 ## 不做的事
-- 不删除 MCP Bridge 后端代码（`src/agent/` 目录所有文件、`src/background/agent_bridge_client.ts`、`src/background/agent_command_dispatcher.ts` 等）
+- 不删除 MCP Bridge 后端代码（`src/agent/` 目录所有文件、`src/extension/background/agent_bridge_client.ts`、`src/extension/background/agent_command_dispatcher.ts` 等）
 - 不删除设置页的集成分区
 - 不修改 MCP 协议、Bridge 通信、命令映射等后端逻辑
 - 不移除 `dashboard_integrations.ts` 中的非集成页功能（`render_current`、`wire_simple_open`、`render_exports` 保留）

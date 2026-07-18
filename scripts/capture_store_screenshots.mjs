@@ -128,8 +128,8 @@ async function main() {
     });
     try {
         const extension_id = await get_extension_id(context);
-        const popup_url = `chrome-extension://${extension_id}/src/popup/popup.html`;
-        const dashboard_url = `chrome-extension://${extension_id}/src/dashboard/dashboard.html`;
+        const popup_url = `chrome-extension://${extension_id}/src/extension/popup/popup.html`;
+        const dashboard_url = `chrome-extension://${extension_id}/src/extension/dashboard/dashboard.html`;
 
         const popup = await context.newPage();
         await popup.goto(popup_url, { waitUntil: 'domcontentloaded' });

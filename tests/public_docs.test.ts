@@ -15,7 +15,7 @@ const project_root = resolve(__dirname, '..');
 const read_project_file = (path: string): string =>
     readFileSync(resolve(project_root, path), 'utf8');
 const extension_manifest = JSON.parse(
-    read_project_file('manifest.json'),
+    read_project_file('src/extension/manifest.json'),
 ) as ExtensionManifest;
 
 function extract_documented_permissions(content: string): string[] {

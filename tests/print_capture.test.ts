@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/print_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_print_capture, stop_print_capture } from '../src/content/print_capture';
+import { start_print_capture, stop_print_capture } from '../src/extension/content/print_capture';
 
 describe('print_capture', () => {
     let sender: ReturnType<typeof vi.fn>;

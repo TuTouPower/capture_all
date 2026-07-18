@@ -39,7 +39,7 @@ import { mock_chrome_debugger } from './__mocks__/chrome_debugger';
 
 import {
     is_streaming_response,
-} from '../src/background/network_capture';
+} from '../src/extension/background/network_capture';
 
 describe('is_streaming_response', () => {
     it('detects text/event-stream mime', () => {

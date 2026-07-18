@@ -41,7 +41,7 @@ import {
     start_network_capture,
     stop_network_capture,
     enable_response_body_capture,
-} from '../src/background/network_capture';
+} from '../src/extension/background/network_capture';
 
 function make_cfg(overrides: Record<string, any> = {}) {
     return {

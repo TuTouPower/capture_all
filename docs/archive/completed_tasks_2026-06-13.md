@@ -10,7 +10,7 @@
 ### ✅ P0.57 streamResourceContent 对所有请求触发（is_streaming_response 匹配过宽）
 - **状态**：已修复 — 2026-06-13
 - **现象**：采集 chatgpt.com 时日志出现大量 `streamResourceContent_failed`，涉及 favicon、CSS、woff2、POST 等**非流式请求**。正常采集流程不应对这些请求调用 `streamResourceContent`。
-- **根因**：`src/background/network_capture.ts` 的 `is_streaming_response()` 判定过宽：
+- **根因**：`src/extension/background/network_capture.ts` 的 `is_streaming_response()` 判定过宽：
   1. `ct.includes('stream')` 会匹配任何 content-type 含 `stream` 的响应（如未来可能出现的 `application/stream+json` 等非 SSE 类型）。
   2. **更关键**：`te.includes('chunked') && !cl` 条件——HTTP/1.1 普通响应也带 `transfer-encoding: chunked`（无 `content-length`），此条件会把**所有 HTTP/1.1 chunked 响应**误判为流式。实际只有 SSE（`text/event-stream`）和真正的 fetch streaming 才应走 `streamResourceContent` 路径。
 - **影响**：
@@ -26,7 +26,7 @@
 ### ✅ P0.58 send_ws_frame 中 raw_payload 为 undefined 时触发 TypeError
 - **状态**：已修复 — 2026-06-13
 - **现象**：WebSocket 帧采集时抛出 `TypeError: Cannot read properties of undefined (reading 'replace')`，来自 `base64_decoded_size(undefined)`。
-- **根因**：`src/background/network_capture.ts` 的 `send_ws_frame()` 中：
+- **根因**：`src/extension/background/network_capture.ts` 的 `send_ws_frame()` 中：
   ```ts
   const raw_payload = resp.payloadData ?? null;  // ?? 只拦截 null，不拦截 undefined
   ```
@@ -47,9 +47,9 @@
 - **状态**：已修复 — 2026-06-13
 - **现象**：用户导出采集时 alert 弹出 `TypeError: Cannot read properties of undefined (reading 'replace')`，日志中 `Export message failed {}` 为空对象（看不到错误堆栈）。
 - **根因**：多处函数假设入参为 string，未做 fault injection 兜底：
-  1. `src/popup/popup.ts:102` `escape_html(s: string)` — 直接 `s.replace()`，无 `String(s ?? '')`。
+  1. `src/extension/popup/popup.ts:102` `escape_html(s: string)` — 直接 `s.replace()`，无 `String(s ?? '')`。
   2. `src/shared/body_routing.ts:116` `safe_request_id(id: string)` — 假设 id 必填，运行时若 `req.request_id` 为 undefined 则 `id.replace()` 崩。
-  3. `src/background/network_capture.ts:22` `base64_decoded_size(b64: string)` — 假设 b64 是 string，未拦截 undefined（P0.58 修复点之一但仍在公共函数签名）。
+  3. `src/extension/background/network_capture.ts:22` `base64_decoded_size(b64: string)` — 假设 b64 是 string，未拦截 undefined（P0.58 修复点之一但仍在公共函数签名）。
   4. `src/shared/logger.ts:40` `write()` — Error 对象直接传 IndexedDB，structured clone 仅保留 enumerable props，导致 message/stack 全丢，日志只显示 `{}`。
 - **影响**：用户导出操作直接崩溃，且日志无法定位真凶（看到空 `{}` 而非完整错误）。
 - **测试为什么没发现**：所有相关单测都用 happy-path 合法输入：
@@ -85,7 +85,7 @@
 - **状态**：已修复 — 2026-06-13
 - **触发日志**：`data/` 新日志中出现 `Export failed "Unknown action"`
 - **现象**：无法正常导出采集记录。popup 上的导出与采集记录面板里的导出报错不一致。
-- **直接根因**：导出入口发送的 message action 与 `src/background/service_worker.ts` 注册的 action 不一致。真实问题中 UI 侧发送 `action: 'get_capture_data'`，但 SW 只处理：
+- **直接根因**：导出入口发送的 message action 与 `src/extension/background/service_worker.ts` 注册的 action 不一致。真实问题中 UI 侧发送 `action: 'get_capture_data'`，但 SW 只处理：
   ```typescript
   case 'get_session_data':
       return get_capture_data(message.session_id);
@@ -120,8 +120,8 @@
   8. 逐步替换导出相关 `readFileSync + toMatch` 测试为行为测试；保留源码审计只能作为补充，不能作为主保护
 - **怎么改（最小路径）**：
   1. 新增 `tests/sw_action_contract.test.ts`
-     - 从 `src/popup/popup.ts`、`src/dashboard/dashboard.ts`、`src/detail/detail.ts` 提取 `chrome.runtime.sendMessage({ action: '...' })`
-     - 从 `src/background/service_worker.ts` 提取 `case '...'`
+     - 从 `src/extension/popup/popup.ts`、`src/extension/dashboard/dashboard.ts`、`src/detail/detail.ts` 提取 `chrome.runtime.sendMessage({ action: '...' })`
+     - 从 `src/extension/background/service_worker.ts` 提取 `case '...'`
      - 断言 UI action 集合是 SW case 集合子集
      - 断言不存在 `get_capture_data` 作为 UI action
   2. 新增/改造 `tests/popup_export.test.ts`
@@ -145,10 +145,10 @@
   4. 任意 UI action 改成未注册字符串时，契约测试必须失败
   5. 任意 SW 导出响应字段改名时，对应前端契约测试必须失败
 - **影响文件**：
-  - `src/popup/popup.ts` — ZIP 导出 action 与 response 读取
-  - `src/dashboard/dashboard.ts` — ZIP 导出 action 与 response 读取
+  - `src/extension/popup/popup.ts` — ZIP 导出 action 与 response 读取
+  - `src/extension/dashboard/dashboard.ts` — ZIP 导出 action 与 response 读取
   - `src/detail/detail.ts` — ZIP 导出 action 与 response 读取
-  - `src/background/service_worker.ts` — action 注册与导出响应字段
+  - `src/extension/background/service_worker.ts` — action 注册与导出响应字段
   - `tests/popup_export.test.ts` — 从源码正则改为行为测试
   - `tests/sw_action_contract.test.ts` — 新增 action 集合契约测试
   - `tests/export_action_response_contract.test.ts` — 新增响应字段契约测试
@@ -179,9 +179,9 @@
      - 验证大数据场景（1000+ 请求）ZIP 生成不超时
   4. 若有人把 `get_capture_data` 改回返回全量数据，契约测试必须失败
 - **影响文件**：
-  - `src/background/service_worker.ts` — `get_capture_data` 改为轻量返回
+  - `src/extension/background/service_worker.ts` — `get_capture_data` 改为轻量返回
   - `src/shared/capture_data_reader.ts` — 新建，页面侧直读
-  - `src/popup/popup.ts` / `src/dashboard/dashboard.ts` / `src/detail/detail.ts` — 改用直读
+  - `src/extension/popup/popup.ts` / `src/extension/dashboard/dashboard.ts` / `src/detail/detail.ts` — 改用直读
 
 ### ✅ P0.48 跨域 PUT/POST 上传内容未抓取（cdp_failed）
 - **状态**：已修复 — 2026-06-13
@@ -208,7 +208,7 @@
   4. 考虑在 `Network.loadingFinished` 时立即获取 body，减少"资源已释放"的超时窗口
   5. 补测试：模拟跨域 PUT 请求，验证 request body 采集和状态标记
 - **影响文件**：
-  - `src/background/network_capture.ts` — loadingFinished 处理、request body 提取、状态区分
+  - `src/extension/background/network_capture.ts` — loadingFinished 处理、request body 提取、状态区分
   - `tests/network_cdp.test.ts` — 跨域 PUT 测试用例
 
 ### ✅ P0.49 ZIP 导出 network.jsonl 缺失 mime_type
@@ -223,7 +223,7 @@
 - **根因分析**：
   - `NetworkRequestData` 接口有 `mime_type: string | null` 字段
   - CDP `Network.responseReceived` 事件的 `response.headers` 包含 `content-type`
-  - `src/background/network_capture.ts` 在 `Network.responseReceived` handler 中提取 headers，但可能未正确写入 `mime_type` 字段
+  - `src/extension/background/network_capture.ts` 在 `Network.responseReceived` handler 中提取 headers，但可能未正确写入 `mime_type` 字段
   - webRequest 路径的 `onHeadersReceived` 也能获取 content-type，但同样可能未传递到最终数据
   - `archive_builder.ts` 的 `ext_for_mime()` 函数依赖 `mime_type` 推断扩展名——当 mime 为 null 时所有文件都变成 `.bin`
 - **影响**：
@@ -239,8 +239,8 @@
   5. body_routing 的 `ext_for_mime()` 从网络请求的 response headers 提取 content-type 作为兜底
   6. 补测试：验证 CDP responseReceived 后 `mime_type` 非空；验证 ZIP 中图片文件扩展名为 `.png`/`.jpg` 而非 `.bin`
 - **影响文件**：
-  - `src/background/network_capture.ts` — responseReceived handler、build_cdp_primary_network_event、build_cdp_body_event
-  - `src/background/network_correlator.ts` — merge_matched、build_cdp_only_request、build_web_request_only_request
+  - `src/extension/background/network_capture.ts` — responseReceived handler、build_cdp_primary_network_event、build_cdp_body_event
+  - `src/extension/background/network_correlator.ts` — merge_matched、build_cdp_only_request、build_web_request_only_request
   - `src/shared/archive_builder.ts` — body 文件扩展名推断兜底
   - `tests/network_cdp.test.ts` — mime_type 写入测试
   - `tests/archive_builder.test.ts` — 扩展名推断测试
@@ -328,8 +328,8 @@
   2. `network_correlator.ts` 中 `build_cdp_only_request`/`build_web_request_only_request`/`merge_matched` 3 处写入前调用 `resolve_resource_type()`
   3. 补测试：给定 CDP 大写类型字符串，验证输出为归一化小写标准类型
 - **影响文件**：
-  - `src/background/network_capture.ts` — CdpRequestMeta 写入处 + build_cdp_body_event
-  - `src/background/network_correlator.ts` — merge_matched / build_cdp_only_request / build_web_request_only_request
+  - `src/extension/background/network_capture.ts` — CdpRequestMeta 写入处 + build_cdp_body_event
+  - `src/extension/background/network_correlator.ts` — merge_matched / build_cdp_only_request / build_web_request_only_request
   - `tests/network_capture.test.ts` — CDP 类型归一化测试
 
 
@@ -337,7 +337,7 @@
 - **状态**：已修复 — 2026-06-12
 - **复现数据**：`data/capture_all_capture_1781265766247_7vafphp.json` + `data/capture_all_logs_2026-06-12_20-06-14.log`
 - **现象**：从 `chrome://extensions/` 启动采集 → CDP attach 失败（预期）→ 切换到正常网页后 CDP retry 日志显示多次 "Body capture retry succeeded"，但导出 JSON 中 93 条 `network_requests` 全部 `response_body: null`、`cdp: {}`、`response_body_status: not_enabled`，同时 `body_capture_mode` 显示 `extension_cpd`（误导）。
-- **根因**：`src/background/network_capture.ts:187` — `enable_response_body_capture()` 的 guard 条件：
+- **根因**：`src/extension/background/network_capture.ts:187` — `enable_response_body_capture()` 的 guard 条件：
 
   ```typescript
   if (dbg_tab_id !== null) return { success: true };  // ← 不检查 dbg_tab_id === tab_id
@@ -401,7 +401,7 @@
   5. 补 E2E：验证 `dbg_tab_id` 始终等于当前活跃 tab
 
 - **影响文件**：
-  - `src/background/network_capture.ts` — `enable_response_body_capture` line 187 guard
+  - `src/extension/background/network_capture.ts` — `enable_response_body_capture` line 187 guard
   - `tests/network_cdp.test.ts` — "returns success when already attached" 用例重写
   - `tests/e2e-cdp-retry.spec.ts` — 增加 response_body 非空断言 + 多 tab 场景
 
@@ -417,8 +417,8 @@
   2. 确认 `exportBtn` click handler 中 message action 在 SW 中已注册
   3. 补测试：完成态点击 exportBtn 触发 chrome.runtime.sendMessage
 - **影响文件**：
-  - `src/popup/popup.ts` — wire_view / render / render_saved
-  - `src/background/service_worker.ts` — message handler 注册
+  - `src/extension/popup/popup.ts` — wire_view / render / render_saved
+  - `src/extension/background/service_worker.ts` — message handler 注册
 - **测试遗漏原因**：
   1. `tests/popup_layout.test.ts` 只断言 HTML 中存在 `exportBtn` 元素 id，不对元素执行 click 事件，不模拟 `chrome.runtime.sendMessage` 调用，不验证下载触发器
   2. 无测试覆盖 popup 与 SW 的 message 往返（`chrome.runtime.sendMessage` 的 action 和参数）
@@ -432,8 +432,8 @@
 - **修复内容**：
   1. `src/detail/detail.ts` 行 205：白名单修正为 `['mouse_event', 'keyboard_event', 'scroll_event', 'input_event']`
   2. `src/detail/detail.ts` 行 348：`get_event_detail()` 的 `dom_mutation` case 替换为 `input_event`
-  3. `src/background/storage.ts`：新增 `start_periodic_flush()` / `stop_periodic_flush()`，利用已定义的 `FLUSH_INTERVAL_MS`（1s）周期性 flush 缓冲区
-  4. `src/background/service_worker.ts`：采集开始时调用 `start_periodic_flush()`，停止时调用 `stop_periodic_flush()`
+  3. `src/extension/background/storage.ts`：新增 `start_periodic_flush()` / `stop_periodic_flush()`，利用已定义的 `FLUSH_INTERVAL_MS`（1s）周期性 flush 缓冲区
+  4. `src/extension/background/service_worker.ts`：采集开始时调用 `start_periodic_flush()`，停止时调用 `stop_periodic_flush()`
 
 
 ### ✅ P0.37 导出文件名不含 date，未使用系统时区
@@ -441,7 +441,7 @@
 - **现象**：导出采集记录文件名格式为 `capture_all_capture_{capture_id}.json`（如 `capture_all_capture_1781265766247_7vafphp.json`），不包含 `{date}` 占位符对应的时间戳。文件名 date 未按用户设置的系统时区格式化。
 - **期望行为**：导出文件名应包含用户设置时区的日期时间，格式如 `capture_all_{capture_id}_2026-06-12_20-02-46.json`（browser/UTC+8 时区）。
 - **影响**：用户无法从文件名获知导出时间，P0.22（文件名用时区时间）实际未生效。
-- **根因**：`export_session()`（`src/dashboard/dashboard.ts:368-369`）直接硬编码文件名：
+- **根因**：`export_session()`（`src/extension/dashboard/dashboard.ts:368-369`）直接硬编码文件名：
   ```typescript
   const capture_filename = capture_dir
       ? `${capture_dir}/capture_all_${id}.${ext}`
@@ -450,8 +450,8 @@
   完全不调用 `build_export_filename()`，`{date}` 模板从未参与实际下载路径。`build_export_filename()` 及其测试独立存在但未被实际导出流程使用。
 - **影响文件**：
   - `src/shared/export_settings.ts` — build_export_filename / 模板替换
-  - `src/dashboard/dashboard.ts` — 导出入口文件名拼接
-  - `src/background/exporter.ts` — SW 端导出文件名
+  - `src/extension/dashboard/dashboard.ts` — 导出入口文件名拼接
+  - `src/extension/background/exporter.ts` — SW 端导出文件名
 - **测试遗漏原因**：
   1. `tests/export_settings.test.ts` 测试了 `build_export_filename()` 函数本身（含 `{date}` 模板替换和时区格式化），但没发现该函数从未被 `export_session()` 实际调用
   2. `tests/e2e-export.spec.ts` 只验证导出文件可下载/内容可解析，不捕获最终传给 `chrome.downloads.download` 的 `filename` 参数值
@@ -468,7 +468,7 @@
   1. `add_system_times_to_capture_data()` 只追加 `*_system_time` 后缀字段（如 `start_time_system_time`），不替换原有的 `started_at`/`ended_at` 值
   2. `system_time_timezone` 未从 `user_config` 传入导出数据流
 - **影响文件**：
-  - `src/background/exporter.ts` — add_system_times_to_capture_data
+  - `src/extension/background/exporter.ts` — add_system_times_to_capture_data
   - `src/shared/system_time.ts` — format_system_time / 时间字段转换
 - **测试遗漏原因**：
   1. `tests/system_time.test.ts` P0.33 新增测试只断言 `*_time_label` 字段存在且不以 `Z` 结尾，不检查顶层 `started_at`/`ended_at` 是否仍为 UTC
@@ -480,16 +480,16 @@
 - **状态**：已修复 — 2026-06-13
 - **现象**：用户在保存对话框中选择导出目录后，下次导出没有回到上次目录；采集记录导出和日志导出也没有分别记住各自位置。
 - **根因**：`src/shared/export_utils.ts` 已实现 `last_capture_export_dir` / `last_log_export_dir` 两个独立 key、`load_last_export_dirs()`、`track_export_dir()`，但实际入口只调用 `download_blob()`：
-  1. `src/popup/popup.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
-  2. `src/dashboard/dashboard.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
+  1. `src/extension/popup/popup.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
+  2. `src/extension/dashboard/dashboard.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
   3. `src/detail/detail.ts` 采集记录导出未读取 `capture_dir`，下载完成后未 `track_export_dir(..., 'capture')`
-  4. `src/dashboard/dashboard.ts` 日志导出未读取 `log_dir`，下载完成后未 `track_export_dir(..., 'log')`
+  4. `src/extension/dashboard/dashboard.ts` 日志导出未读取 `log_dir`，下载完成后未 `track_export_dir(..., 'log')`
 - **为什么测试没发现**：`tests/export_utils.test.ts` 只验证了工具函数自身和入口 `import download_blob`，没有验证实际入口是否调用 `load_last_export_dirs()`、是否把 last dir 传入文件名构建、是否在下载完成后按 `capture`/`log` 分别 track。
 - **修复**：所有采集记录导出入口读取 `capture_dir` 并 track `capture`；日志导出读取 `log_dir` 并 track `log`。补回归测试锁定两个目录必须独立读取和记录。
 - **影响文件**：
   - `src/shared/export_utils.ts` — 已有工具函数保持不变
-  - `src/popup/popup.ts` — 采集记录导出读取/记录 capture 目录
-  - `src/dashboard/dashboard.ts` — 采集记录导出读取/记录 capture 目录；日志导出读取/记录 log 目录
+  - `src/extension/popup/popup.ts` — 采集记录导出读取/记录 capture 目录
+  - `src/extension/dashboard/dashboard.ts` — 采集记录导出读取/记录 capture 目录；日志导出读取/记录 log 目录
   - `src/detail/detail.ts` — 详情页导出读取/记录 capture 目录
   - `tests/export_utils.test.ts` — 新增入口级回归测试
 
@@ -519,8 +519,8 @@
 - **影响文件**：
   - `src/shared/constants.ts` — 默认值 + DEFAULT_USER_CONFIG
   - `src/shared/types.ts` — UserConfig
-  - `src/background/network_capture.ts` — 4 处大小检查
-  - `src/dashboard/dashboard.ts` — 设置 UI
+  - `src/extension/background/network_capture.ts` — 4 处大小检查
+  - `src/extension/dashboard/dashboard.ts` — 设置 UI
 
 
 ### ✅ P0.43 采集记录详情页用户行为 tab 显示「暂无数据」
@@ -529,7 +529,7 @@
 - **现象**：采集记录详情页统计数据明确显示采集到了多条用户行为事件，但点击「用户行为」标签页后内容区域显示「暂无数据」。
 - **修复**：`get_capture_data` 在并行查询前先 `await flush_all()`，确保所有缓冲区事件落盘后再读取。dashboard 和独立详情页共享同一数据加载路径（均调用 `get_capture_data`），一处修复覆盖两个入口。
 - **影响文件**：
-  - `src/background/service_worker.ts` — `get_capture_data` 前置 flush_all
+  - `src/extension/background/service_worker.ts` — `get_capture_data` 前置 flush_all
   - `tests/p043_flush_before_read.test.ts` — 新增单测覆盖
 
 
@@ -543,7 +543,7 @@
   2. 或将删除操作延迟到 body 确认可用后
   3. 补测试：deferred 条目在 `find_matching_cdp_request` 匹配后仍有候选
 - **影响文件**：
-  - `src/background/network_capture.ts` — handle_completed / find_matching_cdp_request / find_cdp_candidates
+  - `src/extension/background/network_capture.ts` — handle_completed / find_matching_cdp_request / find_cdp_candidates
   - `tests/network_cdp.test.ts` — deferred 匹配测试
 
 ---
@@ -664,7 +664,7 @@
 - **状态**：已修复 — 2026-06-14（commit `86378be`）
 - **修复内容**：
   1. 新增 `src/shared/id.ts`，统一 `generate_capture_id()` 实现：格式 `<时间戳毫秒>_<随机7字符>`，去除 `capture_` 前缀
-  2. `src/background/session_manager.ts`、`src/background/agent_command_dispatcher.ts` 改用共享 `generate_capture_id`
+  2. `src/extension/background/session_manager.ts`、`src/extension/background/agent_command_dispatcher.ts` 改用共享 `generate_capture_id`
   3. `DEFAULT_USER_CONFIG.export_filename_template`：`capture_all_{capture_id}_{date}.{ext}` → `capture_{date}.{ext}`
   4. `src/shared/system_time.ts` `format_system_time_filename`：`YYYY-MM-DD_HH-MM-SS` → `YYYYMMDD_HHMMSS`（紧凑日期）
   5. 用户自定义模板仍可用 `{capture_id}` 占位符（向后兼容）

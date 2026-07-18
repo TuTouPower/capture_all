@@ -38,7 +38,7 @@ test.describe('CDP Capture - extension smoke', () => {
 
     test('popup renders with start button', async () => {
         const page = await browser.newPage();
-        await page.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+        await page.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#startBtn')).toBeVisible({ timeout: 10000 });
@@ -47,7 +47,7 @@ test.describe('CDP Capture - extension smoke', () => {
 
     test('start and stop recording', async () => {
         const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+        await popup.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
         await expect(popup.locator('#startBtn')).toBeVisible({ timeout: 10000 });
@@ -69,7 +69,7 @@ test.describe('CDP Capture - extension smoke', () => {
 test.describe('CDP Capture - recording with body capture', () => {
     test('record site, verify body_capture_mode is set', async () => {
         const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+        await popup.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
         // Start recording
@@ -175,7 +175,7 @@ test.describe('CDP Capture - recording with body capture', () => {
 
     test('export JSON contains network requests with response_body_status', async () => {
         const popup = await browser.newPage();
-        await popup.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+        await popup.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
         await popup.waitForLoadState('domcontentloaded');
 
         // Start recording

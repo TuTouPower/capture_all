@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from 'vitest';
-import { create_content_event } from '../src/content/content_event_utils';
+import { create_content_event } from '../src/extension/content/content_event_utils';
 
 describe('create_content_event', () => {
     const base_params = {

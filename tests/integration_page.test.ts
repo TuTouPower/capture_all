@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
         write: vi.fn(),
         flush: vi.fn(),
@@ -16,14 +16,14 @@ vi.mock('../src/background/app_log_storage', () => ({
 }));
 
 // ── 模块级行为测试 ──────────────────────────────────────────────────────
-import * as integrations_mod from '../src/dashboard/dashboard_integrations';
-import { set_page, get_page, set_user_config, router } from '../src/dashboard/dashboard_shared';
+import * as integrations_mod from '../src/extension/dashboard/dashboard_integrations';
+import { set_page, get_page, set_user_config, router } from '../src/extension/dashboard/dashboard_shared';
 import { DEFAULT_USER_CONFIG } from '../src/shared/constants';
 
 // ── 源码文件（供 AC-1/AC-2/AC-4 验证） ──────────────────────────────────
-const main_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
-const integ_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_integrations.ts'), 'utf8');
-const settings_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard_settings.ts'), 'utf8');
+const main_src = readFileSync(resolve(__dirname, '../src/extension/dashboard/dashboard.ts'), 'utf8');
+const integ_src = readFileSync(resolve(__dirname, '../src/extension/dashboard/dashboard_integrations.ts'), 'utf8');
+const settings_src = readFileSync(resolve(__dirname, '../src/extension/dashboard/dashboard_settings.ts'), 'utf8');
 
 // ── AC-3 函数调用行为测试的前置 DOM + config 设置 ─────────────────────
 beforeAll(async () => {
@@ -32,7 +32,7 @@ beforeAll(async () => {
     // 设置默认 user config，避免 render_settings() 等渲染函数读取 undefined
     set_user_config({ ...DEFAULT_USER_CONFIG });
     // 动态导入 dashboard.ts，触发 router.go = go 赋值（模块级）
-    await import('../src/dashboard/dashboard');
+    await import('../src/extension/dashboard/dashboard');
 });
 
 // ────────────────────────────────────────────────────────────────────────

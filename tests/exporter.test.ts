@@ -1,11 +1,11 @@
 // tests/exporter.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { export_json, export_jsonl, export_html, export_har } from '../src/background/exporter';
-import { get_capture, get_events_by_category, get_network_requests, get_console_events } from '../src/background/storage';
+import { export_json, export_jsonl, export_html, export_har } from '../src/extension/background/exporter';
+import { get_capture, get_events_by_category, get_network_requests, get_console_events } from '../src/extension/background/storage';
 import { load_user_config } from '../src/shared/user_config';
 
 // Mock dependencies
-vi.mock('../src/background/storage', () => ({
+vi.mock('../src/extension/background/storage', () => ({
     get_capture: vi.fn(),
     get_events_by_category: vi.fn(),
     get_network_requests: vi.fn(),

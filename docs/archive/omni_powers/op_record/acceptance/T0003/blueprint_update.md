@@ -27,7 +27,7 @@
   ## 5. MCP 集成页（已移除）
 
   MCP 集成页已从主面板移除（T0003）。Webhook / Issue 平台占位卡片已删除。
-  MCP Bridge 配置入口保留在设置页集成分区（§4），Bridge 后端功能（`src/agent/`、`src/background/agent_bridge_client.ts`）不受影响。
+  MCP Bridge 配置入口保留在设置页集成分区（§4），Bridge 后端功能（`src/agent/`、`src/extension/background/agent_bridge_client.ts`）不受影响。
   ```
 
 ### 新增

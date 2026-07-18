@@ -166,7 +166,7 @@ npx playwright test --project=e2e-ext --debug
 ### 1. 创建捕获模块
 
 ```typescript
-// src/content/my_capture.ts
+// src/extension/content/my_capture.ts
 import { Logger } from '../shared/logger';
 
 const logger = new Logger('content/my_capture');
@@ -199,7 +199,7 @@ stop_my_capture();
 ```typescript
 // tests/my_capture.test.ts
 import { describe, it, expect, vi } from 'vitest';
-import { start, stop } from '../src/content/my_capture';
+import { start, stop } from '../src/extension/content/my_capture';
 
 describe('my_capture', () => {
     it('should capture events', () => {

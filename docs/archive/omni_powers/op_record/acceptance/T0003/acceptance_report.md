@@ -18,7 +18,7 @@
 | INV-1: MCP Bridge 后端功能不受影响 | PASS: src/agent/ 目录完整保留（bridge/mcp/shared/ 均在） |
 | INV-2: 设置页集成分区保留 | PASS: #set-integrations 元素存在，Bridge 开关/URL/Token/间隔均可见且功能正常 |
 | INV-3: 侧边栏从 5 项减到 4 项 | PASS: .sb-item count=4, 不含 "MCP / 集成" |
-| INV-4: 后端代码不做修改 | PASS: src/agent/ 目录 intact, src/background/agent_bridge_client.ts intact |
+| INV-4: 后端代码不做修改 | PASS: src/agent/ 目录 intact, src/extension/background/agent_bridge_client.ts intact |
 | INV-5: 行为等价 | PASS: go('captures')/go('settings')/go('current')/go('exports') 行为不变; go('integrations') → captures |
 
 ## 边界与反例验证

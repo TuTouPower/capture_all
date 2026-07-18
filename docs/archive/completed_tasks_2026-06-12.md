@@ -14,7 +14,7 @@
   3. `try_resolve_deferred` 遍历所有关联 deferred，仅当 pending_cdp_ids 变空才 emit 合并
   4. `handle_completed` 使用 Set 构建反向索引
   5. `schedule_orphan_check` 同步清理反向索引
-- **影响文件**: `src/background/network_capture.ts`、`tests/network_capture.test.ts`（+5 测试）
+- **影响文件**: `src/extension/background/network_capture.ts`、`tests/network_capture.test.ts`（+5 测试）
 
 ---
 
@@ -23,7 +23,7 @@
 - **Commit**: `64e9245`
 - **根因**: `.dt-metric` 是 `<button>` 元素，Chrome UA 样式 `color: buttontext` 覆盖继承的 `var(--ink)`，深色模式下 `buttontext` 为黑色
 - **修复**: `.dt-metric` 添加 `color: var(--ink)`
-- **影响文件**: `src/dashboard/dashboard-pages.css`
+- **影响文件**: `src/extension/dashboard/dashboard-pages.css`
 
 ---
 
@@ -35,7 +35,7 @@
   1. `.dt-rail` 添加 `position: relative` + `.dt-rail-handle` 拖拽手柄（`cursor: col-resize`）
   2. `wire_rail_resize()`: mousedown → mousemove 更新 grid-template-columns → mouseup 存 localStorage
   3. 约束 160px ~ 480px，页面加载时恢复
-- **影响文件**: `src/dashboard/dashboard-pages.css`、`src/dashboard/dashboard.ts`
+- **影响文件**: `src/extension/dashboard/dashboard-pages.css`、`src/extension/dashboard/dashboard.ts`
 
 ---
 
@@ -47,7 +47,7 @@
   1. DT_TABS 扩展为 10 个：概览/时间线/用户行为/页面导航/网络请求/控制台/错误异常/Storage/Cookie/本次配置
   2. `render_detail_tab()` 新增 user_action / navigation / error / storage / cookie 渲染
   3. 拆分原 evidence→用户行为+页面导航+错误异常，storage→Storage+Cookie
-- **影响文件**: `src/dashboard/dashboard.ts`
+- **影响文件**: `src/extension/dashboard/dashboard.ts`
 
 ---
 
@@ -58,4 +58,4 @@
 - **修复**:
   - `用户`→`用户行为`、`导航`→`页面导航`、`网络`→`网络请求`、`错误`→`错误异常`、`存储`→`Storage`
   - Quick filter: `用户操作`→`用户行为`、`错误`→`错误异常`、`存储`→`Storage`
-- **影响文件**: `src/dashboard/dashboard.ts`
+- **影响文件**: `src/extension/dashboard/dashboard.ts`

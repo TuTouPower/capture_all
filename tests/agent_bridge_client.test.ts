@@ -5,7 +5,7 @@ import {
     stop_bridge_client,
     set_bridge_session_for_tests,
     type AgentBridgeClientDeps,
-} from '../src/background/agent_bridge_client';
+} from '../src/extension/background/agent_bridge_client';
 import { clear_bridge_session, save_bridge_session } from '../src/shared/agent_bridge_config';
 
 const log_write = vi.hoisted(() => vi.fn());
@@ -13,7 +13,7 @@ const storage_get = vi.hoisted(() => vi.fn());
 const storage_set = vi.hoisted(() => vi.fn());
 const storage_remove = vi.hoisted(() => vi.fn());
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
         write: log_write,
         flush: vi.fn(),

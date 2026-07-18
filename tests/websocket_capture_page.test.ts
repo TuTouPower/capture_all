@@ -2,7 +2,7 @@
 // tests/websocket_capture_page.test.ts
 // Tests for content/websocket_capture.ts — page-level WebSocket monkey-patch capture.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { start_websocket_capture, stop_websocket_capture } from '../src/content/websocket_capture';
+import { start_websocket_capture, stop_websocket_capture } from '../src/extension/content/websocket_capture';
 
 const SIGNAL = '__capture_all_ws__';
 const CAPTURE_ID = 'cap_ws_page';

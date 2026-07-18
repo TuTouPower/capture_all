@@ -100,9 +100,9 @@ import {
     get_storage_changes,
     get_cookie_changes,
     get_lifecycle_events,
-} from '../src/background/storage';
+} from '../src/extension/background/storage';
 import { STORE_NAMES } from '../src/shared/constants';
-import { init_db } from '../src/background/storage';
+import { init_db } from '../src/extension/background/storage';
 
 describe('query_by_store — generic cursor pagination helper', () => {
     it('get_network_requests accepts capture_id, offset, limit', async () => {
@@ -154,8 +154,8 @@ describe('query_by_store with mocked IDB', () => {
     async function setup_mock_db(store_name: string, items: any[]) {
         const fake = make_fake_db(store_name, items);
         // Mock init_db to return our fake db
-        vi.doMock('../src/background/storage', async () => {
-            const actual = await vi.importActual<typeof import('../src/background/storage')>('../src/background/storage');
+        vi.doMock('../src/extension/background/storage', async () => {
+            const actual = await vi.importActual<typeof import('../src/extension/background/storage')>('../src/extension/background/storage');
             return {
                 ...actual,
                 init_db: vi.fn().mockResolvedValue(fake.db),
@@ -166,7 +166,7 @@ describe('query_by_store with mocked IDB', () => {
 
     it('query_by_store calls transaction with correct store_name and readonly mode', async () => {
         // Import the module after mock setup
-        const { init_db: mock_init } = await import('../src/background/storage');
+        const { init_db: mock_init } = await import('../src/extension/background/storage');
         const fake = make_fake_db(STORE_NAMES.NETWORK_REQUESTS, []);
 
         // We need to verify that get_network_requests -> query_by_store

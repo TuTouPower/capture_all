@@ -5,7 +5,7 @@ import type { CaptureEvent, FocusEventData } from '../src/shared/types';
 import {
     start_focus_capture,
     stop_focus_capture,
-} from '../src/content/focus_capture';
+} from '../src/extension/content/focus_capture';
 
 describe('focus_capture', () => {
     let events: Array<{ event: CaptureEvent; data: FocusEventData }>;

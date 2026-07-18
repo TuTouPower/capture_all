@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG } from '../src/shared/constants';
 import {
     start_dom_capture,
     stop_dom_capture,
-} from '../src/content/dom_capture';
+} from '../src/extension/content/dom_capture';
 import type { InputEventData } from '../src/shared/types';
 
 function capture_input_event(

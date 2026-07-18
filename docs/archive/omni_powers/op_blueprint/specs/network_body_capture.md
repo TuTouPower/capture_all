@@ -107,14 +107,14 @@ console.error() ≠ 运行时异常。实现：`console_capture.ts` / `exception
 
 ## 10. 关键文件
 
-- `src/background/network_capture.ts` — CDP-first 主逻辑，`dbg_tab_id` / `dbg_attached_externally` 状态。
-- `src/background/network_webrequest.ts` — webRequest 纯工具。
-- `src/background/network_correlator.ts` — 非活跃 tab 五元组关联。
-- `src/background/body_capture_coordinator.ts` — 三层降级协调。
-- `src/background/stream_buffer.ts` — SSE 流缓冲。
-- `src/background/cdp_event_router.ts` — CDP 事件分发。
-- `src/background/console_capture.ts` / `exception_capture.ts` — CDP console / exception。
-- `src/background/external_cdp_bridge_client.ts` — 外部 CDP 客户端。
-- `src/content/network_hook.ts` — fetch/XHR fallback。
-- `src/content/websocket_capture.ts` — 页面级 WebSocket。
+- `src/extension/background/network_capture.ts` — CDP-first 主逻辑，`dbg_tab_id` / `dbg_attached_externally` 状态。
+- `src/extension/background/network_webrequest.ts` — webRequest 纯工具。
+- `src/extension/background/network_correlator.ts` — 非活跃 tab 五元组关联。
+- `src/extension/background/body_capture_coordinator.ts` — 三层降级协调。
+- `src/extension/background/stream_buffer.ts` — SSE 流缓冲。
+- `src/extension/background/cdp_event_router.ts` — CDP 事件分发。
+- `src/extension/background/console_capture.ts` / `exception_capture.ts` — CDP console / exception。
+- `src/extension/background/external_cdp_bridge_client.ts` — 外部 CDP 客户端。
+- `src/extension/content/network_hook.ts` — fetch/XHR fallback。
+- `src/extension/content/websocket_capture.ts` — 页面级 WebSocket。
 - `src/shared/body_routing.ts` — body 路由。

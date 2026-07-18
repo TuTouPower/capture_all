@@ -21,7 +21,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && npm run build:bridge && npm run build:mcp && npm run build:zip",
+    "build": "tsc && vite build && npm run copy:locales && npm run build:bridge && npm run build:mcp && npm run build:zip",
+    "copy:locales": "node scripts/copy_locales.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

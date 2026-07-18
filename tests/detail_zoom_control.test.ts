@@ -7,7 +7,7 @@ import {
     get_dt_zoom_window_pct,
     get_dt_view, set_dt_view,
     get_dt_play, set_dt_play,
-} from '../src/dashboard/dashboard_shared';
+} from '../src/extension/dashboard/dashboard_shared';
 
 describe('_dt_zoom 状态存取', () => {
     beforeEach(() => { set_dt_zoom(50); set_dt_view('trace'); });

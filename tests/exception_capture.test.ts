@@ -24,7 +24,7 @@ import {
     start_exception_capture,
     stop_exception_capture,
     is_exception_active,
-} from '../src/background/exception_capture';
+} from '../src/extension/background/exception_capture';
 
 const TAB_ID = 42;
 const START_TIME = 1700000000000;

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 const panels_create_mock = vi.fn();
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
         write: vi.fn(),
         flush: vi.fn(),
@@ -28,12 +28,12 @@ beforeEach(() => {
 });
 
 it('registers the Capture All DevTools panel', async () => {
-    await import('../src/devtools/devtools');
+    await import('../src/extension/devtools/devtools');
 
     expect(panels_create_mock).toHaveBeenCalledOnce();
     expect(panels_create_mock).toHaveBeenCalledWith(
         'Capture All',
         'assets/icons/icon48.png',
-        'src/dashboard/dashboard.html',
+        'src/extension/dashboard/dashboard.html',
     );
 });

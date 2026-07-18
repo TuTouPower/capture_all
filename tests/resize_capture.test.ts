@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/resize_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_resize_capture, stop_resize_capture } from '../src/content/resize_capture';
+import { start_resize_capture, stop_resize_capture } from '../src/extension/content/resize_capture';
 
 describe('resize_capture', () => {
     let sender: ReturnType<typeof vi.fn>;

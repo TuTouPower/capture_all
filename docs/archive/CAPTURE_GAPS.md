@@ -100,7 +100,7 @@ const USER_ACTION_TYPES = new Set([
 
 ### 涉及文件
 
-- `src/content/content_script.ts` — 注入拦截
+- `src/extension/content/content_script.ts` — 注入拦截
 - `src/shared/event_category.ts` — 新增 type 映射
 - `src/shared/types.ts` — 如需新增 type 字面量
 

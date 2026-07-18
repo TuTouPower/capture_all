@@ -8,7 +8,7 @@
 
 ## 2. 采集
 
-`src/background/cookie_capture.ts` 监听 `chrome.cookies.onChanged`，每次变化产出 `cookie_change` 事件（category=`cookie`）。
+`src/extension/background/cookie_capture.ts` 监听 `chrome.cookies.onChanged`，每次变化产出 `cookie_change` 事件（category=`cookie`）。
 
 变化类型：
 
@@ -32,4 +32,4 @@ value 受 `redact_data` 脱敏（标 `redaction_status`），截断由 `max_body
 
 ## 6. 关键文件
 
-- `src/background/cookie_capture.ts`
+- `src/extension/background/cookie_capture.ts`

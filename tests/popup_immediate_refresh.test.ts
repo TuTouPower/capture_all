@@ -88,7 +88,7 @@ describe('popup immediate refresh on open (BUG-012)', () => {
         // 通过源码验证核心路径：start_timer 内 refresh_counts 在 setInterval 前
         const fs = await import('fs');
         const path = await import('path');
-        const src = fs.readFileSync(path.resolve(__dirname, '../src/popup/popup.ts'), 'utf-8');
+        const src = fs.readFileSync(path.resolve(__dirname, '../src/extension/popup/popup.ts'), 'utf-8');
 
         // 提取 start_timer 函数体
         const fn_start = src.indexOf('function start_timer(): void {');

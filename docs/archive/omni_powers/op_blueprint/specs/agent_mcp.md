@@ -11,9 +11,9 @@ MCP Server（src/agent/mcp/）
   ↕ HTTP POST /mcp/command，可指定 browser_no 路由至特定浏览器
 HTTP Bridge（src/agent/bridge/）—— 监听 127.0.0.1，管理多实例
   ↕ HTTP 轮询 GET /extension/command + POST /extension/result
-Agent Bridge Client（src/background/agent_bridge_client.ts）
+Agent Bridge Client（src/extension/background/agent_bridge_client.ts）
   ↕
-Agent Data Queries（src/background/agent_data_queries.ts）
+Agent Data Queries（src/extension/background/agent_data_queries.ts）
   ↕
 IndexedDB
 ```
@@ -162,9 +162,9 @@ Bridge 默认启用。用户必须在设置页填入 token 后才能实际通信
 - `src/agent/mcp/schemas.ts` — Zod schema。
 - `src/agent/mcp/tools.ts` — 工具名 → AgentCommandType 映射。
 - `src/agent/shared/protocol.ts` — AgentCommandType / AgentCommandResult / AgentStatus 类型。
-- `src/background/agent_bridge_client.ts` — 扩展侧轮询客户端（export `start_bridge_client`, `stop_bridge_client`, `is_bridge_client_running`）。
-- `src/background/agent_command_dispatcher.ts` — 命令分发。
-- `src/background/agent_data_queries.ts` — 数据查询。
+- `src/extension/background/agent_bridge_client.ts` — 扩展侧轮询客户端（export `start_bridge_client`, `stop_bridge_client`, `is_bridge_client_running`）。
+- `src/extension/background/agent_command_dispatcher.ts` — 命令分发。
+- `src/extension/background/agent_data_queries.ts` — 数据查询。
 - `src/shared/agent_bridge_config.ts` — Bridge 配置类型。
 
 ## 10. 构建产物

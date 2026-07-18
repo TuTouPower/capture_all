@@ -1,6 +1,6 @@
 // tests/stream_buffer.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { create_stream_buffer } from '../src/background/stream_buffer';
+import { create_stream_buffer } from '../src/extension/background/stream_buffer';
 
 describe('stream_buffer', () => {
     beforeEach(() => {

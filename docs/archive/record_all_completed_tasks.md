@@ -202,7 +202,7 @@
 - 测试：配置默认值、保存/读取、非法 URL 拒绝或不连接。
 
 ### 11.2 扩展 bridge client — ✅ 已完成
-- 新增 `src/background/agent_bridge_client.ts`。
+- 新增 `src/extension/background/agent_bridge_client.ts`。
 - 后台 service worker 根据用户配置启动/停止 bridge polling。
 - 定时 POST `/extension/heartbeat`，上报：
   - extension version
@@ -215,7 +215,7 @@
 - 测试：heartbeat、poll command、result 回传、bridge 关闭时不请求、token 缺失时不请求。
 
 ### 11.3 扩展命令 dispatcher — ✅ 已完成
-- 新增 `src/background/agent_command_dispatcher.ts`。
+- 新增 `src/extension/background/agent_command_dispatcher.ts`。
 - 支持设计文档中的全部命令：
   - `recording.start`
   - `recording.stop`
@@ -233,7 +233,7 @@
 - 测试：每个命令至少覆盖成功路径和一个错误路径。
 
 ### 11.4 扩展数据查询 API — ✅ 已完成
-- 新增 `src/background/agent_data_queries.ts`。
+- 新增 `src/extension/background/agent_data_queries.ts`。
 - 实现 `list_data_sources(session_id)`：
   - 返回 `record_events`、`network_requests`、`console_logs`、`error_logs` 等实际存在 source。
   - 返回每个 source 的 count、time_range、types。

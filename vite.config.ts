@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { crx } from '@crxjs/vite-plugin';
-import manifest from './manifest.json';
+import manifest from './src/extension/manifest.json';
 
 export default defineConfig({
     define: {
@@ -11,11 +11,11 @@ export default defineConfig({
         outDir: 'artifacts/dist',
     rollupOptions: {
             input: {
-                background: 'src/background/service_worker.ts',
-                content: 'src/content/content_script.ts',
-                popup: 'src/popup/popup.html',
-                dashboard: 'src/dashboard/dashboard.html',
-                devtools: 'src/devtools/devtools.html'
+                background: 'src/extension/background/service_worker.ts',
+                content: 'src/extension/content/content_script.ts',
+                popup: 'src/extension/popup/popup.html',
+                dashboard: 'src/extension/dashboard/dashboard.html',
+                devtools: 'src/extension/devtools/devtools.html'
             }
         }
     }

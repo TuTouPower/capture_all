@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/fullscreen_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_fullscreen_capture, stop_fullscreen_capture } from '../src/content/fullscreen_capture';
+import { start_fullscreen_capture, stop_fullscreen_capture } from '../src/extension/content/fullscreen_capture';
 
 describe('fullscreen_capture', () => {
     let sender: ReturnType<typeof vi.fn>;

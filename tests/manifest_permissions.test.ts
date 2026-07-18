@@ -6,7 +6,7 @@ import { extname, resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
 const project_root = resolve(__dirname, '..');
-const manifest_path = resolve(project_root, 'manifest.json');
+const manifest_path = resolve(project_root, 'src/extension/manifest.json');
 const manifest = read_manifest(manifest_path);
 
 interface ExtensionManifest {
@@ -53,7 +53,7 @@ describe('manifest permission contract', () => {
         expect(manifest.content_scripts).toEqual([
             expect.objectContaining({
                 matches: ['<all_urls>'],
-                js: ['src/content/content_script.ts'],
+                js: ['src/extension/content/content_script.ts'],
             }),
         ]);
 
@@ -77,7 +77,7 @@ describe('manifest permission contract', () => {
             'utf8',
         );
 
-        expect(vite_config).toContain("import manifest from './manifest.json'");
+        expect(vite_config).toContain("import manifest from './src/extension/manifest.json'");
         expect(vite_config).toContain('crx({ manifest })');
     });
 });

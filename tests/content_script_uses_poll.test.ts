@@ -21,7 +21,7 @@ describe('BUG-004 contract: content_script uses status polling', () => {
         const fs = await import('fs');
         const path = await import('path');
         const src = fs.readFileSync(
-            path.resolve(__dirname, '..', 'src', 'content', 'content_script.ts'),
+            path.resolve(__dirname, '..', 'src', 'extension', 'content', 'content_script.ts'),
             'utf8'
         );
 
@@ -47,7 +47,7 @@ describe('BUG-004 contract: content_script uses status polling', () => {
         const fs = await import('fs');
         const path = await import('path');
         const src = fs.readFileSync(
-            path.resolve(__dirname, '..', 'src', 'content', 'content_script.ts'),
+            path.resolve(__dirname, '..', 'src', 'extension', 'content', 'content_script.ts'),
             'utf8'
         );
         // stop_status_poll 必须出现在 stop_capture 函数体内（粗略：在 stop_mouse_capture 附近）

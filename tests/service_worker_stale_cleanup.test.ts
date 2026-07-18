@@ -5,12 +5,12 @@ const log_write = vi.hoisted(() => vi.fn());
 const storage_get = vi.hoisted(() => vi.fn());
 const storage_set = vi.hoisted(() => vi.fn());
 
-vi.mock('../src/background/storage', async (import_original) => ({
-    ...await import_original<typeof import('../src/background/storage')>(),
+vi.mock('../src/extension/background/storage', async (import_original) => ({
+    ...await import_original<typeof import('../src/extension/background/storage')>(),
     update_capture,
 }));
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
         write: log_write,
         flush: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('../src/background/app_log_storage', () => ({
     }),
 }));
 
-vi.mock('../src/background/keepalive', () => ({
+vi.mock('../src/extension/background/keepalive', () => ({
     setup_keepalive_listener: vi.fn(),
     start_keepalive: vi.fn(),
     stop_keepalive: vi.fn(),
@@ -62,7 +62,7 @@ function get_cleanup_errors(): Array<Record<string, unknown>> {
 }
 
 async function import_and_run_cleanup(): Promise<void> {
-    await import('../src/background/service_worker');
+    await import('../src/extension/background/service_worker');
     await vi.runAllTimersAsync();
 }
 

@@ -3,7 +3,7 @@
 ## 步骤与验证
 
 1. `git mv src/agent/shared/protocol.ts src/shared/protocol.ts` → 验证：`ls src/shared/protocol.ts` 存在
-2. 改 5 处 import：`src/background/*` 由 `'../agent/shared/protocol'` 改为 `'../shared/protocol'`；`tests/*` 由 `'../src/agent/shared/protocol'` 改为 `'../src/shared/protocol'` → 验证：`grep -rn 'agent/shared/protocol'` 无输出
+2. 改 5 处 import：`src/extension/background/*` 由 `'../agent/shared/protocol'` 改为 `'../shared/protocol'`；`tests/*` 由 `'../src/agent/shared/protocol'` 改为 `'../src/shared/protocol'` → 验证：`grep -rn 'agent/shared/protocol'` 无输出
 3. `rmdir src/agent/shared` → 验证：目录不存在
 4. `npm test` → 验证：全绿
 5. `npm run build` → 验证：全绿

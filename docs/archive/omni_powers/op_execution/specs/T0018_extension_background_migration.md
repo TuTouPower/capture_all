@@ -39,8 +39,8 @@ eval: required
 - 已知坑: 文件数较多，workset 必须精确列旧新路径并用产物/真机双门验证。
 
 ### 实现锚点（坐标集中地）
-- `src/background/service_worker.ts`、`storage.ts`、`app_log_storage.ts`、`exporter.ts`
-- `src/background/agent_*.ts`、`keepalive.ts`
+- `src/extension/background/service_worker.ts`、`storage.ts`、`app_log_storage.ts`、`exporter.ts`
+- `src/extension/background/agent_*.ts`、`keepalive.ts`
 - `src/shared/logger.ts`、`capture_data_reader.ts`、`agent_bridge_config.ts`、`chrome.d.ts`
 - `apps/extension/background/`、`apps/extension/runtime/legacy/`
 

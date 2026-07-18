@@ -1,6 +1,6 @@
 // tests/storage.test.ts
 import { describe, it, expect } from 'vitest';
-import { get_session_size, check_storage_limit } from '../src/background/storage';
+import { get_session_size, check_storage_limit } from '../src/extension/background/storage';
 
 describe('storage utilities', () => {
     it('get_session_size returns 0 for unknown session', () => {

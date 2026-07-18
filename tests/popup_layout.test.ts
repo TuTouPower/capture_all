@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // ============================================================
-// 布局常量 — 与 src/popup/popup.css 及 TASKS.md 对齐
+// 布局常量 — 与 src/extension/popup/popup.css 及 TASKS.md 对齐
 // ============================================================
 
 // 源自 CSS: .action { height: 88px }
@@ -277,7 +277,7 @@ interface ParsedCss {
 }
 
 function parse_css(): ParsedCss {
-    const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+    const css_path = resolve(import.meta.dirname!, '../src/extension/popup/popup.css');
     const css = readFileSync(css_path, 'utf-8');
 
     const extract_px = (pattern: RegExp): number => {
@@ -396,13 +396,13 @@ describe('stop button layout — Bug 5 regression (scrollWidth ≤ clientWidth)'
 
     it('.act-stop 使用 flex-direction: column（两行布局）', () => {
         // 两行布局是 Bug 5 修复的核心：列方向让每行独占全宽
-        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css_path = resolve(import.meta.dirname!, '../src/extension/popup/popup.css');
         const css = readFileSync(css_path, 'utf-8');
         expect(css).toMatch(/\.act-stop\s*\{[^}]*flex-direction:\s*column/);
     });
 
     it('.act-stop 使用 white-space: normal 允许多行换行', () => {
-        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css_path = resolve(import.meta.dirname!, '../src/extension/popup/popup.css');
         const css = readFileSync(css_path, 'utf-8');
         expect(css).toMatch(/\.act-stop\s*\{[^}]*white-space:\s*normal/);
     });
@@ -471,7 +471,7 @@ describe('stop button layout — Bug 5 regression (scrollWidth ≤ clientWidth)'
     });
 
     it('act-stop 无 overflow: hidden 之外的隐藏（内容应可见）', () => {
-        const css_path = resolve(import.meta.dirname!, '../src/popup/popup.css');
+        const css_path = resolve(import.meta.dirname!, '../src/extension/popup/popup.css');
         const css = readFileSync(css_path, 'utf-8');
         // .act-stop 不应有 text-overflow: ellipsis 或 overflow: hidden
         // 但可以有 overflow: hidden（在 .mcard 上有，用于文本截断）

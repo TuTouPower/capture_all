@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/visibility_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_visibility_capture, stop_visibility_capture } from '../src/content/visibility_capture';
+import { start_visibility_capture, stop_visibility_capture } from '../src/extension/content/visibility_capture';
 
 describe('visibility_capture', () => {
     let sender: ReturnType<typeof vi.fn>;

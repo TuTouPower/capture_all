@@ -7,14 +7,14 @@
 ```mermaid
 graph TB
     subgraph "浏览器扩展 (Chrome MV3)"
-        SW["Background Service Worker<br/>src/background/service_worker.ts<br/>采集核心协调"]
-        CS["Content Scripts<br/>src/content/<br/>页面事件捕获"]
-        POP["Popup<br/>src/popup/<br/>轻量控制面板"]
-        DASH["Dashboard<br/>src/dashboard/<br/>主面板工作台"]
-        DT["DevTools Panel<br/>src/devtools/<br/>DevTools 集成"]
+        SW["Background Service Worker<br/>src/extension/background/service_worker.ts<br/>采集核心协调"]
+        CS["Content Scripts<br/>src/extension/content/<br/>页面事件捕获"]
+        POP["Popup<br/>src/extension/popup/<br/>轻量控制面板"]
+        DASH["Dashboard<br/>src/extension/dashboard/<br/>主面板工作台"]
+        DT["DevTools Panel<br/>src/extension/devtools/<br/>DevTools 集成"]
         IDB[("IndexedDB<br/>capture_all_db<br/>9 stores")]
-        BC["Agent Bridge Client<br/>src/background/agent_bridge_client.ts<br/>轮询命令 / 回传结果"]
-        AQ["Agent Data Queries<br/>src/background/agent_data_queries.ts<br/>数据查询"]
+        BC["Agent Bridge Client<br/>src/extension/background/agent_bridge_client.ts<br/>轮询命令 / 回传结果"]
+        AQ["Agent Data Queries<br/>src/extension/background/agent_data_queries.ts<br/>数据查询"]
     end
 
     subgraph "本地 Agent 基础设施"
@@ -45,16 +45,16 @@ graph TB
 
 | 文件 | 职责 |
 |---|---|
-| `src/background/service_worker.ts` | 扩展入口，采集生命周期管理，消息路由 |
-| `src/content/content_script.ts` | Content script 入口，页面内事件分发 |
+| `src/extension/background/service_worker.ts` | 扩展入口，采集生命周期管理，消息路由 |
+| `src/extension/content/content_script.ts` | Content script 入口，页面内事件分发 |
 | `src/shared/types.ts` | 全部类型定义 (CaptureRecord, CaptureEvent, category/type 体系) |
 | `src/shared/constants.ts` | 数据库名、Store 名、默认配置、大小限制 |
 | `src/shared/i18n.ts` | 中英文国际化 |
-| `src/background/storage.ts` | IndexedDB 封装 (CRUD、flush、store 路由) |
+| `src/extension/background/storage.ts` | IndexedDB 封装 (CRUD、flush、store 路由) |
 | `src/agent/bridge/main.ts` | Bridge 服务入口 |
 | `src/agent/mcp/main.ts` | MCP Server 入口 |
-| `src/popup/popup.ts` | Popup 控制逻辑 |
-| `src/dashboard/dashboard.ts` | 主面板应用逻辑 |
+| `src/extension/popup/popup.ts` | Popup 控制逻辑 |
+| `src/extension/dashboard/dashboard.ts` | 主面板应用逻辑 |
 | `manifest.json` | Chrome 扩展清单 |
 
 ---
@@ -210,7 +210,7 @@ stopCapture(capture_id)
 
 ### 2.4 Popup (弹出窗口)
 
-**文件**：`src/popup/popup.html`, `src/popup/popup.ts`, `src/popup/popup.css`
+**文件**：`src/extension/popup/popup.html`, `src/extension/popup/popup.ts`, `src/extension/popup/popup.css`
 
 **设计约束**：宽度约 400px，适配 Chrome 扩展弹窗；不出现垂直滚动条；内容等比例缩放保留关键信息。
 
@@ -242,7 +242,7 @@ stopCapture(capture_id)
 
 ### 2.5 Dashboard (主面板)
 
-**文件**：`src/dashboard/dashboard.html`, `src/dashboard/dashboard.ts`，CSS 分离为 4 个文件。
+**文件**：`src/extension/dashboard/dashboard.html`, `src/extension/dashboard/dashboard.ts`，CSS 分离为 4 个文件。
 
 **信息架构**：
 
@@ -283,9 +283,9 @@ MCP Server (src/agent/mcp/)
     | HTTP POST /mcp/command
 HTTP Bridge (src/agent/bridge/)  -- 监听 127.0.0.1
     | HTTP 轮询 GET /extension/command + POST /extension/result
-Agent Bridge Client (src/background/agent_bridge_client.ts)
+Agent Bridge Client (src/extension/background/agent_bridge_client.ts)
     | 内部调用
-Agent Data Queries (src/background/agent_data_queries.ts)
+Agent Data Queries (src/extension/background/agent_data_queries.ts)
     | IndexedDB 读取
 扩展数据库
 ```
@@ -453,6 +453,6 @@ BodyCaptureCoordinator
 
 ### 2.8 DevTools Panel
 
-**文件**：`src/devtools/`
+**文件**：`src/extension/devtools/`
 
 轻量入口，提供 DevTools 集成面板。设计优先级低于 Popup 和 Dashboard。

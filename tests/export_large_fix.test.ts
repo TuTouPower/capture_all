@@ -68,7 +68,7 @@ const mock_capture = {
     body_capture_status: 'captured',
 };
 
-vi.mock('../src/background/storage', () => ({
+vi.mock('../src/extension/background/storage', () => ({
     get_capture: vi.fn(async () => mock_capture),
     get_events_by_category: vi.fn(async () => []),
     get_network_requests: vi.fn(async () => [make_network_request()]),
@@ -79,7 +79,7 @@ vi.mock('../src/shared/user_config', () => ({
     load_user_config: vi.fn(async () => ({ system_time_timezone: 'UTC+8' })),
 }));
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: vi.fn(() => ({
         flush: vi.fn(async () => {}),
         get_entries: vi.fn(async () => []),
@@ -91,7 +91,7 @@ import {
     export_jsonl,
     export_html,
     export_har,
-} from '../src/background/exporter';
+} from '../src/extension/background/exporter';
 
 beforeEach(() => {
     vi.clearAllMocks();

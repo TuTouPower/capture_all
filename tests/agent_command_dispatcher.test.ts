@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
 import 'fake-indexeddb/auto';
-import { dispatch_agent_command, type AgentRuntimeHandlers } from '../src/background/agent_command_dispatcher';
+import { dispatch_agent_command, type AgentRuntimeHandlers } from '../src/extension/background/agent_command_dispatcher';
 import type { AgentCommand } from '../src/shared/protocol';
 import { DEFAULT_CONFIG } from '../src/shared/constants';
 import type { CaptureConfig } from '../src/shared/types';
 
-vi.mock('../src/background/exporter', () => ({
+vi.mock('../src/extension/background/exporter', () => ({
     export_json: vi.fn(async () => '{}'),
     export_jsonl: vi.fn(async () => ''),
     export_html: vi.fn(async () => '<html></html>'),
@@ -17,7 +17,7 @@ const mock_capture_data = {
     sources: { user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [], storage_changes: [], cookie_changes: [] }
 };
 
-vi.mock('../src/background/agent_data_queries', () => ({
+vi.mock('../src/extension/background/agent_data_queries', () => ({
     load_agent_capture_data: vi.fn(async () => mock_capture_data),
     list_data_sources_from_capture_data: vi.fn(() => []),
     list_entries_from_capture_data: vi.fn(() => ({ total: 0, records: [] })),

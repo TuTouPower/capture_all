@@ -8,7 +8,7 @@
 
 ## 1. 问题与根因
 
-现状 `src/background/network_capture.ts` 网络 body 采集只有**一种机制**：
+现状 `src/extension/background/network_capture.ts` 网络 body 采集只有**一种机制**：
 
 ```
 Network.loadingFinished → Network.getResponseBody（一次性事后取 body）

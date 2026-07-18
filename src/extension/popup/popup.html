@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture All 全采</title>
+  <link rel="stylesheet" href="../../shared/design_tokens.css">
+  <link rel="stylesheet" href="./popup.css">
+</head>
+<body>
+  <div class="popup" id="popup">
+    <header class="phead">
+      <div class="brand">
+        <span class="logo"><span class="logo-ring"></span></span>
+        <b>Capture All <span class="brand-cn">全采</span></b>
+      </div>
+      <button class="panelbtn" id="panelBtn" title="主面板">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v4.5A1.5 1.5 0 0 1 17.5 20h-12A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5H10"/></svg>
+        <span data-i18n="mainPanel">主面板</span>
+      </button>
+    </header>
+    <div id="view"></div>
+  </div>
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>

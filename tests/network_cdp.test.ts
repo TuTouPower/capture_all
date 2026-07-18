@@ -42,7 +42,7 @@ import {
     start_network_capture,
     stop_network_capture,
     enable_response_body_capture,
-} from '../src/background/network_capture';
+} from '../src/extension/background/network_capture';
 
 // Helper to create a standard capture config
 function make_cfg(overrides: Partial<{
@@ -221,7 +221,7 @@ describe('enable_response_body_capture', () => {
         );
 
         // Verify meta was stored
-        const { _cdp_request_meta_for_test } = await import('../src/background/network_capture');
+        const { _cdp_request_meta_for_test } = await import('../src/extension/background/network_capture');
         expect(_cdp_request_meta_for_test.has('req_test_1')).toBe(true);
         const meta = _cdp_request_meta_for_test.get('req_test_1')!;
         expect(meta.url).toBe('https://example.com/api');

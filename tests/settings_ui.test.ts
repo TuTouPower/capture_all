@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_USER_CONFIG } from '../src/shared/constants'
-import { set_user_config } from '../src/dashboard/dashboard_shared'
+import { set_user_config } from '../src/extension/dashboard/dashboard_shared'
 import {
     clamp_body_size_bytes,
     render_settings,
-} from '../src/dashboard/dashboard_settings'
+} from '../src/extension/dashboard/dashboard_settings'
 
 const project_root = resolve(__dirname, '..')
-const src = readFileSync(resolve(project_root, 'src/dashboard/dashboard_settings.ts'), 'utf8')
+const src = readFileSync(resolve(project_root, 'src/extension/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('隐私风险提示', () => {
     it('在设置页渲染默认敏感采集项和脱敏边界', () => {

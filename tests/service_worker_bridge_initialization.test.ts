@@ -9,12 +9,12 @@ vi.mock('../src/shared/user_config', () => ({
     load_user_config,
 }));
 
-vi.mock('../src/background/agent_bridge_client', () => ({
+vi.mock('../src/extension/background/agent_bridge_client', () => ({
     start_bridge_client,
     stop_bridge_client: vi.fn(),
 }));
 
-vi.mock('../src/background/app_log_storage', () => ({
+vi.mock('../src/extension/background/app_log_storage', () => ({
     get_app_log_transport: () => ({
         write: log_write,
         flush: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock('../src/background/app_log_storage', () => ({
     }),
 }));
 
-vi.mock('../src/background/keepalive', () => ({
+vi.mock('../src/extension/background/keepalive', () => ({
     setup_keepalive_listener: vi.fn(),
     start_keepalive: vi.fn(),
     stop_keepalive: vi.fn(),
@@ -67,7 +67,7 @@ function get_initialization_errors(): Array<Record<string, unknown>> {
 }
 
 async function import_and_run_initialization(): Promise<void> {
-    await import('../src/background/service_worker');
+    await import('../src/extension/background/service_worker');
     await vi.runAllTimersAsync();
 }
 

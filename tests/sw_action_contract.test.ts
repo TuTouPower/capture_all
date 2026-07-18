@@ -6,9 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const sw_src = readFileSync(resolve(__dirname, '../src/background/service_worker.ts'), 'utf8');
-const popup_src = readFileSync(resolve(__dirname, '../src/popup/popup.ts'), 'utf8');
-const dashboard_src = readFileSync(resolve(__dirname, '../src/dashboard/dashboard.ts'), 'utf8');
+const sw_src = readFileSync(resolve(__dirname, '../src/extension/background/service_worker.ts'), 'utf8');
+const popup_src = readFileSync(resolve(__dirname, '../src/extension/popup/popup.ts'), 'utf8');
+const dashboard_src = readFileSync(resolve(__dirname, '../src/extension/dashboard/dashboard.ts'), 'utf8');
 
 function extract_actions_from_source(src: string): Set<string> {
     const actions = new Set<string>();

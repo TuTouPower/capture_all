@@ -40,7 +40,7 @@ eval: required
 
 ### 实现锚点（坐标集中地）
 - `manifest.json`、`_locales/`、`assets/icons/`
-- `src/content/`
+- `src/extension/content/`
 - `apps/extension/manifest.json`、`apps/extension/content/`
 - `vite.config.ts`
 

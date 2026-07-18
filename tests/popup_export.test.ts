@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const project_root = resolve(__dirname, '..');
-const popup_src = readFileSync(resolve(project_root, 'src/popup/popup.ts'), 'utf8');
-const sw_src = readFileSync(resolve(project_root, 'src/background/service_worker.ts'), 'utf8');
+const popup_src = readFileSync(resolve(project_root, 'src/extension/popup/popup.ts'), 'utf8');
+const sw_src = readFileSync(resolve(project_root, 'src/extension/background/service_worker.ts'), 'utf8');
 
 describe('P0.35/P0.40 export button wiring', () => {
     it('exportBtn click handler uses async/await for sendMessage', () => {

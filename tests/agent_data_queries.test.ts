@@ -7,10 +7,10 @@ import {
     list_entries_from_capture_data,
     load_agent_capture_data,
     type AgentSessionData
-} from '../src/background/agent_data_queries';
+} from '../src/extension/background/agent_data_queries';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../src/shared/types';
 
-vi.mock('../src/background/storage', () => ({
+vi.mock('../src/extension/background/storage', () => ({
     get_capture: vi.fn(),
     get_events_by_category: vi.fn(),
     get_network_requests: vi.fn(),
@@ -28,7 +28,7 @@ import {
     get_error_events,
     get_storage_changes,
     get_cookie_changes,
-} from '../src/background/storage';
+} from '../src/extension/background/storage';
 
 const capture: CaptureRecord = {
     capture_id: 'capture_1',

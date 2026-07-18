@@ -7,7 +7,7 @@ import {
     build_web_request_only_request,
     type CdpBodyEvent,
     type WebRequestMeta
-} from '../src/background/network_correlator';
+} from '../src/extension/background/network_correlator';
 import type { NetworkRequestData } from '../src/shared/types';
 
 function make_web_meta(overrides: Partial<WebRequestMeta> = {}): WebRequestMeta {

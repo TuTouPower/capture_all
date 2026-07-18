@@ -24,25 +24,25 @@
 ### 修改文件
 - `src/shared/constants.ts` — DB version、store names、默认配置
 - `src/shared/redaction.ts` — 新字段脱敏
-- `src/content/mouse_capture.ts`
-- `src/content/keyboard_capture.ts`
-- `src/content/scroll_capture.ts`
-- `src/content/dom_capture.ts`
-- `src/content/storage_capture.ts`
-- `src/content/xhr_fetch_capture.ts`
-- `src/content/network_hook.ts`
-- `src/content/content_script.ts`
-- `src/background/network_capture.ts`
-- `src/background/console_capture.ts`
-- `src/background/exception_capture.ts`
-- `src/background/cookie_capture.ts`
-- `src/background/service_worker.ts`
-- `src/background/storage.ts`
-- `src/background/exporter.ts`
-- `src/background/agent_data_queries.ts`
-- `src/background/agent_command_dispatcher.ts`
+- `src/extension/content/mouse_capture.ts`
+- `src/extension/content/keyboard_capture.ts`
+- `src/extension/content/scroll_capture.ts`
+- `src/extension/content/dom_capture.ts`
+- `src/extension/content/storage_capture.ts`
+- `src/extension/content/xhr_fetch_capture.ts`
+- `src/extension/content/network_hook.ts`
+- `src/extension/content/content_script.ts`
+- `src/extension/background/network_capture.ts`
+- `src/extension/background/console_capture.ts`
+- `src/extension/background/exception_capture.ts`
+- `src/extension/background/cookie_capture.ts`
+- `src/extension/background/service_worker.ts`
+- `src/extension/background/storage.ts`
+- `src/extension/background/exporter.ts`
+- `src/extension/background/agent_data_queries.ts`
+- `src/extension/background/agent_command_dispatcher.ts`
 - `src/agent/mcp/tools.ts`
-- `src/popup/popup.ts`
+- `src/extension/popup/popup.ts`
 - `src/detail/detail.ts`
 
 ---
@@ -714,7 +714,7 @@ git commit -m "refactor: update DB version, store names, capture mode naming"
 ### Task 4: 重写 storage.ts — 新 store 结构 + DB migration
 
 **Files:**
-- Modify: `src/background/storage.ts`
+- Modify: `src/extension/background/storage.ts`
 
 - [ ] **Step 1: 更新 import**
 
@@ -777,7 +777,7 @@ git commit -m "refactor: update DB version, store names, capture mode naming"
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/background/storage.ts
+git add src/extension/background/storage.ts
 git commit -m "refactor: rewrite storage.ts — new stores, capture_id, category-based routing"
 ```
 
@@ -795,7 +795,7 @@ git commit -m "refactor: rewrite storage.ts — new stores, capture_id, category
 ### Task 5: mouse_capture.ts → mouse_event
 
 **Files:**
-- Modify: `src/content/mouse_capture.ts`
+- Modify: `src/extension/content/mouse_capture.ts`
 
 - [ ] **Step 1: 更新 import 和类型**
 
@@ -808,14 +808,14 @@ git commit -m "refactor: rewrite storage.ts — new stores, capture_id, category
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/content/mouse_capture.ts
+git add src/extension/content/mouse_capture.ts
 git commit -m "refactor: mouse_capture → category/type system, extended fields"
 ```
 
 ### Task 6: keyboard_capture.ts → keyboard_event
 
 **Files:**
-- Modify: `src/content/keyboard_capture.ts`
+- Modify: `src/extension/content/keyboard_capture.ts`
 
 - [ ] **Step 1: 同上模式改造**
 
@@ -825,14 +825,14 @@ category: `'user_action'`，type: `'keyboard_event'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/content/keyboard_capture.ts
+git add src/extension/content/keyboard_capture.ts
 git commit -m "refactor: keyboard_capture → category/type system, key_status field"
 ```
 
 ### Task 7: scroll_capture.ts → scroll_event
 
 **Files:**
-- Modify: `src/content/scroll_capture.ts`
+- Modify: `src/extension/content/scroll_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -842,14 +842,14 @@ category: `'user_action'`，type: `'scroll_event'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/content/scroll_capture.ts
+git add src/extension/content/scroll_capture.ts
 git commit -m "refactor: scroll_capture → category/type system, viewport fields"
 ```
 
 ### Task 8: dom_capture.ts → input_event
 
 **Files:**
-- Modify: `src/content/dom_capture.ts`
+- Modify: `src/extension/content/dom_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -868,14 +868,14 @@ password 永远 `value_status: 'not_captured'`，`value_preview: null`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/content/dom_capture.ts
+git add src/extension/content/dom_capture.ts
 git commit -m "refactor: dom_capture → input_event, InputEventData with value_status"
 ```
 
 ### Task 9: storage_capture.ts → storage_change
 
 **Files:**
-- Modify: `src/content/storage_capture.ts`
+- Modify: `src/extension/content/storage_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -885,14 +885,14 @@ category: `'storage'`，type: `'storage_change'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/content/storage_capture.ts
+git add src/extension/content/storage_capture.ts
 git commit -m "refactor: storage_capture → extended StorageChangeData fields"
 ```
 
 ### Task 10: cookie_capture.ts → cookie_change
 
 **Files:**
-- Modify: `src/background/cookie_capture.ts`
+- Modify: `src/extension/background/cookie_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -902,14 +902,14 @@ category: `'cookie'`，type: `'cookie_change'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/background/cookie_capture.ts
+git add src/extension/background/cookie_capture.ts
 git commit -m "refactor: cookie_capture → extended CookieChangeData fields"
 ```
 
 ### Task 11: console_capture.ts → console_event（与异常分离）
 
 **Files:**
-- Modify: `src/background/console_capture.ts`
+- Modify: `src/extension/background/console_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -928,14 +928,14 @@ category: `'console'`，type: `'console_event'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/background/console_capture.ts
+git add src/extension/background/console_capture.ts
 git commit -m "refactor: console_capture → ConsoleEvent, separated from exceptions"
 ```
 
 ### Task 12: exception_capture.ts → runtime_exception（独立 error 分类）
 
 **Files:**
-- Modify: `src/background/exception_capture.ts`
+- Modify: `src/extension/background/exception_capture.ts`
 
 - [ ] **Step 1: 改造**
 
@@ -955,16 +955,16 @@ category: `'error'`，type: `'runtime_exception'`。
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/background/exception_capture.ts
+git add src/extension/background/exception_capture.ts
 git commit -m "refactor: exception_capture → RuntimeExceptionData, independent error category"
 ```
 
 ### Task 13: network_capture.ts + xhr_fetch_capture.ts + network_hook.ts → 统一 network_request
 
 **Files:**
-- Modify: `src/background/network_capture.ts`
-- Modify: `src/content/xhr_fetch_capture.ts`
-- Modify: `src/content/network_hook.ts`
+- Modify: `src/extension/background/network_capture.ts`
+- Modify: `src/extension/content/xhr_fetch_capture.ts`
+- Modify: `src/extension/content/network_hook.ts`
 
 - [ ] **Step 1: network_capture.ts 改造**
 
@@ -989,15 +989,15 @@ git commit -m "refactor: exception_capture → RuntimeExceptionData, independent
 - [ ] **Step 4: 提交**
 
 ```bash
-git add src/background/network_capture.ts src/content/xhr_fetch_capture.ts src/content/network_hook.ts
+git add src/extension/background/network_capture.ts src/extension/content/xhr_fetch_capture.ts src/extension/content/network_hook.ts
 git commit -m "refactor: unify network capture → single network_request type"
 ```
 
 ### Task 14: content_script.ts + service_worker.ts — session_id → capture_id + route_change + lifecycle
 
 **Files:**
-- Modify: `src/content/content_script.ts`
-- Modify: `src/background/service_worker.ts`
+- Modify: `src/extension/content/content_script.ts`
+- Modify: `src/extension/background/service_worker.ts`
 
 - [ ] **Step 1: content_script.ts 改造**
 
@@ -1021,7 +1021,7 @@ git commit -m "refactor: unify network capture → single network_request type"
 - [ ] **Step 3: 提交**
 
 ```bash
-git add src/content/content_script.ts src/background/service_worker.ts
+git add src/extension/content/content_script.ts src/extension/background/service_worker.ts
 git commit -m "refactor: service_worker + content_script — capture_id, route_change, lifecycle events"
 ```
 
@@ -1032,7 +1032,7 @@ git commit -m "refactor: service_worker + content_script — capture_id, route_c
 ### Task 15: exporter.ts — 适配新类型
 
 **Files:**
-- Modify: `src/background/exporter.ts`
+- Modify: `src/extension/background/exporter.ts`
 
 - [ ] **Step 1: 更新所有类型引用和字段名**
 
@@ -1048,15 +1048,15 @@ git commit -m "refactor: service_worker + content_script — capture_id, route_c
 - [ ] **Step 2: 提交**
 
 ```bash
-git add src/background/exporter.ts
+git add src/extension/background/exporter.ts
 git commit -m "refactor: exporter — capture_id, new type references"
 ```
 
 ### Task 16: agent_data_queries.ts + agent_command_dispatcher.ts — 适配新类型
 
 **Files:**
-- Modify: `src/background/agent_data_queries.ts`
-- Modify: `src/background/agent_command_dispatcher.ts`
+- Modify: `src/extension/background/agent_data_queries.ts`
+- Modify: `src/extension/background/agent_command_dispatcher.ts`
 
 - [ ] **Step 1: agent_data_queries.ts 改造**
 
@@ -1072,7 +1072,7 @@ git commit -m "refactor: exporter — capture_id, new type references"
 - [ ] **Step 3: 提交**
 
 ```bash
-git add src/background/agent_data_queries.ts src/background/agent_command_dispatcher.ts
+git add src/extension/background/agent_data_queries.ts src/extension/background/agent_command_dispatcher.ts
 git commit -m "refactor: agent queries + dispatcher — capture_id, new sources"
 ```
 
@@ -1097,7 +1097,7 @@ git commit -m "refactor: MCP tools — capture_id, new source names"
 ### Task 18: popup.ts + detail.ts — UI 适配
 
 **Files:**
-- Modify: `src/popup/popup.ts`
+- Modify: `src/extension/popup/popup.ts`
 - Modify: `src/detail/detail.ts`
 
 - [ ] **Step 1: popup.ts 改造**
@@ -1118,7 +1118,7 @@ git commit -m "refactor: MCP tools — capture_id, new source names"
 - [ ] **Step 3: 提交**
 
 ```bash
-git add src/popup/popup.ts src/detail/detail.ts
+git add src/extension/popup/popup.ts src/detail/detail.ts
 git commit -m "refactor: popup + detail UI — capture_id, new category tabs"
 ```
 

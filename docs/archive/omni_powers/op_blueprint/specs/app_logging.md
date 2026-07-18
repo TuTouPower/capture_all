@@ -1,6 +1,6 @@
 # 应用日志
 
-实现：`src/shared/logger.ts` + `src/background/app_log_storage.ts`。独立于采集数据，用于调试扩展自身。
+实现：`src/shared/logger.ts` + `src/extension/background/app_log_storage.ts`。独立于采集数据，用于调试扩展自身。
 
 ## 1. 存储
 
@@ -38,4 +38,4 @@ log_max_size_mb: 100      // 最大 100MB
 ## 5. 关键文件
 
 - `src/shared/logger.ts` — 日志模块。
-- `src/background/app_log_storage.ts` — `app_logs` store CRUD。
+- `src/extension/background/app_log_storage.ts` — `app_logs` store CRUD。

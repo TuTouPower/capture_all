@@ -14,7 +14,7 @@
 - 无偏航、无自由发挥。`get_user_config`/`router` import 清理是 spec 实现锚点明确要求的连带清理。
 
 ### 不变量检查
-- INV-1：✅ 守住 —— MCP Bridge/本地 Agent 后端代码未修改（`src/agent/`、`src/background/agent_bridge_client.ts` 等不动）
+- INV-1：✅ 守住 —— MCP Bridge/本地 Agent 后端代码未修改（`src/agent/`、`src/extension/background/agent_bridge_client.ts` 等不动）
 - INV-2：✅ 守住 —— 设置页代码（`dashboard_settings.ts`）未修改，`#set-integrations` 保留（`dashboard_settings.ts:91`）
 - INV-3：✅ 守住 —— NAV 数组 4 项，侧边栏渲染逻辑不变，其他导航项样式/交互无影响
 - INV-4：✅ 守住 —— 后端通信代码全部未动
@@ -85,7 +85,7 @@ verdict: FAIL
 - 无 spec 外的"顺手改进"或额外功能。
 
 ### 不变量检查
-- INV-1：守住 —— `src/agent/`、`src/background/agent_bridge_client.ts` 等后端代码未修改。
+- INV-1：守住 —— `src/agent/`、`src/extension/background/agent_bridge_client.ts` 等后端代码未修改。
 - INV-2：守住 —— `dashboard_settings.ts:91-99` 中 `#set-integrations` 完整保留，包含启用开关、URL、Token、轮询间隔输入框。
 - INV-3：守住 —— NAV 数组 4 项，侧边栏渲染逻辑未变。
 - INV-4：守住 —— 后端通信代码全部未动。
@@ -112,7 +112,7 @@ verdict: FAIL
 - 源码字符串匹配（AC-1/AC-2）—— 非直接用户可观察，但对删除型 refactor 任务有实用价值
 
 ### 异步时序
-- beforeAll 中使用 `await import('../src/dashboard/dashboard')` 动态导入，正确 await。`router.go()` 是同步函数，无 race condition 风险。
+- beforeAll 中使用 `await import('../src/extension/dashboard/dashboard')` 动态导入，正确 await。`router.go()` 是同步函数，无 race condition 风险。
 
 ### 危险模式扫描
 - 无 `.skip`/`.only`

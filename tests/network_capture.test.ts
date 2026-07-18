@@ -13,7 +13,7 @@ import {
     extract_request_body,
     headers_array_to_map,
     resolve_resource_type,
-} from '../src/background/network_webrequest';
+} from '../src/extension/background/network_webrequest';
 import {
     build_cdp_body_result,
     find_matching_cdp_request,
@@ -25,7 +25,7 @@ import {
     _deferred_cdp_index_for_test,
     _try_resolve_deferred_for_test,
     _base64_decoded_size_for_test,
-} from '../src/background/network_capture';
+} from '../src/extension/background/network_capture';
 
 // ─── request header redaction ───
 

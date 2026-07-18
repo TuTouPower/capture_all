@@ -38,9 +38,9 @@
 - src/shared/i18n.ts — 新增 14 个 i18n key（中英文）
 - src/shared/agent_bridge_config.ts — 类型扩展 + normalize 逻辑 + session 管理函数
 - src/shared/chrome.d.ts — storage.local.remove 类型声明
-- src/background/agent_bridge_client.ts — enroll 流 + 会话持久化 + 401 重试
-- src/background/service_worker.ts — get_user_config_for_bridge 返回类型扩展
-- src/dashboard/dashboard_settings.ts — 浏览器编号输入 + 高级折叠 + i18n
+- src/extension/background/agent_bridge_client.ts — enroll 流 + 会话持久化 + 401 重试
+- src/extension/background/service_worker.ts — get_user_config_for_bridge 返回类型扩展
+- src/extension/dashboard/dashboard_settings.ts — 浏览器编号输入 + 高级折叠 + i18n
 - tests/agent_bridge_client.test.ts — T0006 enroll/session/401 测试
 - tests/agent_bridge_config_ui.test.ts — T0006 browser_no 配置测试
 - tests/agent_bridge_config.test.ts — 修复已存在默认值断言

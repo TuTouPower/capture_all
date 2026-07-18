@@ -49,27 +49,27 @@
   **Bug A — `NetworkRequestData` / `ConsoleEventData` 缺少 `capture_id` 字段，数据写入 IndexedDB 但无法按 `capture_id` 检索**
   - `src/shared/types.ts`:242 — `NetworkRequestData` 没有 `capture_id` 字段<br>
     `src/shared/types.ts`:284 — `ConsoleEventData` 没有 `capture_id` 字段
-  - `src/background/storage.ts`:86-91 — `NETWORK_REQUESTS` store 定义：
+  - `src/extension/background/storage.ts`:86-91 — `NETWORK_REQUESTS` store 定义：
     ```typescript
     keyPath: 'event_id',           // NetworkRequestData 没有 event_id → key 为 undefined → DB 自动生成 key
     index: 'capture_id',           // NetworkRequestData 没有 capture_id → 索引值为 undefined → 查询永远返回空
     ```
-  - `src/background/storage.ts`:93-98 — `CONSOLE_EVENTS` store 同样问题
-  - `src/background/network_capture.ts`:434-478 — `build_network_event()` 只把 `capture_id` 设在 `event` 上，传给 `data: NetworkRequestData` 时未设置
-  - `src/background/service_worker.ts`:520-530 — `handle_network_request()` 只取 payload 的 `data` 部分调 `write_network_requests()`，丢弃了含 `capture_id` 的 `event` 部分
-  - `src/background/service_worker.ts`:532-541 — `handle_console_log()` 同样，只传 `event.data`，不传 `capture_id`
+  - `src/extension/background/storage.ts`:93-98 — `CONSOLE_EVENTS` store 同样问题
+  - `src/extension/background/network_capture.ts`:434-478 — `build_network_event()` 只把 `capture_id` 设在 `event` 上，传给 `data: NetworkRequestData` 时未设置
+  - `src/extension/background/service_worker.ts`:520-530 — `handle_network_request()` 只取 payload 的 `data` 部分调 `write_network_requests()`，丢弃了含 `capture_id` 的 `event` 部分
+  - `src/extension/background/service_worker.ts`:532-541 — `handle_console_log()` 同样，只传 `event.data`，不传 `capture_id`
   - 结果：数据通过 `store.put(item)` 成功写入（key 自动生成），stats 计数器正常增长，但 `get_network_requests(capture_id)` / `get_console_events(capture_id)` 用 `IDBKeyRange.only(capture_id)` 查索引，因为存储对象上没有 `capture_id` 属性，索引值为 `undefined`，永远查不到 → 返回空数组
   - 同样影响 `RuntimeExceptionData`（`error_events` store）、`StorageChangeData`（`storage_changes` store）、`CookieChangeData`（`cookie_changes` store）
   ---
   **Bug B — `exporter.ts` 只查询 `user_action` 一个 event category，漏了其余 6 个**
-  - `src/background/exporter.ts`:14 — `export_json()` 只调用：
+  - `src/extension/background/exporter.ts`:14 — `export_json()` 只调用：
     ```typescript
     get_events_by_category(capture_id, 'user_action', 0, 100000)
     ```
     未查询 `navigation`、`error`、`storage`、`cookie`、`capture_lifecycle` 等 category
-  - `src/background/exporter.ts`:30-32 — `export_jsonl()` 同样只查 `user_action`
-  - `src/background/exporter.ts`:57-59 — `export_html()` 同样只查 `user_action`
-  - `src/background/service_worker.ts`:111-119 — `get_capture_data()`（dashboard 用）已在 P0.6 修过，查全部 7 个 category，但 exporter 未同步更新
+  - `src/extension/background/exporter.ts`:30-32 — `export_jsonl()` 同样只查 `user_action`
+  - `src/extension/background/exporter.ts`:57-59 — `export_html()` 同样只查 `user_action`
+  - `src/extension/background/service_worker.ts`:111-119 — `get_capture_data()`（dashboard 用）已在 P0.6 修过，查全部 7 个 category，但 exporter 未同步更新
   - 结果：即使 Bug A 修好后 events 能查到，`navigation`/`storage`/`cookie` 等事件也不会出现在导出文件中。`network_requests` 和 `console_events` 用的是专用 reader，不受此 bug 影响
   ---
 - **修复要点**：
@@ -104,10 +104,10 @@
   5. **初始 tab URL 记录** — 录制开始时 `last_tab_urls.set(active_tab.id, active_tab.url)`，确保首次导航也能触发受限于→正常的重试
   6. **E2E 测试验证** — 模拟 chrome://newtab 启动 → 导航到目标网站 → 验证 `network_requests[].response_body` 非空
 - **影响文件**：
-  - `src/background/network_capture.ts` — `enable_response_body_capture` + `build_network_event`
-  - `src/background/body_capture_coordinator.ts` — `start_body_capture` 接收 `already_attached` 参数
-  - `src/background/service_worker.ts` — 初始/重试调用传递 `debugger_attached_tab_id`；`last_tab_urls` 初始化
-  - `src/content/network_hook.ts` / `src/content/xhr_fetch_capture.ts` — fallback body 捕获
+  - `src/extension/background/network_capture.ts` — `enable_response_body_capture` + `build_network_event`
+  - `src/extension/background/body_capture_coordinator.ts` — `start_body_capture` 接收 `already_attached` 参数
+  - `src/extension/background/service_worker.ts` — 初始/重试调用传递 `debugger_attached_tab_id`；`last_tab_urls` 初始化
+  - `src/extension/content/network_hook.ts` / `src/extension/content/xhr_fetch_capture.ts` — fallback body 捕获
 
 ### ✅ P0.11 CDP 重试成功后 current_capture 元数据未更新
 - **状态**：已修复 — `0f9e1f1`。提取 `update_capture_body_state` 辅助函数，onActivated/onUpdated 两处重试路径调用，失败时也更新
@@ -134,7 +134,7 @@
   4. 失败时也更新（state 可能从之前的部分成功变为新的失败），确保导出数据始终反映最新状态
 - **测试遗漏原因**：E2E CDP 重试测试（`e2e-cdp-retry.spec.ts`）只验证 `start_body_capture` 调用成功，不检查 export JSON 中 `body_capture_mode` 字段是否反映重试后的实际状态
 - **影响文件**：
-  - `src/background/service_worker.ts` — 两处重试路径补充 `current_capture` 更新
+  - `src/extension/background/service_worker.ts` — 两处重试路径补充 `current_capture` 更新
 
 ### ✅ P0.12 网络请求 response_body 全部为 null — 三层根因叠加
 - **状态**：L1+L2 已修复，L3 为 Chrome 架构限制无法修复
@@ -162,7 +162,7 @@
   3. 可选：提取 retry 函数 `retry_console_capture(tab_id)` / `retry_body_capture(tab_id)` 封装正确回调，避免手动写错
 - **测试遗漏原因**：无测试验证 retry 后的数据落在正确的 IndexedDB store 中；无测试对比初始启动和 retry 路径的数据表分布
 - **影响文件**：
-  - `src/background/service_worker.ts` — 4 处回调替换
+  - `src/extension/background/service_worker.ts` — 4 处回调替换
 
 ### ✅ P0.14 build_network_event 中 response_preview 始终为 null
 - **状态**：已修复 — `a7309a6`。CdpBodyResult 加 preview 字段，build_network_event 接收并使用，覆盖 CDP matched + orphan 双路径
@@ -176,8 +176,8 @@
   2. `build_network_event` 接收 preview 参数，传入 `response_preview`
   3. fallback hook（`network_hook.ts`）同样适用——已生成 preview（截断时），但未传递到最终 NetworkRequestData
 - **影响文件**：
-  - `src/background/network_capture.ts` — cdp_body_results value 类型 + build_network_event 签名
-  - `src/content/network_hook.ts` — fallback 路径透传 preview
+  - `src/extension/background/network_capture.ts` — cdp_body_results value 类型 + build_network_event 签名
+  - `src/extension/content/network_hook.ts` — fallback 路径透传 preview
   - `src/shared/types.ts` — 无需改（`NetworkRequestData.response_preview` 字段已存在，只是从未被填充）
 
 ### ✅ P0.15 CDP body 与 webRequest 竞态导致 not_enabled 虚高 + 同请求重复记录
@@ -212,7 +212,7 @@
   - `network_correlator.test.ts` 测了 `correlate()` 函数级匹配，但 `handle_completed()` 中的实际匹配流程（line 508-528）完全不同且无测试
   - E2E 测试从不统计 `response_body_status` 分布，无法发现 not_enabled 占比异常
 - **影响文件**：
-  - `src/background/network_capture.ts` — handle_completed + find_matching_cdp_request + schedule_orphan_check
+  - `src/extension/background/network_capture.ts` — handle_completed + find_matching_cdp_request + schedule_orphan_check
 
 ### ✅ P0.16 CDP orphan / bridge 路径构造的 NetworkRequestData 缺少必填字段
 - **状态**：已修复 — `f7e95ee`。4 个 builder 函数返回类型 any → NetworkRequestData，补全全部 30 个必填字段；handle_network_request 新增 normalize_network_request 校验
@@ -237,9 +237,9 @@
   - 无类型级测试（如 vitest `expectTypeOf()` 验证返回值类型 = `NetworkRequestData`）
   - E2E 导出测试只检查特定字段，不遍历所有记录验证必填字段非 undefined
 - **影响文件**：
-  - `src/background/network_correlator.ts` — build_cdp_only_request / merge_matched / build_web_request_only_request
-  - `src/background/body_capture_coordinator.ts` — convert_bridge_event_to_request
-  - `src/background/service_worker.ts` — handle_network_request normalize
+  - `src/extension/background/network_correlator.ts` — build_cdp_only_request / merge_matched / build_web_request_only_request
+  - `src/extension/background/body_capture_coordinator.ts` — convert_bridge_event_to_request
+  - `src/extension/background/service_worker.ts` — handle_network_request normalize
   - `tests/network_correlator.test.ts` — 补字段完整性断言
 
 ### ✅ P0.17 测试文件补充清单（P0.15-P0.16 暴露的测试缺口）
@@ -283,8 +283,8 @@
   4. 补单元测试：给定 `started_at` + `absolute_time`，验证导出事件 `relative_time_ms` 为相对值
   5. 补 E2E/导出测试：遍历 `events`，断言所有 `relative_time_ms` 在采集窗口内
 - **影响文件**：
-  - `src/background/service_worker.ts` — 事件接收/normalize/写入路径
-  - `src/content/content_script.ts` 或相关 content capture 模块 — `dom_ready/page_load` 上报路径
+  - `src/extension/background/service_worker.ts` — 事件接收/normalize/写入路径
+  - `src/extension/content/content_script.ts` 或相关 content capture 模块 — `dom_ready/page_load` 上报路径
   - `tests/e2e-export-content.spec.ts` / `tests/e2e-consistency.spec.ts` — 增加时间不变量验证
 
 ### ✅ P0.19 停止采集返回 success=false 但 UI 强制完成
@@ -316,8 +316,8 @@
   5. popup 保留兜底但不应在正常路径触发 warn
   6. 补 E2E/日志测试：停止后导出日志不含 `Message handler error`，popup 不出现 `stop returned success=false`
 - **影响文件**：
-  - `src/background/service_worker.ts` — message handler / stop_capture 返回路径 / error details
-  - `src/popup/popup.ts` — stop 返回值处理与 warn 触发条件
+  - `src/extension/background/service_worker.ts` — message handler / stop_capture 返回路径 / error details
+  - `src/extension/popup/popup.ts` — stop 返回值处理与 warn 触发条件
   - `tests/e2e-stop.spec.ts` / `tests/e2e-logging.spec.ts` — 增加停止协议与日志断言
 
 ### ✅ P0.20 运行日志导出不应让用户选择 JSON/JSONL，应统一为 .log
@@ -342,9 +342,9 @@
   6. 更新 E2E：只断言存在单一导出入口，下载文件名为 `.log`，内容包含 `[level] [module] message` 等可读文本
 - **测试遗漏原因**：现有 `tests/e2e-logging.spec.ts` 验证 JSON/JSONL 导出存在，未覆盖产品期望“运行日志只有一种 .log 格式”。
 - **影响文件**：
-  - `src/dashboard/dashboard.ts` — 诊断日志导出 UI / handler
-  - `src/background/exporter.ts` — `export_app_logs` 输出格式与文件名
-  - `src/background/service_worker.ts` — `export_app_logs` action 参数处理
+  - `src/extension/dashboard/dashboard.ts` — 诊断日志导出 UI / handler
+  - `src/extension/background/exporter.ts` — `export_app_logs` 输出格式与文件名
+  - `src/extension/background/service_worker.ts` — `export_app_logs` action 参数处理
   - `tests/e2e-logging.spec.ts` — 更新运行日志导出断言
 
 ### ✅ P0.21 用户可见命名不应使用 session，应统一为 capture / 采集记录
@@ -376,9 +376,9 @@
   6. 更新所有测试，确保新建记录 id 前缀为 `capture_`，导出文件名不含 `session`
 - **测试遗漏原因**：现有测试只验证导出成功和内容结构，没有断言用户可见命名禁用词；需要新增字符串审计测试，禁止 UI/导出文件名/新 id 出现 `session`。
 - **影响文件**：
-  - `src/background/service_worker.ts` / `src/background/exporter.ts` / `src/background/storage.ts` — id 生成、导出命名、对外字段
+  - `src/extension/background/service_worker.ts` / `src/extension/background/exporter.ts` / `src/extension/background/storage.ts` — id 生成、导出命名、对外字段
   - `src/agent/**` — MCP/Agent 对外 tool/action/参数命名
-  - `src/dashboard/dashboard.ts` / `src/popup/popup.ts` — UI 文案和下载文件名
+  - `src/extension/dashboard/dashboard.ts` / `src/extension/popup/popup.ts` — UI 文案和下载文件名
   - `tests/**` — `session_id` fixture、导出文件名、MCP 协议断言
   - `docs/**` — 规格和任务文档中的用户可见命名
 
@@ -404,8 +404,8 @@
 - **测试遗漏原因**：现有导出测试只校验文件存在/内容结构，未设置非 UTC 时区，也未断言文件名和 UI 时间格式。
 - **影响文件**：
   - `src/shared/system_time.ts` 或新增共享时间格式化模块 — 用户时区格式化
-  - `src/background/exporter.ts` — 采集记录/日志导出文件名与报告时间
-  - `src/dashboard/dashboard.ts` / `src/popup/popup.ts` — 用户可见时间
+  - `src/extension/background/exporter.ts` — 采集记录/日志导出文件名与报告时间
+  - `src/extension/dashboard/dashboard.ts` / `src/extension/popup/popup.ts` — 用户可见时间
   - `tests/e2e-export-content.spec.ts` / `tests/e2e-logging.spec.ts` / `tests/system_time.test.ts` — 时区断言
 
 ### ✅ P0.23 采集记录详情「用户行为」标签页为空
@@ -427,8 +427,8 @@
   4. 空态只在真实无数据时显示，不能吞掉已有数据
   5. 补 E2E：采集用户点击/滚动/输入后，详情页「用户行为」tab 可见对应明细
 - **影响文件**：
-  - `src/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
-  - `src/dashboard/dashboard-pages.css` — 用户行为列表展示样式
+  - `src/extension/dashboard/dashboard.ts` — 详情页 tab 数据过滤/渲染
+  - `src/extension/dashboard/dashboard-pages.css` — 用户行为列表展示样式
   - `tests/e2e-detail-tabs.spec.ts` / `tests/e2e-capture-local.spec.ts` — 用户行为明细断言
 
 ### ✅ P0.24 详情页时间线和网络请求侧面板不可拖拽调整宽度
@@ -451,8 +451,8 @@
   4. 支持键盘/无障碍基础行为，至少保证不破坏现有点击选择
   5. 补 E2E：拖拽分隔条后，左 pane 宽度变化，右 pane 仍可见
 - **影响文件**：
-  - `src/dashboard/dashboard.ts` — split-pane 事件绑定/状态
-  - `src/dashboard/dashboard-pages.css` — split-pane 布局和拖拽条
+  - `src/extension/dashboard/dashboard.ts` — split-pane 事件绑定/状态
+  - `src/extension/dashboard/dashboard-pages.css` — split-pane 布局和拖拽条
   - `tests/e2e-detail-tabs.spec.ts` — 拖拽宽度断言
 
 ### ✅ P0.25 网络请求详情布局错误：右侧为空，应左列表右详情并占满空间
@@ -477,8 +477,8 @@
   5. 与 P0.24 侧栏拖拽联动，拖拽只改变左列表宽度，右详情自动占满
   6. 补 E2E：网络 tab 有请求时右侧非空；点击第二条后详情内容变化
 - **影响文件**：
-  - `src/dashboard/dashboard.ts` — 网络请求选择态与详情渲染
-  - `src/dashboard/dashboard-pages.css` — 网络分栏布局
+  - `src/extension/dashboard/dashboard.ts` — 网络请求选择态与详情渲染
+  - `src/extension/dashboard/dashboard-pages.css` — 网络分栏布局
   - `tests/e2e-detail-tabs.spec.ts` / `tests/e2e-network.spec.ts` — 网络详情交互断言
 
 ### ✅ P0.26 采集完成后的操作按钮应拆成「查看」和「导出」
@@ -500,8 +500,8 @@
   4. 「导出」复用现有导出逻辑，默认导出用户当前配置格式或产品默认格式
   5. 补测试：采集完成态同时出现「查看」「导出」两个按钮，点击分别触发对应动作
 - **影响文件**：
-  - `src/popup/popup.ts` — 完成态按钮渲染与事件绑定
-  - `src/popup/popup.html` / `src/popup/popup.css` — 如按钮布局需要调整
+  - `src/extension/popup/popup.ts` — 完成态按钮渲染与事件绑定
+  - `src/extension/popup/popup.html` / `src/extension/popup/popup.css` — 如按钮布局需要调整
   - `tests/popup_layout.test.ts` 或 E2E popup 测试 — 完成态按钮断言
 
 ### ✅ P0.27 导出采集记录和运行日志应分别记住上次导出位置
@@ -522,7 +522,7 @@
   4. 补测试：两类导出分别保存并读取各自上次位置，互不覆盖
 - **影响文件**：
   - `src/shared/export_settings.ts` — 导出路径配置结构
-  - `src/background/exporter.ts` / `src/dashboard/dashboard.ts` — 导出 filename 生成与保存
+  - `src/extension/background/exporter.ts` / `src/extension/dashboard/dashboard.ts` — 导出 filename 生成与保存
   - `tests/export_settings.test.ts` 或导出相关测试 — 位置记忆断言
 
 ### ✅ P0.29 停止采集 flush_all 时 IndexedDB 写入失败：key path 未 yield 值
@@ -544,7 +544,7 @@
   3. flush 失败时逐条重试，跳过问题记录而非整批失败
   4. 补单测：flush 含空 id 的记录时不应整批失败
 - **影响文件**：
-  - `src/background/app_log_storage.ts` — flush buffer + put 校验
+  - `src/extension/background/app_log_storage.ts` — flush buffer + put 校验
   - `tests/app_log_storage.test.ts` — 边界条件测试
 
 ### ✅ P0.30 控制台采集为零：console capture 已启动但无事件记录
@@ -563,8 +563,8 @@
   3. 在已采集的 opencode.ai 页面上手动复现，确认 `Runtime.consoleAPICalled` 事件是否触发
   4. 补 E2E：验证 console_events 数组非空
 - **影响文件**：
-  - `src/background/console_capture.ts` — CDP 事件监听
-  - `src/background/service_worker.ts` — handle_console_log + capture_id 设置
+  - `src/extension/background/console_capture.ts` — CDP 事件监听
+  - `src/extension/background/service_worker.ts` — handle_console_log + capture_id 设置
   - `tests/e2e-console-errors.spec.ts` / `tests/e2e-capture-local.spec.ts` — console_events 非空断言
 
 ### ✅ P0.31 网络请求 resource type 全部为 unknown
@@ -586,7 +586,7 @@
   3. 统一类型名称映射表（webRequest 用 `xmlhttprequest`，CDP 用 `XHR`，统一为 `xhr`）
   4. 补单测：给定不同 `details.type`，验证输出 `type` 字段正确
 - **影响文件**：
-  - `src/background/network_capture.ts` — build_network_event + CDP meta
+  - `src/extension/background/network_capture.ts` — build_network_event + CDP meta
   - `src/shared/types.ts` — 可能需新增类型映射常量
   - `tests/network_capture.test.ts` — type 字段测试
 
@@ -605,8 +605,8 @@
   2. 写入 `current_capture.url` 和 `current_capture.tab_title`
   3. 补单测：创建 capture 后验证 url/title 非空
 - **影响文件**：
-  - `src/background/service_worker.ts` — start_capture
-  - `src/background/session_manager.ts` — create_capture
+  - `src/extension/background/service_worker.ts` — start_capture
+  - `src/extension/background/session_manager.ts` — create_capture
   - `tests/session_manager.test.ts` — url/title 字段验证
 
 ### ✅ P0.33 导出采集记录 JSON 中时间字段容易误读为未跟随浏览器时区
@@ -630,7 +630,7 @@
   4. 补测试：设置 `system_time_timezone: 'browser'` 或固定偏移后，导出 JSON 中人读字段符合设置且不出现误导性命名
 - **影响文件**：
   - `src/shared/system_time.ts` — 时间字段转换与命名
-  - `src/background/exporter.ts` — JSON/JSONL/HTML/log 导出时间输出
+  - `src/extension/background/exporter.ts` — JSON/JSONL/HTML/log 导出时间输出
   - `src/shared/types.ts` — 如调整导出字段类型
   - `tests/system_time.test.ts` / `tests/export_settings.test.ts` — 导出时间字段断言
 
@@ -657,7 +657,7 @@
   - `src/shared/types.ts` — `SystemTimeTimezone` 类型
   - `src/shared/system_time.ts` — 固定 UTC 偏移格式化
   - `src/shared/user_config.ts` / `src/shared/constants.ts` — 默认值与旧配置迁移
-  - `src/dashboard/dashboard.ts` / `src/shared/i18n.ts` — 设置页选项和文案
+  - `src/extension/dashboard/dashboard.ts` / `src/shared/i18n.ts` — 设置页选项和文案
   - `tests/system_time.test.ts` / `tests/export_settings.test.ts` — 偏移时区断言
 
 ### ✅ P0.28 运行日志导出默认格式错误：现在默认是 `.txt`，应为 `.log`
@@ -687,8 +687,8 @@
   4. 补测试：实际下载参数 filename 必须以 `.log` 结尾，且不得出现 `.txt`
   5. 如单元测试无法覆盖保存对话框默认扩展名，补 E2E/集成测试或文档说明验证方式
 - **影响文件**：
-  - `src/background/exporter.ts` — 运行日志内容和文件名
-  - `src/dashboard/dashboard.ts` — 运行日志下载入口
+  - `src/extension/background/exporter.ts` — 运行日志内容和文件名
+  - `src/extension/dashboard/dashboard.ts` — 运行日志下载入口
   - `tests/export_settings.test.ts` / dashboard 导出测试 / E2E 下载测试 — filename 扩展名断言
 
 ### ✅ Bug 1: 网络请求数量统计到了但时间序列显示为 0
@@ -726,7 +726,7 @@
 
 ### ✅ 1.1 console.log 中的 Record All
 - **状态**：已修复。全项目 console.log/warn/error 前缀已统一为 `Capture All:`，无需变更
-- **文件**：`src/background/service_worker.ts`、`src/background/session_manager.ts`、`src/background/keepalive.ts`、`src/background/exporter.ts`、`src/content/content_script.ts`、`src/devtools/devtools.ts`、`src/devtools/devtools_panel.ts`
+- **文件**：`src/extension/background/service_worker.ts`、`src/extension/background/session_manager.ts`、`src/extension/background/keepalive.ts`、`src/extension/background/exporter.ts`、`src/extension/content/content_script.ts`、`src/extension/devtools/devtools.ts`、`src/extension/devtools/devtools_panel.ts`
 
 ### ✅ 1.2 DevTools HTML 标题
 - **状态**：已修复。`devtools.html` 标题已为 `Capture All DevTools`，`devtools_panel.html` 标题已为 `Capture All DevTools Panel`，h1 已为 `Capture All Panel`
@@ -997,27 +997,27 @@
 
 ### ✅ P7.1 日志基础设施
 - **状态**：已实施 — Logger 类 + MessageLogTransport + IndexedDBLogTransport + 类型/常量扩展
-- **文件**：`src/shared/logger.ts`（新建）、`src/background/app_log_storage.ts`（新建）
+- **文件**：`src/shared/logger.ts`（新建）、`src/extension/background/app_log_storage.ts`（新建）
 - `Logger` 类：`debug/info/warn/error` 四级，级别门控，自动捕获 error stack
 - `LogTransport` 接口：`IndexedDBLogTransport`（SW/dashboard/popup 直写 IndexedDB）+ `MessageLogTransport`（content script 经 SW 中继）
 - `UserConfig` 扩展：`log_level`（默认 `warn`）+ `log_max_entries`（默认 10000）
 
 ### ✅ P7.2 DB 迁移 v2 → v3
 - **状态**：已实施
-- **文件**：`src/background/storage.ts`、`src/shared/constants.ts`
+- **文件**：`src/extension/background/storage.ts`、`src/shared/constants.ts`
 - 新增 `app_logs` store（keyPath: `id`，indexes: `timestamp`/`level`/`module`）
 - `DB_VERSION` 2 → 3，`STORE_NAMES` 加 `APP_LOGS`
 
 ### ✅ P7.3 日志导出 API
 - **状态**：已实施
-- **文件**：`src/background/exporter.ts`、`src/background/service_worker.ts`
+- **文件**：`src/extension/background/exporter.ts`、`src/extension/background/service_worker.ts`
 - `export_app_logs(options)` 支持 JSON/JSONL，按 level/module/时间范围筛选
 - SW 新 action：`export_app_logs` / `clear_app_logs` / `app_log_batch` / `get_app_log_count` / `set_log_level`
 - `clear_app_logs()` 清空 app_logs store
 
 ### ✅ P7.4 诊断日志设置页面
 - **状态**：已实施
-- **文件**：`src/dashboard/dashboard.ts`
+- **文件**：`src/extension/dashboard/dashboard.ts`
 - 设置导航加「诊断日志」section
 - 日志级别 segmented control（debug/info/warn/error/silent）、最大条数 input、当前日志数展示
 - 导出 JSON / 导出 JSONL / 清除所有日志按钮
@@ -1025,11 +1025,11 @@
 ### ✅ P7.5 console.* → Logger 迁移
 - **状态**：已实施
 - **涉及文件**：8 个文件约 30 处 `console.log/warn/error`
-- `src/background/service_worker.ts`（18 处）→ `logger.info/warn/error`
-- `src/background/session_manager.ts`（3 处）
-- `src/background/keepalive.ts`（1 处）
-- `src/content/content_script.ts`（4 处）→ `MessageLogTransport`，停止 `console.log` 防止污染采集数据
-- `src/dashboard/dashboard.ts`、`src/popup/popup.ts`、`src/devtools/*.ts`
+- `src/extension/background/service_worker.ts`（18 处）→ `logger.info/warn/error`
+- `src/extension/background/session_manager.ts`（3 处）
+- `src/extension/background/keepalive.ts`（1 处）
+- `src/extension/content/content_script.ts`（4 处）→ `MessageLogTransport`，停止 `console.log` 防止污染采集数据
+- `src/extension/dashboard/dashboard.ts`、`src/extension/popup/popup.ts`、`src/extension/devtools/*.ts`
 
 ### ✅ P7.6 日志系统 E2E 测试
 - **状态**：已完成 — `tests/e2e-logging.spec.ts`

@@ -1,6 +1,6 @@
 # 弹出窗口三状态
 
-`src/popup/`。轻量采集控制面板，宽度约 360-400px，不出现垂直滚动条。
+`src/extension/popup/`。轻量采集控制面板，宽度约 360-400px，不出现垂直滚动条。
 
 ## 1. 布局（从上到下）
 
@@ -42,7 +42,7 @@
 
 ## 5. 入口
 
-- 「主面板」按钮：打开 dashboard（`src/dashboard/dashboard.html`）。
+- 「主面板」按钮：打开 dashboard（`src/extension/dashboard/dashboard.html`）。
 - 「实时详情」/「查看详情」：打开 dashboard 详情视图（`?capture=xxx&page=detail`），不跳转独立页面。
 - 「查看全部」按钮：与「查看详情」右对齐。
 
@@ -56,6 +56,6 @@
 
 ## 7. 关键文件
 
-- `src/popup/popup.html` / `popup.ts` / `popup.css`。
+- `src/extension/popup/popup.html` / `popup.ts` / `popup.css`。
 - `src/shared/poll_capture_status.ts` — 状态轮询。
 - `src/shared/capture_stats.ts` — 7 标签计数。

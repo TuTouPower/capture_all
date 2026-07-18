@@ -52,7 +52,7 @@ import {
     start_console_capture,
     stop_console_capture,
     is_console_active,
-} from '../src/background/console_capture';
+} from '../src/extension/background/console_capture';
 
 const TAB_ID = 1793063899;
 const START_TIME = 1700000000000;

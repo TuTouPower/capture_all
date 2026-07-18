@@ -25,7 +25,7 @@ Record All 在用户勾选 response body 捕获后，自动选择最强可用路
 
 ### Cookie 脱敏开关不生效
 
-`src/popup/popup.ts` 里 `redactData` change handler 只写 storage，没有更新内存态 `user_config`。开始录制时 `get_record_config()` 读取旧值，导致 `redact_data` 仍为 `true`。
+`src/extension/popup/popup.ts` 里 `redactData` change handler 只写 storage，没有更新内存态 `user_config`。开始录制时 `get_record_config()` 读取旧值，导致 `redact_data` 仍为 `true`。
 
 ### Response body 静默失败
 

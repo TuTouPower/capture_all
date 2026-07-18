@@ -40,7 +40,7 @@ test.beforeAll(async () => {
 
     // Write bridge config via extension page
     const page = await browser.newPage();
-    await page.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+    await page.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
     await page.waitForLoadState('domcontentloaded');
 
     // Step 1: Write config
@@ -93,7 +93,7 @@ test.beforeAll(async () => {
 
     // Step 4: Manually send heartbeat from extension to verify bridge accepts it
     const page2 = await browser.newPage();
-    await page2.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+    await page2.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
     const heartbeat_test = await page2.evaluate(async (cfg) => {
         try {
             const res = await fetch(`${cfg.url}/extension/heartbeat`, {

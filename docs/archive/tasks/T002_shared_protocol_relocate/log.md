@@ -8,7 +8,7 @@
 
 - `git mv src/agent/shared/protocol.ts src/shared/protocol.ts`；`rmdir src/agent/shared/`。
 - 同步改 10 处 import（grep 比 plan 列的 5 处更全）：
-  - `src/background/{agent_bridge_client,agent_command_dispatcher,agent_data_queries}.ts`：`'../agent/shared/protocol'` → `'../shared/protocol'`（3 处）
+  - `src/extension/background/{agent_bridge_client,agent_command_dispatcher,agent_data_queries}.ts`：`'../agent/shared/protocol'` → `'../shared/protocol'`（3 处）
   - `tests/{agent_protocol,agent_command_dispatcher}.test.ts`：`'../src/agent/shared/protocol'` → `'../src/shared/protocol'`（2 处）
   - `src/agent/bridge/{command_queue,config,server}.ts`：`'../shared/protocol'` → `'../../shared/protocol'`（3 处）
   - `src/agent/mcp/{client,tools}.ts`：同上（2 处）

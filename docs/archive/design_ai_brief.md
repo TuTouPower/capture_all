@@ -87,9 +87,9 @@ Record All 更像“浏览器调试黑匣子”，不是普通录屏工具。
 
 文件：
 
-- `src/popup/popup.html`
-- `src/popup/popup.ts`
-- `src/popup/popup.css`
+- `src/extension/popup/popup.html`
+- `src/extension/popup/popup.ts`
+- `src/extension/popup/popup.css`
 
 当前职责：
 
@@ -145,10 +145,10 @@ Record All 更像“浏览器调试黑匣子”，不是普通录屏工具。
 
 文件：
 
-- `src/devtools/devtools.html`
-- `src/devtools/devtools_panel.html`
-- `src/devtools/devtools.ts`
-- `src/devtools/devtools_panel.ts`
+- `src/extension/devtools/devtools.html`
+- `src/extension/devtools/devtools_panel.html`
+- `src/extension/devtools/devtools.ts`
+- `src/extension/devtools/devtools_panel.ts`
 
 当前较轻，主要是扩展和 DevTools 集成入口。设计优先级低于 Popup 和 Detail。
 
@@ -370,7 +370,7 @@ Detail 页会有很多记录。设计应支持：
 - Chrome MV3 扩展
 - 前端是原生 HTML/CSS/TypeScript，不是 React
 - 构建工具：Vite
-- 样式文件：`src/popup/popup.css`、`src/detail/detail.css`
+- 样式文件：`src/extension/popup/popup.css`、`src/detail/detail.css`
 - i18n 使用 `data-i18n` 和 `src/shared/i18n.ts`
 - 主题使用 `src/shared/theme.ts`
 - 用户设置存在 `chrome.storage.local.user_config`
@@ -421,9 +421,9 @@ Detail 页会有很多记录。设计应支持：
 
 设计时优先看：
 
-- `src/popup/popup.html`
-- `src/popup/popup.css`
-- `src/popup/popup.ts`
+- `src/extension/popup/popup.html`
+- `src/extension/popup/popup.css`
+- `src/extension/popup/popup.ts`
 - `src/detail/detail.html`
 - `src/detail/detail.css`
 - `src/detail/detail.ts`

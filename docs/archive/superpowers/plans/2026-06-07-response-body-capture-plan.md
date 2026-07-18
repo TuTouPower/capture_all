@@ -20,7 +20,7 @@ Advanced + response body 开启后：
 文件：
 
 ```text
-src/popup/popup.ts
+src/extension/popup/popup.ts
 ```
 
 修改：
@@ -41,7 +41,7 @@ redactData change handler 更新 user_config 内存态
 
 ```text
 src/shared/redaction.ts
-src/background/network_capture.ts
+src/extension/background/network_capture.ts
 相关测试文件
 ```
 
@@ -112,7 +112,7 @@ npm run build 类型通过
 文件：
 
 ```text
-src/background/body_capture_coordinator.ts
+src/extension/background/body_capture_coordinator.ts
 ```
 
 职责：
@@ -148,7 +148,7 @@ mock chrome.debugger / bridge client / fallback，跑完整决策树测试
 文件：
 
 ```text
-src/background/network_capture.ts
+src/extension/background/network_capture.ts
 ```
 
 修改：
@@ -187,7 +187,7 @@ loadingFailed 后 status=cdp_failed
 文件：
 
 ```text
-src/background/network_correlator.ts
+src/extension/background/network_correlator.ts
 ```
 
 职责：
@@ -229,9 +229,9 @@ web_request_only
 文件：
 
 ```text
-src/content/network_hook.ts
-src/content/content_script.ts 或现有入口
-src/background/service_worker.ts
+src/extension/content/network_hook.ts
+src/extension/content/content_script.ts 或现有入口
+src/extension/background/service_worker.ts
 ```
 
 能力：
@@ -275,7 +275,7 @@ binary 标记 unsupported_binary
 文件：
 
 ```text
-src/background/external_cdp_bridge_client.ts
+src/extension/background/external_cdp_bridge_client.ts
 src/shared/agent_bridge_config.ts
 src/shared/types.ts
 ```
@@ -361,7 +361,7 @@ Network event 转 body event
 文件：
 
 ```text
-src/background/service_worker.ts
+src/extension/background/service_worker.ts
 ```
 
 修改：
@@ -388,9 +388,9 @@ stop 后 extension CDP / bridge / fallback 都清理
 文件：
 
 ```text
-src/popup/popup.ts
-src/popup/popup.html
-src/popup/popup.css
+src/extension/popup/popup.ts
+src/extension/popup/popup.html
+src/extension/popup/popup.css
 src/detail/detail.ts
 src/detail/detail.html
 src/detail/detail.css
@@ -434,7 +434,7 @@ detect 失败不影响默认 extension CDP
 文件：
 
 ```text
-src/background/exporter.ts
+src/extension/background/exporter.ts
 ```
 
 修改：

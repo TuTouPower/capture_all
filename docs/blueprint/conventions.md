@@ -77,17 +77,17 @@
 
 新增一个 content capture 模块（参考已实现的 `clipboard_capture.ts` 等）：
 
-1. 在 `src/content/` 新建 `xxx_capture.ts`，导出 `start_xxx_capture()` / `stop_xxx_capture()`。
+1. 在 `src/extension/content/` 新建 `xxx_capture.ts`，导出 `start_xxx_capture()` / `stop_xxx_capture()`。
 2. 在 `src/shared/types.ts` 声明新的 `EventType` 与对应 `XxxEventData` 接口，加入 `CaptureEventDataMap`。
 3. 在 `src/shared/event_category.ts` 注册 type → category 映射。
-4. 在 `src/content/content_script.ts` 的激活序列中接入 start/stop。
-5. 在 `src/background/storage.ts` 确认 store 路由覆盖新 category（多数归入既有 store）。
+4. 在 `src/extension/content/content_script.ts` 的激活序列中接入 start/stop。
+5. 在 `src/extension/background/storage.ts` 确认 store 路由覆盖新 category（多数归入既有 store）。
 6. 补单测 `tests/xxx_capture.test.ts`（mock Chrome API）。
 7. 若该事件应计入 UI 标签计数，更新 `capture_stats.ts` / `label_counts` 映射。
 
 新增一个 background capture 模块（参考 `console_capture.ts`）：
 
-1. 在 `src/background/` 新建 `xxx_capture.ts`，暴露 start / stop 接口。
+1. 在 `src/extension/background/` 新建 `xxx_capture.ts`，暴露 start / stop 接口。
 2. 在 `service_worker.ts` 的 startCapture / stopCapture 序列中接入。
 3. 类型与 store 路由同上。
 4. 补单测。

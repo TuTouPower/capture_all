@@ -9,14 +9,14 @@
 全项目裸 `console.log/warn/error`，**没有日志系统**。
 
 ```
-src/background/service_worker.ts   18 处 console.*
-src/background/capture_manager.ts   3 处 console.*
-src/background/keepalive.ts         1 处 console.debug
-src/content/content_script.ts       4 处 console.*
-src/dashboard/dashboard.ts          1 处 console.error
-src/popup/popup.ts                  1 处 console.warn
-src/devtools/devtools.ts            1 处 console.*
-src/devtools/devtools_panel.ts      1 处 console.*
+src/extension/background/service_worker.ts   18 处 console.*
+src/extension/background/capture_manager.ts   3 处 console.*
+src/extension/background/keepalive.ts         1 处 console.debug
+src/extension/content/content_script.ts       4 处 console.*
+src/extension/dashboard/dashboard.ts          1 处 console.error
+src/extension/popup/popup.ts                  1 处 console.warn
+src/extension/devtools/devtools.ts            1 处 console.*
+src/extension/devtools/devtools_panel.ts      1 处 console.*
 ```
 
 问题：
@@ -229,7 +229,7 @@ function generate_log_id(): string {
 - `console.log` 不再使用 — 日志存储到 IndexedDB 后，开发者通过导出或 dashboard 查看
 - error 级别自动捕获调用栈（跳过 Logger 自身的两帧）
 
-### 4.3 IndexedDBLogTransport (`src/background/app_log_storage.ts`) [新建]
+### 4.3 IndexedDBLogTransport (`src/extension/background/app_log_storage.ts`) [新建]
 
 ```typescript
 export class IndexedDBLogTransport implements LogTransport {
@@ -328,7 +328,7 @@ export function get_app_log_transport(): IndexedDBLogTransport {
 }
 ```
 
-### 4.4 MessageLogTransport (`src/shared/logger.ts` 或 `src/background/app_log_storage.ts`)
+### 4.4 MessageLogTransport (`src/shared/logger.ts` 或 `src/extension/background/app_log_storage.ts`)
 
 ```typescript
 export class MessageLogTransport implements LogTransport {
@@ -365,7 +365,7 @@ export class MessageLogTransport implements LogTransport {
 }
 ```
 
-### 4.5 DB 迁移 (`src/background/storage.ts`)
+### 4.5 DB 迁移 (`src/extension/background/storage.ts`)
 
 ```typescript
 export const DB_VERSION = 3;  // was 2
@@ -398,7 +398,7 @@ DEFAULT_USER_CONFIG: {
 }
 ```
 
-### 4.7 Service Worker 集成 (`src/background/service_worker.ts`)
+### 4.7 Service Worker 集成 (`src/extension/background/service_worker.ts`)
 
 新增 action（在 `handle_message` switch 中）：
 
@@ -435,7 +435,7 @@ const config = await load_user_config();
 Logger.set_level(config.log_level);
 ```
 
-### 4.8 导出 (`src/background/exporter.ts`)
+### 4.8 导出 (`src/extension/background/exporter.ts`)
 
 ```typescript
 export interface ExportAppLogsOptions {
@@ -467,7 +467,7 @@ export async function export_app_logs(options: ExportAppLogsOptions): Promise<st
 }
 ```
 
-### 4.9 Dashboard UI (`src/dashboard/dashboard.ts`)
+### 4.9 Dashboard UI (`src/extension/dashboard/dashboard.ts`)
 
 在设置导航中新增：
 
@@ -507,14 +507,14 @@ export async function export_app_logs(options: ExportAppLogsOptions): Promise<st
 
 | 文件 | 数量 | Transport | Logger 模块名 |
 |------|------|-----------|---------------|
-| `src/background/service_worker.ts` | 18 | IndexedDB | `background/sw` |
-| `src/background/capture_manager.ts` | 3 | IndexedDB | `background/capture` |
-| `src/background/keepalive.ts` | 1 | IndexedDB | `background/keepalive` |
-| `src/content/content_script.ts` | 4 | Message | `content/script` |
-| `src/dashboard/dashboard.ts` | 1 | IndexedDB | `dashboard` |
-| `src/popup/popup.ts` | 1 | IndexedDB | `popup` |
-| `src/devtools/devtools.ts` | 1 | IndexedDB | `devtools` |
-| `src/devtools/devtools_panel.ts` | 1 | IndexedDB | `devtools/panel` |
+| `src/extension/background/service_worker.ts` | 18 | IndexedDB | `background/sw` |
+| `src/extension/background/capture_manager.ts` | 3 | IndexedDB | `background/capture` |
+| `src/extension/background/keepalive.ts` | 1 | IndexedDB | `background/keepalive` |
+| `src/extension/content/content_script.ts` | 4 | Message | `content/script` |
+| `src/extension/dashboard/dashboard.ts` | 1 | IndexedDB | `dashboard` |
+| `src/extension/popup/popup.ts` | 1 | IndexedDB | `popup` |
+| `src/extension/devtools/devtools.ts` | 1 | IndexedDB | `devtools` |
+| `src/extension/devtools/devtools_panel.ts` | 1 | IndexedDB | `devtools/panel` |
 
 迁移规则：
 - `console.log('Capture All: xxx')` → `logger.info('xxx')`
@@ -532,11 +532,11 @@ export async function export_app_logs(options: ExportAppLogsOptions): Promise<st
 | 1 | `src/shared/types.ts` | 加 `LogLevel`/`AppLogEntry`/`LogQueryFilter`/`LogTransport` 类型，`UserConfig` 加 `log_level`+`log_max_entries` |
 | 2 | `src/shared/constants.ts` | `DB_VERSION`→3, `STORE_NAMES`+`APP_LOGS`, `DEFAULT_USER_CONFIG` 加默认值 |
 | 3 | `src/shared/logger.ts` | **新建** — `Logger` 类 + `MessageLogTransport` + `generate_log_id` |
-| 4 | `src/background/storage.ts` | v3 migration — 创建 `app_logs` store |
-| 5 | `src/background/app_log_storage.ts` | **新建** — `IndexedDBLogTransport` + 单例 + 查询/导出/清除 |
-| 6 | `src/background/exporter.ts` | 新增 `export_app_logs()` / `clear_app_logs()` |
-| 7 | `src/background/service_worker.ts` | 初始化 + 4 新 action + console 迁移 |
-| 8 | `src/dashboard/dashboard.ts` | settings nav + 诊断日志 UI section |
+| 4 | `src/extension/background/storage.ts` | v3 migration — 创建 `app_logs` store |
+| 5 | `src/extension/background/app_log_storage.ts` | **新建** — `IndexedDBLogTransport` + 单例 + 查询/导出/清除 |
+| 6 | `src/extension/background/exporter.ts` | 新增 `export_app_logs()` / `clear_app_logs()` |
+| 7 | `src/extension/background/service_worker.ts` | 初始化 + 4 新 action + console 迁移 |
+| 8 | `src/extension/dashboard/dashboard.ts` | settings nav + 诊断日志 UI section |
 | 9-14 | 其余文件 | console → logger 迁移 |
 
 ---

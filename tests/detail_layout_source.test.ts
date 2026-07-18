@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const dashboard_ts = readFileSync('src/dashboard/dashboard_detail.ts', 'utf8');
-const dashboard_css = readFileSync('src/dashboard/dashboard-pages.css', 'utf8');
+const dashboard_ts = readFileSync('src/extension/dashboard/dashboard_detail.ts', 'utf8');
+const dashboard_css = readFileSync('src/extension/dashboard/dashboard-pages.css', 'utf8');
 
 describe('detail layout source', () => {
     it('renders the timeline rail resize handle inside the rail', () => {

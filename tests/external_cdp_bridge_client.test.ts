@@ -6,7 +6,7 @@ import {
     poll_external_cdp_events,
     stop_external_cdp,
     type ExternalCdpBridgeConfig
-} from '../src/background/external_cdp_bridge_client';
+} from '../src/extension/background/external_cdp_bridge_client';
 
 const MOCK_CONFIG: ExternalCdpBridgeConfig = {
     bridge_url: 'http://127.0.0.1:17831',

@@ -72,9 +72,9 @@
 
 | 文件 | 改动 |
 |------|------|
-| `src/dashboard/dashboard.ts` | render_shell() / render_settings() 加 handle 元素 + wire 调用；新增 wire_sidebar_resize |
-| `src/dashboard/dashboard.css` | .sidebar 改用 CSS 变量 + handle 样式 |
-| `src/dashboard/dashboard-pages.css` | .set-body 改用 CSS 变量 + handle 样式 |
+| `src/extension/dashboard/dashboard.ts` | render_shell() / render_settings() 加 handle 元素 + wire 调用；新增 wire_sidebar_resize |
+| `src/extension/dashboard/dashboard.css` | .sidebar 改用 CSS 变量 + handle 样式 |
+| `src/extension/dashboard/dashboard-pages.css` | .set-body 改用 CSS 变量 + handle 样式 |
 | `tests/sidebar_resize.test.ts` | 新增测试 |
 
 **边界约束**：
@@ -101,7 +101,7 @@
 **预期行为**：content_script 拦截 `navigator.clipboard.writeText()` / `readText()`，生成 `user_action` 类事件，type 为 `clipboard_write` / `clipboard_read`，data 包含操作类型（出于隐私不记录具体内容）。
 
 **涉及文件**：
-- `src/content/content_script.ts` — 注入 clipboard 拦截
+- `src/extension/content/content_script.ts` — 注入 clipboard 拦截
 - `src/shared/types.ts` — 新增事件 type
 - `src/shared/event_category.ts` — 映射到 `user_action` category
 
@@ -226,7 +226,7 @@ BUG-001 子代理
 
 #### 涉及文件
 
-- 源码文件：src/shared/types.ts、src/background/service_worker.ts、src/background/session_manager.ts、src/popup/popup.ts、src/shared/archive_builder.ts
+- 源码文件：src/shared/types.ts、src/extension/background/service_worker.ts、src/extension/background/session_manager.ts、src/extension/popup/popup.ts、src/shared/archive_builder.ts
 - 测试文件：tests/archive_builder.test.ts、tests/e2e-capture-local.spec.ts、tests/e2e-capture-baidu.spec.ts、tests/system_time.test.ts、tests/agent_data_queries.test.ts、tests/session_manager.test.ts、tests/stop_capture.test.ts
 - 文档文件：无（CLAUDE.md 已有约定，本次无需补充）
 
@@ -276,7 +276,7 @@ BUG-001 子代理
 - 测试输入：含 `mode: 'standard'` 的脏 capture 对象（模拟历史 IndexedDB 数据）
 - 期望断言：`expect(manifest.capture.mode).toBeUndefined()`
 - 修复前失败原因：archive_builder 原样序列化 capture 对象，mode 流入 manifest
-- 修改的源码文件：src/shared/types.ts（删 2 处字段）、src/background/service_worker.ts（删 2 处写入）、src/background/session_manager.ts（删 1 处）、src/popup/popup.ts（删 1 处）、src/shared/archive_builder.ts（增防御过滤）
+- 修改的源码文件：src/shared/types.ts（删 2 处字段）、src/extension/background/service_worker.ts（删 2 处写入）、src/extension/background/session_manager.ts（删 1 处）、src/extension/popup/popup.ts（删 1 处）、src/shared/archive_builder.ts（增防御过滤）
 - 最小修复说明：删除类型定义 + 4 个写入点 + 归档层防御过滤
 - 回归测试：strips deprecated mode field from manifest.capture（archive_builder）、e2e-capture-local/baidu 的 mode 反向断言
 - 修复后测试结果：相关单测 97 PASS 0 FAIL；tsc 无错误；全量 npm test 654/654 PASS
@@ -418,7 +418,7 @@ BUG-003 子代理
 
 #### 涉及文件
 
-- 源码文件：src/background/console_capture.ts（核心修复）、src/background/cdp_event_router.ts（复用，未改）
+- 源码文件：src/extension/background/console_capture.ts（核心修复）、src/extension/background/cdp_event_router.ts（复用，未改）
 - 测试文件：tests/console_capture.test.ts（重写）、tests/__mocks__/chrome_debugger.ts（mock 增量）
 - 文档文件：本段
 
@@ -468,7 +468,7 @@ BUG-003 子代理
 - 测试输入：emit `Target.attachedToTarget` 事件（sessionId='child-session-abc'），然后断言 `send_command_calls` 中存在 `command==='Runtime.enable' && sessionId==='child-session-abc'` 的记录
 - 期望断言：`sub_target_runtime_enable.length >= 1`
 - 修复前失败原因：`AssertionError: expected 0 to be greater than or equal to 1`（console_capture 修复前从不向子 session 发 Runtime.enable）
-- 修改的源码文件：src/background/console_capture.ts
+- 修改的源码文件：src/extension/background/console_capture.ts
 - 最小修复说明：`handle_debugger_event` 新增 `Target.attachedToTarget`/`Target.detachedFromTarget` 分支。attach 时 `register_session(child_session)` + 对子 session 发 `Runtime.enable`；detach 时 `unregister_session`。导入共享 `cdp_event_router` 的 register/unregister
 - 回归测试：
   - `forwards a main-target consoleAPICalled event to sender`（主链路不退化）
@@ -525,7 +525,7 @@ BUG-004 子代理
 #### 涉及文件
 
 - 源码文件：
-  - src/content/content_script.ts（fallback 改为轮询）
+  - src/extension/content/content_script.ts（fallback 改为轮询）
   - src/shared/poll_capture_status.ts（新增，可注入轮询工具）
 - 测试文件：
   - tests/poll_capture_status.test.ts（新增，6 测）
@@ -582,12 +582,12 @@ BUG-004 子代理
 - 修复前失败测试：`tests/content_script_uses_poll.test.ts > content_script source integrates start_status_poll (regression guard)`
 - 测试文件：tests/content_script_uses_poll.test.ts
 - 测试名称：`BUG-004 contract: content_script uses status polling > content_script source integrates start_status_poll (regression guard)`
-- 测试输入：将 `src/content/content_script.ts` 临时回退到旧"一次性 get_status"实现，运行契约测试
+- 测试输入：将 `src/extension/content/content_script.ts` 临时回退到旧"一次性 get_status"实现，运行契约测试
 - 期望断言：源码匹配 `/start_status_poll\s*\(\s*\{/`（必须实际调用轮询）
 - 修复前失败原因：旧实现无此调用，正则不匹配
 - 修改的源码文件：
   - src/shared/poll_capture_status.ts（新增）
-  - src/content/content_script.ts（接入轮询）
+  - src/extension/content/content_script.ts（接入轮询）
 - 最小修复说明：抽出 `start_status_poll` 工具模块（依赖注入），content_script 加载时启动轮询替代一次性 get_status；stop_capture 时停止轮询
 - 回归测试：
   - `REGRESSION BUG-004: when first get_status returns not_capturing, keeps polling and fires on_active once SW starts`
@@ -640,7 +640,7 @@ BUG-005 子代理
 
 #### 涉及文件
 
-- 源码文件：src/background/network_capture.ts
+- 源码文件：src/extension/background/network_capture.ts
 - 测试文件：tests/network_capture.test.ts
 - 文档文件：无
 
@@ -686,7 +686,7 @@ BUG-005 子代理
 - 测试输入：`'http://127.0.0.1:9777/log'`、`'http://127.0.0.1:17831/extension/heartbeat'`、`'http://localhost:9777/log'`、`'chrome-extension://abc123/options.html'`、`'https://example.com/api/data'` 等
 - 期望断言：自身 origin URL 返回 true，外部 URL 返回 false
 - 修复前失败原因：函数未导出，TypeError
-- 修改的源码文件：src/background/network_capture.ts
+- 修改的源码文件：src/extension/background/network_capture.ts
 - 最小修复说明：新增导出 `is_self_origin_url`（按 hostname 判定 127.0.0.1/localhost + chrome-extension 前缀）；在 `handle_before_request` 与 `Network.requestWillBeSent` 入口调用，命中即 return 不采集
 - 回归测试：7 个用例覆盖各端口/origin 组合及误杀防护
 - 修复后测试结果：network_capture 92/92 PASS，network_cdp+correlator 51/51 PASS，tsc 无错误，全量 npm test 654/654 PASS

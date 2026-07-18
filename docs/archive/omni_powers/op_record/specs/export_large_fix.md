@@ -353,5 +353,5 @@ Bridge → MCP → LLM
 | 3 | `src/agent/bridge/server.ts` | `MAX_EXTENSION_RESULT_BODY_BYTES` 32→64MB；`/mcp/command` 路由加超时选择逻辑 + `output_path` 写文件逻辑 |
 | 4 | `src/agent/mcp/schemas.ts` | `export_capture_schema` 加 `output_path`、`include_response_body`；`get_all_capture_data_schema` 加 `output_path` |
 | 5 | `src/agent/mcp/tools.ts` | `execute_mcp_tool` 透传新参数（无需改，已透传 `...payload`） |
-| 6 | `src/background/exporter.ts` | 四个 `export_*` 函数加 `ExportOptions` 参数；`include_response_body=false` 时过滤 `response_body` |
-| 7 | `src/background/agent_command_dispatcher.ts` | `export_capture` 函数接收并传递 `include_response_body` 选项 |
+| 6 | `src/extension/background/exporter.ts` | 四个 `export_*` 函数加 `ExportOptions` 参数；`include_response_body=false` 时过滤 `response_body` |
+| 7 | `src/extension/background/agent_command_dispatcher.ts` | `export_capture` 函数接收并传递 `include_response_body` 选项 |

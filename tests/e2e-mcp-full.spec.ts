@@ -38,7 +38,7 @@ test.beforeAll(async () => {
 
     // Write bridge config
     const page = await browser.newPage();
-    await page.goto(`chrome-extension://${extension_id}/src/popup/popup.html`);
+    await page.goto(`chrome-extension://${extension_id}/src/extension/popup/popup.html`);
     await page.waitForLoadState('domcontentloaded');
 
     await page.evaluate(async (cfg) => {

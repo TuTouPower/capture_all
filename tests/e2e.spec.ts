@@ -21,7 +21,7 @@ test.afterAll(async () => {
 test.describe('Record All UI', () => {
     test('popup loads with start button', async () => {
         const page = await context.newPage();
-        await page.goto(`${SERVE_URL}/src/popup/popup.html`);
+        await page.goto(`${SERVE_URL}/src/extension/popup/popup.html`);
         await page.waitForLoadState('domcontentloaded');
 
         await expect(page.locator('#startBtn')).toBeVisible();

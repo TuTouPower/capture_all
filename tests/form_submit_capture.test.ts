@@ -5,7 +5,7 @@ import type { CaptureEvent, FormSubmitData } from '../src/shared/types';
 import {
     start_form_submit_capture,
     stop_form_submit_capture,
-} from '../src/content/form_submit_capture';
+} from '../src/extension/content/form_submit_capture';
 
 describe('form_submit_capture', () => {
     let events: Array<{ event: CaptureEvent; data: FormSubmitData }>;

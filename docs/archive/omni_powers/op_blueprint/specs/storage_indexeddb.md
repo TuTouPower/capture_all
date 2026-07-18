@@ -6,7 +6,7 @@
 
 - 名称：`capture_all_db`（`DB_NAME`）。
 - 版本：`3`（`DB_VERSION`）。
-- 封装：`src/background/storage.ts`。
+- 封装：`src/extension/background/storage.ts`。
 
 ## 2. Stores
 
@@ -73,9 +73,9 @@ Console 和 Error 分两个独立 store（console.error() ≠ 运行时异常）
 
 ## 7. 关键文件
 
-- `src/background/storage.ts` — IndexedDB CRUD + flush + store 路由。
-- `src/background/app_log_storage.ts` — `app_logs` store 专用。
+- `src/extension/background/storage.ts` — IndexedDB CRUD + flush + store 路由。
+- `src/extension/background/app_log_storage.ts` — `app_logs` store 专用。
 - `src/shared/constants.ts` — `STORE_NAMES` / 大小限制常量。
 - `src/shared/capture_data_reader.ts` — 单采集读取。
 - `src/shared/capture_stats.ts` — 7 标签统计。
-- `src/background/agent_data_queries.ts` — Agent 查询。
+- `src/extension/background/agent_data_queries.ts` — Agent 查询。

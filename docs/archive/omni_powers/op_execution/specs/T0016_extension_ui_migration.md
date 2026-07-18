@@ -38,7 +38,7 @@ eval: required
 - 已知坑: HTML 相对 CSS/JS 路径和 `getURL` 字符串需同时更新。
 
 ### 实现锚点（坐标集中地）
-- `src/popup/`、`src/dashboard/`、`src/devtools/`
+- `src/extension/popup/`、`src/extension/dashboard/`、`src/extension/devtools/`
 - `src/shared/i18n.ts`、`theme.ts`、`dom_utils.ts`、`design_tokens.css`
 - `apps/extension/ui/`
 

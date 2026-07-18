@@ -3,10 +3,10 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { clamp_body_size_bytes } from '../src/dashboard/dashboard_settings'
+import { clamp_body_size_bytes } from '../src/extension/dashboard/dashboard_settings'
 
 const project_root = resolve(__dirname, '..')
-const dashboard_source = readFileSync(resolve(project_root, 'src/dashboard/dashboard_settings.ts'), 'utf8')
+const dashboard_source = readFileSync(resolve(project_root, 'src/extension/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('settings 配置同步行为', () => {
     describe('persist 逻辑结构', () => {

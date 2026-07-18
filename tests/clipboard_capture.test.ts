@@ -22,7 +22,7 @@ vi.stubGlobal('document', mock_document);
 vi.stubGlobal('navigator', mock_navigator);
 vi.stubGlobal('window', { location: { href: 'https://example.com' } });
 
-import { start_clipboard_capture, stop_clipboard_capture } from '../src/content/clipboard_capture';
+import { start_clipboard_capture, stop_clipboard_capture } from '../src/extension/content/clipboard_capture';
 
 function emit_doc(event_name: string) {
     (doc_listeners[event_name] || []).forEach(fn => fn(new Event(event_name)));

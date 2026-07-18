@@ -89,7 +89,7 @@ describe('P0.43: flush before read ensures data consistency', () => {
     it('flush_all must be callable before reading events (API shape check)', async () => {
         // 验证 flush_all 作为函数存在，可被 get_capture_data 调用
         // 此测试不实际调用 flush_all（需要 IndexedDB 环境），仅验证导入路径
-        const storage_module = await import('../src/background/storage');
+        const storage_module = await import('../src/extension/background/storage');
 
         expect(typeof storage_module.flush_all).toBe('function');
     });

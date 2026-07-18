@@ -38,7 +38,7 @@ eval: required
 - 已知坑: CDP 与 WebRequest 共享 correlation/body 状态，禁止跨 task 改 interface。
 
 ### 实现锚点（坐标集中地）
-- `src/background/network_*.ts`、`cdp_*.ts`
+- `src/extension/background/network_*.ts`、`cdp_*.ts`
 - `body_capture_coordinator.ts`、`stream_buffer.ts`
 - `console_capture.ts`、`exception_capture.ts`、`cookie_capture.ts`
 - `apps/extension/background/capture/`

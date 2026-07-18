@@ -1,7 +1,7 @@
 # 实施计划 — 流式 / WebSocket / 子 target 全捕获
 
 关联 spec：`docs/specs/streaming_websocket_capture.md`
-方法：TDD（每步先写测试）。文件 `src/background/network_capture.ts` 已 968 行，按 spec §3 拆分。
+方法：TDD（每步先写测试）。文件 `src/extension/background/network_capture.ts` 已 968 行，按 spec §3 拆分。
 
 ---
 

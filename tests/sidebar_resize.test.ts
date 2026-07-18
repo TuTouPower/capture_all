@@ -21,7 +21,7 @@ const mock_style = {
 Object.defineProperty(document.documentElement, 'style', { value: mock_style, configurable: true });
 
 // Import after stubs
-import { wire_sidebar_resize } from '../src/dashboard/sidebar_resize';
+import { wire_sidebar_resize } from '../src/extension/dashboard/sidebar_resize';
 
 function create_handle(): HTMLElement {
     const el = document.createElement('div');

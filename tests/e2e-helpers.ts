@@ -63,8 +63,8 @@ export async function launch_extension(headless = false): Promise<E2EFixture> {
         extension_id = worker.url().split('/')[2];
     }
 
-    const popup_url = `chrome-extension://${extension_id}/src/popup/popup.html`;
-    const dashboard_url = `chrome-extension://${extension_id}/src/dashboard/dashboard.html`;
+    const popup_url = `chrome-extension://${extension_id}/src/extension/popup/popup.html`;
+    const dashboard_url = `chrome-extension://${extension_id}/src/extension/dashboard/dashboard.html`;
 
     await wait_for_sw_ready(context, popup_url);
 

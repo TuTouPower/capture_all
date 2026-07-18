@@ -12,12 +12,16 @@ const project_root = root_argument_index === -1
 
 const forbidden_paths = [
     '.mcp.json',
-    '.claude/',
+    '.claude/settings.local.json',
+    '.claude/skills/',
+    '.claude/worktrees/',
     'node_modules/',
     'artifacts/',
     'data/',
     '.worktrees/',
 ];
+// Project-level `.claude/settings.json` is intentionally tracked (hooks config).
+// Only user-local override files under `.claude/` are forbidden.
 // `docs/archive/` is intentionally tracked (D5 in docs/blueprint/decisions.md);
 // the scanner skips its content but no longer forbids the path itself.
 const forbidden_extensions = new Set(['.log', '.zip']);

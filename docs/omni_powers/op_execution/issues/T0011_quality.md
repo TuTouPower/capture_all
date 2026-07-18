@@ -13,16 +13,21 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 未解决的问题
 
+第 3 轮 review（用户额外授权）仍 FAIL：
+
 1. `scripts/scan_tracked_tree.mjs` 仍有真实 secret 绕过：
-   - 任意 source 行包含 `line_pattern: /` 时关闭 credential assignment 检测。
-   - slash 前后启发式可能把普通 assignment 当 regex。
-   - 含 `${...}` 的模板字符串全部判安全，硬编码 secret 前缀可逃逸。
-   - 部分 finding exemption 未完整锚定，scanner 自测 exemption 可豁免任意匹配前缀的真实 credential。
-2. IndexedDB v1/v2/v3 fixture 已验证升级与 records 保留，但未逐 store 比对升级后 `keyPath` 与 `indexNames`，未完整满足 AC-2 schema 矩阵。
+   - 静态片段不超过 8 字符的模板可被判为安全，如 ``API_KEY = `hunter2${runtime_id}```、``AKIA${suffix}``。
+   - placeholder 仅按值前缀匹配，`${RUNTIME_ID}hunter2`、`${RUNTIME_ID:-hunter2}`、`process.env.API_KEY || "hunter2"` 可逃逸。
+2. IndexedDB 冻结仍不完整：
+   - 测试 expected 直接引用生产 `DB_VERSION`；生产版本改为 v4 时不会失败。
+   - `sessions`、`events`、`console_logs`、`error_log` 由 fixture 预建后与 fixture 自比，生产空库建库 schema 漂移可逃逸。
+3. Artifact smoke 依赖 ignored `artifacts/` 残留，不证明当前源码完成新鲜 build；陈旧产物可掩盖 Bridge 源码/build script 损坏。
+
+第 3 轮已关闭原始 `line_pattern`/slash/宽泛 exemption 样例，并增加逐 store schema 比对，但上述反例证明 AC-1/AC-2/AC-5 仍未满足。
 
 ## 已尝试轮数
 
-2 轮，达到 review 上限。
+3 轮；第 3 轮由用户额外授权，仍达到当前授权上限。
 
 ## 影响
 
@@ -32,4 +37,8 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 恢复条件
 
-用户于 2026-07-18 明确授权突破两轮 review 上限，追加第 3 轮 implementer/reviewer。修复范围仅限 scanner secret bypass 与 IndexedDB 全量 schema 矩阵；不降低 AC-2/AC-5。
+需用户再次明确授权额外 implementer/reviewer 轮。修复不得降低 AC-1/AC-2/AC-5：
+
+- scanner 必须拒绝任何含硬编码静态 secret 的模板、placeholder 拼接或默认值，仅放行完整纯动态表达式。
+- 使用独立冻结 v3 契约验证 DB version 与空库生产建库的全部 14 store schema；升级 fixture 继续验证 sentinel records。
+- artifact smoke 必须绑定当前源码的新鲜 build，不读取残留产物自证。

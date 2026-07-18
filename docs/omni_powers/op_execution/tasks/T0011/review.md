@@ -109,3 +109,56 @@ verdict: FAIL
 第 2 轮仍有范围内 blocker。按 heavy review 上限转 `blocked_by=quality`。
 
 verdict: FAIL
+
+# T0011 Review (Round 3)
+
+## 裁决一：规格合规
+
+### Round 2 blocker 复核
+
+- `line_pattern` 全局短路、slash 启发式、宽泛正则 exemption：已删除。
+- Exemption 改为 `path + label + exact line SHA-256`：原行尾追加绕过已关闭。
+- v1/v2/v3 升级后逐 store 查询 `keyPath`/`indexNames`：已增加，但 legacy store 的生产建库 schema 仍未被独立验证。
+- 模板字符串 secret bypass：未关闭；新规则仍允许短静态 secret 与 placeholder 前缀绕过。
+
+### 不变量检查
+
+- INV-1、INV-3、INV-4、INV-5：守住；未修改产品实现。
+- INV-2：未被测试完整冻结。`DB_VERSION` 期望直接引用生产常量，生产版本改为 v4 时测试仍通过；4 个 legacy store schema 由 fixture 预建后与 fixture 自比，生产建库定义漂移可逃逸。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- 原 4 个 scanner 绕过样例均形成真实 CLI/临时 Git repo 否证。
+- v1/v2/v3 records 保留继续逐 store 深比较。
+- 现行 10 个非 legacy store 可由 v1 升级路径验证生产创建结果。
+
+### 剩余阻断
+
+1. `is_safe_dynamic_template()` 将静态片段不超过 8 字符、未命中特定品牌前缀的模板判安全。``const API_KEY = `hunter2${runtime_id}`;``、``API_KEY = `AKIA${suffix}``` 均可错误通过。
+2. `placeholder_value_pattern` 仅匹配值前缀。`${RUNTIME_ID}hunter2`、`${RUNTIME_ID:-hunter2}`、`process.env.API_KEY || "hunter2"` 可错误通过。
+3. DB v3 未用冻结字面契约断言；将生产 `DB_VERSION` 从 3 改为 4，baseline tests 仍全绿。
+4. `sessions`、`events`、`console_logs`、`error_log` 在所有 fixture 中预建。升级测试比较的是 fixture 创建 schema 与 v3 fixture；空库测试只精确检查 5 个代表 store，因此 4 个 legacy store 的生产 `keyPath`/index 漂移仍可逃逸。
+5. Artifact smoke 只读取 ignored `artifacts/`，不生成或验证产物新鲜度。干净 checkout 直接 `npm test` 会失败；保留陈旧产物时，删除 Bridge 源码或破坏 build script 仍可通过该 smoke。
+
+## 验证摘要
+
+- focused Vitest：PASS，20 tests。
+- full Vitest：PASS，92 files / 1099 tests。
+- tracked-tree scanner：PASS，409 files。
+- build：PASS，Extension、Bridge、MCP、zip 均生成。
+- mutation/反例：短静态模板 secret、placeholder/default secret、DB v4、legacy schema 漂移、陈旧 artifact 均可复现假绿。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| Scanner 仍有模板与 placeholder secret bypass | 否 | 动态值必须完整解析为纯表达式；不得按静态片段长度或值前缀判安全。补短 secret、默认值、拼接值否证。 |
+| DB v3 未冻结 | 否 | 使用独立冻结常量/fixture 版本断言 `3`，不得把生产 `DB_VERSION` 同时当 expected。 |
+| Legacy schema 未由生产空库路径完整验证 | 否 | 空库经 `init_db()` 后，与独立冻结 schema 对全部 14 store 精确比较。 |
+| Artifact smoke 可读取陈旧产物 | 否 | 明确 build 前置并在隔离输出目录验证当前构建，或将 smoke 绑定到实际 build 命令；禁止依赖工作区残留。 |
+
+第 3 轮仍 FAIL。用户授权的额外 review 轮已用尽；恢复 `blocked_by=quality`，不得进入 evaluator、merge gate 或 T0012。
+
+verdict: FAIL

@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 in_progress：用户于 2026-07-18 显式授权追加第 3 轮。仅修复 scanner secret bypass 与 IndexedDB 全量 schema 矩阵，随后重审；通过前不得进入 T0012。
+T0011 blocked_by=quality：用户授权的第 3 轮 review 仍 FAIL。Scanner 模板/placeholder 仍有真实 secret bypass；DB v3 与 legacy 4-store 生产 schema 未完整冻结；artifact smoke 可读取陈旧产物。不得进入 evaluator、merge gate 或 T0012；需用户再次明确授权额外修复轮。
 
 ## 本批次（2026-07-18 intake）
 

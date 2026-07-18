@@ -41,7 +41,7 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 再次恢复条件
 
-需要用户再次明确授权后，才可启动第 8 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
+用户于 2026-07-19 一次性授权第 8-15 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
 
 - `rhs_contains_hardcoded_secret` shell default 正则扩展为 `(?::[-?=]+|[-?])`，识别 `${VAR:-}`/`${VAR:=}`/`${VAR:?}`/`${VAR:default}`/`${VAR?default}`/`${VAR-default}` 等 POSIX 形式；新增反例否证。
 - `concatenate_string_literals` piece 解析跳过 `as <type>` 子句；或 fallback 路径对 `allow_source_expressions=true` 时拼接两侧均判 secret-like。

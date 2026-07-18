@@ -20,28 +20,31 @@
 
 ---
 
-## 2026-07-19 07:30 UTC+8 — repo layout refactor 进度交接
+## 2026-07-19 07:50 UTC+8 — repo layout refactor 完成
 
-- 当前焦点：仓库布局按 `docs/refactor_plan.md` 对齐 `repo_template`（三产品 src + 文档 template 化）
-- branch：`task_t002_shared_protocol_relocate`（基于 `task_t001_align_repo_layout`，链式）
-- head_commit：`0cfc760 chore: finalize repo layout refactor (Phase 5 partial)`
-- 已完成：
-  - **Phase 0 (T001)** `3a34685`：`AGENTS.md` 重写 + `CLAUDE.md` 软链 + `docs/{templates,tasks,reviews,spikes,blueprint,guides,handoff}.md` 骨架；omni_powers 整树归档；`docs/specs/` `docs/stora/` 删除
-  - **Phase 2 (T002)** `5c21a50`：`src/agent/shared/protocol.ts` → `src/shared/protocol.ts`；10 处 import 同步
-  - **Phase 3a (T003)** `e2a7f86`：`src/agent/bridge/` → `src/bridge/`
-  - **Phase 3b (T004)** `0be0262`：`src/agent/mcp/` → `src/mcp/`；`src/agent/` 已删
-  - **Phase 3c (T005)** `cc399a4`：5 个 surfaces + `manifest.json` + `_locales/` 搬到 `src/extension/`；`capture_data_reader` 紧急下沉到 `src/extension/shared/`；新增 `scripts/copy_locales.mjs` + `npm run copy:locales`（crxjs 不自动从 `src/extension/_locales/` 复制到 dist）
-  - **Phase 5 部分 (T008)** `0cfc760`：blueprint/architecture 更新三产品结构；scanner 移除 `docs/archive/` from forbidden_paths；`.claude/settings.json` 清理 omni hooks 与 env（保留 SessionStart 拉 bridge）
-- 未完成：
-  - **T006 backlog**：§4.3 表剩余 10 个扩展专用 shared 文件下沉到 `src/extension/shared/`（i18n / theme / design_tokens.css / chrome.d.ts / export_utils / export_settings / archive_builder / capture_stats / poll_capture_status / dom_utils）。需精确区分 `../../shared/X` 中 X 是否属于扩展专用。不阻塞功能。
-  - **T007 backlog (Phase 4)**：测试树重组到 `tests/{unit,integration,e2e,support}`。质量优化，不影响功能。
-  - **合并 main**：`task_t001_align_repo_layout` + `task_t002_shared_protocol_relocate` 两分支链式，待整体 merge main。
-- 陷阱：
-  - **scanner 仍报 `.claude/settings.json` forbidden-path**：`.claude/` 在 scanner `forbidden_paths`，但项目级 settings.json 已入库是合理的；精确规则（如改报 `.claude/settings.local.json`）不在 T008 范围。
-  - **scanner 其他 pre-existing finding**：`docs/refactor_plan.md` 的 `/home/karon/...` 引用、文档示例 token、测试 mock token、`src/bridge/server.ts:301` 等都是 pre-existing，非本次回归。
-  - **`docs/tasks/T005_extension_relocate/plan.md` 与 `spec.md` 被 sed 字面污染**：批量 sed 替换 `src/{surface}/` 时把 plan/spec 里命令示例的字面字符串也替换了。实际执行以 commit diff 与 log 为准。
-  - **测试硬编码路径**：`tests/manifest_permissions.test.ts` / `tests/public_docs.test.ts` / `tests/content_script_uses_poll.test.ts` / `tests/entry_unification.test.ts` 已在 T005 修复；后续移动源码路径时要再扫一遍这四个文件的硬编码。
-- 下一步：
-  1. 决定是否 merge `task_t001_align_repo_layout` 与 `task_t002_shared_protocol_relocate` 到 main（建议先 merge task_t001 到 main，再 rebase task_t002 到 main，最后 merge task_t002）。
-  2. T006 / T007 作为独立 task 接力，不必阻塞 main merge。
-  3. 后续若有新 task，按 `AGENTS.md` 四态流程；活动 task 在 `docs/tasks/`，完结归档到 `docs/archive/tasks/`。
+- 当前焦点：`docs/refactor_plan.md` 全部 Phase 闭合；剩 merge main
+- branch：`task_t002_shared_protocol_relocate`（基于 `task_t001_align_repo_layout`）
+- head_commit：`70dde67 test: update vitest/playwright/package config for new test tree`
+- 已完成（自上次交接起新增）：
+  - **T006** `410d1a4`：§4.3 表剩余 10 个扩展专用 shared 下沉到 `src/extension/shared/`（i18n / theme / design_tokens.css / chrome.d.ts / export_utils / export_settings / archive_builder / capture_stats / poll_capture_status / dom_utils）；blueprint/architecture.md 同步去掉"待 T006"标注
+  - **T007 Commit A** `3416dd6`：测试树重组——`tests/*.test.ts` → `tests/unit/`；`tests/*.spec.ts` + `e2e/{T0001,T0002,T0003}/` → `tests/e2e/`；`tests/{__mocks__,fixtures,helpers}/` → `tests/support/`；根 `e2e/` 删除；测试间互引、src 引用深度、root resolution 全修
+  - **T007 Commit B** `70dde67`：config 调整——vitest exclude 加 `tests/{e2e,support}/**`；playwright testDir `./tests/e2e`、e2e-t0001/t0003 testDir 同步；`webServer url` 修 `/src/extension/popup/popup.html`（T005 漏）；`test:e2e:server` script 路径同步
+- 全部 commits（重构主体）：
+  - `3a34685` T001 Phase 0 docs alignment
+  - `c7bea96` finalize T001
+  - `5c21a50` T002 Phase 2 protocol relocate
+  - `e2a7f86` T003 Phase 3a bridge relocate
+  - `0be0262` T004 Phase 3b mcp relocate
+  - `cc399a4` T005 Phase 3c extension relocate
+  - `0cfc760` T008 Phase 5 partial finalize（blueprint + scanner + settings.json）
+  - `901aa39` archive T008 + handoff
+  - `410d1a4` T006 extension-only shared sink
+  - `3416dd6` T007A test tree relocate
+  - `70dde67` T007B config updates
+- 未完成：仅剩 merge main（两分支链：`task_t001_align_repo_layout` → `task_t002_shared_protocol_relocate`）
+- 陷阱（更新）：
+  - **T007 unit 内部未细分 integration**：`tests/unit/` 含所有 .test.ts，未按"模块协作 vs 纯逻辑"再细分。后续可把大文件（`agent_bridge_server.test.ts` 66K、`dashboard_timeline_marker.test.ts` 22K 等）从 unit/ 移到新建 `tests/integration/`。
+  - **playwright webServer 启动依赖 build**：`npm run test:e2e` 跑前需 `npm run build` 产出 `artifacts/dist/`，否则 webServer url 找不到 HTML。
+  - **scanner 仍报 `.claude/settings.json` forbidden-path**：pre-existing，非本次回归。
+- 下一步：merge main。建议顺序：先 `task_t001_align_repo_layout` → main，再 rebase `task_t002_shared_protocol_relocate` 到 main，最后 merge task_t002。
+

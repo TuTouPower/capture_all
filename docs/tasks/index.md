@@ -14,5 +14,5 @@
 | T004 | refactor: move mcp sources to src/mcp (Phase 3b) | done | — | task_t002_shared_protocol_relocate | commit `0be0262`；src/agent/ 已删 |
 | T005 | refactor: move extension surfaces + manifest + _locales (Phase 3c) | done | — | task_t002_shared_protocol_relocate | commit `cc399a4` |
 | T006 | refactor: sink remaining extension-only shared into src/extension/shared/ | done | — | task_t002_shared_protocol_relocate | commit pending；10 文件下沉；§4.3 表全闭合 |
-| T007 | test: reorganize tests into unit/integration/e2e (Phase 4) | backlog | — | — | 测试树重组；质量优化 |
+| T007 | test: reorganize tests into unit/integration/e2e (Phase 4) | done | — | task_t002_shared_protocol_relocate | commit `3416dd6` + `70dde67`；三层 tests/{unit,e2e,support}/；config 同步；refactor_plan.md 全部 Phase 闭合 |
 | T008 | chore: finalize repo layout refactor (Phase 5 partial) | done | — | task_t002_shared_protocol_relocate | commit `0cfc760`；blueprint + scanner + settings.json 收口；T006/T007 留 backlog |

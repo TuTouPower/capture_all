@@ -38,7 +38,7 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 再次恢复条件
 
-需要用户再次明确授权后，才可启动第 6 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
+用户于 2026-07-18 明确授权第 6 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
 
 - 删除 `is_safe_literal_value` 短纯字母规则，或显著收紧（如限制到 ≤4 字符、仅非 credential_key 场景）。
 - 数组字面量递归检查每个元素。

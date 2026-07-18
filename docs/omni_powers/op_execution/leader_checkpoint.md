@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 blocked_by=quality：第 5 轮独立 review FAIL（条件性）。Round 4 恢复条件全部满足；但 scanner 新引入 `is_safe_literal_value` 短纯字母规则、数组字面量整体豁免、字符串拼接未合并，与 AC-5「真 secret 仍失败」冲突。当前授权轮次已用尽；用户再次明确授权前不得继续 implementer/reviewer，不得进入 evaluator、merge gate 或 T0012。
+T0011 in_progress：用户于 2026-07-18 明确授权第 6 轮 implementer/reviewer。范围固定为收紧 `is_safe_literal_value` 短纯字母规则、数组字面量递归检查、字符串拼接合并判定，并补真实 CLI 反例；通过独立 review 前不得进入 evaluator、merge gate 或 T0012。
 
 ## 本批次（2026-07-18 intake）
 

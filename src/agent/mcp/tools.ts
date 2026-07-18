@@ -1,5 +1,5 @@
 import type { BridgeMcpClient } from './client';
-import type { AgentCommandType } from '../shared/protocol';
+import type { AgentCommandType } from '../../shared/protocol';
 
 export interface McpToolCall {
     name: string;

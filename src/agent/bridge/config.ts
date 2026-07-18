@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { AgentBridgeConfig } from '../shared/protocol';
+import type { AgentBridgeConfig } from '../../shared/protocol';
 
 interface RawBridgeConfig {
     host?: string;

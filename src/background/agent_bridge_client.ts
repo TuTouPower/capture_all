@@ -1,5 +1,5 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
-import type { AgentCommandType } from '../agent/shared/protocol';
+import type { AgentCommandType } from '../shared/protocol';
 import {
     normalize_agent_bridge_config,
     type AgentBridgeUserConfig,

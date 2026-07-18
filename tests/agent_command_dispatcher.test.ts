@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { dispatch_agent_command, type AgentRuntimeHandlers } from '../src/background/agent_command_dispatcher';
-import type { AgentCommand } from '../src/agent/shared/protocol';
+import type { AgentCommand } from '../src/shared/protocol';
 import { DEFAULT_CONFIG } from '../src/shared/constants';
 import type { CaptureConfig } from '../src/shared/types';
 

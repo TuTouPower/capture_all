@@ -1,4 +1,4 @@
-import type { AgentCommand, AgentCommandResult, AgentError, AgentErrorCode } from '../agent/shared/protocol';
+import type { AgentCommand, AgentCommandResult, AgentError, AgentErrorCode } from '../shared/protocol';
 import { list_captures as storage_list_captures, get_capture } from './storage';
 import { export_har, export_html, export_json, export_jsonl } from './exporter';
 import {

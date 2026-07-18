@@ -56,3 +56,56 @@
 | Matrix verification 为人工描述 | 【暂存:架构决策】 | 本 task 可保留为索引；后续若成为 gate，应改为机器生成。 |
 
 verdict: FAIL
+
+# T0011 Review (Round 2)
+
+## 裁决一：规格合规
+
+### Round 1 blocker 复核
+
+- Artifact smoke 条件返回、实际 build、Bridge/MCP/zip 产物检查：已修复。
+- v1/v2/v3 fixture、真实升级、旧数据保留：核心路径已修复。
+- Store 集合/数量、deprecated alias 精确断言：已修复。
+- AC-3/AC-4 行为证据表述、宽泛 Vite 断言：已修复。
+- Scanner 整文件 allowlist：已收窄，但仍存在真实 secret 绕过。
+
+### 验收标准覆盖
+
+- AC-1：reviewer 范围内通过；基础 Playwright 留 evaluator。
+- AC-2：部分通过。升级与 records 保留已验证，但 fixture 声明的逐 store `key_path`/`indexes` 未在升级后完整比对。
+- AC-3：通过 reviewer 证据要求。
+- AC-4：reviewer 范围内通过；浏览器级 XSS 留 evaluator。
+- AC-5：失败。Scanner 新增启发式和 exemption 仍可放过真实 credential。
+
+### 不变量检查
+
+- INV-1、INV-3、INV-4、INV-5：守住。
+- INV-2：版本、store 集合和数据保留已锁定；完整 schema 矩阵证据仍不足。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- 无条件返回、skip、零断言 artifact smoke。
+- 真实旧版本 DB 升级与 records 查询。
+- 精确 store 集合/数量及 alias 引用一致。
+- Scanner 临时 Git repo + CLI 行为测试及同文件否证。
+
+### 剩余阻断
+
+1. `has_credential_assignment()` 对任意 source 行包含 `line_pattern: /` 时全局返回 false，可通过注释绕过真实 secret。
+2. `is_embedded_regex_match` 仅凭 credential 前后出现 `/` 判定 regex，可让普通 assignment 逃逸。
+3. 任意含 `${...}` 的模板字符串都判安全，硬编码 secret 前缀加插值可逃逸。
+4. 部分 exemption 未完整锚定行尾；scanner 自测 exemption 只匹配 `API_KEY=`/`api_key: 'sk-` 前缀，可豁免真实值。
+5. v1/v2/v3 fixture 的 `key_path`/`indexes` 字段未被测试消费，多个 store schema 漂移仍可能假绿。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| Scanner 存在全局和模式级 secret bypass | 否 | 删除内容短路与 slash 启发式；模板只允许纯安全动态值；exemption 必须完整行匹配；新增四类绕过否证。 |
+| IndexedDB 完整 keyPath/index 矩阵未执行 | 否 | 升级后逐 store 查询 `keyPath`/`indexNames`，与冻结 v3 schema matrix 精确比较。 |
+
+第 2 轮仍有范围内 blocker。按 heavy review 上限转 `blocked_by=quality`。
+
+verdict: FAIL

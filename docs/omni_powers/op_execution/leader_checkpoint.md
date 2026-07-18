@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 ready：先提交批准后的 intake 元数据，再创建 task 分支，按 merge gate 完成基线测试与 scanner 治理。
+T0011 blocked_by=quality：两轮 review 已到上限。需用户显式授权追加修复/review 轮，处理 scanner secret bypass 与 IndexedDB 全量 schema 矩阵；不得进入 T0012。
 
 ## 本批次（2026-07-18 intake）
 

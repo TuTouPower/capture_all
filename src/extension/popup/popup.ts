@@ -1,14 +1,14 @@
 // popup/popup.ts — Capture All 全采 采集控制台
 // Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real capturing wiring.
 import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../../shared/types';
-import { init_locale, t, apply_translations } from '../../shared/i18n';
-import { init_theme } from '../../shared/theme';
+import { init_locale, t, apply_translations } from '../shared/i18n';
+import { init_theme } from '../shared/theme';
 import { escape_html } from '../../shared/escape';
 import { load_user_config } from '../../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { format_system_time } from '../../shared/system_time';
-import { download_blob, build_capture_filename } from '../../shared/export_utils';
-import { build_archive } from '../../shared/archive_builder';
+import { download_blob, build_capture_filename } from '../shared/export_utils';
+import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { generate_capture_id } from '../../shared/id';
 import { Logger } from '../../shared/logger';

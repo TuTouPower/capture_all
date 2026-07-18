@@ -11,7 +11,7 @@
 // 修复：引入 start_status_poll，content_script 加载后周期性轮询直到采集开始。
 
 import { describe, it, expect, vi } from 'vitest';
-import { start_status_poll, POLL_INTERVAL_MS } from '../src/shared/poll_capture_status';
+import { start_status_poll, POLL_INTERVAL_MS } from '../src/extension/shared/poll_capture_status';
 
 interface MockTimer {
     callback: () => void;

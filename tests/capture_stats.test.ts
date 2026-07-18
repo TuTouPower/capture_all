@@ -3,7 +3,7 @@ import {
     create_empty_capture_stats,
     increment_capture_event_stats,
     visible_capture_stat_counts,
-} from '../src/shared/capture_stats';
+} from '../src/extension/shared/capture_stats';
 
 describe('capture_stats', () => {
     it('keeps user action count separate from total event count', () => {

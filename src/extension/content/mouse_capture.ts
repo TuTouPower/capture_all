@@ -2,7 +2,7 @@
 import type { CaptureConfig, CaptureEvent, MouseEventData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
 import { truncate_target_text } from '../../shared/redaction';
-import { build_xpath } from '../../shared/dom_utils';
+import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: CaptureConfig;

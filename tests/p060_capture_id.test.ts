@@ -1,6 +1,6 @@
 // tests/p060_capture_id.test.ts — P0.60 capture_id 去前缀 + 默认导出文件名模板改造
 import { describe, test, expect } from 'vitest';
-import { build_export_filename } from '../src/shared/export_settings';
+import { build_export_filename } from '../src/extension/shared/export_settings';
 import { DEFAULT_USER_CONFIG } from '../src/shared/constants';
 import { generate_capture_id } from '../src/shared/id';
 

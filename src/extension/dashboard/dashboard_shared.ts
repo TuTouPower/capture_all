@@ -2,8 +2,8 @@
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig } from '../../shared/types';
 import { escape_html as esc } from '../../shared/escape';
 import { format_system_time } from '../../shared/system_time';
-import { download_blob, build_capture_filename } from '../../shared/export_utils';
-import { build_archive } from '../../shared/archive_builder';
+import { download_blob, build_capture_filename } from '../shared/export_utils';
+import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';

@@ -1,6 +1,6 @@
 // shared/export_settings.ts
-import type { UserConfig } from './types';
-import { format_system_time_filename } from './system_time';
+import type { UserConfig } from '../../shared/types';
+import { format_system_time_filename } from '../../shared/system_time';
 
 type ExportExtension = 'json' | 'jsonl' | 'html' | 'har' | 'zip';
 

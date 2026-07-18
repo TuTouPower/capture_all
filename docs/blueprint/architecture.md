@@ -109,7 +109,15 @@ src/
 │   ├── devtools/                 # DevTools 面板（轻量入口）
 │   │   └── devtools.html / devtools.ts / devtools_panel.html / devtools_panel.ts
 │   └── shared/                   # 仅扩展专用（依赖 background/content 或扩展 UI）
-│       └── capture_data_reader.ts # 直连 IndexedDB 读取采集快照（依赖 background/storage）
+│       ├── capture_data_reader.ts # 直连 IndexedDB 读取采集快照（依赖 background/storage）
+│       ├── i18n.ts / theme.ts    # 国际化 / 主题（扩展 UI 专用）
+│       ├── design_tokens.css     # CSS 设计令牌
+│       ├── chrome.d.ts           # Chrome API 类型声明
+│       ├── export_utils.ts / export_settings.ts  # 导出下载/文件名（扩展侧）
+│       ├── archive_builder.ts    # 归档拼装
+│       ├── capture_stats.ts      # 采集统计计算
+│       ├── poll_capture_status.ts # 扩展轮询状态
+│       └── dom_utils.ts          # DOM/xpath（content 用）
 ├── bridge/                       # Bridge 产品（HTTP 服务器 + 命令队列 + CDP）
 │   ├── main.ts                   # 入口（`npm run bridge`）
 │   ├── server.ts                 # HTTP 服务器（/health, /mcp/command, /extension/command …）
@@ -129,9 +137,6 @@ src/
     ├── logger.ts / system_time.ts / escape.ts / hash.ts / id.ts
     ├── event_utils.ts / event_category.ts / body_routing.ts
     ├── user_config.ts / agent_bridge_config.ts
-    ├── i18n.ts / theme.ts / design_tokens.css / chrome.d.ts  # 待 T006 下沉到 extension/shared
-    ├── export_settings.ts / export_utils.ts                  # 待 T006 下沉到 extension/shared
-    ├── archive_builder.ts / capture_stats.ts / poll_capture_status.ts / dom_utils.ts  # 待 T006
     └── …
 ```
 

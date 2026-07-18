@@ -1,5 +1,5 @@
 // shared/theme.ts
-import type { ThemeMode } from './types';
+import type { ThemeMode } from '../../shared/types';
 
 const STORAGE_KEY = 'theme';
 

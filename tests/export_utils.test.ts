@@ -6,7 +6,7 @@ import {
     download_blob,
     build_capture_filename,
     build_log_filename,
-} from '../src/shared/export_utils';
+} from '../src/extension/shared/export_utils';
 
 // Mock chrome APIs
 const mock_download = vi.fn();
@@ -227,7 +227,7 @@ describe('P0.40/P0.53: export entries unified, no last_dir override', () => {
     });
 
     it('export_utils no longer exposes last_dir storage helpers', () => {
-        const src = read('src/shared/export_utils.ts');
+        const src = read('src/extension/shared/export_utils.ts');
         expect(src).not.toMatch(/load_last_export_dirs/);
         expect(src).not.toMatch(/save_last_export_dir/);
         expect(src).not.toMatch(/track_export_dir/);

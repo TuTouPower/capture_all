@@ -4,7 +4,7 @@ import {
     create_empty_capture_stats,
     increment_capture_event_stats,
     visible_capture_stat_counts,
-} from '../src/shared/capture_stats';
+} from '../src/extension/shared/capture_stats';
 import type { CaptureEvent, CategoryKey } from '../src/shared/types';
 
 function event(type: CaptureEvent['type']): CaptureEvent {

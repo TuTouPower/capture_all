@@ -1,7 +1,7 @@
 // dashboard/dashboard.ts — Capture All 主面板入口
 // 只做初始化、导入各模块、注册路由
-import { init_locale } from '../../shared/i18n';
-import { init_theme } from '../../shared/theme';
+import { init_locale } from '../shared/i18n';
+import { init_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { load_user_config } from '../../shared/user_config';
 import {

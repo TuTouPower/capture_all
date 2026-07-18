@@ -1,19 +1,19 @@
 // shared/archive_builder.ts — 页面侧 ZIP 组装
 import { zipSync, strToU8 } from 'fflate';
-import { plan_body, safe_request_id } from './body_routing';
-import { sha256_hex } from './hash';
+import { plan_body, safe_request_id } from '../../shared/body_routing';
+import { sha256_hex } from '../../shared/hash';
 import {
     add_absolute_system_time,
     add_capture_system_times,
     format_system_time,
-} from './system_time';
+} from '../../shared/system_time';
 import type {
     CaptureRecord,
     CaptureEvent,
     ConsoleEventData,
     NetworkRequestData,
     SystemTimeTimezone,
-} from './types';
+} from '../../shared/types';
 
 // ============================================================
 // 输入类型

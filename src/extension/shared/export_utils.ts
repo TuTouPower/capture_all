@@ -13,8 +13,8 @@
 //   - showSaveFilePicker 不可用（如 service worker 环境）→ 退回 downloads API
 
 import { build_export_filename } from './export_settings';
-import type { UserConfig } from './types';
-import { format_system_time_filename } from './system_time';
+import type { UserConfig } from '../../shared/types';
+import { format_system_time_filename } from '../../shared/system_time';
 
 interface SaveFilePickerType {
     description: string;

@@ -3,7 +3,7 @@ import {
     build_network_jsonl_line,
     render_readme,
     build_archive,
-} from '../src/shared/archive_builder';
+} from '../src/extension/shared/archive_builder';
 import { strFromU8, unzipSync } from 'fflate';
 import type {
     NetworkRequestData,

@@ -1,7 +1,7 @@
 // tests/session_manager.test.ts — P0.32: capture creation includes url and tab_title
 import { describe, it, expect } from 'vitest';
 import type { CaptureRecord } from '../src/shared/types';
-import { create_empty_capture_stats } from '../src/shared/capture_stats';
+import { create_empty_capture_stats } from '../src/extension/shared/capture_stats';
 
 // Replica of start_recording logic with P0.32 fix
 function create_capture_record(opts: {

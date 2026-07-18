@@ -18,7 +18,7 @@ import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_re
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../../shared/redaction';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
-import { create_empty_capture_stats, increment_capture_event_stats } from '../../shared/capture_stats';
+import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
 import { category_for_event_type } from '../../shared/event_category';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';

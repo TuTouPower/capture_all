@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VISIBLE_CAPTURE_STAT_KEYS } from '../src/shared/capture_stats';
+import { VISIBLE_CAPTURE_STAT_KEYS } from '../src/extension/shared/capture_stats';
 import { category_for_event_type } from '../src/shared/event_category';
 import type { CaptureStats, EventType } from '../src/shared/types';
 

@@ -4,13 +4,13 @@
 // 回归防御：如果未来误删 content_script 中的轮询逻辑，回到"一次性 get_status"
 // 旧实现，本测试会失败。
 //
-// 详见 src/shared/poll_capture_status.ts 的根因说明。
+// 详见 src/extension/shared/poll_capture_status.ts 的根因说明。
 //
 // 注意：content_script.ts 顶层执行 chrome.runtime.onMessage 等浏览器 API，
 // 不能在 node 环境直接 import，本测试只做静态源码扫描。
 
 import { describe, it, expect } from 'vitest';
-import * as poll_module from '../src/shared/poll_capture_status';
+import * as poll_module from '../src/extension/shared/poll_capture_status';
 
 describe('BUG-004 contract: content_script uses status polling', () => {
     it('poll_capture_status module exports start_status_poll', () => {

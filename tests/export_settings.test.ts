@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { build_export_filename } from '../src/shared/export_settings';
+import { build_export_filename } from '../src/extension/shared/export_settings';
 
 const now = new Date('2024-02-03T04:05:06.000Z');
 

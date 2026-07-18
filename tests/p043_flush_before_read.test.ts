@@ -2,7 +2,7 @@
 // P0.43: get_capture_data 读取 IndexedDB 前 flush 缓冲区，确保 stats 与 events 数据一致
 import { describe, expect, it } from 'vitest';
 import { category_for_event_type } from '../src/shared/event_category';
-import { increment_capture_event_stats, create_empty_capture_stats } from '../src/shared/capture_stats';
+import { increment_capture_event_stats, create_empty_capture_stats } from '../src/extension/shared/capture_stats';
 
 // 模拟 get_capture_data 的核心逻辑：先 flush 再读取
 // 验证 flush_all 在 get_events_by_category 之前被调用

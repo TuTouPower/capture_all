@@ -1,4 +1,4 @@
-import type { CaptureStats, CategoryKey } from './types';
+import type { CaptureStats, CategoryKey } from '../../shared/types';
 
 /**
  * 两套计数口径（勿混用）：

@@ -18,7 +18,7 @@ describe('entry_unification', () => {
     });
 
     it('export filename generation stays centralized', () => {
-        const export_settings = source('src/shared/export_settings.ts');
+        const export_settings = source('src/extension/shared/export_settings.ts');
         const popup = source('src/extension/popup/popup.ts');
 
         expect(export_settings).toMatch(/export function build_export_filename/);

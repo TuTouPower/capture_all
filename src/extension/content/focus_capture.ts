@@ -1,7 +1,7 @@
 // content/focus_capture.ts
 import type { CaptureEvent, FocusEventData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
-import { build_xpath } from '../../shared/dom_utils';
+import { build_xpath } from '../shared/dom_utils';
 
 const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
 

@@ -34,12 +34,12 @@ document.body.innerHTML = `
 `;
 
 // Minimal i18n/theme stubs so imports don't crash
-vi.mock('../src/shared/i18n', () => ({
+vi.mock('../src/extension/shared/i18n', () => ({
     init_locale: vi.fn(),
     t: (k: string) => k,
     apply_translations: vi.fn(),
 }));
-vi.mock('../src/shared/theme', () => ({
+vi.mock('../src/extension/shared/theme', () => ({
     init_theme: vi.fn(),
 }));
 vi.mock('../src/shared/logger', () => ({

@@ -18,7 +18,7 @@ import { start_print_capture, stop_print_capture } from './print_capture';
 import { start_websocket_capture, stop_websocket_capture } from './websocket_capture';
 import { DEFAULT_CONFIG } from '../../shared/constants';
 import { Logger, MessageLogTransport } from '../../shared/logger';
-import { start_status_poll, type CaptureStatusResponse } from '../../shared/poll_capture_status';
+import { start_status_poll, type CaptureStatusResponse } from '../shared/poll_capture_status';
 
 /** Unified sender type accepted by all content capture modules. */
 type ContentSender = (event: CaptureEvent, data?: unknown) => void;

@@ -1,6 +1,6 @@
 // content/dom_capture.ts
 import type { CaptureConfig, InputEventData } from '../../shared/types';
-import { build_xpath } from '../../shared/dom_utils';
+import { build_xpath } from '../shared/dom_utils';
 
 let is_capturing = false;
 let config: CaptureConfig;

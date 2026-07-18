@@ -34,12 +34,12 @@ document.body.innerHTML = `
 `;
 
 // ── Module stubs ─────────────────────────────────────────────
-vi.mock('../src/shared/i18n', () => ({
+vi.mock('../src/extension/shared/i18n', () => ({
     init_locale: vi.fn(),
     t: (k: string) => k,
     apply_translations: vi.fn(),
 }));
-vi.mock('../src/shared/theme', () => ({
+vi.mock('../src/extension/shared/theme', () => ({
     init_theme: vi.fn(),
 }));
 vi.mock('../src/shared/logger', () => ({
@@ -51,11 +51,11 @@ vi.mock('../src/shared/user_config', () => ({
 vi.mock('../src/shared/constants', () => ({
     DEFAULT_USER_CONFIG: {},
 }));
-vi.mock('../src/shared/export_utils', () => ({
+vi.mock('../src/extension/shared/export_utils', () => ({
     download_blob: vi.fn(),
     build_capture_filename: vi.fn(),
 }));
-vi.mock('../src/shared/archive_builder', () => ({
+vi.mock('../src/extension/shared/archive_builder', () => ({
     build_archive: vi.fn(),
 }));
 vi.mock('../src/shared/system_time', () => ({

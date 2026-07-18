@@ -1,7 +1,7 @@
 // dashboard/dashboard_settings.ts — 设置页
 import type { UserConfig, ThemeMode } from '../../shared/types';
-import { set_locale, type Locale, t } from '../../shared/i18n';
-import { set_theme } from '../../shared/theme';
+import { set_locale, type Locale, t } from '../shared/i18n';
+import { set_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { save_user_config } from '../../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../../shared/constants';
@@ -219,7 +219,7 @@ function wire_settings(): void {
 }
 
 async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
-    const { download_blob, build_log_filename } = await import('../../shared/export_utils');
+    const { download_blob, build_log_filename } = await import('../shared/export_utils');
     const update_size = async () => {
         const el = c.querySelector('#logSize') as HTMLInputElement | null;
         if (!el) return;

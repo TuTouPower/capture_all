@@ -33,7 +33,7 @@
     "mcp": "tsx src/mcp/main.ts",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:all": "playwright test",
-    "test:e2e:server": "npx tsx tests/fixtures/server.ts",
+    "test:e2e:server": "npx tsx tests/support/fixtures/server.ts",
     "build:bridge": "esbuild src/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs",
     "build:mcp": "esbuild src/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs",
     "build:zip": "cd artifacts/dist && zip -r ../extension.zip ."

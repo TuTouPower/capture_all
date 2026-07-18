@@ -14,7 +14,7 @@ process.env.NO_PROXY = no_proxy;
 process.env.no_proxy = no_proxy;
 
 export default defineConfig({
-    testDir: './tests',
+    testDir: './tests/e2e',
     outputDir: 'artifacts/test-results',
     timeout: 120_000,
     expect: { timeout: 15_000 },
@@ -25,7 +25,7 @@ export default defineConfig({
     webServer: [
         {
             command: 'npm run serve:e2e',
-            url: 'http://127.0.0.1:4174/src/popup/popup.html',
+            url: 'http://127.0.0.1:4174/src/extension/popup/popup.html',
             reuseExistingServer: true,
             timeout: 120000,
         },
@@ -57,7 +57,7 @@ export default defineConfig({
         },
         {
             name: 'e2e-t0001',
-            testDir: './e2e/T0001',
+            testDir: './tests/e2e/T0001',
             fullyParallel: false,
             workers: 1,
             retries: 0,
@@ -70,7 +70,7 @@ export default defineConfig({
         },
         {
             name: 'e2e-t0003',
-            testDir: './e2e/T0003',
+            testDir: './tests/e2e/T0003',
             fullyParallel: false,
             workers: 1,
             retries: 0,

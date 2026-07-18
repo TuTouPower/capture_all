@@ -210,3 +210,52 @@ verdict: FAIL
 第 4 轮独立 review 仍 FAIL。当前授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
 
 verdict: FAIL
+
+# T0011 Review (Round 5)
+
+## 裁决一：规格合规
+
+### Round 4 blocker 复核
+
+- Scanner 跨行 assignment、placeholder 标点后缀、shell `${VAR:-default}`、bracket env、ternary fallback、template 表达式内部 assignment：均改为完整 statement 合并 + RHS 字面量分析，已关闭。
+- AC-1 基础 Playwright 非零 discovery：新增可执行 Vitest/Playwright discovery gate；删除唯一基础 E2E 必失败。
+- `contract_matrix.json` 静态 1124 数字与 file-level allowlist 描述：已移除。
+
+### 不变量检查
+
+- INV-1 至 INV-5：守住。
+- AC-1、AC-2：通过。
+- AC-5：scanner 引入新放宽规则，与「真 secret 仍失败」精神冲突。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- focused Vitest 34 tests、full Vitest 92 files / 1113 tests、build、409-file scanner 均通过。
+- DB v4 mutation、legacy schema mutation、Bridge build 入口 mutation、Playwright discovery mutation 均按预期 FAIL。
+
+### 剩余阻断
+
+1. `is_safe_literal_value` 第 274 行 `/^[A-Za-z]+$/ && value.length < 12` 放过短纯字母硬编码 secret：
+   - `const PASSWORD = "supersecret";` PASS
+   - `const TOKEN = "tokensecret";` PASS
+   - `const API_KEY = "abcdefghijk";` PASS
+   - 与 AC-5「真 secret 仍失败」冲突。
+2. `is_safe_literal_value` 第 262 行 `/^\[[^\]]*\]$/` 整体豁免数组字面量：
+   - `const TOKENS = ["hunter2xx", "realsecret_abcd"];` PASS
+   - 未递归检查元素。
+3. 字符串拼接未合并求值：
+   - `const PASSWORD = "super" + "secret";` PASS
+   - 每个子串独立判 safe。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| 短纯字母硬编码 secret 被放过 | 否 | 删除 `^[A-Za-z]+$ && length<12` 规则或显著收紧；新增反例否证。 |
+| 数组字面量整体豁免 | 否 | 递归调用 rhs_contains_hardcoded_secret 检查每个元素。 |
+| 字符串拼接未合并 | 否 | 拼接两侧纯字面量合并后判定，或拼接两侧均满足 safe 才放过。 |
+
+第 5 轮独立 review 仍 FAIL（条件性）。恢复条件已满足，但 scanner 新引入的放宽规则与 AC-5 不变量冲突。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
+
+verdict: FAIL

@@ -183,7 +183,7 @@
     {
       "id": "T0011",
       "title": "test: 冻结重构行为与产物基线",
-      "status": "ready",
+      "status": "in_progress",
       "spec": "specs/T0011_refactor_baseline.md",
       "depends_on": [],
       "workset": [

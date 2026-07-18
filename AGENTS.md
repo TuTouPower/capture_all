@@ -122,7 +122,7 @@ Chrome MV3 扩展，采集浏览器内的用户行为、页面导航、网络请
 - `npm run dev` — Vite 开发
 - `npm run build` — `tsc && vite build && build:bridge && build:mcp && build:zip`，输出到 `artifacts/dist/`、`artifacts/bridge/`、`artifacts/mcp/`
 - `npm run bridge` — 启动 Bridge（`tsx src/bridge/main.ts`）
-- `npm run mcp` — 启动 MCP 服务端（`tsx src/agent/mcp/main.ts`）
+- `npm run mcp` — 启动 MCP 服务端（`tsx src/mcp/main.ts`）
 
 测试：
 

@@ -77,7 +77,7 @@ describe('package metadata', () => {
             + '--outfile=artifacts/bridge/bridge.mjs',
         );
         expect(package_json.scripts['build:mcp']).toBe(
-            'esbuild src/agent/mcp/main.ts --bundle --platform=node '
+            'esbuild src/mcp/main.ts --bundle --platform=node '
             + '--format=esm --external:ws '
             + '--outfile=artifacts/mcp/mcp.mjs',
         );

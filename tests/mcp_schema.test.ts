@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_TOOL_SCHEMAS } from '../src/agent/mcp/schemas';
+import { MCP_TOOL_SCHEMAS } from '../src/mcp/schemas';
 
 describe('MCP tool schemas', () => {
     // Helper: parse should succeed

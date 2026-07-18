@@ -10,4 +10,6 @@
 |----|------|------|-------|--------|------|
 | T001 | refactor: align agent docs layout with repo_template (Phase 0) | done | — | task_t001_align_repo_layout | commit `3a34685`；Phase 0 文档骨架 + 入口对齐 |
 | T002 | refactor: move agent protocol into src/shared (Phase 2) | done | — | task_t002_shared_protocol_relocate | commit `5c21a50`；扁平 src/shared；extension/shared 下沉留 Phase 3 |
-| T003 | refactor: move bridge sources to src/bridge (Phase 3a) | active | — | task_t002_shared_protocol_relocate | bridge 搬家；后续 Phase 共用此 branch |
+| T003 | refactor: move bridge sources to src/bridge (Phase 3a) | done | — | task_t002_shared_protocol_relocate | commit `e2a7f86` |
+| T004 | refactor: move mcp sources to src/mcp (Phase 3b) | done | — | task_t002_shared_protocol_relocate | commit pending；src/agent/ 已删 |
+| T005 | refactor: move extension surfaces + manifest + _locales (Phase 3c) | backlog | — | — | 最大子任务；待开 |

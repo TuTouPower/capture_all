@@ -201,7 +201,7 @@ describe('export_har: include_response_body', () => {
 // ------------------------------------------------------------------
 describe('MCP schema: output_path / include_response_body', () => {
     it('export_capture accepts output_path', async () => {
-        const { MCP_TOOL_SCHEMAS } = await import('../src/agent/mcp/schemas');
+        const { MCP_TOOL_SCHEMAS } = await import('../src/mcp/schemas');
         const parsed = MCP_TOOL_SCHEMAS.export_capture.parse({
             capture_id: 'cap_1',
             format: 'json',
@@ -211,7 +211,7 @@ describe('MCP schema: output_path / include_response_body', () => {
     });
 
     it('export_capture accepts include_response_body', async () => {
-        const { MCP_TOOL_SCHEMAS } = await import('../src/agent/mcp/schemas');
+        const { MCP_TOOL_SCHEMAS } = await import('../src/mcp/schemas');
         const parsed = MCP_TOOL_SCHEMAS.export_capture.parse({
             capture_id: 'cap_1',
             format: 'json',
@@ -221,7 +221,7 @@ describe('MCP schema: output_path / include_response_body', () => {
     });
 
     it('export_capture rejects empty output_path', async () => {
-        const { MCP_TOOL_SCHEMAS } = await import('../src/agent/mcp/schemas');
+        const { MCP_TOOL_SCHEMAS } = await import('../src/mcp/schemas');
         expect(() => MCP_TOOL_SCHEMAS.export_capture.parse({
             capture_id: 'cap_1',
             format: 'json',
@@ -230,7 +230,7 @@ describe('MCP schema: output_path / include_response_body', () => {
     });
 
     it('get_all_capture_data accepts output_path', async () => {
-        const { MCP_TOOL_SCHEMAS } = await import('../src/agent/mcp/schemas');
+        const { MCP_TOOL_SCHEMAS } = await import('../src/mcp/schemas');
         const parsed = MCP_TOOL_SCHEMAS.get_all_capture_data.parse({
             capture_id: 'cap_1',
             output_path: '/tmp/all.json',
@@ -239,7 +239,7 @@ describe('MCP schema: output_path / include_response_body', () => {
     });
 
     it('export_session shares the extended schema', async () => {
-        const { MCP_TOOL_SCHEMAS } = await import('../src/agent/mcp/schemas');
+        const { MCP_TOOL_SCHEMAS } = await import('../src/mcp/schemas');
         const parsed = MCP_TOOL_SCHEMAS.export_session.parse({
             capture_id: 'cap_1',
             format: 'har',

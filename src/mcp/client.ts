@@ -1,4 +1,4 @@
-import type { AgentCommandResult, AgentCommandType, AgentError, AgentStatus } from '../../shared/protocol';
+import type { AgentCommandResult, AgentCommandType, AgentError, AgentStatus } from '../shared/protocol';
 
 interface BridgeErrorResponse {
     error?: AgentError;

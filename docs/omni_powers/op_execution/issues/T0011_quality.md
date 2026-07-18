@@ -32,4 +32,4 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 恢复条件
 
-需用户显式授权突破两轮 review 上限，追加第 3 轮 implementer/reviewer；或批准修改流程/规格。建议继续追加修复轮，不降低 AC-2/AC-5。
+用户于 2026-07-18 明确授权突破两轮 review 上限，追加第 3 轮 implementer/reviewer。修复范围仅限 scanner secret bypass 与 IndexedDB 全量 schema 矩阵；不降低 AC-2/AC-5。

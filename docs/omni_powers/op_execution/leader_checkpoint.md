@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 blocked_by=quality：两轮 review 已到上限。需用户显式授权追加修复/review 轮，处理 scanner secret bypass 与 IndexedDB 全量 schema 矩阵；不得进入 T0012。
+T0011 in_progress：用户于 2026-07-18 显式授权追加第 3 轮。仅修复 scanner secret bypass 与 IndexedDB 全量 schema 矩阵，随后重审；通过前不得进入 T0012。
 
 ## 本批次（2026-07-18 intake）
 

@@ -4,7 +4,6 @@
 
 ### current_task
 
-全部完成
 
 ### last_completed
 
@@ -12,36 +11,36 @@ T0010
 
 ### next_step
 
-批次完成，可进行收尾或启动新批次
-## 本批次（2026-07-16 intake）
+T0011 ready：先提交批准后的 intake 元数据，再创建 task 分支，按 merge gate 完成基线测试与 scanner 治理。
 
-主题：**MCP/Bridge 边界重构 + 多浏览器自动绑定（用户只设浏览器编号）**
+## 本批次（2026-07-18 intake）
 
-| TID | 标题 | status | depends_on |
-|---|---|---|---|
-| T0004 | Bridge 多实例注册表 + 每实例队列 | done | — |
-| T0005 | Bridge enroll + instance_token hash | done | T0004 |
-| T0006 | 扩展 browser_no + 自动连接 | done | T0005 |
-| T0007 | MCP list_browsers + browser_no 透传 + schema 瘦身 | done | T0004 |
-| T0008 | SessionStart 自动 bridge + 注入 mcp token | done | T0005 |
-| T0009 | 本机配对批准 S1 | done | T0005, T0006 |
-| T0010 | 文档对齐 agent_mcp 边界 | done | T0006–T0009 |
+主题：**按运行产品分区完成整仓目录改造，并在纯迁移总门后深化 modules**
 
-### 产品默认决策（写入 draft spec，待闸门 A 确认）
+### 基线
 
-1. MCP 不存浏览器 token；只持 bridge 通道配置
-2. Bridge 存注册表与 token hash，负责路由/顶替
-3. 用户只设 `browser_no`；对话用编号
-4. 多 online 写操作必须指定编号（`TARGET_REQUIRED`）
-5. 安全默认 S1 配对批准；S0 仅 dev
-6. 同号 re-enroll 顶替旧连接
+- Vitest: 90 files / 1079 tests 全绿
+- 基础 Extension E2E: 1 passed
+- Build: Extension、Bridge、MCP、zip 全部成功
+- 固化对象: manifest 入口、IndexedDB v3 schema、Bridge route/auth 矩阵、token 四级 fallback、导出/XSS
+- tracked-tree scanner 当前 22 findings 已分类；T0011 以精确规则治理，禁止目录级放行
 
-### 代码侧已合入、待 T0010 写入 blueprint
+### 任务拓扑
 
-- 大导出 `output_path` / 瘦身 / **>1MB 自动落盘**（`da722d5`, `5649916`）
+| 范围 | 内容 | gate |
+|---|---|---|
+| T0011 | 行为与产物基线 | 新批次起点 |
+| T0012–T0020 | workspace + 三 packages/三产品纯迁移 | T0020 轨 A 总门 |
+| T0021–T0030 | package 规范化、Extension/Bridge/MCP deep modules | 轨 B |
+| T0031 | 测试树重组 | unit/integration/e2e 非零发现 |
+| T0032 | 活动文档/CI/扫描/旧树收口 | 最终全矩阵 |
 
-## 关键上下文
+### 已确认决策
 
-- T0001–T0003 已 done（历史流程偏差见 decisions）
-- 本机：`.claude/skills` heavy bind；`OP_DOCS_DIR=docs/omni_powers`
-- open issues 仍多——可另 `/optriage`，与本批次解耦
+1. 目标结构采用 `apps/extension`、`apps/bridge`、`apps/mcp`、`packages/*`、分层 `tests/`、集中 `tooling/`
+2. 允许破坏性源码路径升级，但不丢 IndexedDB 历史数据、不削弱 Bridge 安全
+3. `artifacts/dist` 保持
+4. Bridge token 保持 `CLI > env > persisted file > generated`，生成文件 mode `0600`
+5. MCP token 对 Extension 数据路由 bootstrap 兼容保留；instance token 不得访问 MCP/CDP
+6. 纯迁移与 interface 深化不交错；T0020 未通过不得启动 T0021
+7. 当前 `.claude/settings.json` 用户修改保留，不纳入本批次 task workset

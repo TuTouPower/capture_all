@@ -179,6 +179,676 @@
       ],
       "eval": "required",
       "blocked_by": null
+    },
+    {
+      "id": "T0011",
+      "title": "test: 冻结重构行为与产物基线",
+      "status": "ready",
+      "spec": "specs/T0011_refactor_baseline.md",
+      "depends_on": [],
+      "workset": [
+        "scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0012",
+      "title": "refactor: 建立 workspace 与 tooling 骨架",
+      "status": "ready",
+      "spec": "specs/T0012_workspace_tooling_skeleton.md",
+      "depends_on": [
+        "T0011"
+      ],
+      "workset": [
+        "package.json",
+        "package-lock.json",
+        "tsconfig.json",
+        "tsconfig.base.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "playwright.config.ts",
+        ".github/workflows/ci.yml",
+        "scripts/capture_store_screenshots.mjs",
+        "scripts/generate_icons.mjs",
+        "scripts/outline_svg_text.py",
+        "scripts/scan_tracked_tree.mjs",
+        "tooling/typescript/tsconfig.browser.json",
+        "tooling/typescript/tsconfig.node.json",
+        "tooling/typescript/tsconfig.test.json",
+        "tooling/build/vite.config.ts",
+        "tooling/build/build_bridge.mjs",
+        "tooling/build/build_mcp.mjs",
+        "tooling/build/build_zip.mjs",
+        "tooling/test/vitest.config.ts",
+        "tooling/test/playwright.config.ts",
+        "tooling/scripts/capture_store_screenshots.mjs",
+        "tooling/scripts/generate_icons.mjs",
+        "tooling/scripts/outline_svg_text.py",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0013",
+      "title": "refactor: 纯迁移 shared_kernel 与 agent_protocol",
+      "status": "ready",
+      "spec": "specs/T0013_shared_kernel_agent_protocol_migration.md",
+      "depends_on": [
+        "T0012"
+      ],
+      "workset": [
+        "src/shared/escape.ts",
+        "src/shared/hash.ts",
+        "src/shared/id.ts",
+        "src/agent/shared/protocol.ts",
+        "packages/shared_kernel/package.json",
+        "packages/shared_kernel/tsconfig.json",
+        "packages/shared_kernel/src/index.ts",
+        "packages/shared_kernel/src/escape.ts",
+        "packages/shared_kernel/src/hash.ts",
+        "packages/shared_kernel/src/id.ts",
+        "packages/agent_protocol/package.json",
+        "packages/agent_protocol/tsconfig.json",
+        "packages/agent_protocol/src/index.ts",
+        "packages/agent_protocol/src/protocol.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0014",
+      "title": "refactor: 纯迁移 capture_domain 遗留模块",
+      "status": "ready",
+      "spec": "specs/T0014_capture_domain_legacy_migration.md",
+      "depends_on": [
+        "T0013"
+      ],
+      "workset": [
+        "src/shared/types.ts",
+        "src/shared/constants.ts",
+        "src/shared/redaction.ts",
+        "src/shared/event_utils.ts",
+        "src/shared/event_category.ts",
+        "src/shared/capture_stats.ts",
+        "src/shared/body_routing.ts",
+        "src/shared/archive_builder.ts",
+        "src/shared/export_utils.ts",
+        "src/shared/export_settings.ts",
+        "src/shared/system_time.ts",
+        "packages/capture_domain/package.json",
+        "packages/capture_domain/tsconfig.json",
+        "packages/capture_domain/src/index.ts",
+        "packages/capture_domain/src/legacy/types.ts",
+        "packages/capture_domain/src/legacy/constants.ts",
+        "packages/capture_domain/src/legacy/redaction.ts",
+        "packages/capture_domain/src/legacy/event_utils.ts",
+        "packages/capture_domain/src/legacy/event_category.ts",
+        "packages/capture_domain/src/legacy/capture_stats.ts",
+        "packages/capture_domain/src/legacy/body_routing.ts",
+        "packages/capture_domain/src/legacy/archive_builder.ts",
+        "packages/capture_domain/src/legacy/export_utils.ts",
+        "packages/capture_domain/src/legacy/export_settings.ts",
+        "packages/capture_domain/src/legacy/system_time.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0015",
+      "title": "refactor: 纯迁移 Extension 静态入口与 Content",
+      "status": "ready",
+      "spec": "specs/T0015_extension_content_migration.md",
+      "depends_on": [
+        "T0014"
+      ],
+      "workset": [
+        "manifest.json",
+        "vite.config.ts",
+        "_locales/en/messages.json",
+        "_locales/zh_CN/messages.json",
+        "assets/icons/icon.svg",
+        "assets/icons/icon16.png",
+        "assets/icons/icon32.png",
+        "assets/icons/icon48.png",
+        "assets/icons/icon128.png",
+        "assets/icons/icon300.png",
+        "apps/extension/package.json",
+        "apps/extension/manifest.json",
+        "apps/extension/_locales/en/messages.json",
+        "apps/extension/_locales/zh_CN/messages.json",
+        "apps/extension/assets/icons/icon.svg",
+        "apps/extension/assets/icons/icon16.png",
+        "apps/extension/assets/icons/icon32.png",
+        "apps/extension/assets/icons/icon48.png",
+        "apps/extension/assets/icons/icon128.png",
+        "apps/extension/assets/icons/icon300.png",
+        "src/content/clipboard_capture.ts",
+        "src/content/content_event_utils.ts",
+        "src/content/content_script.ts",
+        "src/content/dom_capture.ts",
+        "src/content/focus_capture.ts",
+        "src/content/form_submit_capture.ts",
+        "src/content/fullscreen_capture.ts",
+        "src/content/keyboard_capture.ts",
+        "src/content/mouse_capture.ts",
+        "src/content/network_hook.ts",
+        "src/content/print_capture.ts",
+        "src/content/resize_capture.ts",
+        "src/content/scroll_capture.ts",
+        "src/content/storage_capture.ts",
+        "src/content/visibility_capture.ts",
+        "src/content/websocket_capture.ts",
+        "apps/extension/content/clipboard_capture.ts",
+        "apps/extension/content/content_event_utils.ts",
+        "apps/extension/content/content_script.ts",
+        "apps/extension/content/dom_capture.ts",
+        "apps/extension/content/focus_capture.ts",
+        "apps/extension/content/form_submit_capture.ts",
+        "apps/extension/content/fullscreen_capture.ts",
+        "apps/extension/content/keyboard_capture.ts",
+        "apps/extension/content/mouse_capture.ts",
+        "apps/extension/content/network_hook.ts",
+        "apps/extension/content/print_capture.ts",
+        "apps/extension/content/resize_capture.ts",
+        "apps/extension/content/scroll_capture.ts",
+        "apps/extension/content/storage_capture.ts",
+        "apps/extension/content/visibility_capture.ts",
+        "apps/extension/content/websocket_capture.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0016",
+      "title": "refactor: 纯迁移 Extension UI",
+      "status": "ready",
+      "spec": "specs/T0016_extension_ui_migration.md",
+      "depends_on": [
+        "T0015"
+      ],
+      "workset": [
+        "vite.config.ts",
+        "apps/extension/manifest.json",
+        "src/popup/popup.css",
+        "src/popup/popup.html",
+        "src/popup/popup.ts",
+        "apps/extension/ui/popup/popup.css",
+        "apps/extension/ui/popup/popup.html",
+        "apps/extension/ui/popup/popup.ts",
+        "src/dashboard/dashboard-pages.css",
+        "src/dashboard/dashboard.css",
+        "src/dashboard/dashboard.html",
+        "src/dashboard/dashboard.ts",
+        "src/dashboard/dashboard_captures.ts",
+        "src/dashboard/dashboard_detail.ts",
+        "src/dashboard/dashboard_integrations.ts",
+        "src/dashboard/dashboard_settings.ts",
+        "src/dashboard/dashboard_shared.ts",
+        "src/dashboard/detail-shell.css",
+        "src/dashboard/detail-views.css",
+        "src/dashboard/icons.ts",
+        "src/dashboard/sidebar_resize.ts",
+        "apps/extension/ui/dashboard/dashboard-pages.css",
+        "apps/extension/ui/dashboard/dashboard.css",
+        "apps/extension/ui/dashboard/dashboard.html",
+        "apps/extension/ui/dashboard/dashboard.ts",
+        "apps/extension/ui/dashboard/dashboard_captures.ts",
+        "apps/extension/ui/dashboard/dashboard_detail.ts",
+        "apps/extension/ui/dashboard/dashboard_integrations.ts",
+        "apps/extension/ui/dashboard/dashboard_settings.ts",
+        "apps/extension/ui/dashboard/dashboard_shared.ts",
+        "apps/extension/ui/dashboard/detail-shell.css",
+        "apps/extension/ui/dashboard/detail-views.css",
+        "apps/extension/ui/dashboard/icons.ts",
+        "apps/extension/ui/dashboard/sidebar_resize.ts",
+        "src/devtools/devtools.html",
+        "src/devtools/devtools.ts",
+        "src/devtools/devtools_panel.html",
+        "src/devtools/devtools_panel.ts",
+        "apps/extension/ui/devtools/devtools.html",
+        "apps/extension/ui/devtools/devtools.ts",
+        "apps/extension/ui/devtools/devtools_panel.html",
+        "apps/extension/ui/devtools/devtools_panel.ts",
+        "src/shared/i18n.ts",
+        "src/shared/theme.ts",
+        "src/shared/dom_utils.ts",
+        "src/shared/user_config.ts",
+        "src/shared/poll_capture_status.ts",
+        "src/shared/design_tokens.css",
+        "apps/extension/ui/shared/i18n.ts",
+        "apps/extension/ui/shared/theme.ts",
+        "apps/extension/ui/shared/dom_utils.ts",
+        "apps/extension/ui/shared/user_config.ts",
+        "apps/extension/ui/shared/poll_capture_status.ts",
+        "apps/extension/ui/shared/design_tokens.css"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0017",
+      "title": "refactor: 纯迁移 Background capture adapters",
+      "status": "ready",
+      "spec": "specs/T0017_background_capture_adapters_migration.md",
+      "depends_on": [
+        "T0016"
+      ],
+      "workset": [
+        "src/background/network_capture.ts",
+        "src/background/network_context.ts",
+        "src/background/network_correlator.ts",
+        "src/background/network_webrequest.ts",
+        "src/background/webrequest_handler.ts",
+        "src/background/ws_handler.ts",
+        "src/background/cdp_handler.ts",
+        "src/background/cdp_event_router.ts",
+        "src/background/body_capture_coordinator.ts",
+        "src/background/stream_buffer.ts",
+        "src/background/console_capture.ts",
+        "src/background/exception_capture.ts",
+        "src/background/cookie_capture.ts",
+        "src/background/external_cdp_bridge_client.ts",
+        "apps/extension/background/capture/network_capture.ts",
+        "apps/extension/background/capture/network_context.ts",
+        "apps/extension/background/capture/network_correlator.ts",
+        "apps/extension/background/capture/network_webrequest.ts",
+        "apps/extension/background/capture/webrequest_handler.ts",
+        "apps/extension/background/capture/ws_handler.ts",
+        "apps/extension/background/capture/cdp_handler.ts",
+        "apps/extension/background/capture/cdp_event_router.ts",
+        "apps/extension/background/capture/body_capture_coordinator.ts",
+        "apps/extension/background/capture/stream_buffer.ts",
+        "apps/extension/background/capture/console_capture.ts",
+        "apps/extension/background/capture/exception_capture.ts",
+        "apps/extension/background/capture/cookie_capture.ts",
+        "apps/extension/background/capture/external_cdp_bridge_client.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0018",
+      "title": "refactor: 纯迁移 Background 核心与 adapters",
+      "status": "ready",
+      "spec": "specs/T0018_extension_background_migration.md",
+      "depends_on": [
+        "T0017"
+      ],
+      "workset": [
+        "vite.config.ts",
+        "apps/extension/manifest.json",
+        "src/background/storage.ts",
+        "src/background/app_log_storage.ts",
+        "src/background/exporter.ts",
+        "src/background/agent_bridge_client.ts",
+        "src/background/agent_command_dispatcher.ts",
+        "src/background/agent_data_queries.ts",
+        "src/background/keepalive.ts",
+        "src/background/service_worker.ts",
+        "src/shared/logger.ts",
+        "src/shared/capture_data_reader.ts",
+        "src/shared/agent_bridge_config.ts",
+        "src/shared/chrome.d.ts",
+        "apps/extension/background/persistence/storage.ts",
+        "apps/extension/background/persistence/app_log_storage.ts",
+        "apps/extension/background/export/exporter.ts",
+        "apps/extension/background/agent/agent_bridge_client.ts",
+        "apps/extension/background/agent/agent_command_dispatcher.ts",
+        "apps/extension/background/agent/agent_data_queries.ts",
+        "apps/extension/background/tabs/keepalive.ts",
+        "apps/extension/background/service_worker.ts",
+        "apps/extension/runtime/legacy/logger.ts",
+        "apps/extension/runtime/legacy/capture_data_reader.ts",
+        "apps/extension/runtime/legacy/agent_bridge_config.ts",
+        "apps/extension/runtime/chrome.d.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0019",
+      "title": "refactor: 纯迁移 Bridge 产品",
+      "status": "ready",
+      "spec": "specs/T0019_bridge_product_migration.md",
+      "depends_on": [
+        "T0018"
+      ],
+      "workset": [
+        "package.json",
+        "src/agent/bridge/cdp_handler.ts",
+        "src/agent/bridge/command_queue.ts",
+        "src/agent/bridge/config.ts",
+        "src/agent/bridge/main.ts",
+        "src/agent/bridge/server.ts",
+        "apps/bridge/package.json",
+        "apps/bridge/tsconfig.json",
+        "apps/bridge/cdp_handler.ts",
+        "apps/bridge/command_queue.ts",
+        "apps/bridge/config.ts",
+        "apps/bridge/main.ts",
+        "apps/bridge/server.ts",
+        "tooling/build/build_bridge.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0020",
+      "title": "refactor: 纯迁移 MCP 产品并关闭迁移轨",
+      "status": "ready",
+      "spec": "specs/T0020_mcp_product_migration_gate.md",
+      "depends_on": [
+        "T0019"
+      ],
+      "workset": [
+        "package.json",
+        ".mcp.json.example",
+        "src/agent/mcp/client.ts",
+        "src/agent/mcp/main.ts",
+        "src/agent/mcp/schemas.ts",
+        "src/agent/mcp/tools.ts",
+        "apps/mcp/package.json",
+        "apps/mcp/tsconfig.json",
+        "apps/mcp/client.ts",
+        "apps/mcp/main.ts",
+        "apps/mcp/schemas.ts",
+        "apps/mcp/tools.ts",
+        "tooling/build/build_mcp.mjs",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0021",
+      "title": "refactor: 按知识所有权规范化三个 packages",
+      "status": "ready",
+      "spec": "specs/T0021_package_ownership_normalization.md",
+      "depends_on": [
+        "T0020"
+      ],
+      "workset": [
+        "packages/shared_kernel/src/index.ts",
+        "packages/capture_domain/src/index.ts",
+        "packages/capture_domain/src/capture.ts",
+        "packages/capture_domain/src/event.ts",
+        "packages/capture_domain/src/config.ts",
+        "packages/capture_domain/src/export.ts",
+        "packages/capture_domain/src/persistence.ts",
+        "packages/capture_domain/src/logging.ts",
+        "packages/capture_domain/src/legacy/types.ts",
+        "packages/capture_domain/src/legacy/constants.ts",
+        "packages/agent_protocol/src/index.ts",
+        "packages/agent_protocol/src/protocol.ts",
+        "apps/extension/ui/shared/user_config.ts",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0022",
+      "title": "refactor: 建立 Extension 数据 seams",
+      "status": "ready",
+      "spec": "specs/T0022_extension_data_seams.md",
+      "depends_on": [
+        "T0021"
+      ],
+      "workset": [
+        "packages/capture_domain/src/index.ts",
+        "packages/capture_domain/src/logging.ts",
+        "packages/capture_domain/src/persistence.ts",
+        "packages/capture_domain/src/snapshot.ts",
+        "apps/extension/runtime/log_client.ts",
+        "apps/extension/runtime/capture_snapshot_gateway.ts",
+        "apps/extension/background/persistence/app_log_storage.ts",
+        "apps/extension/background/persistence/storage.ts",
+        "apps/extension/runtime/legacy/logger.ts",
+        "apps/extension/runtime/legacy/capture_data_reader.ts",
+        "apps/extension/ui/popup/popup.ts",
+        "apps/extension/ui/dashboard/dashboard.ts",
+        "apps/extension/ui/dashboard/dashboard_shared.ts",
+        "apps/extension/ui/devtools/devtools.ts",
+        "apps/extension/ui/devtools/devtools_panel.ts",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0023",
+      "title": "refactor: 建立 typed Extension messages",
+      "status": "ready",
+      "spec": "specs/T0023_typed_extension_messages.md",
+      "depends_on": [
+        "T0022"
+      ],
+      "workset": [
+        "packages/agent_protocol/src/index.ts",
+        "packages/agent_protocol/src/extension_messages.ts",
+        "apps/extension/runtime/messages.ts",
+        "apps/extension/runtime/client.ts",
+        "apps/extension/background/messaging/message_router.ts",
+        "apps/extension/background/service_worker.ts",
+        "apps/extension/content/content_script.ts",
+        "apps/extension/ui/popup/popup.ts",
+        "apps/extension/ui/dashboard/dashboard.ts",
+        "apps/extension/ui/dashboard/dashboard_captures.ts",
+        "apps/extension/ui/dashboard/dashboard_detail.ts",
+        "apps/extension/ui/dashboard/dashboard_settings.ts",
+        "apps/extension/ui/dashboard/dashboard_shared.ts",
+        "apps/extension/ui/devtools/devtools.ts",
+        "apps/extension/ui/devtools/devtools_panel.ts",
+        "apps/extension/background/agent/agent_bridge_client.ts",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0024",
+      "title": "refactor: 提取 TabEventCapture 与 background 路由",
+      "status": "ready",
+      "spec": "specs/T0024_tab_event_capture.md",
+      "depends_on": [
+        "T0023"
+      ],
+      "workset": [
+        "apps/extension/background/service_worker.ts",
+        "apps/extension/background/messaging/message_router.ts",
+        "apps/extension/background/tabs/tab_event_capture.ts",
+        "apps/extension/background/tabs/keepalive.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0025",
+      "title": "refactor: 提取 CaptureRuntime 与 background main",
+      "status": "ready",
+      "spec": "specs/T0025_capture_runtime_background_main.md",
+      "depends_on": [
+        "T0024"
+      ],
+      "workset": [
+        "vite.config.ts",
+        "apps/extension/manifest.json",
+        "apps/extension/background/service_worker.ts",
+        "apps/extension/background/main.ts",
+        "apps/extension/background/capture_runtime/capture_runtime.ts",
+        "apps/extension/background/capture_runtime/stop_pipeline.ts",
+        "apps/extension/background/messaging/message_router.ts",
+        "apps/extension/background/tabs/tab_event_capture.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0026",
+      "title": "refactor: 深化 IndexedDB persistence module",
+      "status": "ready",
+      "spec": "specs/T0026_indexeddb_persistence_module.md",
+      "depends_on": [
+        "T0025"
+      ],
+      "workset": [
+        "packages/capture_domain/src/index.ts",
+        "packages/capture_domain/src/persistence.ts",
+        "apps/extension/background/persistence/storage.ts",
+        "apps/extension/background/persistence/indexeddb_schema.ts",
+        "apps/extension/background/persistence/capture_store.ts",
+        "apps/extension/background/persistence/event_store.ts",
+        "apps/extension/background/persistence/buffered_writer.ts",
+        "apps/extension/background/persistence/capture_size_tracker.ts",
+        "apps/extension/background/persistence/legacy_storage_decoder.ts",
+        "apps/extension/background/agent/agent_data_queries.ts",
+        "apps/extension/runtime/capture_snapshot_gateway.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0027",
+      "title": "refactor: 建立统一 CaptureExporter module",
+      "status": "ready",
+      "spec": "specs/T0027_capture_exporter_module.md",
+      "depends_on": [
+        "T0026"
+      ],
+      "workset": [
+        "packages/capture_domain/src/index.ts",
+        "packages/capture_domain/src/export.ts",
+        "packages/capture_domain/src/capture_exporter.ts",
+        "packages/capture_domain/src/json_exporter.ts",
+        "packages/capture_domain/src/jsonl_exporter.ts",
+        "packages/capture_domain/src/har_exporter.ts",
+        "packages/capture_domain/src/html_exporter.ts",
+        "apps/extension/background/export/exporter.ts",
+        "apps/extension/background/export/export_gateway.ts",
+        "apps/extension/ui/popup/popup.ts",
+        "apps/extension/ui/dashboard/dashboard.ts",
+        "apps/extension/background/agent/agent_command_dispatcher.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0028",
+      "title": "refactor: 深化 Bridge HTTP 与认证 modules",
+      "status": "ready",
+      "spec": "specs/T0028_bridge_http_auth_modules.md",
+      "depends_on": [
+        "T0021"
+      ],
+      "workset": [
+        "apps/bridge/config.ts",
+        "apps/bridge/server.ts",
+        "apps/bridge/http/bridge_server.ts",
+        "apps/bridge/http/request_body.ts",
+        "apps/bridge/http/response.ts",
+        "apps/bridge/http/route_policy.ts",
+        "apps/bridge/auth/mcp_authenticator.ts",
+        "apps/bridge/auth/instance_authenticator.ts",
+        "apps/bridge/auth/token_hash.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0029",
+      "title": "refactor: 深化 Bridge 实例、配对、命令与 CDP modules",
+      "status": "ready",
+      "spec": "specs/T0029_bridge_domain_modules.md",
+      "depends_on": [
+        "T0028"
+      ],
+      "workset": [
+        "apps/bridge/main.ts",
+        "apps/bridge/server.ts",
+        "apps/bridge/command_queue.ts",
+        "apps/bridge/cdp_handler.ts",
+        "apps/bridge/http/bridge_server.ts",
+        "apps/bridge/instances/instance_registry.ts",
+        "apps/bridge/instances/target_resolver.ts",
+        "apps/bridge/pairing/pairing_manager.ts",
+        "apps/bridge/commands/command_gateway.ts",
+        "apps/bridge/commands/command_queue.ts",
+        "apps/bridge/cdp/cdp_adapter.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0030",
+      "title": "refactor: 深化 MCP tool registry 与 executor",
+      "status": "ready",
+      "spec": "specs/T0030_mcp_tool_modules.md",
+      "depends_on": [
+        "T0029"
+      ],
+      "workset": [
+        "apps/mcp/main.ts",
+        "apps/mcp/client.ts",
+        "apps/mcp/schemas.ts",
+        "apps/mcp/tools.ts",
+        "apps/mcp/bridge_client/bridge_client.ts",
+        "apps/mcp/tool_registry/tool_registry.ts",
+        "apps/mcp/tool_executor/tool_executor.ts",
+        "apps/mcp/schemas/tool_schemas.ts",
+        "packages/agent_protocol/src/index.ts",
+        "packages/agent_protocol/src/protocol.ts"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0031",
+      "title": "test: 重组测试与 runner 发现规则",
+      "status": "ready",
+      "spec": "specs/T0031_test_tree_reorganization.md",
+      "depends_on": [
+        "T0027",
+        "T0030"
+      ],
+      "workset": [
+        "package.json",
+        "vitest.config.ts",
+        "playwright.config.ts",
+        "tooling/test/vitest.config.ts",
+        "tooling/test/playwright.config.ts",
+        ".github/workflows/ci.yml"
+      ],
+      "eval": "required",
+      "blocked_by": null
+    },
+    {
+      "id": "T0032",
+      "title": "refactor: 对齐文档、CI、扫描规则并删除旧树",
+      "status": "ready",
+      "spec": "specs/T0032_final_cleanup_docs_ci.md",
+      "depends_on": [
+        "T0031"
+      ],
+      "workset": [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "README.md",
+        "README.en.md",
+        "CONTRIBUTING.md",
+        "docs/deployment.md",
+        "docs/mcp_usage.md",
+        "docs/troubleshooting.md",
+        "docs/contributing_dev.md",
+        ".github/workflows/ci.yml",
+        ".mcp.json.example",
+        ".gitignore",
+        "package.json",
+        "tooling/scripts/scan_tracked_tree.mjs"
+      ],
+      "eval": "required",
+      "blocked_by": null
     }
   ]
 }

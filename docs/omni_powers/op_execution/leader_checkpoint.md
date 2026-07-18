@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 in_progress：用户于 2026-07-18 明确授权第 6 轮 implementer/reviewer。范围固定为收紧 `is_safe_literal_value` 短纯字母规则、数组字面量递归检查、字符串拼接合并判定，并补真实 CLI 反例；通过独立 review 前不得进入 evaluator、merge gate 或 T0012。
+T0011 blocked_by=quality：第 6 轮独立 review FAIL。Round 5 三 blocker 第 1、2 关闭，第 3 部分关闭；新增括号包裹字符串拼接、logical assignment `||=`/`&&=`/`??=` 绕过。当前授权轮次已用尽；用户再次明确授权前不得继续 implementer/reviewer，不得进入 evaluator、merge gate 或 T0012。
 
 ## 本批次（2026-07-18 intake）
 

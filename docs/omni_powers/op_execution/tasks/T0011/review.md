@@ -259,3 +259,50 @@ verdict: FAIL
 第 5 轮独立 review 仍 FAIL（条件性）。恢复条件已满足，但 scanner 新引入的放宽规则与 AC-5 不变量冲突。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
 
 verdict: FAIL
+
+# T0011 Review (Round 6)
+
+## 裁决一：规格合规
+
+### Round 5 blocker 复核
+
+- `is_safe_literal_value` 短纯字母规则改为 `safe_literal_allowlist` 白名单：已关闭，`supersecret`、`tokensecret`、`abcdefghijk` 等短纯字母 secret 均触发 exit 1。
+- 数组字面量通过 `split_array_elements` 递归检查每个元素：已关闭，嵌套数组、对象、模板、ternary、env fallback 元素均检测。
+- 字符串拼接通过 `concatenate_string_literals` 合并后判定：部分关闭；裸拼接 `"super"+"secret"` 已检测，但括号包裹形式仍 miss。
+
+### 不变量检查
+
+- INV-1 至 INV-5：守住。
+- AC-1、AC-2、AC-4：通过。
+- AC-5：字符串括号包裹拼接与 logical assignment 仍可绕过。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- focused Vitest 39 tests、full Vitest 92 files / 1118 tests、build、409-file scanner 均通过。
+- DB v4、legacy schema、Bridge build 入口、删除基础 E2E discovery mutation 均按预期 FAIL。
+- Round 5 三个 blocker 中第 1、2 完全关闭。
+
+### 剩余阻断
+
+1. 括号/嵌套括号包裹的字符串拼接绕过合并判定：
+   - `const PASSWORD = ("super" + "secret");` exit 0
+   - `const TOKEN = (("super") + (("secret")));` exit 0
+   - `concatenate_string_literals` 要求 RHS 以引号字符开头，外层括号使其返回 null；fallback 走逐字面量循环，每个子串 < 8 字符不被识别为 secret-like。
+2. logical assignment `||=`、`&&=`、`??=` 完全不解析：
+   - `API_KEY ||= "real_secret";` exit 0
+   - `API_KEY ??= "real_secret";` exit 0
+   - `extract_assignments` 仅识别 ident 后跟 `:` 或 `=`。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| 括号包裹字符串拼接绕过 | 否 | `rhs_contains_hardcoded_secret` 或 `concatenate_string_literals` 剥离首尾匹配的 `()` 后再合并判定。 |
+| logical assignment 不解析 | 否 | `extract_assignments` 增加 `\|\|=`、`&&=`、`??=` 识别。 |
+| 方法调用形式拼接（如 `["a","b"].join("")`） | 是 | 超出本轮范围，列为后续 issue；要求 AST 才能解。 |
+
+第 6 轮独立 review 仍 FAIL。Round 5 三 blocker 字面已关闭，但字符串拼接合并判定的精神未完整关闭（括号包裹），且 `||=`/`??=` 类 logical assignment 完全不解析。授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
+
+verdict: FAIL

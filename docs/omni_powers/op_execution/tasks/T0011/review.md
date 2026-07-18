@@ -162,3 +162,51 @@ verdict: FAIL
 第 3 轮仍 FAIL。用户授权的额外 review 轮已用尽；恢复 `blocked_by=quality`，不得进入 evaluator、merge gate 或 T0012。
 
 verdict: FAIL
+
+# T0011 Review (Round 4)
+
+## 裁决一：规格合规
+
+### Round 3 blocker 复核
+
+- DB v3 独立字面契约、空库生产建库全部 14-store schema：已修复，相关 mutation 可否证。
+- Artifact smoke 删除残留产物并执行当前源码完整 build：已修复，破坏 build 入口或 Bridge 源码均失败。
+- Scanner 已关闭本轮实现覆盖的短模板与 placeholder/default 样例，但仍存在同类真实 secret 绕过，恢复条件未满足。
+- AC-1 未冻结基础 Playwright 非零发现；删除唯一基础 E2E 后 baseline 仍通过。
+
+### 不变量检查
+
+- INV-1 至 INV-5：生产实现、DB v3、Bridge token/权限与产物路径未被修改。
+- INV-2：本轮测试证据通过。
+- AC-1、AC-5：失败。
+
+## 裁决二：测试可信
+
+### 已修复
+
+- `DB_VERSION = 4` 导致 baseline 4 tests FAIL。
+- legacy `sessions.start_time` index 漂移导致空库 schema test FAIL。
+- Bridge build 入口或源码损坏时 fresh artifact smoke FAIL。
+- Full Vitest 92 files / 1105 tests、build、409-file scanner 均通过。
+
+### 剩余阻断
+
+1. Scanner 仍按单行与首段表达式判断，以下硬编码 secret 实测 exit 0：
+   - 跨行赋值与跨行 default。
+   - `${RUNTIME_ID}/hunter2`、`${RUNTIME_ID}.hunter2`。
+   - ternary fallback、`process.env["API_KEY"] || "hunter2"`。
+   - 模板表达式内部 assignment：``consume(`${API_KEY = "MyActualProductionPassword!"}`)``。
+2. AC-1 的 Playwright/test discovery 仅静态写入 `contract_matrix.json`。删除 `tests/e2e.spec.ts` 后 `baseline_smoke.test.ts` 仍 PASS；未建立 runner 非零发现断言。
+3. `contract_matrix.json` 仍写 `1124 tests`，本轮实际为 1105，证明该字段不是可执行当前基线。
+
+## 问题清单
+
+| 问题 | 暂存 | 说明 |
+|---|---|---|
+| Scanner 仍有跨行、标点后缀、fallback 与模板表达式绕过 | 否 | 必须按完整 assignment 值/语法范围判定，不得继续叠加单行正则例外。新增 reviewer 反例否证。 |
+| 基础 Playwright 非零发现未冻结 | 否 | 增加可执行 discovery 断言；删除或改名唯一基础 E2E 必须使 baseline 失败。 |
+| Matrix 测试数陈旧 | 否 | 改为当前可执行基线或移除不可验证静态数字，禁止作为通过证据。 |
+
+第 4 轮独立 review 仍 FAIL。当前授权轮次已用尽；恢复 `blocked_by=quality`。不得进入 evaluator、merge gate、squash merge 或 T0012。
+
+verdict: FAIL

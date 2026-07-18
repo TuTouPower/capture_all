@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 in_progress：用户于 2026-07-18 再次明确授权第 4 轮。范围固定为 scanner 完整值判定、独立 DB v3/14-store 契约、当前源码新鲜 build smoke；通过独立 review 前不得进入 evaluator、merge gate 或 T0012。
+T0011 blocked_by=quality：第 4 轮独立 review FAIL。DB v3/14-store 与 fresh artifact smoke 已通过；scanner 仍有跨行、标点后缀、fallback、模板表达式绕过，AC-1 仍缺基础 Playwright 非零 discovery gate。当前授权轮次已用尽；用户再次明确授权前不得继续 implementer/reviewer，不得进入 evaluator、merge gate 或 T0012。
 
 ## 本批次（2026-07-18 intake）
 

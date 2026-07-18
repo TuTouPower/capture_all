@@ -63,96 +63,88 @@ graph TB
 
 ## 3. 目录结构
 
+按三产品 + 扁平 `shared` 组织（见 `decisions.md §002 §003`）。源码 `src/{extension,bridge,mcp,shared}`，扩展专用资源（manifest、`_locales`）随扩展入 `src/extension/`。
+
 ```
 src/
-├── background/                   # Service Worker - 采集核心
-│   ├── service_worker.ts         # 主入口，消息路由，生命周期管理
-│   ├── storage.ts                # IndexedDB CRUD 封装（store 路由 + flush）
-│   ├── network_capture.ts        # webRequest / CDP 网络采集
-│   ├── network_webrequest.ts     # webRequest 纯工具函数
-│   ├── network_context.ts        # 网络上下文
-│   ├── network_correlator.ts     # webRequest-CDP 请求关联（非活跃 tab）
-│   ├── console_capture.ts        # CDP console 采集
-│   ├── exception_capture.ts      # CDP runtime 异常采集
-│   ├── cookie_capture.ts         # chrome.cookies API 采集
-│   ├── body_capture_coordinator.ts # Body 捕获协调器
-│   ├── cdp_event_router.ts       # CDP 事件路由分发
-│   ├── stream_buffer.ts          # SSE / 流式响应增量缓冲
-│   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端
-│   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端
-│   ├── agent_command_dispatcher.ts # Agent 命令分发
-│   ├── agent_data_queries.ts     # Agent 数据查询
-│   ├── app_log_storage.ts        # 应用日志存储
-│   ├── exporter.ts               # JSON / JSONL / HTML / HAR 导出
-│   └── keepalive.ts              # SW 保活（chrome.alarms）
-├── content/                      # Content Scripts - 页面内采集
-│   ├── content_script.ts         # 主入口，消息监听 + 按需激活
-│   ├── content_event_utils.ts    # content 事件公共工具
-│   ├── mouse_capture.ts          # 鼠标事件
-│   ├── keyboard_capture.ts       # 键盘事件
-│   ├── scroll_capture.ts         # 滚动事件
-│   ├── dom_capture.ts            # DOM 变化（input_event / dom_mutation）
-│   ├── clipboard_capture.ts      # 剪贴板事件
-│   ├── focus_capture.ts          # 焦点事件
-│   ├── form_submit_capture.ts    # 表单提交
-│   ├── fullscreen_capture.ts     # 全屏变化
-│   ├── print_capture.ts          # 打印事件
-│   ├── resize_capture.ts         # 窗口尺寸变化
-│   ├── visibility_capture.ts     # 页面可见性变化
-│   ├── storage_capture.ts        # localStorage / sessionStorage 拦截
-│   ├── websocket_capture.ts      # WebSocket 帧捕获
-│   └── network_hook.ts           # fetch response body hook
-├── popup/                        # 弹出窗口（3 状态）
-│   ├── popup.html / popup.ts / popup.css
-├── dashboard/                    # 主面板
-│   ├── dashboard.html / dashboard.ts
-│   ├── dashboard_captures.ts     # 采集列表页
-│   ├── dashboard_detail.ts       # 采集详情页
-│   ├── dashboard_settings.ts     # 设置页
-│   ├── dashboard_integrations.ts # 当前采集 / 导出任务
-│   ├── dashboard_shared.ts       # 共享工具
-│   ├── sidebar_resize.ts         # 侧边栏拖拽
-│   ├── icons.ts                  # 图标定义
-│   └── *.css                     # Shell / pages / detail / views 样式
-├── devtools/                     # DevTools 面板（轻量入口）
-│   ├── devtools.html / devtools.ts
-│   └── devtools_panel.html / devtools_panel.ts
-├── shared/                       # 共享模块
-│   ├── types.ts                  # 全部类型定义（CaptureRecord / CaptureEvent / category+type 体系）
-│   ├── constants.ts              # DB 名 / Store 名 / 默认配置 / 大小限制
-│   ├── i18n.ts / theme.ts        # 国际化 / 主题
-│   ├── event_utils.ts            # event_id 生成 + 公共字段填充
-│   ├── event_category.ts         # 事件分类映射
-│   ├── redaction.ts              # 脱敏规则
-│   ├── escape.ts                 # HTML/JS 安全转义
-│   ├── dom_utils.ts              # DOM 工具
-│   ├── user_config.ts            # 用户配置读写
-│   ├── system_time.ts            # 系统时间处理
-│   ├── agent_bridge_config.ts    # Bridge 配置
-│   ├── export_settings.ts / export_utils.ts  # 导出设置与工具
-│   ├── capture_data_reader.ts    # 采集数据读取器
-│   ├── capture_stats.ts          # 采集统计计算
-│   ├── poll_capture_status.ts    # 采集状态轮询
-│   ├── archive_builder.ts        # 归档构建
-│   ├── body_routing.ts           # Body 捕获路由
-│   ├── hash.ts / id.ts           # 哈希 / ID 生成
-│   ├── logger.ts                 # 日志模块
-│   ├── design_tokens.css         # 设计令牌
-│   └── chrome.d.ts               # Chrome API 类型声明
-└── agent/                        # 本地 Agent 基础设施
-    ├── bridge/
-    │   ├── main.ts               # Bridge 服务入口（`npm run bridge`）
-    │   ├── server.ts             # HTTP 服务器（/health, /mcp/command, /extension/command …）
-    │   ├── command_queue.ts      # 命令队列（enqueue → 扩展轮询取走 → resolve）
-    │   ├── config.ts             # Bridge CLI/环境变量配置
-    │   └── cdp_handler.ts        # 外部 CDP 检测/启动/停止/事件
-    ├── mcp/
-    │   ├── main.ts               # MCP Server 入口（`npm run mcp`）
-    │   ├── client.ts             # Bridge HTTP 客户端（/mcp/status, /mcp/command）
-    │   ├── schemas.ts            # Zod 参数校验 schema
-    │   └── tools.ts              # MCP 工具名 → AgentCommandType 映射
-    └── shared/
-        └── protocol.ts           # AgentCommandType / AgentCommandResult / AgentStatus 类型
+├── extension/                    # Chrome 扩展产品（MV3）
+│   ├── manifest.json             # 扩展清单源（构建产物仍输出到 artifacts/dist/manifest.json）
+│   ├── _locales/                 # i18n 源（en / zh_CN）；构建复制到 artifacts/dist/_locales/
+│   ├── background/               # Service Worker - 采集核心
+│   │   ├── service_worker.ts     # 主入口，消息路由，生命周期管理
+│   │   ├── storage.ts            # IndexedDB CRUD 封装（store 路由 + flush）
+│   │   ├── network_capture.ts    # webRequest / CDP 网络采集
+│   │   ├── network_webrequest.ts # webRequest 纯工具函数
+│   │   ├── network_context.ts    # 网络上下文
+│   │   ├── network_correlator.ts # webRequest-CDP 请求关联（非活跃 tab）
+│   │   ├── console_capture.ts    # CDP console 采集
+│   │   ├── exception_capture.ts  # CDP runtime 异常采集
+│   │   ├── cookie_capture.ts     # chrome.cookies API 采集
+│   │   ├── body_capture_coordinator.ts # Body 捕获协调器
+│   │   ├── cdp_event_router.ts   # CDP 事件路由分发
+│   │   ├── stream_buffer.ts      # SSE / 流式响应增量缓冲
+│   │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端
+│   │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端
+│   │   ├── agent_command_dispatcher.ts # Agent 命令分发
+│   │   ├── agent_data_queries.ts # Agent 数据查询
+│   │   ├── app_log_storage.ts    # 应用日志存储
+│   │   ├── exporter.ts           # JSON / JSONL / HTML / HAR 导出
+│   │   └── keepalive.ts          # SW 保活（chrome.alarms）
+│   ├── content/                  # Content Scripts - 页面内采集
+│   │   ├── content_script.ts     # 主入口，消息监听 + 按需激活
+│   │   ├── content_event_utils.ts
+│   │   ├── mouse_capture.ts / keyboard_capture.ts / scroll_capture.ts
+│   │   ├── dom_capture.ts / clipboard_capture.ts / focus_capture.ts
+│   │   ├── form_submit_capture.ts / fullscreen_capture.ts / print_capture.ts
+│   │   ├── resize_capture.ts / visibility_capture.ts
+│   │   ├── storage_capture.ts / websocket_capture.ts / network_hook.ts
+│   ├── popup/                    # 弹出窗口（3 状态）
+│   │   └── popup.html / popup.ts / popup.css
+│   ├── dashboard/                # 主面板
+│   │   ├── dashboard.html / dashboard.ts
+│   │   ├── dashboard_captures.ts / dashboard_detail.ts / dashboard_settings.ts
+│   │   ├── dashboard_integrations.ts / dashboard_shared.ts
+│   │   ├── sidebar_resize.ts / icons.ts
+│   │   └── *.css                 # Shell / pages / detail / views 样式
+│   ├── devtools/                 # DevTools 面板（轻量入口）
+│   │   └── devtools.html / devtools.ts / devtools_panel.html / devtools_panel.ts
+│   └── shared/                   # 仅扩展专用（依赖 background/content 或扩展 UI）
+│       └── capture_data_reader.ts # 直连 IndexedDB 读取采集快照（依赖 background/storage）
+├── bridge/                       # Bridge 产品（HTTP 服务器 + 命令队列 + CDP）
+│   ├── main.ts                   # 入口（`npm run bridge`）
+│   ├── server.ts                 # HTTP 服务器（/health, /mcp/command, /extension/command …）
+│   ├── command_queue.ts          # 命令队列
+│   ├── config.ts                 # Bridge CLI/环境变量配置
+│   └── cdp_handler.ts            # 外部 CDP 检测/启动/停止/事件
+├── mcp/                          # MCP 产品（MCP Server + 工具 schema + Bridge 客户端）
+│   ├── main.ts                   # 入口（`npm run mcp`）
+│   ├── client.ts                 # Bridge HTTP 客户端
+│   ├── schemas.ts                # Zod 参数校验 schema
+│   └── tools.ts                  # MCP 工具名 → AgentCommandType 映射
+└── shared/                       # 跨产品扁平共享（不依赖任何产品目录）
+    ├── protocol.ts               # AgentCommandType / AgentCommandResult / AgentStatus 类型（三端线协议）
+    ├── types.ts                  # 领域类型（CaptureRecord / CaptureEvent / category+type 体系）
+    ├── constants.ts              # DB 名 / Store 名 / 默认配置 / 大小限制
+    ├── redaction.ts              # 脱敏规则（bridge CDP 也用）
+    ├── logger.ts / system_time.ts / escape.ts / hash.ts / id.ts
+    ├── event_utils.ts / event_category.ts / body_routing.ts
+    ├── user_config.ts / agent_bridge_config.ts
+    ├── i18n.ts / theme.ts / design_tokens.css / chrome.d.ts  # 待 T006 下沉到 extension/shared
+    ├── export_settings.ts / export_utils.ts                  # 待 T006 下沉到 extension/shared
+    ├── archive_builder.ts / capture_stats.ts / poll_capture_status.ts / dom_utils.ts  # 待 T006
+    └── …
+```
+
+依赖方向（见 `decisions.md §002`）：
+
+```
+extension ──► src/shared
+bridge    ──► src/shared
+mcp       ──► src/shared
+extension ──✗── bridge / mcp
+bridge    ──✗── extension / mcp
+mcp       ──✗── extension / bridge（运行时只走 HTTP）
+src/shared ──✗── 任何产品目录
 ```
 
 ## 4. 模块职责

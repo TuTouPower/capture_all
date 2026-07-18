@@ -16,9 +16,10 @@ const forbidden_paths = [
     'node_modules/',
     'artifacts/',
     'data/',
-    'docs/archive/',
     '.worktrees/',
 ];
+// `docs/archive/` is intentionally tracked (D5 in docs/blueprint/decisions.md);
+// the scanner skips its content but no longer forbids the path itself.
 const forbidden_extensions = new Set(['.log', '.zip']);
 const skipped_binary_extensions = new Set([
     '.avif',

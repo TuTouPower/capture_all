@@ -8,4 +8,4 @@
 
 | ID | 标题 | 状态 | owner | branch | 备注 |
 |----|------|------|-------|--------|------|
-| T001 | refactor: align repo layout with repo_template | active | — | — | 多 Phase；计划见 `docs/refactor_plan.md`；本文件即 Phase 0 产物 |
+| T001 | refactor: align agent docs layout with repo_template (Phase 0) | done | — | task_t001_align_repo_layout | commit `3a34685`；Phase 0 文档骨架 + 入口对齐；后续 Phase 1-5 待开新 task |

@@ -25,3 +25,11 @@
 - `npm run build`：tsc + vite + bridge + mcp + zip 全绿。
 - `npm run scan:tracked-tree`：251 finding，主要是 `docs/archive/**` forbidden-path（D5 已接受入库与 scanner 默认规则的冲突，待后续 Phase 调整）。
 - `git status`：153 文件（131 rename + 16 add + 5 modify + 1 type-change）；rename 检测正常。
+
+### 完结
+
+- commit：`3a34685 docs: align agent docs layout with repo_template`（分支 `task_t001_align_repo_layout`）
+- Phase 0 单循环、纯文档搬家；未派 review subagent（无代码逻辑、`npm test`/`npm run build` 已绿）。
+- blueprint 已在 spec 范围内更新（`decisions.md` 记 D1-D8）；`architecture.md` 保留现状描述，Phase 3 源码搬家后 finalization 再改。
+- T001 范围即 Phase 0；后续 Phase 1（行为护栏，标"可选"且现有测试已覆盖 baseline）、Phase 2-5 由后续 task 接力。
+

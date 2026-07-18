@@ -38,7 +38,7 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 再次恢复条件
 
-需要用户再次明确授权后，才可启动第 7 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
+用户于 2026-07-19 明确授权第 7 轮 implementer/reviewer。修复不得降低 AC-5「真 secret 仍失败」：
 
 - `rhs_contains_hardcoded_secret` 或 `concatenate_string_literals` 剥离首尾匹配的 `()` 后再合并判定。
 - `extract_assignments` 增加 `||=`、`&&=`、`??=` 识别。

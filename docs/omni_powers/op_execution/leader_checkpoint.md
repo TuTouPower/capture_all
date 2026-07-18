@@ -12,7 +12,7 @@ T0010
 
 ### next_step
 
-T0011 blocked_by=quality：用户授权的第 3 轮 review 仍 FAIL。Scanner 模板/placeholder 仍有真实 secret bypass；DB v3 与 legacy 4-store 生产 schema 未完整冻结；artifact smoke 可读取陈旧产物。不得进入 evaluator、merge gate 或 T0012；需用户再次明确授权额外修复轮。
+T0011 in_progress：用户于 2026-07-18 再次明确授权第 4 轮。范围固定为 scanner 完整值判定、独立 DB v3/14-store 契约、当前源码新鲜 build smoke；通过独立 review 前不得进入 evaluator、merge gate 或 T0012。
 
 ## 本批次（2026-07-18 intake）
 

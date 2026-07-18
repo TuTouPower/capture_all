@@ -183,14 +183,14 @@
     {
       "id": "T0011",
       "title": "test: 冻结重构行为与产物基线",
-      "status": "blocked",
+      "status": "in_progress",
       "spec": "specs/T0011_refactor_baseline.md",
       "depends_on": [],
       "workset": [
         "scripts/scan_tracked_tree.mjs"
       ],
       "eval": "required",
-      "blocked_by": "quality"
+      "blocked_by": null
     },
     {
       "id": "T0012",

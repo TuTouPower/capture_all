@@ -37,7 +37,7 @@ created_at: 2026-07-18 14:05:54 UTC+8
 
 ## 恢复条件
 
-需用户再次明确授权额外 implementer/reviewer 轮。修复不得降低 AC-1/AC-2/AC-5：
+用户于 2026-07-18 再次明确授权第 4 轮 implementer/reviewer。修复不得降低 AC-1/AC-2/AC-5：
 
 - scanner 必须拒绝任何含硬编码静态 secret 的模板、placeholder 拼接或默认值，仅放行完整纯动态表达式。
 - 使用独立冻结 v3 契约验证 DB version 与空库生产建库的全部 14 store schema；升级 fixture 继续验证 sentinel records。

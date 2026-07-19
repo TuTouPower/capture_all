@@ -246,23 +246,28 @@ export async function handle_cdp_start(
                         ? session.events.find(e => e.request_id === pending_req_id && e.response_body_status === 'pending')
                         : undefined;
                     body_seq_to_req_id.delete(msg.id);
-                    if (waiting_event && msg.result) {
-                        if (msg.result.body && typeof msg.result.body === 'string') {
-                            if (msg.result.base64Encoded) {
-                                waiting_event.response_body_status = 'unsupported_binary';
-                            } else {
-                                let body: string = msg.result.body;
-                                const bytes = new TextEncoder().encode(body);
-                                if (bytes.length > session.max_body_bytes) {
-                                    body = new TextDecoder().decode(bytes.slice(0, session.max_body_bytes));
-                                    waiting_event.response_body = body;
-                                    waiting_event.response_body_status = 'too_large';
+                    if (waiting_event) {
+                        if (msg.result) {
+                            if (msg.result.body && typeof msg.result.body === 'string') {
+                                if (msg.result.base64Encoded) {
+                                    waiting_event.response_body_status = 'unsupported_binary';
                                 } else {
-                                    waiting_event.response_body = body;
-                                    waiting_event.response_body_status = 'captured';
+                                    let body: string = msg.result.body;
+                                    const bytes = new TextEncoder().encode(body);
+                                    if (bytes.length > session.max_body_bytes) {
+                                        body = new TextDecoder().decode(bytes.slice(0, session.max_body_bytes));
+                                        waiting_event.response_body = body;
+                                        waiting_event.response_body_status = 'too_large';
+                                    } else {
+                                        waiting_event.response_body = body;
+                                        waiting_event.response_body_status = 'captured';
+                                    }
                                 }
+                            } else {
+                                waiting_event.response_body_status = 'cdp_failed';
                             }
                         } else {
+                            // CDP 返回 {id, error}：资源已释放/无 stream 等，事件终态 cdp_failed
                             waiting_event.response_body_status = 'cdp_failed';
                         }
                     }
@@ -308,7 +313,7 @@ export async function handle_cdp_events(
         return { status: 404, body: { ok: false, events: [] } };
     }
 
-    // Return completed events and remove them from the session
+    // Return completed events and remove only the returned ones from the session
     const completed: CdpStoredEvent[] = [];
     const pending: CdpStoredEvent[] = [];
 
@@ -320,8 +325,10 @@ export async function handle_cdp_events(
         }
     }
 
-    session.events = pending;
     const to_return = completed.slice(0, MAX_EVENTS_PER_POLL);
+    const remaining_completed = completed.slice(MAX_EVENTS_PER_POLL);
+    // 未返回的 completed 事件保留到下次轮询
+    session.events = pending.concat(remaining_completed);
 
     return {
         status: 200,

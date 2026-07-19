@@ -5,6 +5,7 @@ import { create_content_event, get_relative_time } from './content_event_utils';
 let is_capturing = false;
 let capture_id = '';
 let capture_start_epoch_ms = 0;
+let tab_id = 0;
 let send_event: (event: CaptureEvent) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
@@ -65,11 +66,13 @@ export function start_storage_capture(
     sender: (event: CaptureEvent) => void,
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
+    new_tab_id: number,
 ): void {
     if (is_capturing) return;
     send_event = sender;
     capture_id = new_capture_id;
     capture_start_epoch_ms = new_capture_start_epoch_ms;
+    tab_id = new_tab_id;
     is_capturing = true;
 
     inject_page_script();
@@ -101,7 +104,7 @@ export function start_storage_capture(
             category: 'storage',
             type: 'storage_change',
             relative_time_ms: get_relative_time(capture_start_epoch_ms),
-            tab_id: 0,
+            tab_id,
             source: 'content_script',
         });
 

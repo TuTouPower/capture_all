@@ -74,7 +74,7 @@ function build_key_event(
 
     const target = get_target_info(event);
 
-    const masked = config.redact_data && !is_shortcut_mode();
+    const masked = config.redact_data;
 
     const base_event = create_content_event({
         capture_id,
@@ -100,7 +100,7 @@ function build_key_event(
         target_selector: target.selector,
         target_xpath: target.xpath,
         target_tag: (event.target as HTMLElement)?.tagName?.toLowerCase() ?? null,
-        target_input_type: null,
+        target_input_type: (event.target as HTMLInputElement)?.type ?? null,
     };
 
     send_event(base_event, key_data);

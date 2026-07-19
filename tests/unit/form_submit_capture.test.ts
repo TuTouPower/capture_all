@@ -1,11 +1,30 @@
 // @vitest-environment jsdom
 // tests/form_submit_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { CaptureEvent, FormSubmitData } from '../../src/shared/types';
+import type { CaptureEvent, FormSubmitData, CaptureConfig } from '../../src/shared/types';
 import {
     start_form_submit_capture,
     stop_form_submit_capture,
 } from '../../src/extension/content/form_submit_capture';
+
+function make_config(overrides: Partial<CaptureConfig> = {}): CaptureConfig {
+    return {
+        mouse_precision: 'clicks_scroll_drag',
+        capture_console: true,
+        capture_network: true,
+        keyboard_capture_mode: 'all',
+        capture_input_values: true,
+        capture_request_body: true,
+        capture_response_body: true,
+        max_body_capture_bytes: 104857600,
+        inline_text_max_bytes: 1024,
+        redact_sensitive_headers: true,
+        redact_url_query: true,
+        redact_data: true,
+        sample_rate_ms: 50,
+        ...overrides,
+    };
+}
 
 describe('form_submit_capture', () => {
     let events: Array<{ event: CaptureEvent; data: FormSubmitData }>;
@@ -41,7 +60,7 @@ describe('form_submit_capture', () => {
     }
 
     it('form submit → form_submit 事件', () => {
-        start_form_submit_capture(sender, 'cap1', Date.now(), 1);
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config());
         const form = create_form({
             action: 'https://example.com/login',
             method: 'post',
@@ -60,8 +79,26 @@ describe('form_submit_capture', () => {
         expect(data.field_count).toBe(3);
     });
 
+    it('redact_data + redact_url_query 启用时 form_action 敏感 query 脱敏', () => {
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config({ redact_data: true, redact_url_query: true }));
+        const form = create_form({ action: 'https://example.com/submit?token=SECRET&next=/home' });
+        form.dispatchEvent(new Event('submit', { bubbles: true }));
+        expect(sender).toHaveBeenCalledTimes(1);
+        const action = events[0].data.form_action ?? '';
+        expect(action).not.toContain('SECRET');
+        expect(action).toContain('%5BREDACTED%5D');
+        expect(action).toContain('next=%2Fhome');
+    });
+
+    it('redact_url_query=false 时 form_action 保留原值', () => {
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config({ redact_data: true, redact_url_query: false }));
+        const form = create_form({ action: 'https://example.com/submit?token=SECRET' });
+        form.dispatchEvent(new Event('submit', { bubbles: true }));
+        expect(events[0].data.form_action).toContain('SECRET');
+    });
+
     it('stop 后不发送', () => {
-        start_form_submit_capture(sender, 'cap1', Date.now(), 1);
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config());
         stop_form_submit_capture();
         const form = create_form({ action: '/submit', field_count: 1 });
         form.dispatchEvent(new Event('submit', { bubbles: true }));
@@ -69,7 +106,7 @@ describe('form_submit_capture', () => {
     });
 
     it('非 form 元素不触发', () => {
-        start_form_submit_capture(sender, 'cap1', Date.now(), 1);
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config());
         const div = document.createElement('div');
         document.body.appendChild(div);
         div.dispatchEvent(new Event('submit', { bubbles: true }));
@@ -78,8 +115,8 @@ describe('form_submit_capture', () => {
 
     it('重复 start 不重复注册', () => {
         const spy = vi.spyOn(document, 'addEventListener');
-        start_form_submit_capture(sender, 'cap1', Date.now(), 1);
-        start_form_submit_capture(sender, 'cap1', Date.now(), 1);
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config());
+        start_form_submit_capture(sender, 'cap1', Date.now(), 1, make_config());
         const submit_calls = spy.mock.calls.filter(c => c[0] === 'submit');
         expect(submit_calls).toHaveLength(1);
         spy.mockRestore();

@@ -103,10 +103,10 @@ function start_capture(config: CaptureConfig): void {
     start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
     start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
     start_dom_capture(config, send_event);
-    start_storage_capture(sender, capture_id, capture_start_epoch_ms);
+    start_storage_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_network_hook(send_event);
     start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id, config);
     start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_visibility_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);

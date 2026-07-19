@@ -1,12 +1,14 @@
 // content/form_submit_capture.ts
-import type { CaptureEvent, FormSubmitData } from '../../shared/types';
+import type { CaptureConfig, CaptureEvent, FormSubmitData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
 import { build_xpath } from '../shared/dom_utils';
+import { redact_url } from '../../shared/redaction';
 
 let is_capturing = false;
 let capture_id = '';
 let capture_start_epoch_ms = 0;
 let tab_id = 0;
+let config: CaptureConfig;
 let send_event: (event: CaptureEvent, data: FormSubmitData) => void;
 let submit_listener: ((e: Event) => void) | null = null;
 
@@ -15,12 +17,14 @@ export function start_form_submit_capture(
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
+    new_config: CaptureConfig,
 ): void {
     if (is_capturing) return;
     send_event = sender;
     capture_id = new_capture_id;
     capture_start_epoch_ms = new_capture_start_epoch_ms;
     tab_id = new_tab_id;
+    config = new_config;
     is_capturing = true;
 
     submit_listener = handle_submit;
@@ -52,8 +56,11 @@ function handle_submit(e: Event): void {
     if (!(target instanceof HTMLFormElement)) return;
 
     const form = target;
+    const redact_q = Boolean(config.redact_data) && Boolean(config.redact_url_query);
+    const action_raw = form.action || '';
+    const action_redacted = action_raw ? redact_url(action_raw, redact_q).url : '';
     const data: FormSubmitData = {
-        form_action: form.action || null,
+        form_action: action_redacted || null,
         form_method: form.method || 'get',
         form_id: form.id || null,
         form_name: form.name || null,

@@ -133,34 +133,34 @@ function handle_contextmenu(event: MouseEvent): void {
 
 function handle_wheel(event: WheelEvent): void {
     if (!is_capturing) return;
-    const el = event.target as HTMLElement;
+    const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'wheel', {
-        selector: get_selector(el),
-        xpath: build_xpath(el),
-        tag: el.tagName.toLowerCase(),
-        text: null,
+        selector: info.selector,
+        xpath: info.xpath,
+        tag: info.tag,
+        text: info.text,
     });
 }
 
 function handle_dragstart(event: DragEvent): void {
     if (!is_capturing) return;
-    const el = event.target as HTMLElement;
+    const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'dragstart', {
-        selector: get_selector(el),
-        xpath: build_xpath(el),
-        tag: el.tagName.toLowerCase(),
-        text: null,
+        selector: info.selector,
+        xpath: info.xpath,
+        tag: info.tag,
+        text: info.text,
     });
 }
 
 function handle_dragend(event: DragEvent): void {
     if (!is_capturing) return;
-    const el = event.target as HTMLElement;
+    const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'dragend', {
-        selector: get_selector(el),
-        xpath: build_xpath(el),
-        tag: el.tagName.toLowerCase(),
-        text: null,
+        selector: info.selector,
+        xpath: info.xpath,
+        tag: info.tag,
+        text: info.text,
     });
 }
 

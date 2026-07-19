@@ -136,6 +136,11 @@ export function handle_ws_created(req_id: string, params: any, state: WsHandlerS
         created_ts: Date.now(),
     };
     state.ws_connections.set(req_id, conn);
+    // T065: ws_connections 上限保护（1000 连接），超出清理最旧条目
+    if (state.ws_connections.size > 1000) {
+        const oldest = state.ws_connections.keys().next().value;
+        if (oldest) state.ws_connections.delete(oldest);
+    }
     send_ws_connection_event(req_id, conn, 'connecting', state);
 }
 

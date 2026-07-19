@@ -96,7 +96,7 @@ function render_detail_tab(showInsp: boolean): string {
     }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
     if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
-    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], ['时间', '类型', '事件', 'URL / 来源', '详情', '来源'])}</div>`;
+    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], ['时间', '类型', '事件', 'URL / 来源 / 详情', '来源'])}</div>`;
     if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'unhandled_rejection', 'resource_error', 'network_failed', 'capture_error'], ['时间', '类型', '错误消息', '堆栈', '来源'])}</div>`;
     if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change'], ['时间', '类型', 'Key', '详情', '来源'])}</div>`;
     if (dt_tab === 'cookie') return `<div class="simple-pad scroll">${render_simple_events(['cookie_change'], ['时间', '类型', '名称', '详情', '来源'])}</div>`;

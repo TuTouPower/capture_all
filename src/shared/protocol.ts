@@ -20,12 +20,17 @@ export type AgentErrorCode =
     | 'COMMAND_TIMEOUT'
     | 'TOKEN_INVALID'
     | 'COMMAND_CANCELLED'
-    | 'SESSION_NOT_FOUND'
+    // capture 术语（新码，推荐使用）
+    | 'CAPTURE_NOT_FOUND'
+    | 'CAPTURE_ALREADY_RUNNING'
+    | 'NO_ACTIVE_CAPTURE'
+    // 旧码（兼容别名，废弃期限：v2.0 移除；新客户端请使用 capture 系列新码）
+    | 'SESSION_NOT_FOUND'      // 兼容别名 → CAPTURE_NOT_FOUND
     | 'SOURCE_NOT_FOUND'
     | 'RECORD_NOT_FOUND'
     | 'INVALID_QUERY'
-    | 'RECORDING_ALREADY_RUNNING'
-    | 'NO_ACTIVE_RECORDING'
+    | 'RECORDING_ALREADY_RUNNING' // 兼容别名 → CAPTURE_ALREADY_RUNNING
+    | 'NO_ACTIVE_RECORDING'       // 兼容别名 → NO_ACTIVE_CAPTURE
     | 'EXPORT_FAILED'
     | 'STORAGE_READ_FAILED'
     | 'PAYLOAD_TOO_LARGE'
@@ -35,6 +40,13 @@ export type AgentErrorCode =
     | 'TARGET_AMBIGUOUS'
     | 'LABEL_DUPLICATE'
     | 'PAIRING_REQUIRED';
+
+// T057: 新旧错误码映射，供 dispatcher 与客户端渐进迁移
+export const ERROR_CODE_ALIASES: Record<string, AgentErrorCode> = {
+    'SESSION_NOT_FOUND': 'CAPTURE_NOT_FOUND',
+    'RECORDING_ALREADY_RUNNING': 'CAPTURE_ALREADY_RUNNING',
+    'NO_ACTIVE_RECORDING': 'NO_ACTIVE_CAPTURE',
+};
 
 export interface AgentError {
     code: AgentErrorCode;

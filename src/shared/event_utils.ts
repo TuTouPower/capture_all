@@ -10,6 +10,15 @@ function random_chars(len: number): string {
 }
 
 export function generate_event_id(): string {
+    // T059: 优先用 crypto.randomUUID（MV3 service worker + content script + browser 均支持）
+    // fallback Math.random 用于旧环境（如非 secure context）
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return `evt_${crypto.randomUUID()}`;
+        }
+    } catch {
+        // ignore
+    }
     event_counter++;
     const ts = Date.now().toString(36);
     return `evt_${ts}_${random_chars(6)}_${event_counter}`;

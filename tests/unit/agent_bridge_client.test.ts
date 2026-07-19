@@ -83,7 +83,18 @@ function create_deps(
 function mock_idle_bridge(): ReturnType<typeof vi.spyOn> {
     return vi.spyOn(global, 'fetch').mockImplementation(
         async (input: string | URL | Request) => {
-            if (input.toString().endsWith('/extension/command')) {
+            const url = input.toString();
+            if (url.endsWith('/extension/enroll')) {
+                return new Response(JSON.stringify({
+                    ok: true,
+                    data: {
+                        instance_id: 'inst_test_session',
+                        instance_token: 'ext_test_session_token',
+                        browser_label: null,
+                    },
+                }), { status: 200 });
+            }
+            if (url.endsWith('/extension/command')) {
                 return new Response(null, { status: 204 });
             }
 
@@ -116,13 +127,18 @@ function create_deferred<T>(): {
 
 beforeEach(() => {
     stop_bridge_client();
-    set_bridge_session_for_tests(null);
+    set_bridge_session_for_tests({ instance_id: 'inst_test_session', instance_token: 'ext_test_session_token' });
+    storage_get.mockResolvedValue({
+        agent_bridge_session: { instance_id: 'inst_test_session', instance_token: 'ext_test_session_token' },
+    });
     vi.useFakeTimers();
     log_write.mockClear();
     storage_get.mockClear();
     storage_set.mockClear();
     storage_remove.mockClear();
-    storage_get.mockResolvedValue({});
+    storage_get.mockResolvedValue({
+        agent_bridge_session: { instance_id: 'inst_test_session', instance_token: 'ext_test_session_token' },
+    });
     storage_set.mockResolvedValue(undefined);
     storage_remove.mockResolvedValue(undefined);
 });
@@ -133,7 +149,7 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
-describe.skip('agent bridge client', () => {
+describe('agent bridge client', () => {
     test('starts and stops', () => {
         const deps = create_deps();
 
@@ -580,7 +596,14 @@ describe.skip('agent bridge client', () => {
     });
 });
 
-describe.skip('T0006: auto-enroll and session management', () => {
+describe('T0006: auto-enroll and session management', () => {
+    beforeEach(() => {
+        // These tests exercise the enroll path itself; clear any preset session
+        // so the client must enroll rather than reuse storage.
+        set_bridge_session_for_tests(null);
+        storage_get.mockResolvedValue({});
+    });
+
     function create_enroll_deps(
         get_user_config: AgentBridgeClientDeps['get_user_config'] = vi.fn(
             async () => browser_enrolled_config,

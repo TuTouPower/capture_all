@@ -17,4 +17,4 @@
 | T007 | test: reorganize tests into unit/integration/e2e (Phase 4) | done | — | task_t002_shared_protocol_relocate | commit `3416dd6` + `70dde67`；三层 tests/{unit,e2e,support}/ |
 | T008 | refactor: replace browser_no with browser_label + instance_id routing | done | — | main | commit `a408f24` + `89a88d4`；代码+文档；测试重写拆 T009/T010（注：T008 ID 复用，旧 T008_phase5_finalize 已在 archive） |
 | T009 | test: rewrite browser_label config/UI tests (partial) | done | — | main | commit `e97d451`；config_ui + settings_ui 重写 |
-| T010 | test: rewrite agent_bridge_client/server tests for label routing | backlog | — | — | ~1700 行测试重写；保留 describe.skip |
+| T010 | test: rewrite agent_bridge_client/server tests for label routing | done | — | main | commit pending；21+73 测试全绿；0 skip |

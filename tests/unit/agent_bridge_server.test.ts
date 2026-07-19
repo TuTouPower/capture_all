@@ -173,7 +173,7 @@ afterEach(async () => {
     }
 });
 
-describe.skip('bridge server', () => {
+describe('bridge server', () => {
     it('returns health without token', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/health`);
@@ -845,13 +845,13 @@ describe.skip('bridge server', () => {
 
     it('multi-instance: status lists two online extensions', async () => {
         const server = await start_test_server();
-        for (const id of ['inst_a', 'inst_b']) {
+        for (const [id, label] of [['inst_a', 'work'], ['inst_b', 'personal']] as const) {
             await fetch(`${server.url}/extension/heartbeat`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     instance_id: id,
-                    browser_no: id === 'inst_a' ? 1 : 2,
+                    browser_label: label,
                     extension_version: '1.0.0',
                     active_capture_id: null,
                 }),
@@ -867,13 +867,13 @@ describe.skip('bridge server', () => {
 
     it('multi-instance: commands route per instance and isolation', async () => {
         const server = await start_test_server();
-        for (const [id, no] of [['inst_a', 1], ['inst_b', 2]] as const) {
+        for (const [id, label] of [['inst_a', 'work'], ['inst_b', 'personal']] as const) {
             await fetch(`${server.url}/extension/heartbeat`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     instance_id: id,
-                    browser_no: no,
+                    browser_label: label,
                     extension_version: '1.0.0',
                     active_capture_id: null,
                 }),
@@ -883,7 +883,7 @@ describe.skip('bridge server', () => {
         const cmd_p = fetch(`${server.url}/mcp/command`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'captures.list', payload: { browser_no: 1 } }),
+            body: JSON.stringify({ type: 'captures.list', payload: { target_label: 'work' } }),
         });
         const for_a = await take_next_command(server.url, 'inst_a');
         expect(for_a.type).toBe('captures.list');
@@ -932,7 +932,7 @@ describe.skip('bridge server', () => {
 
     // ─── T0005 bridge auto-enroll ───
 
-    it('enroll returns 400 when browser_no is missing', async () => {
+    it('enroll returns 200 with only extension_version (browser_no no longer required)', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
@@ -942,26 +942,9 @@ describe.skip('bridge server', () => {
             },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         });
-        expect(response.status).toBe(400);
-        expect((await response.json()).error.code).toBe('INVALID_QUERY');
+        expect(response.status).toBe(200);
+        expect((await response.json()).ok).toBe(true);
     });
-
-    it.each([0, -1, 1.5, null, 'abc'])(
-        'enroll returns 400 for invalid browser_no: %s',
-        async (val) => {
-            const server = await start_test_server();
-            const response = await fetch(`${server.url}/extension/enroll`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ browser_no: val, extension_version: '1.0.0' }),
-            });
-            expect(response.status).toBe(400);
-            expect((await response.json()).error.code).toBe('INVALID_QUERY');
-        },
-    );
 
     it('enroll returns 400 when extension_version is missing', async () => {
         const server = await start_test_server();
@@ -971,13 +954,13 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1 }),
+            body: JSON.stringify({ browser_label: 'work' }),
         });
         expect(response.status).toBe(400);
         expect((await response.json()).error.code).toBe('INVALID_QUERY');
     });
 
-    it('AC-1: enroll returns 200 with instance_id, instance_token, browser_no', async () => {
+    it('AC-1: enroll returns 200 with instance_id, instance_token, browser_label', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
@@ -985,7 +968,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(200);
         const json = await response.json();
@@ -994,7 +977,7 @@ describe.skip('bridge server', () => {
         expect(json.data.instance_id.length).toBeGreaterThan(0);
         expect(typeof json.data.instance_token).toBe('string');
         expect(json.data.instance_token.startsWith('ext_')).toBe(true);
-        expect(json.data.browser_no).toBe(1);
+        expect(json.data.browser_label).toBe('work');
     });
 
     it('enroll accepts optional instance_id', async () => {
@@ -1006,7 +989,6 @@ describe.skip('bridge server', () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                browser_no: 1,
                 extension_version: '1.0.0',
                 instance_id: 'my-custom-instance',
             }),
@@ -1025,7 +1007,6 @@ describe.skip('bridge server', () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                browser_no: 1,
                 extension_version: '1.0.0',
                 browser_label: 'Chrome 127',
             }),
@@ -1038,7 +1019,7 @@ describe.skip('bridge server', () => {
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(401);
     });
@@ -1051,7 +1032,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
 
@@ -1079,7 +1060,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
 
@@ -1115,7 +1096,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
 
@@ -1171,7 +1152,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id } = (await enroll_res.json()).data;
 
@@ -1202,7 +1183,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id } = (await enroll_res.json()).data;
 
@@ -1233,7 +1214,7 @@ describe.skip('bridge server', () => {
         expect(response.status).toBe(401);
     });
 
-    it('AC-4: same browser_no re-enroll invalidates old token', async () => {
+    it('AC-4: same browser_label re-enroll invalidates old token', async () => {
         const server = await start_test_server();
         const enroll1 = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
@@ -1241,7 +1222,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const data1 = (await enroll1.json()).data;
 
@@ -1260,14 +1241,14 @@ describe.skip('bridge server', () => {
         });
         expect(hb1.status).toBe(200);
 
-        // Re-enroll same browser_no
+        // Re-enroll same browser_label (extension restart path)
         const enroll2 = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '2.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '2.0.0' }),
         });
         const data2 = (await enroll2.json()).data;
 
@@ -1312,7 +1293,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const data1 = (await enroll1.json()).data;
         await fetch(`${server.url}/extension/heartbeat`, {
@@ -1328,25 +1309,25 @@ describe.skip('bridge server', () => {
             }),
         });
 
-        // Re-enroll same browser_no
+        // Re-enroll same browser_label
         await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '2.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '2.0.0' }),
         });
 
         const status = await (await fetch(`${server.url}/mcp/status`, {
             headers: { Authorization: `Bearer ${token}` },
         })).json() as any;
 
-        // Only one instance with browser_no=1
-        const browser1_instances = status.extensions.filter(
-            (e: any) => e.browser_no === 1,
+        // Only one instance with browser_label='work'
+        const work_instances = status.extensions.filter(
+            (e: any) => e.browser_label === 'work',
         );
-        expect(browser1_instances).toHaveLength(1);
+        expect(work_instances).toHaveLength(1);
     });
 
     it('AC-5: mcp/status extensions do not expose instance_token', async () => {
@@ -1357,7 +1338,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_token, instance_id } = (await enroll_res.json()).data;
 
@@ -1396,7 +1377,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_token } = (await enroll_res.json()).data;
 
@@ -1414,7 +1395,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_token } = (await enroll_res.json()).data;
 
@@ -1440,7 +1421,7 @@ describe.skip('bridge server', () => {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+                body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
             })
         ).json();
         const e2 = await (
@@ -1450,7 +1431,7 @@ describe.skip('bridge server', () => {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ browser_no: 2, extension_version: '1.0.0' }),
+                body: JSON.stringify({ browser_label: 'personal', extension_version: '1.0.0' }),
             })
         ).json();
 
@@ -1492,7 +1473,7 @@ describe.skip('bridge server', () => {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(403);
         const json = await response.json();
@@ -1509,7 +1490,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(200);
         const json = await response.json();
@@ -1525,7 +1506,7 @@ describe.skip('bridge server', () => {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(200);
         const json = await response.json();
@@ -1596,9 +1577,9 @@ describe.skip('bridge server', () => {
         expect(response.status).toBe(401);
     });
 
-    it('AC-2: pair approve allows enroll for approved browser_no', async () => {
+    it('AC-2: pairing window open + correct code allows enroll (extension origin)', async () => {
         const server = await start_test_server();
-        await fetch(`${server.url}/pair/open`, {
+        const open_res = await fetch(`${server.url}/pair/open`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -1606,27 +1587,23 @@ describe.skip('bridge server', () => {
             },
             body: JSON.stringify({}),
         });
-        await fetch(`${server.url}/pair/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ browser_no: 3 }),
-        });
+        const { pairing_code } = (await open_res.json()).data;
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 3, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code }),
         });
         expect(response.status).toBe(200);
         const json = await response.json();
         expect(json.ok).toBe(true);
-        expect(json.data.browser_no).toBe(3);
+        expect(json.data.browser_label).toBe('work');
         expect(typeof json.data.instance_token).toBe('string');
     });
 
-    it('AC-2: non-approved browser_no still rejected after approve for another', async () => {
+    it('AC-2: extension enroll rejected when pairing window open but no code', async () => {
         const server = await start_test_server();
         await fetch(`${server.url}/pair/open`, {
             method: 'POST',
@@ -1636,18 +1613,13 @@ describe.skip('bridge server', () => {
             },
             body: JSON.stringify({}),
         });
-        await fetch(`${server.url}/pair/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ browser_no: 3 }),
-        });
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 4, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(403);
         expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
@@ -1670,12 +1642,12 @@ describe.skip('bridge server', () => {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 5, extension_version: '1.0.0', pairing_code }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code }),
         });
         expect(response.status).toBe(200);
         const json = await response.json();
         expect(json.ok).toBe(true);
-        expect(json.data.browser_no).toBe(5);
+        expect(json.data.browser_label).toBe('work');
     });
 
     it('AC-3: enroll with wrong pairing_code is rejected', async () => {
@@ -1694,7 +1666,7 @@ describe.skip('bridge server', () => {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0', pairing_code: '000000' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code: '000000' }),
         });
         expect(response.status).toBe(403);
         expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
@@ -1718,7 +1690,7 @@ describe.skip('bridge server', () => {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0', pairing_code }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code }),
         });
         expect(response.status).toBe(403);
     });
@@ -1731,7 +1703,7 @@ describe.skip('bridge server', () => {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_no: 1, extension_version: '1.0.0' }),
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
         const response = await fetch(`${server.url}/extension/heartbeat`, {
@@ -1745,12 +1717,15 @@ describe.skip('bridge server', () => {
         expect(response.status).toBe(200);
     });
 
-    it('approve reject when pairing is closed', async () => {
+    it('extension enroll rejected when pairing window closed', async () => {
         const server = await start_test_server();
-        const response = await fetch(`${server.url}/pair/approve`, {
+        const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ browser_no: 1 }),
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
         expect(response.status).toBe(403);
         expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');

@@ -61,6 +61,9 @@ export function merge_matched(
     cdp_event: CdpBodyEvent,
     correlation_status: NetworkCorrelationStatus
 ): NetworkRequestData {
+    // T056: 空对象 {} 为 truthy 但无内容；用 keys 长度判断是否真正可用
+    const has_headers = (h: Record<string, string> | null | undefined): boolean =>
+        !!h && Object.keys(h).length > 0;
     const request: NetworkRequestData = {
         capture_id: web_meta.capture_id,
         relative_time: web_meta.relative_time,
@@ -77,8 +80,9 @@ export function merge_matched(
         duration_ms: web_meta.duration_ms,
         start_time_ms: null,
         end_time_ms: null,
-        request_headers: web_meta.request_headers || cdp_event.request_headers,
-        response_headers: web_meta.response_headers || cdp_event.response_headers,
+        // T056: 空对象 {} 为 truthy 但无内容；用 has_headers 判断是否真正可用
+        request_headers: has_headers(web_meta.request_headers) ? web_meta.request_headers : (cdp_event.request_headers || {}),
+        response_headers: has_headers(web_meta.response_headers) ? web_meta.response_headers : (cdp_event.response_headers || {}),
         headers_status: 'captured',
         request_body: web_meta.request_body ?? cdp_event.request_body,
         request_body_status: web_meta.request_body_status || cdp_event.request_body_status,

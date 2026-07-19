@@ -111,7 +111,7 @@ function start_capture(config: CaptureConfig): void {
     start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_fullscreen_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_print_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_websocket_capture(sender, capture_id, capture_start_epoch_ms);
+    start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
 
     logger.debug('All capture modules started', {
         modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook', 'clipboard', 'form_submit', 'focus', 'visibility', 'resize', 'fullscreen', 'print', 'websocket'],

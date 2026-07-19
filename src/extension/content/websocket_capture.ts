@@ -5,21 +5,40 @@ import { create_content_event, get_relative_time } from './content_event_utils';
 let is_capturing = false;
 let capture_id = '';
 let capture_start_epoch_ms = 0;
+let tab_id = 0;
 let send_event: (event: CaptureEvent) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__capture_all_ws__';
 
-const PAGE_SCRIPT = `(function() {
+// 注入页面脚本字符串（导出便于测试 eval 验证行为）
+export const PAGE_SCRIPT = `(function() {
     if (window.__capture_all_ws_installed__) return;
     window.__capture_all_ws_installed__ = true;
     var SIGNAL = '${SIGNAL}';
+
+    // UTF-8 字节长度（兼容老浏览器，TextEncoder 不存在时用近似）
+    function utf8_byte_len(s) {
+        if (typeof TextEncoder !== 'undefined') {
+            return new TextEncoder().encode(s).length;
+        }
+        var n = 0;
+        for (var i = 0; i < s.length; i++) {
+            var c = s.charCodeAt(i);
+            if (c < 0x80) n += 1;
+            else if (c < 0x800) n += 2;
+            else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+                n += 4; i++;
+            } else n += 3;
+        }
+        return n;
+    }
 
     function post(ws_url, direction, data) {
         try {
             var data_status, data_preview, data_bytes;
             if (typeof data === 'string') {
-                data_bytes = data.length;
+                data_bytes = utf8_byte_len(data);
                 if (data_bytes > 200) {
                     data_status = 'too_large';
                     data_preview = null;
@@ -37,7 +56,7 @@ const PAGE_SCRIPT = `(function() {
                 data_preview = null;
             } else {
                 var s = String(data);
-                data_bytes = s.length;
+                data_bytes = utf8_byte_len(s);
                 if (data_bytes > 200) {
                     data_status = 'too_large';
                     data_preview = null;
@@ -57,63 +76,37 @@ const PAGE_SCRIPT = `(function() {
         } catch (e) {}
     }
 
-    var OrigWS = window.WebSocket;
-    function PatchedWS() {
+    var OrigWP = window.WebSocket;
+    function PatchedWP() {
         var ws;
         if (arguments.length > 1) {
-            ws = new OrigWS(arguments[0], arguments[1]);
+            ws = new OrigWP(arguments[0], arguments[1]);
         } else {
-            ws = new OrigWS(arguments[0]);
+            ws = new OrigWP(arguments[0]);
         }
         var url = arguments[0];
 
+        // 仅在 ws.send 时 post 一次 'sent'
         var orig_send = ws.send.bind(ws);
         ws.send = function(data) {
             try { post(url, 'sent', data); } catch (e) {}
             return orig_send(data);
         };
 
-        var _onmessage = null;
-        Object.defineProperty(ws, 'onmessage', {
-            get: function() { return _onmessage; },
-            set: function(handler) {
-                _onmessage = handler;
-                if (handler) {
-                    orig_handler = function(ev) {
-                        try { post(url, 'received', ev.data); } catch (e) {}
-                        handler.call(ws, ev);
-                    };
-                    orig_addEventListener.call(ws, 'message', orig_handler);
-                }
-            }
+        // 单一内部 listener 负责 'received' 采集；页面 onmessage/addEventListener/
+        // removeEventListener 保持原生语义，不重写、不包装、不重复 post。
+        ws.addEventListener('message', function(ev) {
+            try { post(url, 'received', ev.data); } catch (e) {}
         });
-
-        var orig_addEventListener = ws.addEventListener.bind(ws);
-        var message_wrappers = [];
-        ws.addEventListener = function(type, listener, options) {
-            if (type === 'message') {
-                var wrapper = function(ev) {
-                    try { post(url, 'received', ev.data); } catch (e) {}
-                    if (listener && listener.handleEvent) {
-                        listener.handleEvent.call(listener, ev);
-                    } else if (listener) {
-                        listener.call(ws, ev);
-                    }
-                };
-                message_wrappers.push({ original: listener, wrapper: wrapper });
-                return orig_addEventListener(type, wrapper, options);
-            }
-            return orig_addEventListener(type, listener, options);
-        };
 
         return ws;
     }
-    PatchedWS.prototype = OrigWS.prototype;
-    PatchedWS.CONNECTING = OrigWS.CONNECTING;
-    PatchedWS.OPEN = OrigWS.OPEN;
-    PatchedWS.CLOSING = OrigWS.CLOSING;
-    PatchedWS.CLOSED = OrigWS.CLOSED;
-    window.WebSocket = PatchedWS;
+    PatchedWP.prototype = OrigWP.prototype;
+    PatchedWP.CONNECTING = OrigWP.CONNECTING;
+    PatchedWP.OPEN = OrigWP.OPEN;
+    PatchedWP.CLOSING = OrigWP.CLOSING;
+    PatchedWP.CLOSED = OrigWP.CLOSED;
+    window.WebSocket = PatchedWP;
 })();`;
 
 function inject_page_script(): void {
@@ -131,11 +124,13 @@ export function start_websocket_capture(
     sender: (event: CaptureEvent) => void,
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
+    new_tab_id: number,
 ): void {
     if (is_capturing) return;
     send_event = sender;
     capture_id = new_capture_id;
     capture_start_epoch_ms = new_capture_start_epoch_ms;
+    tab_id = new_tab_id;
     is_capturing = true;
 
     inject_page_script();
@@ -160,7 +155,7 @@ export function start_websocket_capture(
             category: 'network',
             type: 'ws_message',
             relative_time_ms: get_relative_time(capture_start_epoch_ms),
-            tab_id: 0,
+            tab_id,
             source: 'content_script',
         });
 

@@ -166,9 +166,10 @@ export async function stop_body_capture(): Promise<void> {
 
     // Stop external CDP bridge polling
     if (coordinator_state.external_session_key) {
-        // We need deps here but stop is best-effort
         if (coordinator_state.poll_timer) {
+            // T050: 兼容 setTimeout/setInterval
             clearInterval(coordinator_state.poll_timer);
+            clearTimeout(coordinator_state.poll_timer);
             coordinator_state.poll_timer = undefined;
         }
     }
@@ -184,6 +185,7 @@ export async function stop_body_capture_with_cleanup(
     if (coordinator_state.external_session_key && coordinator_state.mode === 'external_cdp_bridge') {
         if (coordinator_state.poll_timer) {
             clearInterval(coordinator_state.poll_timer);
+            clearTimeout(coordinator_state.poll_timer);
         }
         try {
             const bridge_config = await deps.get_bridge_config();
@@ -231,21 +233,41 @@ async function try_external_cdp_bridge(
 
         // Start polling for body events
         const session_key = start_result.session_key;
-        const poll_timer = setInterval(async () => {
-            const events = await poll_external_cdp_events(bridge_config, session_key);
-            for (const evt of events) {
-                const req = convert_bridge_event_to_request(evt, capture_id);
-                deps.on_network_request(req);
+        // T050: 单飞轮询（完成后递归 setTimeout 而非 setInterval，避免重叠）
+        let poll_in_flight = false;
+        let poll_stopped = false;
+        const poll_once = async () => {
+            if (poll_stopped || poll_in_flight) return;
+            poll_in_flight = true;
+            try {
+                const events = await poll_external_cdp_events(bridge_config, session_key);
+                for (const evt of events) {
+                    const req = convert_bridge_event_to_request(evt, capture_id);
+                    deps.on_network_request(req);
+                }
+            } catch {
+                // best-effort：单次失败不终止轮询，下次重试
+            } finally {
+                poll_in_flight = false;
+                if (!poll_stopped) {
+                    poll_timer = setTimeout(poll_once, 500);
+                }
             }
-        }, 500);
+        };
+        let poll_timer: ReturnType<typeof setTimeout> = setTimeout(poll_once, 500);
 
         return {
             mode: 'external_cdp_bridge',
             status: 'active',
             message: `External CDP bridge active on port ${detect_result.cdp_port}`,
             external_session_key: session_key,
-            poll_timer
-        };
+            // 包装 stop 函数：清 timer + 标记停止
+            poll_timer,
+            stop: () => {
+                poll_stopped = true;
+                clearTimeout(poll_timer);
+            }
+        } as BodyCaptureStartResult;
     } catch {
         return null;
     }

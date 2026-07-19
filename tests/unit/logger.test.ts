@@ -90,3 +90,96 @@ describe('Logger Error serialization (P0.59)', () => {
         expect(transport.last_entry?.stack).toBeUndefined();
     });
 });
+
+describe('Logger redaction & size cap', () => {
+    it('redacts sensitive URL query in string details', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('nav', 'https://example.com/path?token=SECRET&id=1');
+
+        const value = transport.last_entry?.details as string;
+        expect(value).not.toContain('SECRET');
+        expect(value).toContain('%5BREDACTED%5D');
+        expect(value).toContain('id=1');
+    });
+
+    it('redacts sensitive URL inside nested object details', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { user: 'a', meta: { url: 'https://x?api_key=K&path=/y' } });
+
+        const details = transport.last_entry?.details as { meta: { url: string } };
+        expect(details.meta.url).not.toContain('K');
+        expect(details.meta.url).toContain('%5BREDACTED%5D');
+        expect(details.meta.url).toContain('path=%2Fy');
+    });
+
+    it('redacts URL inside arrays', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('arr', ['https://x?token=Z', 'keep']);
+
+        const arr = transport.last_entry?.details as string[];
+        expect(arr[0]).not.toContain('Z');
+        expect(arr[1]).toBe('keep');
+    });
+
+    it('truncates oversized string to MAX_LOG_ENTRY_BYTES + marker', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        const huge = 'a'.repeat(100 * 1024);
+        logger.info('big', huge);
+
+        const value = transport.last_entry?.details as string;
+        expect(value.length).toBeLessThan(huge.length);
+        expect(value).toContain('[TRUNCATED]');
+    });
+
+    it('redacts URL inside Error message', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        const err = new Error('fetch failed: https://api.example.com/?token=SECRET');
+        logger.error('fail', err);
+
+        const details = transport.last_entry?.details as { message: string };
+        expect(details.message).not.toContain('SECRET');
+        expect(details.message).toContain('%5BREDACTED%5D');
+    });
+
+    it('redacts URL in top-level message string', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.warn('redirect to https://x?token=SECRET happened');
+
+        expect(transport.last_entry?.message).not.toContain('SECRET');
+        expect(transport.last_entry?.message).toContain('%5BREDACTED%5D');
+    });
+
+    it('handles circular references without throwing', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        const obj: Record<string, unknown> = { url: 'https://x?token=Z' };
+        obj.self = obj;
+
+        expect(() => logger.info('circular', obj)).not.toThrow();
+        const details = transport.last_entry?.details as Record<string, unknown>;
+        expect(details.url).not.toContain('Z');
+        expect(details.self).toBe('[Circular]');
+    });
+
+    it('keeps non-URL non-oversized primitives unchanged', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.error('String detail', 'boom');
+
+        expect(transport.last_entry?.details).toBe('boom');
+    });
+});

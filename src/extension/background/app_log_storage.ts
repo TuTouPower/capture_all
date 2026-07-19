@@ -5,8 +5,13 @@ import { get_db } from './storage';
 import { load_user_config } from '../../shared/user_config';
 import type { LogTransport } from '../../shared/logger';
 
+// T049: 准确估算 entry 字节（含 details/stack，按 UTF-8）
 function estimate_entry_bytes(entry: AppLogEntry): number {
-    return (entry.message?.length || 0) + (entry.module?.length || 0) + 40;
+    try {
+        return new TextEncoder().encode(JSON.stringify(entry)).length;
+    } catch {
+        return (entry.message?.length || 0) + (entry.module?.length || 0) + 40;
+    }
 }
 
 export class IndexedDBLogTransport implements LogTransport {
@@ -43,10 +48,17 @@ export class IndexedDBLogTransport implements LogTransport {
             store.put(entry);
         }
 
-        await new Promise<void>((resolve, reject) => {
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-        });
+        try {
+            await new Promise<void>((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+                tx.onabort = () => reject(tx.error);
+            });
+        } catch (_err) {
+            // T049: 失败时把 batch 按原顺序放回 buffer 供下次重试
+            this.buffer.unshift(...batch);
+            throw _err;
+        }
 
         await this.trim_if_needed();
     }
@@ -64,11 +76,11 @@ export class IndexedDBLogTransport implements LogTransport {
             const request = index.openCursor(null, 'prev');
             const results: AppLogEntry[] = [];
             let skipped = 0;
-            let counted = 0;
 
             request.onsuccess = () => {
                 const cursor = request.result;
-                if (!cursor || counted >= limit + offset) {
+                // T049: 用 results.length >= limit 终止，不再多返回 offset 条
+                if (!cursor || results.length >= limit) {
                     resolve(results);
                     return;
                 }
@@ -96,7 +108,6 @@ export class IndexedDBLogTransport implements LogTransport {
                     cursor.continue();
                 } else {
                     results.push(entry);
-                    counted++;
                     cursor.continue();
                 }
             };

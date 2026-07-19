@@ -211,6 +211,9 @@ export function build_network_event(
     response_preview: string | null = null
 ): NetworkEventPayload {
     const relative_time_ms = pending.timestamp - state.start_time;
+    // T054: response_body 字节/encoding 填充
+    const response_body_bytes = response_body ? new TextEncoder().encode(response_body).length : null;
+    const response_body_encoding: 'utf8' | 'base64' | null = response_body ? 'utf8' : null;
 
     const event = create_base_event({
         capture_id: state.capture_id,
@@ -253,8 +256,8 @@ export function build_network_event(
         response_body,
         response_preview,
         response_body_status,
-        response_body_encoding: null,
-        response_body_bytes: null,
+        response_body_encoding,
+        response_body_bytes,
         mime_type: pending.mime_type,
         request_size_bytes: null,
         response_size_bytes: null,

@@ -30,16 +30,16 @@
 
 ### Bridge 启动失败
 
-**症状**：`npm run bridge` 报错
+**症状**：`npm run bridge -- --port <PORT>` 报错
 
 **排查**：
-1. 检查端口是否被占用：`lsof -i :3000`
+1. 检查端口是否被占用：`lsof -i :<PORT>`
 2. 检查 token 是否设置：`echo $CAPTURE_ALL_BRIDGE_TOKEN`
-3. 查看日志：`artifacts/bridge/bridge.log`
+3. 查看日志：前台运行看 stdout/stderr；systemd 用 `journalctl -u capture-all-bridge`
 
 **解决**：
 - 更换端口或停止占用进程
-- 设置环境变量：`export CAPTURE_ALL_BRIDGE_TOKEN='your-token'`
+- 设置环境变量：`export CAPTURE_ALL_BRIDGE_TOKEN="$(openssl rand -hex 32)"`
 
 ### Bridge 连接超时
 
@@ -133,6 +133,6 @@
 ## 日志位置
 
 - **扩展日志**：Chrome DevTools → Extensions → Capture All → Service Worker
-- **Bridge 日志**：`artifacts/bridge/bridge.log`
+- **Bridge 日志**：前台运行看 stdout/stderr；systemd 用 `journalctl -u capture-all-bridge`；需文件日志请自行配置重定向
 - **MCP 日志**：标准输出
 - **测试日志**：`artifacts/test-results/`

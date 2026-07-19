@@ -31,11 +31,12 @@ npm run build
 ### 本地运行
 
 ```bash
-export CAPTURE_ALL_BRIDGE_TOKEN='your-random-token'
-npm run bridge
+# 先用密码管理器或 openssl 生成随机 token
+export CAPTURE_ALL_BRIDGE_TOKEN="$(openssl rand -hex 32)"
+npm run bridge -- --port 17831
 ```
 
-Bridge 默认绑定 `127.0.0.1:3000`。
+Bridge 默认绑定 `127.0.0.1`。`--port` 必须显式指定（入口无默认端口）。
 
 ### systemd 服务（Linux）
 
@@ -50,8 +51,9 @@ After=network.target
 Type=simple
 User=your-user
 WorkingDirectory=/path/to/capture_all
-Environment=CAPTURE_ALL_BRIDGE_TOKEN=your-random-token
-ExecStart=/usr/bin/node artifacts/bridge/bridge.mjs
+# Token 从 EnvironmentFile 注入（不要在 unit 文件中硬编码）
+EnvironmentFile=/etc/capture-all-bridge.env
+ExecStart=/usr/bin/node artifacts/bridge/bridge.mjs --port 17831
 Restart=on-failure
 RestartSec=10
 
@@ -84,7 +86,7 @@ sudo systemctl start capture-all-bridge
 
 ## 监控
 
-- Bridge 日志：`artifacts/bridge/bridge.log`
+- Bridge 日志：前台运行看 stdout/stderr；systemd 用 `journalctl -u capture-all-bridge`；需文件日志请自行配置日志重定向/轮转
 - 扩展日志：Chrome DevTools → Extensions → Capture All → Service Worker
 - MCP 日志：标准输出
 

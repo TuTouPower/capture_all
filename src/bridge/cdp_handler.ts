@@ -17,6 +17,7 @@ interface CdpSession {
     max_body_bytes: number;
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
+    connect_error: string | null; // T062: ws onerror/onclose 时记录
 }
 
 interface CdpStoredEvent {
@@ -135,6 +136,7 @@ export async function handle_cdp_start(
             max_body_bytes,
             redact_sensitive_headers,
             redact_url_query,
+            connect_error: null,
         };
 
         // Connect to CDP WebSocket
@@ -288,10 +290,12 @@ export async function handle_cdp_start(
 
         ws.onerror = () => {
             session.cdp_ws = null;
+            session.connect_error = 'WebSocket error';
         };
 
         ws.onclose = () => {
             session.cdp_ws = null;
+            session.connect_error = 'WebSocket closed';
         };
 
         sessions.set(session_key, session);

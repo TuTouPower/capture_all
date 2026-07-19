@@ -14,7 +14,7 @@
 ## Privacy and security
 
 - [ ] No real tokens, credentials, private browser data, or unredacted captures
-- [ ] No local `.mcp.json`, `.claude/`, `data/`, `artifacts/`, `docs/archive/`, or `node_modules/` files
+- [ ] No local `.mcp.json`, `.claude/settings.local.json`, `.claude/skills/`, `.claude/worktrees/`, `data/`, `artifacts/`, `docs/archive/`, or `node_modules/` files
 - [ ] Captured data, browser permissions, defaults, Bridge/MCP exposure, and export behavior are unchanged or explained below
 
 <!-- Describe privacy, permission, or security impact. Write "None" only after checking. -->

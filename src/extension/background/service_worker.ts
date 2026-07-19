@@ -326,6 +326,26 @@ async function start_capture_inner(capture_id: string, config: CaptureConfig): P
         return { success: false, error: 'Already capturing' };
     }
 
+    try {
+        return await start_capture_inner_impl(capture_id, config);
+    } catch (err) {
+        // 任一子系统启动失败：逆序清理已启动的部分，避免半启动 + 永久 capturing
+        logger.error('start_capture_inner failed, rolling back', serialize_error(err));
+        try {
+            await stop_capture_inner();
+        } catch (cleanup_err) {
+            logger.error('rollback stop_capture_inner failed', serialize_error(cleanup_err));
+        }
+        return { success: false, error: `Start failed: ${err}` };
+    }
+}
+
+async function start_capture_inner_impl(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {
+    if (is_capturing) {
+        logger.warn('start_capture_inner_impl called while already capturing');
+        return { success: false, error: 'Already capturing' };
+    }
+
     const now = Date.now();
     const now_iso = new Date().toISOString();
 

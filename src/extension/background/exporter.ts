@@ -13,6 +13,11 @@ export interface ExportOptions {
 
 const PAGE_SIZE = 5000;
 
+// T045: HAR body size 用 UTF-8 字节
+function utf8_byte_len(s: string): number {
+    return new TextEncoder().encode(s).length;
+}
+
 // T043: 分页读取直到耗尽，替代固定 100000 截断
 async function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
     const all: CaptureEvent[] = [];
@@ -322,7 +327,9 @@ function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 's
             headers: req_headers,
             queryString: query_string,
             headersSize: -1,
-            bodySize: r.request_body ? r.request_body.length : (has_body_method(r.method) ? 0 : -1)
+            bodySize: r.request_body
+                ? (r.request_body_bytes ?? utf8_byte_len(r.request_body))
+                : (has_body_method(r.method) ? 0 : -1)
         },
         response: {
             status: r.status_code || 0,
@@ -331,13 +338,13 @@ function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 's
             headers: res_headers,
             cookies: [],
             content: {
-                size: r.response_body ? r.response_body.length : (r.response_body_bytes ?? 0),
+                size: r.response_body_bytes ?? (r.response_body ? utf8_byte_len(r.response_body) : 0),
                 mimeType: res_mime,
                 ...(r.response_body ? { text: r.response_body } : {})
             },
             redirectURL: get_header(r.response_headers, 'location') || '',
             headersSize: -1,
-            bodySize: r.response_body ? r.response_body.length : -1
+            bodySize: r.response_body_bytes ?? (r.response_body ? utf8_byte_len(r.response_body) : -1)
         },
         cache: {},
         timings: { send: 0, wait: duration, receive: 0 },

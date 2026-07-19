@@ -126,7 +126,15 @@ Runs declarative Content Script and observes user behavior and network activity 
 - [X] User activity（用户活动 — 点击、滚动、键盘、输入值）
 - [X] Website content（网站内容 — 网络请求/响应、控制台输出、异常、Storage、Cookie）
 
-未勾选的项本扩展均不采集。
+> **重要说明**：上述勾选为发布负责人提供的分类参考。本扩展默认采集的
+> User activity、Website content 等数据**可能包含**身份验证信息（如请求
+> 中的 token、Cookie、Authorization header）、个人通信内容（如 WebSocket
+> 消息）和个人身份信息（如用户在表单中输入的姓名、邮箱）。
+>
+> 发布负责人需根据目标商店的定义与 `PRIVACY.md` 中声明的数据范围，逐一
+> 核实是否应勾选 PII/Authentication/Personal communications 项。不要仅凭
+> "本扩展不主动收集这些类型"的直觉来判断——用户输入和网页内容可能间接
+> 包含这些数据。
 
 ### Privacy policy URL / 隐私政策 URL
 

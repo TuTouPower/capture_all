@@ -375,7 +375,10 @@ export interface WsFrameData {
     error_message: string | null;
     url: string;
     tab_id?: number;
+    /** @deprecated 使用 capture_id 替代。兼容别名，v2.0 移除。 */
     session_id?: string | null;
+    /** 当前采集 ID（推荐字段，替代 session_id）。 */
+    capture_id?: string | null;
 }
 
 // ============================================================

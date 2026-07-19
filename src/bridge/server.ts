@@ -363,11 +363,31 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     });
                 }
                 const prev = instances.get(body.instance_id);
+                // T047: browser_label 显式同步（包括清空为 null），不再回退到 prev 旧标签
+                const new_label = body.browser_label !== undefined
+                    ? (body.browser_label && body.browser_label.length > 0 ? body.browser_label : null)
+                    : prev?.browser_label ?? null;
+                // 检测 label 变化：若新 label 与其他实例冲突则顶替（与 enroll 一致）
+                if (new_label) {
+                    for (const [id, inst] of [...instances.entries()]) {
+                        if (id !== body.instance_id && inst.browser_label === new_label) {
+                            instances.delete(id);
+                            const old_queue = queues.get(id);
+                            if (old_queue) {
+                                old_queue.cancel_all();
+                                queues.delete(id);
+                            }
+                            for (const [cmd_id, owner_id] of [...command_owners.entries()]) {
+                                if (owner_id === id) command_owners.delete(cmd_id);
+                            }
+                        }
+                    }
+                }
                 instances.set(body.instance_id, {
                     instance_id: body.instance_id,
                     extension_version: body.extension_version,
                     active_capture_id: body.active_capture_id,
-                    browser_label: body.browser_label ?? prev?.browser_label ?? null,
+                    browser_label: new_label,
                     token_hash: prev?.token_hash ?? null,
                     seen_at: Date.now(),
                 });

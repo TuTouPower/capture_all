@@ -140,7 +140,8 @@ async function poll_cycle(
         };
 
         stage = 'heartbeat';
-        await send_heartbeat(agent_bridge_url, token, deps);
+        const heartbeat_config = normalize_agent_bridge_config(await deps.get_user_config());
+        await send_heartbeat(agent_bridge_url, token, deps, heartbeat_config.browser_label);
         if (!is_active_lifecycle(active_lifecycle_id)) return;
 
         stage = 'command_fetch';
@@ -270,7 +271,7 @@ async function enroll(url: string, browser_label: string, extension_version: str
     return body.data;
 }
 
-async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps): Promise<void> {
+async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps, browser_label?: string): Promise<void> {
     const status = deps.get_status();
     const response = await fetch(`${url}/extension/heartbeat`, {
         method: 'POST',
@@ -278,7 +279,9 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
         body: JSON.stringify({
             instance_id: runtime_instance_id,
             extension_version: deps.extension_version,
-            active_capture_id: status.active_capture_id
+            active_capture_id: status.active_capture_id,
+            // T047: heartbeat 携带 browser_label，Bridge 检测配置变化后更新实例元数据
+            browser_label: browser_label ?? null,
         })
     });
 

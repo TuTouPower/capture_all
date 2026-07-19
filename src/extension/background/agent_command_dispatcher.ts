@@ -53,8 +53,8 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'data.list':
             return list_entries_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
                 source: get_required_string(payload, 'source') as AgentDataSource,
-                offset: get_optional_number(payload, 'offset'),
-                limit: get_optional_number(payload, 'limit'),
+                offset: get_optional_non_negative_int(payload, 'offset'),
+                limit: get_optional_non_negative_int(payload, 'limit', 100000),
                 start_time: get_optional_number(payload, 'start_time'),
                 end_time: get_optional_number(payload, 'end_time'),
                 order: get_order(payload)
@@ -68,8 +68,8 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'timeline.list':
             return get_timeline_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
                 sources: get_optional_sources(payload),
-                offset: get_optional_number(payload, 'offset'),
-                limit: get_optional_number(payload, 'limit'),
+                offset: get_optional_non_negative_int(payload, 'offset'),
+                limit: get_optional_non_negative_int(payload, 'limit', 100000),
                 start_time: get_optional_number(payload, 'start_time'),
                 end_time: get_optional_number(payload, 'end_time'),
                 order: get_order(payload)
@@ -85,6 +85,9 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
             return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'), {
                 include_response_body: get_optional_boolean(payload, 'include_response_body'),
             });
+        default:
+            // T048: 未知命令类型显式拒绝，避免返回 ok:true data:undefined
+            throw new AgentCommandError('INVALID_QUERY', `Unsupported command type: ${command.type}`);
     }
 }
 
@@ -96,7 +99,17 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
     const result = await handlers.start_capture(capture_id, config);
 
     if (!result.success) {
-        throw new AgentCommandError('RECORDING_ALREADY_RUNNING', result.error || 'Recording already running');
+        // T048: 区分"已有活跃采集"与"存储失败"。错误信息含 'already capturing'/'already recording'/'not idle' 用 RECORDING_ALREADY_RUNNING，
+        // 其他失败（如 create_capture 抛错）用 STORAGE_READ_FAILED，不再一律覆盖。
+        const err_msg = (result.error || '').toLowerCase();
+        const is_busy = err_msg.includes('already capturing')
+            || err_msg.includes('already recording')
+            || err_msg.includes('already_capturing')
+            || err_msg.includes('not idle');
+        if (is_busy) {
+            throw new AgentCommandError('RECORDING_ALREADY_RUNNING', result.error || 'Recording already running');
+        }
+        throw new AgentCommandError('STORAGE_READ_FAILED', result.error || 'Start capture failed');
     }
 
     return { capture_id, status: 'recording' };
@@ -114,8 +127,8 @@ async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
 }
 
 async function list_captures(payload: Record<string, unknown>): Promise<unknown> {
-    const offset = get_optional_number(payload, 'offset') ?? 0;
-    const limit = get_optional_number(payload, 'limit') ?? 100;
+    const offset = get_optional_non_negative_int(payload, 'offset') ?? 0;
+    const limit = get_optional_non_negative_int(payload, 'limit', 100000) ?? 100;
     const order = get_order(payload) ?? 'desc';
     const captures = await storage_list_captures();
     const sorted = [...captures].sort((a, b) => order === 'asc'
@@ -171,6 +184,19 @@ function get_optional_number(payload: Record<string, unknown>, key: string): num
     if (value === undefined) return undefined;
     if (typeof value !== 'number' || !Number.isFinite(value)) {
         throw new AgentCommandError('INVALID_QUERY', `${key} must be a number`);
+    }
+    return value;
+}
+
+// T048: offset/limit 必须是非负整数（slice 语义要求）
+function get_optional_non_negative_int(payload: Record<string, unknown>, key: string, max?: number): number | undefined {
+    const value = payload[key];
+    if (value === undefined) return undefined;
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        throw new AgentCommandError('INVALID_QUERY', `${key} must be a non-negative integer`);
+    }
+    if (max !== undefined && value > max) {
+        throw new AgentCommandError('INVALID_QUERY', `${key} exceeds maximum ${max}`);
     }
     return value;
 }

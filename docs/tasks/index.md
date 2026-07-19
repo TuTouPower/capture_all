@@ -18,7 +18,7 @@
 | T008 | refactor: replace browser_no with browser_label + instance_id routing | done | — | main | commit `a408f24` + `89a88d4`；代码+文档；测试重写拆 T009/T010（注：T008 ID 复用，旧 T008_phase5_finalize 已在 archive） |
 | T009 | test: rewrite browser_label config/UI tests (partial) | done | — | main | commit `e97d451`；config_ui + settings_ui 重写 |
 | T010 | test: rewrite agent_bridge_client/server tests for label routing | done | — | main | commit `12a55bb`；21+73 测试全绿；0 skip |
-| T011 | security: remove Bridge token from argv in SessionStart hook | active | claude | task_t011_security_argv_token | project_01/HIGH-1 |
+| T011 | security: remove Bridge token from argv in SessionStart hook | done | claude | task_t011_security_argv_token | commit `ebbb8ea`；project_01/HIGH-1 |
 | T012 | security: broaden URL query redaction + fix redact_password precedence | backlog | — | — | src_bridge_mcp_shared_02/HIGH-4 + HIGH-6 |
 | T013 | privacy: keyboard shortcuts redaction + form_action URL + storage tab_id | backlog | — | — | src_extension_05/HIGH-1/2/3 + LOW-12 |
 | T014 | privacy: WebSocket URL/header/payload redaction | backlog | — | — | src_extension_02/HIGH-3 + src_extension_03/HIGH-7 |

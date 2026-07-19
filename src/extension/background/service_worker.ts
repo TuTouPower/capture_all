@@ -681,6 +681,9 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
     });
 
     current_capture = null;
+    current_capture_id = null;
+    start_time = 0;
+    current_config = DEFAULT_CONFIG;
     last_active_tab.clear();
     logger.info('Capture stopped');
     return { success: true };
@@ -1083,7 +1086,7 @@ function start_agent_bridge(): void {
         get_user_config: get_user_config_for_bridge,
         start_capture: (capture_id, config) => start_capture(capture_id, config),
         stop_capture: () => stop_capture(),
-        get_status: () => ({ active_capture_id: current_capture_id }),
+        get_status: () => ({ active_capture_id: is_capturing ? current_capture_id : null }),
         extension_version: chrome.runtime.getManifest().version
     };
     start_bridge_client(bridge_deps);

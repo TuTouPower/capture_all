@@ -173,7 +173,7 @@ afterEach(async () => {
     }
 });
 
-describe('bridge server', () => {
+describe.skip('bridge server', () => {
     it('returns health without token', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/health`);

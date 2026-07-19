@@ -31,7 +31,10 @@ export type AgentErrorCode =
     | 'PAYLOAD_TOO_LARGE'
     | 'ORIGIN_NOT_ALLOWED'
     | 'TARGET_REQUIRED'
-    | 'TARGET_NOT_FOUND';
+    | 'TARGET_NOT_FOUND'
+    | 'TARGET_AMBIGUOUS'
+    | 'LABEL_DUPLICATE'
+    | 'PAIRING_REQUIRED';
 
 export interface AgentError {
     code: AgentErrorCode;
@@ -106,7 +109,6 @@ export interface AgentRecordDetail<TData = unknown> {
 
 export interface AgentExtensionStatus {
     instance_id: string;
-    browser_no: number | null;
     browser_label: string | null;
     online: boolean;
     extension_version: string | null;

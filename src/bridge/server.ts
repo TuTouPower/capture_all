@@ -12,7 +12,6 @@ interface PairingState {
     open: boolean;
     code: string | null;
     expires_at: number;
-    allowlist: Set<number>;
 }
 
 const PAIRING_DEFAULT_DURATION_MS = 5 * 60 * 1000;
@@ -26,7 +25,6 @@ interface ExtensionInstance {
     instance_id: string;
     extension_version: string;
     active_capture_id: string | null;
-    browser_no: number | null;
     browser_label: string | null;
     token_hash: string | null;
     seen_at: number;
@@ -62,7 +60,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         open: false,
         code: null,
         expires_at: 0,
-        allowlist: new Set(),
     };
     const is_s0 = Boolean(config.dev_mode);
 
@@ -89,7 +86,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         return [...instances.values()].filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
     }
 
-    function resolve_target(payload: Record<string, unknown>, write: boolean): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'EXTENSION_OFFLINE'; message: string } } {
+    function resolve_target(payload: Record<string, unknown>, _write: boolean): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'TARGET_AMBIGUOUS' | 'EXTENSION_OFFLINE'; message: string } } {
         const online = list_online();
         if (online.length === 0) {
             return { error: { code: 'EXTENSION_OFFLINE', message: 'Extension is offline' } };
@@ -98,8 +95,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         const target_instance_id = typeof payload.target_instance_id === 'string' && payload.target_instance_id.length > 0
             ? payload.target_instance_id
             : null;
-        const browser_no = typeof payload.browser_no === 'number' && Number.isInteger(payload.browser_no)
-            ? payload.browser_no
+        const target_label = typeof payload.target_label === 'string' && payload.target_label.length > 0
+            ? payload.target_label
             : null;
 
         if (target_instance_id) {
@@ -110,28 +107,34 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             return { instance_id: inst.instance_id };
         }
 
-        if (browser_no !== null) {
-            const inst = online.find((item) => item.browser_no === browser_no);
-            if (!inst) {
-                return { error: { code: 'TARGET_NOT_FOUND', message: `No online extension with browser_no=${browser_no}` } };
+        if (target_label) {
+            const matches = online.filter((item) => item.browser_label === target_label);
+            if (matches.length === 0) {
+                return { error: { code: 'TARGET_NOT_FOUND', message: `No online extension with label="${target_label}"` } };
             }
-            return { instance_id: inst.instance_id };
+            if (matches.length > 1) {
+                return { error: { code: 'TARGET_AMBIGUOUS', message: `Multiple online extensions share label="${target_label}"; specify target_instance_id` } };
+            }
+            return { instance_id: matches[0].instance_id };
         }
 
         if (online.length === 1) {
             return { instance_id: online[0].instance_id };
         }
 
-        if (write || online.length > 1) {
-            return {
-                error: {
-                    code: 'TARGET_REQUIRED',
-                    message: 'Multiple extensions online; specify browser_no or target_instance_id',
-                },
-            };
-        }
-
-        return { instance_id: online[0].instance_id };
+        // Multi-instance: require explicit target (instance_id preferred; label as human alias).
+        // If all instances have unique labels, surface them; otherwise flag anonymous.
+        const labels = online.map((item) => item.browser_label).filter((l): l is string => Boolean(l));
+        const has_anonymous = labels.length < online.length;
+        const hint = has_anonymous
+            ? 'Multiple extensions online; some have no label. Set browser_label in each extension settings, then specify target_label or target_instance_id.'
+            : `Multiple extensions online; specify target_label (one of: ${Array.from(new Set(labels)).join(', ')}) or target_instance_id.`;
+        return {
+            error: {
+                code: 'TARGET_REQUIRED',
+                message: hint,
+            },
+        };
     }
 
     function build_status(port: number): AgentStatus {
@@ -143,7 +146,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             const queue = queues.get(inst.instance_id);
             return {
                 instance_id: inst.instance_id,
-                browser_no: inst.browser_no,
                 browser_label: inst.browser_label,
                 online: is_on,
                 extension_version: inst.extension_version,
@@ -227,7 +229,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 pairing_state.open = true;
                 pairing_state.code = generate_pairing_code();
                 pairing_state.expires_at = now + duration_ms;
-                pairing_state.allowlist.clear();
                 return send_json(response, 200, {
                     ok: true,
                     data: {
@@ -247,27 +248,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 pairing_state.open = false;
                 pairing_state.code = null;
                 pairing_state.expires_at = 0;
-                pairing_state.allowlist.clear();
                 return send_json(response, 200, { ok: true, data: { open: false } });
-            }
-
-            if (request.method === 'POST' && request.url === '/pair/approve') {
-                const body = await read_json(request).catch(() => ({}));
-                const browser_no = (body as Record<string, unknown>).browser_no;
-                if (typeof browser_no !== 'number' || !Number.isInteger(browser_no) || browser_no < 1) {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: 'browser_no must be a positive integer' },
-                    });
-                }
-                if (!pairing_state.open || pairing_state.expires_at < Date.now()) {
-                    return send_json(response, 403, {
-                        ok: false,
-                        error: { code: 'PAIRING_REQUIRED', message: 'Pairing is not open. Open /pair page first.' },
-                    });
-                }
-                pairing_state.allowlist.add(browser_no);
-                return send_json(response, 200, { ok: true, data: { browser_no, approved: true } });
             }
 
             if (request.method === 'POST' && request.url === '/extension/enroll') {
@@ -286,7 +267,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
                 // T0009 S1: extension origin must pass pairing check (MCP bypasses)
                 if (!has_mcp && !is_s0) {
-                    const allowed = is_enroll_allowed(pairing_state, body.browser_no, body.pairing_code);
+                    const allowed = is_enroll_allowed(pairing_state, body.pairing_code);
                     if (!allowed) {
                         return send_json(response, 403, {
                             ok: false,
@@ -301,11 +282,15 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
                 const token_hash = hash_token(instance_token);
 
-                // Replace any existing binding for same browser_no.
-                for (const [id, inst] of [...instances.entries()]) {
-                    if (inst.browser_no === body.browser_no && id !== instance_id) {
-                        instances.delete(id);
-                        queues.delete(id);
+                // Replace any existing binding with the same non-empty label (extension restart path);
+                // empty labels are treated as anonymous and never auto-replace.
+                const new_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
+                if (new_label) {
+                    for (const [id, inst] of [...instances.entries()]) {
+                        if (id !== instance_id && inst.browser_label === new_label) {
+                            instances.delete(id);
+                            queues.delete(id);
+                        }
                     }
                 }
 
@@ -313,8 +298,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     instance_id,
                     extension_version: body.extension_version,
                     active_capture_id: null,
-                    browser_no: body.browser_no,
-                    browser_label: body.browser_label ?? null,
+                    browser_label: new_label,
                     token_hash,
                     seen_at: Date.now(),
                 });
@@ -325,7 +309,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     data: {
                         instance_id,
                         instance_token,
-                        browser_no: body.browser_no,
+                        browser_label: new_label,
                     },
                 });
             }
@@ -373,7 +357,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     instance_id: body.instance_id,
                     extension_version: body.extension_version,
                     active_capture_id: body.active_capture_id,
-                    browser_no: body.browser_no ?? prev?.browser_no ?? null,
                     browser_label: body.browser_label ?? prev?.browser_label ?? null,
                     token_hash: prev?.token_hash ?? null,
                     seen_at: Date.now(),
@@ -593,7 +576,6 @@ function resolve_extension_auth(
 }
 
 function validate_enroll(value: unknown): {
-    browser_no: number;
     browser_label?: string | null;
     extension_version: string;
     instance_id?: string;
@@ -601,9 +583,6 @@ function validate_enroll(value: unknown): {
 } {
     if (!is_plain_object(value)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Enroll body must be an object');
-    }
-    if (typeof value.browser_no !== 'number' || !Number.isInteger(value.browser_no) || value.browser_no < 1) {
-        throw new BridgeHttpError(400, 'INVALID_QUERY', 'browser_no must be a positive integer');
     }
     if (typeof value.extension_version !== 'string' || value.extension_version.length === 0) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'extension_version is required');
@@ -618,7 +597,6 @@ function validate_enroll(value: unknown): {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'pairing_code must be a string');
     }
     return {
-        browser_no: value.browser_no,
         browser_label: value.browser_label as string | null | undefined,
         extension_version: value.extension_version,
         instance_id: value.instance_id as string | undefined,
@@ -646,29 +624,24 @@ function actual_port(server: http.Server): number {
     return (server.address() as AddressInfo).port;
 }
 
-function is_enroll_allowed(state: PairingState, browser_no: number, pairing_code?: string): boolean {
+function is_enroll_allowed(state: PairingState, pairing_code?: string): boolean {
     const now = Date.now();
     if (!state.open || state.expires_at < now) {
         return false;
     }
-    if (state.allowlist.has(browser_no)) {
-        return true;
-    }
     if (pairing_code && state.code && pairing_code === state.code) {
-        state.allowlist.add(browser_no);
         return true;
     }
     return false;
 }
 
-function build_pairing_status(state: PairingState): { open: boolean; code: string | null; expires_at: number; allowlist: number[] } {
+function build_pairing_status(state: PairingState): { open: boolean; code: string | null; expires_at: number } {
     const now = Date.now();
     const open = state.open && state.expires_at > now;
     return {
         open,
         code: open ? state.code : null,
         expires_at: open ? state.expires_at : 0,
-        allowlist: open ? [...state.allowlist] : [],
     };
 }
 
@@ -707,10 +680,9 @@ button:active{opacity:.8}
 <div id="root">Loading...</div>
 <script>
 const ROOT = document.getElementById('root');
-async function refresh(){try{const r=await fetch('/pair/status');const d=await r.json();const s=d.data;if(!s.open){ROOT.innerHTML='<div class="closed">Pairing is closed.<br><small>Run <code style="font-size:14px;letter-spacing:0">POST /pair/open</code> via MCP to enable.</small></div>';return}const exp=new Date(s.expires_at).toLocaleTimeString();let allowlist='';if(s.allowlist.length>0)allowlist='<p style="font-size:13px;color:#666">Approved browsers: '+s.allowlist.join(', ')+'</p>';
-ROOT.innerHTML='<div class="card"><h2>Pairing Code</h2><code>'+s.code+'</code><p class="meta">Expires at '+exp+'</p>'+allowlist+'</div><div class="card"><h2>Approve Browser</h2><div class="row"><input id="bno" type="number" placeholder="Browser No" min="1"><button onclick="approve()">Approve</button></div><div id="msg" class="msg"></div></div>';
+async function refresh(){try{const r=await fetch('/pair/status');const d=await r.json();const s=d.data;if(!s.open){ROOT.innerHTML='<div class="closed">Pairing is closed.<br><small>Run <code style="font-size:14px;letter-spacing:0">POST /pair/open</code> via MCP to enable.</small></div>';return}const exp=new Date(s.expires_at).toLocaleTimeString();
+ROOT.innerHTML='<div class="card"><h2>Pairing Code</h2><code>'+s.code+'</code><p class="meta">Expires at '+exp+'</p><p style="font-size:13px;color:#666">Open the extension popup and let it enroll while this code is active. No per-browser approval needed.</p></div>';
 }catch(e){ROOT.innerHTML='<div class="closed">Error loading status</div>'}}
-async function approve(){const v=parseInt(document.getElementById('bno').value);const m=document.getElementById('msg');if(!v){m.className='msg err';m.textContent='Enter a browser number';return}try{const r=await fetch('/pair/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({browser_no:v})});const d=await r.json();if(d.ok){m.className='msg ok';m.textContent='Approved browser '+v;refresh()}else{m.className='msg err';m.textContent=d.error?.message||'Failed'}}catch(e){m.className='msg err';m.textContent='Error: '+e.message}}
 refresh();
 </script>
 </body>
@@ -781,7 +753,6 @@ function validate_heartbeat(value: unknown): {
     instance_id: string;
     extension_version: string;
     active_capture_id: string | null;
-    browser_no?: number | null;
     browser_label?: string | null;
 } {
     if (!is_plain_object(value)) {
@@ -797,14 +768,6 @@ function validate_heartbeat(value: unknown): {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Heartbeat body is invalid');
     }
 
-    let browser_no: number | null | undefined;
-    if (value.browser_no !== undefined) {
-        if (typeof value.browser_no !== 'number' || !Number.isInteger(value.browser_no) || value.browser_no < 1) {
-            throw new BridgeHttpError(400, 'INVALID_QUERY', 'browser_no must be a positive integer');
-        }
-        browser_no = value.browser_no;
-    }
-
     let browser_label: string | null | undefined;
     if (value.browser_label !== undefined) {
         if (value.browser_label !== null && typeof value.browser_label !== 'string') {
@@ -817,7 +780,6 @@ function validate_heartbeat(value: unknown): {
         instance_id: value.instance_id,
         extension_version: value.extension_version,
         active_capture_id,
-        browser_no,
         browser_label,
     };
 }

@@ -309,12 +309,12 @@ describe('execute_mcp_tool', () => {
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_a' },
-            body: JSON.stringify({ instance_id: 'inst_a', extension_version: '1.0.0', active_capture_id: 'cap-1', browser_no: 1 }),
+            body: JSON.stringify({ instance_id: 'inst_a', extension_version: '1.0.0', active_capture_id: 'cap-1', browser_label: 'work' }),
         });
         await fetch(`${server.url}/extension/heartbeat`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_b' },
-            body: JSON.stringify({ instance_id: 'inst_b', extension_version: '2.0.0', active_capture_id: null, browser_no: 2 }),
+            body: JSON.stringify({ instance_id: 'inst_b', extension_version: '2.0.0', active_capture_id: null, browser_label: 'personal' }),
         });
 
         const result = await execute_mcp_tool(client, { name: 'list_browsers' });
@@ -323,8 +323,7 @@ describe('execute_mcp_tool', () => {
         expect(Array.isArray(browsers)).toBe(true);
         expect(browsers.length).toBe(2);
         for (const b of browsers) {
-            expect(b).toHaveProperty('browser_no');
-            expect(typeof (b as Record<string, unknown>).browser_no).toBe('number');
+            expect(b).toHaveProperty('instance_id');
             expect(b).toHaveProperty('online');
             expect(typeof (b as Record<string, unknown>).online).toBe('boolean');
             expect(b).toHaveProperty('browser_label');

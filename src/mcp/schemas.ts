@@ -7,7 +7,13 @@ const limit_schema = z.number().int().positive().optional();
 const order_schema = z.enum(['asc', 'desc']).optional();
 const start_time_schema = z.number().optional();
 const end_time_schema = z.number().optional();
-const browser_no_schema = z.number().int().positive().optional();
+const target_instance_id_schema = z.string().min(1).optional();
+const target_label_schema = z.string().min(1).optional();
+
+const target_schemas = {
+    target_instance_id: target_instance_id_schema,
+    target_label: target_label_schema,
+};
 
 const query_range_schema = {
     offset: offset_schema,
@@ -47,30 +53,30 @@ const list_browsers_schema = z.object({
 const start_recording_schema = z.object({
     capture_id: z.string().min(1).optional(),
     config: capture_config_schema.optional(),
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const stop_recording_schema = z.object({
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const list_captures_schema = z.object({
     ...query_range_schema,
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const get_capture_schema = z.object({
     capture_id: capture_id_schema,
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const list_data_sources_schema = z.object({
     capture_id: capture_id_schema,
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
@@ -78,7 +84,7 @@ const list_records_schema = z.object({
     capture_id: capture_id_schema,
     source: z.string().min(1, 'source is required'),
     ...query_range_schema,
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
@@ -86,7 +92,7 @@ const get_record_schema = z.object({
     capture_id: capture_id_schema,
     source: z.string().min(1, 'source is required'),
     record_id: z.string().min(1, 'record_id is required'),
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
@@ -94,21 +100,21 @@ const get_timeline_schema = z.object({
     capture_id: capture_id_schema,
     sources: z.array(z.string()).optional(),
     ...query_range_schema,
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const get_timeline_item_schema = z.object({
     capture_id: capture_id_schema,
     item_id: z.string().min(1, 'item_id is required'),
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
 const get_all_capture_data_schema = z.object({
     capture_id: capture_id_schema,
     output_path: z.string().min(1).optional(),
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 
@@ -117,7 +123,7 @@ const export_capture_schema = z.object({
     format: z.string(),
     output_path: z.string().min(1).optional(),
     include_response_body: z.boolean().optional(),
-    browser_no: browser_no_schema,
+    ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).passthrough();
 

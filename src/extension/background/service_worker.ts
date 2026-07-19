@@ -934,7 +934,7 @@ chrome.tabs.onRemoved.addListener((tabId: number) => {
 });
 
 // Agent bridge client
-async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token' | 'agent_bridge_poll_interval_ms' | 'browser_no' | 'browser_label'>> {
+async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token' | 'agent_bridge_poll_interval_ms' | 'browser_label'>> {
     const result = await chrome.storage.local.get('user_config');
     return result.user_config ?? {};
 }

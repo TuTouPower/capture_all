@@ -204,15 +204,15 @@ async function resolve_token(config: AgentBridgeUserConfig, deps: AgentBridgeCli
         return session_token;
     }
 
-    if (config.browser_no > 0) {
+    if (config.agent_bridge_token.length > 0) {
         try {
             const instance_id = await generate_instance_id();
-            const result = await enroll(config.agent_bridge_url, config.browser_no, config.browser_label, deps.extension_version, instance_id);
+            const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token);
             runtime_instance_id = result.instance_id;
             session_token = result.instance_token;
             enrolled = true;
             await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
-            logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_no: config.browser_no });
+            logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_label: config.browser_label || null });
             return session_token;
         } catch (error) {
             log_bridge_error(
@@ -222,12 +222,6 @@ async function resolve_token(config: AgentBridgeUserConfig, deps: AgentBridgeCli
             );
             return null;
         }
-    }
-
-    if (config.agent_bridge_token.length > 0) {
-        session_token = config.agent_bridge_token;
-        runtime_instance_id = runtime_instance_id || `inst_${Math.random().toString(36).slice(2, 10)}`;
-        return session_token;
     }
 
     return null;
@@ -240,11 +234,11 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
     session_token = null;
     enrolled = false;
 
-    if (config.browser_no < 1) return;
+    if (config.agent_bridge_token.length < 1) return;
 
     try {
         const instance_id = runtime_instance_id || await generate_instance_id();
-        const result = await enroll(config.agent_bridge_url, config.browser_no, config.browser_label, deps.extension_version, instance_id);
+        const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token);
         runtime_instance_id = result.instance_id;
         session_token = result.instance_token;
         enrolled = true;
@@ -259,11 +253,14 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
     }
 }
 
-async function enroll(url: string, browser_no: number, browser_label: string, extension_version: string, instance_id: string): Promise<{ instance_id: string; instance_token: string }> {
+async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token: string): Promise<{ instance_id: string; instance_token: string }> {
     const response = await fetch(`${url}/extension/enroll`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ browser_no, browser_label: browser_label || null, extension_version, instance_id }),
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bridge_token}`,
+        },
+        body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id }),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);

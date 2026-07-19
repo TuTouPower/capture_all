@@ -570,43 +570,13 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
         return { success: true };
     }
 
-    is_capturing = false;
+    // 不立即翻 is_capturing=false：让 in-flight 回调继续 drain，
+    // 通过 capture_state.phase='stopping' 拒绝新 start/stop 命令（T029）。
 
     // Reset shared CDP debugger tracking
     debugger_attached_tab_id = null;
 
-    // Write capture_lifecycle.capture_stopped event
-    if (current_capture && current_capture_id) {
-        const duration_ms = Date.now() - start_time;
-        const stopped_event = create_base_event({
-            capture_id: current_capture_id,
-            category: 'capture_lifecycle',
-            type: 'capture_stopped',
-            relative_time_ms: get_relative_time(start_time),
-            tab_id: current_capture.tab_id,
-            url: current_capture.start_url,
-            source: 'background',
-        });
-        const stopped_data: CaptureStoppedData = {
-            capture_id: current_capture_id,
-            reason: 'user_stop',
-            duration_ms,
-            stats: current_capture.stats,
-        };
-        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data }]));
-
-        // Update capture end fields
-        await run_stop_step('update_capture', async () => {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            current_capture!.status = 'completed';
-            current_capture!.ended_at = new Date().toISOString();
-            current_capture!.duration_ms = duration_ms;
-            current_capture!.end_url = tabs[0]?.url || null;
-            current_capture!.updated_at = new Date().toISOString();
-            await update_capture(current_capture!);
-        });
-    }
-
+    // 1. 先停生产者（让 in-flight 回调自然结束）
     await run_stop_step('stop_keepalive', () => stop_keepalive());
     await run_stop_step('stop_network_capture', () => stop_network_capture());
     await run_stop_step('clear_cdp_body_handler', () => set_cdp_body_event_handler(null));
@@ -637,10 +607,46 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
         }
     });
 
+    // 2. drain：停 flush 调度 + 最后一次 flush 落库剩余事件
     await run_stop_step('stop_periodic_flush', () => { stop_periodic_flush(); });
     await run_stop_step('flush_all', () => flush_all());
 
-    // 清空持久化活跃采集状态
+    // 3. drain 完成后翻 is_capturing=false，回调入口不再处理新事件
+    is_capturing = false;
+
+    // 4. 写 stopped lifecycle event + 更新 CaptureRecord（含 drain 后的最终 stats）
+    if (current_capture && current_capture_id) {
+        const duration_ms = Date.now() - start_time;
+        const stopped_event = create_base_event({
+            capture_id: current_capture_id,
+            category: 'capture_lifecycle',
+            type: 'capture_stopped',
+            relative_time_ms: get_relative_time(start_time),
+            tab_id: current_capture.tab_id,
+            url: current_capture.start_url,
+            source: 'background',
+        });
+        const stopped_data: CaptureStoppedData = {
+            capture_id: current_capture_id,
+            reason: 'user_stop',
+            duration_ms,
+            stats: current_capture.stats,
+        };
+        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data }]));
+
+        await run_stop_step('update_capture', async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            current_capture!.status = 'completed';
+            current_capture!.ended_at = new Date().toISOString();
+            current_capture!.duration_ms = duration_ms;
+            current_capture!.end_url = tabs[0]?.url || null;
+            current_capture!.updated_at = new Date().toISOString();
+            await update_capture(current_capture!);
+        });
+        await run_stop_step('flush_stopped_event', () => flush_all());
+    }
+
+    // 5. 清空持久化活跃采集状态
     await run_stop_step('clear_active_capture_state', async () => {
         try {
             await chrome.storage.local.set({

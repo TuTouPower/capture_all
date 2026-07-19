@@ -78,7 +78,7 @@ describe('public project entry points', () => {
             expect(content).toContain('127.0.0.1');
             expect(content).toContain('Apache-2.0');
             expect(content).toContain('<all_urls>');
-            expect(content).toContain('32 MiB');
+            expect(content).toContain('64 MiB');
         }
 
         expect(english_readme).toContain('Load unpacked');

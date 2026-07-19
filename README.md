@@ -214,7 +214,7 @@ npm run mcp                # 从 TypeScript 源码启动 MCP Server
 ## 已知限制
 
 - 当前采集模型需要高影响浏览器权限。
-- Bridge 普通 JSON body 上限为 1 MiB，扩展结果回传上限为 32 MiB。
+- Bridge 普通 JSON body 上限为 1 MiB，扩展结果回传上限为 64 MiB。
 - 大采集应使用分页 `list_records` 或扩展本地导出，不应依赖 MCP 全量数据请求。
 - 脱敏不会扫描任意响应 body 文本中的所有潜在 Secret。
 - 尚无 Chrome Web Store 包、npm 发布、兼容性保证或支持 SLA。

@@ -17,7 +17,6 @@ Chrome MV3 扩展，采集浏览器内的用户行为、页面导航、网络请
 | `docs/blueprint/domain.md` | 领域术语、MCP 工具命名、禁用术语、业务不变量、存储限制、错误码 | 接触业务概念、对齐术语时 |
 | `docs/blueprint/conventions.md` | 命名、缩进、UI 编码、扩展 API 规范、安全编码、日志、新增模块步骤 | 写代码前对齐风格 |
 | `docs/blueprint/decisions.md` | 已确认的非显然决策（含 src 三产品重构、shared 扁平化、token 模型、DB v3 等） | 需要理解历史取舍时 |
-| `docs/refactor_plan.md` | 当前活动重构计划：源码按 `src/{extension,bridge,mcp,shared}` 重构、文档对齐 `repo_template` | 修改 `src/` 目录结构或 import 路径前必读 |
 | `docs/reviews/RNN_slug/` | 当前独立 review | 评审非 task 对象时 |
 | `docs/spikes/SNN_slug/report.md` | 实验问题、证据和结论 | 技术选型或未知风险验证时 |
 | `docs/templates/` | task / review / spike 模板 | 创建对应工作项时复制 |

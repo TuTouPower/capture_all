@@ -1,5 +1,5 @@
 // shared/user_config.ts
-import type { SystemTimeTimezone, UserConfig } from './types';
+import type { UserConfig } from './types';
 import { DEFAULT_USER_CONFIG } from './constants';
 
 const STORAGE_KEY = 'user_config';
@@ -374,28 +374,64 @@ export function migrate_iana_timezone(value: string): string {
     return 'browser';
 }
 
+// T060: 持久化边界运行时校验。
+function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
+    const cfg = { ...DEFAULT_USER_CONFIG };
+    const src = raw || {};
+    const c = cfg as Record<string, unknown>;
+
+    const bool_keys = ['capture_input_values', 'capture_request_body', 'capture_response_body', 'redact_data', 'agent_bridge_enabled', 'export_save_as'];
+    for (const key of bool_keys) {
+        if (typeof src[key] === 'boolean') c[key] = src[key];
+    }
+
+    if (src.mouse_precision === 'clicks' || src.mouse_precision === 'clicks_scroll_drag' || src.mouse_precision === 'full_trajectory') c.mouse_precision = src.mouse_precision;
+    if (src.keyboard_capture_mode === 'none' || src.keyboard_capture_mode === 'shortcuts' || src.keyboard_capture_mode === 'all') c.keyboard_capture_mode = src.keyboard_capture_mode;
+    if (src.theme === 'light' || src.theme === 'dark' || src.theme === 'follow-system') c.theme = src.theme;
+    if (src.locale === 'en' || src.locale === 'zh_CN') c.locale = src.locale;
+    if (src.detail_time_display_mode === 'system' || src.detail_time_display_mode === 'relative' || src.detail_time_display_mode === 'absolute') c.detail_time_display_mode = src.detail_time_display_mode;
+
+    const num_keys = ['max_body_capture_bytes', 'inline_text_max_bytes'];
+    for (const key of num_keys) {
+        const v = src[key];
+        if (typeof v === 'number' && Number.isInteger(v) && v >= 0) c[key] = v;
+    }
+
+    const str_keys = ['export_capture_directory', 'export_log_directory', 'export_filename_template', 'agent_bridge_url', 'agent_bridge_token'];
+    for (const key of str_keys) {
+        if (typeof src[key] === 'string') c[key] = src[key];
+    }
+
+    if (typeof src.system_time_timezone === 'string' && src.system_time_timezone.length > 0) (c as Record<string, unknown>).system_time_timezone = src.system_time_timezone;
+
+    if (src.log_level === 'debug' || src.log_level === 'info' || src.log_level === 'warn' || src.log_level === 'error' || src.log_level === 'silent') c.log_level = src.log_level;
+
+    if (typeof src.log_max_size_mb === 'number' && Number.isInteger(src.log_max_size_mb) && src.log_max_size_mb > 0) c.log_max_size_mb = src.log_max_size_mb;
+
+    return cfg;
+}
+
 export async function load_user_config(): Promise<UserConfig> {
     try {
         const result = await chrome.storage.local.get(STORAGE_KEY);
-        const stored = result[STORAGE_KEY] as Partial<UserConfig> | undefined;
-        const merged = { ...DEFAULT_USER_CONFIG, ...(stored || {}) };
+        const stored = result[STORAGE_KEY] as Record<string, unknown> | undefined;
+        const merged: Record<string, unknown> = { ...DEFAULT_USER_CONFIG, ...(stored || {}) };
 
         // P0.34: migrate old IANA timezone values to fixed UTC offsets
         if (merged.system_time_timezone) {
-            const migrated = migrate_iana_timezone(merged.system_time_timezone);
+            const migrated = migrate_iana_timezone(merged.system_time_timezone as string);
             if (migrated !== merged.system_time_timezone) {
-                merged.system_time_timezone = migrated as SystemTimeTimezone;
-                // Persist the migration immediately
+                merged.system_time_timezone = migrated;
                 try {
                     await chrome.storage.local.set({ [STORAGE_KEY]: merged });
                 } catch {
-                    // Best-effort migration; if persistence fails, the in-memory
-                    // value is still correct for this capture
+                    // Best-effort migration
                 }
             }
         }
 
-        return merged as UserConfig;
+        // T060: 运行时校验所有字段
+        return sanitize_user_config(merged);
     } catch {
         return { ...DEFAULT_USER_CONFIG } as UserConfig;
     }

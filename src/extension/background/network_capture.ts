@@ -190,10 +190,25 @@ export async function enable_response_body_capture(
         stream_buffer_instance = create_stream_buffer({
             on_flush: (request_id, accumulated) => {
                 const meta = cdp_request_meta.get(request_id);
-                if (meta) {
-                    meta.response_body = (meta.response_body || '') + accumulated;
-                    meta.response_body_status = 'streaming';
+                if (!meta) return;
+                // 已超上限：停止追加，避免长 SSE 持续累积内存
+                if (meta.response_body_status === 'too_large') return;
+                const acc_bytes = meta.response_body ? new TextEncoder().encode(meta.response_body).length : 0;
+                const chunk_bytes = new TextEncoder().encode(accumulated).length;
+                if (acc_bytes + chunk_bytes > config.max_body_capture_bytes) {
+                    // 仅保留上限内部分并标 too_large
+                    const remaining = Math.max(0, config.max_body_capture_bytes - acc_bytes);
+                    if (remaining > 0) {
+                        const encoder = new TextEncoder();
+                        const decoder = new TextDecoder();
+                        const head_bytes = encoder.encode(accumulated).slice(0, remaining);
+                        meta.response_body = (meta.response_body || '') + decoder.decode(head_bytes);
+                    }
+                    meta.response_body_status = 'too_large';
+                    return;
                 }
+                meta.response_body = (meta.response_body || '') + accumulated;
+                meta.response_body_status = 'streaming';
             },
         });
         // P1: auto-attach to sub-targets (worker/iframe/OOPIF)
@@ -499,10 +514,18 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             if (meta) {
                 const body = meta.response_body || null;
                 const byte_size = body ? new TextEncoder().encode(body).length : 0;
-                const is_partial = meta.response_body_status === 'partial';
+                // 优先尊重 on_flush 期间标注的 too_large（避免 loadingFinished 重新评估时回退到 captured）
+                let status: BodyCaptureStatus;
+                if (meta.response_body_status === 'too_large') {
+                    status = 'too_large';
+                } else if (meta.response_body_status === 'partial') {
+                    status = 'partial';
+                } else {
+                    status = byte_size > config.max_body_capture_bytes ? 'too_large' : 'captured';
+                }
                 const body_result: CdpBodyResult = {
                     body,
-                    status: is_partial ? 'partial' : (byte_size > config.max_body_capture_bytes ? 'too_large' : 'captured'),
+                    status,
                     timestamp: Date.now(),
                     preview: body?.slice(0, 200) ?? null,
                     encoding: 'utf8',

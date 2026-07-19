@@ -874,11 +874,17 @@ async function update_capture_body_state(result: BodyCaptureStartResult): Promis
 // Tab activation listener - send start to new tab's content script
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (!is_capturing) return;
+    // 捕获当前 generation，await 后校验避免跨采集写入
+    const gen = capture_state.current_generation();
+    const cap_id = current_capture_id;
+    const cap_start = start_time;
+    const cap_config = current_config;
     logger.debug(`Tab activated: ${activeInfo.tabId}`);
 
     // Write tab_switch event with from/to tracking
     const prev = last_active_tab.get(activeInfo.windowId);
     const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (!capture_state.is_active_generation(gen)) return; // await 后采集已切换
     const tab_url = tab.url || '';
 
     const switch_data: TabSwitchData = {
@@ -889,15 +895,16 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     };
 
     const switch_event = create_base_event({
-        capture_id: current_capture_id!,
+        capture_id: cap_id!,
         category: 'navigation',
         type: 'tab_switch',
-        relative_time_ms: get_relative_time(start_time),
+        relative_time_ms: get_relative_time(cap_start),
         tab_id: activeInfo.tabId,
         url: tab_url,
         source: 'background',
     });
     await write_events([{ ...switch_event, data: switch_data }]);
+    if (!capture_state.is_active_generation(gen)) return;
 
     // Update tracking
     last_active_tab.set(activeInfo.windowId, { tab_id: activeInfo.tabId, url: tab_url });
@@ -905,21 +912,23 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     // Send start to the newly activated tab（content script 可能尚未 ready，重试）
     const start_ok = await tabs_send_message_retry(activeInfo.tabId, {
         action: 'start',
-        config: current_config,
-        capture_id: current_capture_id,
-        capture_start_epoch_ms: start_time,
+        config: cap_config,
+        capture_id: cap_id,
+        capture_start_epoch_ms: cap_start,
         tab_id: activeInfo.tabId,
     }, { label: 'start-on-activate' });
+    if (!capture_state.is_active_generation(gen)) return;
     if (start_ok) {
         logger.debug(`Sent start to tab ${activeInfo.tabId}`);
     }
 
     // Retry CDP-based capture on tab switch if previously failed (e.g. chrome:// URL at start)
-    if (current_config.capture_console && !is_console_active()) {
+    if (cap_config.capture_console && !is_console_active()) {
         const result = await start_console_capture(
-            current_capture_id!, start_time, activeInfo.tabId,
-            current_config.redact_data, handle_console_log
+            cap_id!, cap_start, activeInfo.tabId,
+            cap_config.redact_data, handle_console_log
         );
+        if (!capture_state.is_active_generation(gen)) return;
         if (result.success) {
             debugger_attached_tab_id = activeInfo.tabId;
             logger.info('Console capture retry succeeded on tab ' + activeInfo.tabId);
@@ -935,9 +944,9 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             logger.info('Exception capture retry succeeded on tab ' + activeInfo.tabId);
         }
     }
-    if (current_config.capture_network && current_config.capture_response_body) {
+    if (cap_config.capture_network && cap_config.capture_response_body) {
         const body_result = await start_body_capture(
-            current_capture_id!, start_time, current_config, activeInfo.tabId,
+            cap_id!, cap_start, cap_config, activeInfo.tabId,
             {
                 get_active_tab_url: async () => tab_url,
                 get_bridge_config: async () => {
@@ -948,6 +957,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             },
             debugger_attached_tab_id
         );
+        if (!capture_state.is_active_generation(gen)) return;
         await update_capture_body_state(body_result);
         if (body_result.mode === 'extension_cdp' || body_result.mode === 'external_cdp_bridge') {
             logger.info('Body capture retry succeeded on tab ' + activeInfo.tabId);

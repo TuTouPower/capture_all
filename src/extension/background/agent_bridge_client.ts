@@ -156,7 +156,7 @@ async function poll_cycle(
             if (!is_active_lifecycle(active_lifecycle_id)) return;
 
             try {
-                await send_result(agent_bridge_url, token, result);
+                await send_result_with_retry(agent_bridge_url, token, result);
             } catch (error) {
                 if (!is_active_lifecycle(active_lifecycle_id)) return;
                 log_bridge_error(
@@ -298,6 +298,30 @@ async function fetch_command(url: string, token: string): Promise<PendingCommand
     if (!response.ok) throw new BridgeHttpError(response.status);
 
     return response.json();
+}
+
+// T046: 结果投递失败重试。Bridge 已从队列移除命令，结果丢失会让 MCP 调用方收到 COMMAND_TIMEOUT。
+// 重试 3 次，每次退避 500ms / 1s / 2s；最终失败记日志（命令已执行但调用方收不到结果）。
+async function send_result_with_retry(url: string, token: string, result: unknown): Promise<void> {
+    const max_attempts = 3;
+    const delays = [0, 500, 1000];
+    let last_error: unknown = null;
+    for (let attempt = 0; attempt < max_attempts; attempt++) {
+        if (delays[attempt] > 0) {
+            await new Promise((r) => setTimeout(r, delays[attempt]));
+        }
+        try {
+            await send_result(url, token, result);
+            return; // 2xx 成功
+        } catch (error) {
+            last_error = error;
+            // 4xx（非 429）不重试：result 被拒绝（如 401/400）
+            if (error instanceof BridgeHttpError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+                throw error;
+            }
+        }
+    }
+    throw last_error ?? new Error('send_result exhausted retries');
 }
 
 async function send_result(url: string, token: string, result: unknown): Promise<void> {

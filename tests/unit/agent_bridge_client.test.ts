@@ -363,6 +363,8 @@ describe('agent bridge client', () => {
 
         start_bridge_client(create_deps());
         await run_initial_poll();
+        // T046: send_result_with_retry 有 setTimeout 重试，推进 fake timers 让重试跑完
+        await vi.advanceTimersByTimeAsync(2000);
         stop_bridge_client();
 
         expect(get_error_entries()).toEqual([

@@ -26,13 +26,13 @@ export default defineConfig({
         {
             command: 'npm run serve:e2e',
             url: 'http://127.0.0.1:4174/src/extension/popup/popup.html',
-            reuseExistingServer: true,
+            reuseExistingServer: !process.env.CI,
             timeout: 120000,
         },
         {
             command: 'npm run test:e2e:server',
             url: 'http://127.0.0.1:17832/test-page.html',
-            reuseExistingServer: true,
+            reuseExistingServer: !process.env.CI,
             timeout: 120000,
         },
     ],

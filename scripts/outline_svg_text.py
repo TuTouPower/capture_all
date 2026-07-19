@@ -54,11 +54,15 @@ def load_font(path: Path) -> TTFont:
 
 
 def pick_font(text: str, font_family: str) -> TTFont:
-    """中文优先 CJK Bold；纯拉丁用 Noto Sans Bold。"""
+    """中文优先 CJK Bold；纯拉丁用 Noto Sans Bold。
+
+    注意：font_family 参数当前不参与字体选择（工具仅支持两种固定字体），
+    传入但忽略。如需扩展字体选择逻辑，在此函数内解析 font_family。
+    """
+    del font_family  # 显式标注忽略：当前不支持按 font_family 选字体
     if any(ord(ch) > 0x2E7F for ch in text):
         if FONT_CJK_BOLD.is_file():
             return load_font(FONT_CJK_BOLD)
-    # font-family 里若点名 CJK 且字形覆盖拉丁，仍优先 Noto Sans Bold 保持西文一致
     if FONT_LATIN_BOLD.is_file():
         return load_font(FONT_LATIN_BOLD)
     raise FileNotFoundError(

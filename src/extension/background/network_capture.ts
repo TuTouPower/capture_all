@@ -421,6 +421,26 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             const req_headers = (request.headers || {}) as Record<string, string>;
             const request_body_mime = (req_headers['content-type'] || req_headers['Content-Type']) ?? null;
 
+            // 重定向：params.redirectResponse 存在时，先 emit 前一跳（保留证据）再覆盖
+            const redirect_response = params?.redirectResponse;
+            const existing = cdp_request_meta.get(req_id);
+            if (redirect_response && existing) {
+                // 填充前一跳的响应信息
+                existing.status_code = redirect_response.status || 0;
+                existing.response_headers = headers_map_from_cdp(redirect_response.headers || {});
+                existing.mime_type = extract_mime_type(existing.response_headers);
+                // emit 前一跳（status 3xx，作为重定向中间事件）
+                const hop_body_result: CdpBodyResult = {
+                    body: null,
+                    status: 'not_enabled',
+                    timestamp: Date.now(),
+                    preview: null,
+                    encoding: null,
+                    byte_size: null,
+                };
+                send_to_background(build_cdp_primary_network_event(existing, hop_body_result, req_id));
+            }
+
             cdp_request_meta.set(req_id, {
                 url: request.url || '',
                 method: request.method || 'GET',
@@ -433,6 +453,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 request_body_status: req_body_status,
                 request_body_mime,
                 mime_type: null,
+                redirect_count: existing ? (existing.redirect_count || 0) + 1 : 0,
             });
         }
     }

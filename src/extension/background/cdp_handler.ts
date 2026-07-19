@@ -82,6 +82,7 @@ export interface CdpRequestMeta {
     response_body?: string | null;
     response_body_status?: BodyCaptureStatus;
     stream_mode?: 'none' | 'sse' | 'chunked';
+    redirect_count?: number;
 }
 
 export interface CdpBodyResult {

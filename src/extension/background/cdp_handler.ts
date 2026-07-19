@@ -127,54 +127,65 @@ export function handle_cdp_event(source: { tabId?: number; sessionId?: string },
     const req_id: string = params?.requestId;
     if (!req_id) return;
 
+    // 复合键：sessionId + requestId。CDP requestId 仅在 session 范围内唯一，
+    // flatten:auto-attach 后跨主页面/iframe/worker 子目标可能重复。
+    // 内部 Map/Set 用 req_key，CDP 命令 requestId 仍用原 req_id，输出 request_id 字段保留原 req_id。
+    const req_key = cdp_request_key(source, req_id);
+
     if (method === 'Network.requestWillBeSent') {
-        handle_request_will_be_sent(req_id, params, state);
+        handle_request_will_be_sent(req_key, req_id, params, state);
     }
 
     if (method === 'Network.responseReceived') {
-        handle_response_received(req_id, params, state);
+        handle_response_received(req_key, req_id, params, state);
     }
 
     if (method === 'Network.dataReceived') {
-        handle_data_received(req_id, params, state);
+        handle_data_received(req_key, params, state);
     }
 
     if (method === 'Network.loadingFinished') {
-        handle_loading_finished(req_id, params, state);
+        handle_loading_finished(req_key, req_id, params, state);
     }
 
     if (method === 'Network.loadingFailed') {
-        handle_loading_failed(req_id, params, state);
+        handle_loading_failed(req_key, params, state);
     }
 
     // ── WebSocket events ──
     if (method === 'Network.webSocketCreated') {
-        handle_ws_created(req_id, params, state);
+        handle_ws_created(req_key, req_id, params, state);
     }
 
     if (method === 'Network.webSocketWillSendHandshakeRequest') {
-        handle_ws_handshake_request(req_id, params, state);
+        handle_ws_handshake_request(req_key, params, state);
     }
 
     if (method === 'Network.webSocketHandshakeResponseReceived') {
-        handle_ws_handshake_response(req_id, params, state);
+        handle_ws_handshake_response(req_key, req_id, params, state);
     }
 
     if (method === 'Network.webSocketFrameSent') {
-        send_ws_frame(req_id, 'sent', params, state);
+        send_ws_frame(req_key, req_id, 'sent', params, state);
     }
 
     if (method === 'Network.webSocketFrameReceived') {
-        send_ws_frame(req_id, 'received', params, state);
+        send_ws_frame(req_key, req_id, 'received', params, state);
     }
 
     if (method === 'Network.webSocketFrameError') {
-        handle_ws_frame_error(req_id, params, state);
+        handle_ws_frame_error(req_key, req_id, params, state);
     }
 
     if (method === 'Network.webSocketClosed') {
-        handle_ws_closed(req_id, state);
+        handle_ws_closed(req_key, req_id, state);
     }
+}
+
+// 复合 key：${sessionId ?? 'root'}:${requestId}
+export function cdp_request_key(source: { sessionId?: string } | undefined, req_id: string): string {
+    const sid = source?.sessionId;
+    return sid ? `${sid}:${req_id}` : `root:${req_id}`;
 }
 
 function handle_sub_target_attached(params: any, state: CdpHandlerState): void {
@@ -209,7 +220,7 @@ function handle_sub_target_detached(params: any): void {
     }
 }
 
-function handle_request_will_be_sent(req_id: string, params: any, state: CdpHandlerState): void {
+function handle_request_will_be_sent(req_key: string, _req_id: string, params: any, state: CdpHandlerState): void {
     const request = params?.request;
     if (request) {
         // BUG-005: 排除扩展自身 origin 与本地 Bridge URL，避免 /log 等端点
@@ -233,7 +244,7 @@ function handle_request_will_be_sent(req_id: string, params: any, state: CdpHand
         const req_headers = (request.headers || {}) as Record<string, string>;
         const request_body_mime = (req_headers['content-type'] || req_headers['Content-Type']) ?? null;
 
-        state.cdp_request_meta.set(req_id, {
+        state.cdp_request_meta.set(req_key, {
             url: request.url || '',
             method: request.method || 'GET',
             status_code: 0,
@@ -249,9 +260,9 @@ function handle_request_will_be_sent(req_id: string, params: any, state: CdpHand
     }
 }
 
-function handle_response_received(req_id: string, params: any, state: CdpHandlerState): void {
+function handle_response_received(req_key: string, req_id: string, params: any, state: CdpHandlerState): void {
     const response = params?.response;
-    const existing = state.cdp_request_meta.get(req_id);
+    const existing = state.cdp_request_meta.get(req_key);
     const resp_headers = headers_map_from_cdp(response?.headers || {});
     const mime = extract_mime_type(resp_headers);
     if (existing) {
@@ -259,7 +270,7 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
         existing.response_headers = resp_headers;
         existing.mime_type = mime;
     } else {
-        state.cdp_request_meta.set(req_id, {
+        state.cdp_request_meta.set(req_key, {
             url: response?.url || '',
             method: '',
             status_code: response?.status || 0,
@@ -275,13 +286,13 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
     }
 
     if (state.config.capture_response_body && is_streaming_response(resp_headers) && state.dbg_tab_id !== null) {
-        state.streaming_requests.add(req_id);
+        state.streaming_requests.add(req_key);
         if (existing) {
             existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
         }
-        if (state.finished_before_stream.delete(req_id)) {
+        if (state.finished_before_stream.delete(req_key)) {
             // loadingFinished already fired — skip streamResourceContent, mark partial
-            logger.debug('stream_skipped_already_finished', { req_id });
+            logger.debug('stream_skipped_already_finished', { req_key });
             if (existing) {
                 existing.response_body_status = 'partial';
             }
@@ -292,12 +303,12 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
                 { requestId: req_id }
             ).then((result: any) => {
                 if (result?.bufferedData) {
-                    state.stream_buffer_instance?.append(req_id, result.bufferedData);
+                    state.stream_buffer_instance?.append(req_key, result.bufferedData);
                 }
-                logger.debug('stream_started', { req_id, mime });
+                logger.debug('stream_started', { req_key, mime });
             }).catch((err: any) => {
-                logger.debug('streamResourceContent_failed', { req_id, error: String(err).slice(0, 80) });
-                const meta = state.cdp_request_meta.get(req_id);
+                logger.debug('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
+                const meta = state.cdp_request_meta.get(req_key);
                 if (meta) {
                     meta.response_body_status = 'partial';
                 }
@@ -308,25 +319,25 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
     }
 }
 
-function handle_data_received(req_id: string, params: any, state: CdpHandlerState): void {
-    if (state.streaming_requests.has(req_id)) {
+function handle_data_received(req_key: string, params: any, state: CdpHandlerState): void {
+    if (state.streaming_requests.has(req_key)) {
         const chunk = params?.data;
         if (chunk && state.stream_buffer_instance) {
-            state.stream_buffer_instance.append(req_id, chunk);
+            state.stream_buffer_instance.append(req_key, chunk);
         }
     }
 }
 
-function handle_loading_finished(req_id: string, _params: any, state: CdpHandlerState): void {
+function handle_loading_finished(req_key: string, req_id: string, _params: any, state: CdpHandlerState): void {
     if (state.dbg_tab_id === null) return;
-    state.finished_before_stream.add(req_id);
-    const meta_for_method = state.cdp_request_meta.get(req_id);
+    state.finished_before_stream.add(req_key);
+    const meta_for_method = state.cdp_request_meta.get(req_key);
     const http_method = meta_for_method?.method?.toUpperCase() || '';
 
     // capture_response_body=false: 不发起 getResponseBody/streamResourceContent
     if (!state.config.capture_response_body) {
-        if (state.streaming_requests.has(req_id)) {
-            state.streaming_requests.delete(req_id);
+        if (state.streaming_requests.has(req_key)) {
+            state.streaming_requests.delete(req_key);
         }
         const body_result: CdpBodyResult = {
             body: null,
@@ -336,19 +347,19 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
             encoding: null,
             byte_size: null,
         };
-        const meta = state.cdp_request_meta.get(req_id);
+        const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_id);
+            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
-            state.cdp_request_meta.delete(req_id);
+            state.cdp_request_meta.delete(req_key);
         }
         return;
     }
 
-    if (state.streaming_requests.has(req_id)) {
-        state.stream_buffer_instance?.force_flush(req_id);
-        state.streaming_requests.delete(req_id);
-        const meta = state.cdp_request_meta.get(req_id);
+    if (state.streaming_requests.has(req_key)) {
+        state.stream_buffer_instance?.force_flush(req_key);
+        state.streaming_requests.delete(req_key);
+        const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
             const body = meta.response_body || null;
             const byte_size = body ? new TextEncoder().encode(body).length : 0;
@@ -361,9 +372,9 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
                 encoding: 'utf8',
                 byte_size,
             };
-            state.cdp_primary_emitted.add(req_id);
+            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
-            state.cdp_request_meta.delete(req_id);
+            state.cdp_request_meta.delete(req_key);
         }
         return;
     }
@@ -383,7 +394,7 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
             // OPTIONS/HEAD typically have no body — not an error
             body_status = (http_method === 'OPTIONS' || http_method === 'HEAD')
                 ? 'not_enabled' : 'cdp_failed';
-            logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result', method: http_method });
+            logger.debug('get_body_failed', { req_key, reason: 'no_body_in_result', method: http_method });
         } else if (result.base64Encoded) {
             byte_size = base64_decoded_size(result.body);
             encoding = 'base64';
@@ -403,12 +414,12 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
         }
 
         const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview, encoding, byte_size };
-        state.cdp_body_results.set(req_id, body_result);
+        state.cdp_body_results.set(req_key, body_result);
 
         // CDP-first: if we have metadata, build and emit the complete entry directly
-        const meta = state.cdp_request_meta.get(req_id);
+        const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_id);
+            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             logger.debug('cdp_primary_emitted', {
                 url: meta.url?.slice(0, 120),
@@ -417,14 +428,14 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
                 body_len: body?.length ?? 0,
             });
             // Clean up — no need for orphan check since we already emitted
-            state.cdp_request_meta.delete(req_id);
-            state.cdp_body_results.delete(req_id);
+            state.cdp_request_meta.delete(req_key);
+            state.cdp_body_results.delete(req_key);
             return;
         }
 
         // No metadata yet — fall back to deferred/orphan resolution
-        try_resolve_deferred(req_id, state);
-        schedule_orphan_check(req_id, state);
+        try_resolve_deferred(req_key, state);
+        schedule_orphan_check(req_key, req_id, state);
     }).catch((err: any) => {
         // -32000 = "No resource with given identifier" (resource already released)
         // OPTIONS/HEAD have no body by spec
@@ -434,35 +445,35 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
         const status: BodyCaptureStatus = (is_resource_released || is_no_body_method)
             ? 'not_enabled' : 'cdp_failed';
         const fail_result: CdpBodyResult = { body: null, status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
-        state.cdp_body_results.set(req_id, fail_result);
-        logger.debug('get_body_error', { req_id, error: err_msg.slice(0, 100), status });
+        state.cdp_body_results.set(req_key, fail_result);
+        logger.debug('get_body_error', { req_key, error: err_msg.slice(0, 100), status });
 
         // CDP-first: emit even on failure (status will be cdp_failed)
-        const meta = state.cdp_request_meta.get(req_id);
+        const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_id);
+            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id, state));
-            state.cdp_request_meta.delete(req_id);
-            state.cdp_body_results.delete(req_id);
+            state.cdp_request_meta.delete(req_key);
+            state.cdp_body_results.delete(req_key);
             return;
         }
 
-        try_resolve_deferred(req_id, state);
-        schedule_orphan_check(req_id, state);
+        try_resolve_deferred(req_key, state);
+        schedule_orphan_check(req_key, req_id, state);
     });
 }
 
-function handle_loading_failed(req_id: string, _params: any, state: CdpHandlerState): void {
-    const fail_meta = state.cdp_request_meta.get(req_id);
+function handle_loading_failed(req_key: string, _params: any, state: CdpHandlerState): void {
+    const fail_meta = state.cdp_request_meta.get(req_key);
     const fail_method = fail_meta?.method?.toUpperCase() || '';
     const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
         ? 'not_enabled' : 'cdp_failed';
-    state.cdp_body_results.set(req_id, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
-    try_resolve_deferred(req_id, state);
-    schedule_orphan_check(req_id, state);
+    state.cdp_body_results.set(req_key, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
+    try_resolve_deferred(req_key, state);
+    schedule_orphan_check(req_key, '', state);
 }
 
-function handle_ws_created(req_id: string, params: any, state: CdpHandlerState): void {
+function handle_ws_created(req_key: string, req_id: string, params: any, state: CdpHandlerState): void {
     const ws_url = params?.url || '';
     const conn: WsConnectionMeta = {
         url: ws_url,
@@ -472,29 +483,29 @@ function handle_ws_created(req_id: string, params: any, state: CdpHandlerState):
         ws_status: 'connecting',
         created_ts: Date.now(),
     };
-    state.ws_connections.set(req_id, conn);
-    send_ws_connection_event(req_id, conn, 'connecting', state);
+    state.ws_connections.set(req_key, conn);
+    send_ws_connection_event(req_key, req_id, conn, 'connecting', state);
 }
 
-function handle_ws_handshake_request(req_id: string, params: any, state: CdpHandlerState): void {
-    const conn = state.ws_connections.get(req_id);
+function handle_ws_handshake_request(req_key: string, params: any, state: CdpHandlerState): void {
+    const conn = state.ws_connections.get(req_key);
     if (conn) {
         conn.request_headers = headers_map_from_cdp(params?.request?.headers || {});
     }
 }
 
-function handle_ws_handshake_response(req_id: string, params: any, state: CdpHandlerState): void {
-    const conn = state.ws_connections.get(req_id);
+function handle_ws_handshake_response(req_key: string, req_id: string, params: any, state: CdpHandlerState): void {
+    const conn = state.ws_connections.get(req_key);
     if (conn) {
         conn.response_headers = headers_map_from_cdp(params?.response?.headers || {});
         conn.status_code = params?.response?.status || 101;
         conn.ws_status = 'open';
-        send_ws_connection_event(req_id, conn, 'open', state);
+        send_ws_connection_event(req_key, req_id, conn, 'open', state);
     }
 }
 
-function handle_ws_frame_error(req_id: string, params: any, state: CdpHandlerState): void {
-    const frame_url = redact_url(state.ws_connections.get(req_id)?.url || '', Boolean(state.config.redact_data && state.config.redact_url_query)).url;
+function handle_ws_frame_error(req_key: string, req_id: string, params: any, state: CdpHandlerState): void {
+    const frame_url = redact_url(state.ws_connections.get(req_key)?.url || '', Boolean(state.config.redact_data && state.config.redact_url_query)).url;
     const frame_data: WsFrameData = {
         ws_connection_id: req_id,
         direction: 'error',
@@ -521,16 +532,16 @@ function handle_ws_frame_error(req_id: string, params: any, state: CdpHandlerSta
     state.send_to_background({ event, data: frame_data });
 }
 
-function handle_ws_closed(req_id: string, state: CdpHandlerState): void {
-    const conn = state.ws_connections.get(req_id);
+function handle_ws_closed(req_key: string, _req_id: string, state: CdpHandlerState): void {
+    const conn = state.ws_connections.get(req_key);
     if (conn) {
         conn.ws_status = 'closed';
-        send_ws_connection_event(req_id, conn, 'closed', state);
-        state.ws_connections.delete(req_id);
+        send_ws_connection_event(req_key, _req_id, conn, 'closed', state);
+        state.ws_connections.delete(req_key);
     }
 }
 
-function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_status: WsConnectionMeta['ws_status'], state: CdpHandlerState): void {
+function send_ws_connection_event(_req_key: string, req_id: string, conn: WsConnectionMeta, ws_status: WsConnectionMeta['ws_status'], state: CdpHandlerState): void {
     const redact_q = Boolean(state.config.redact_data && state.config.redact_url_query);
     const redact_hdrs = Boolean(state.config.redact_data && state.config.redact_sensitive_headers);
     const url_result = redact_url(conn.url, redact_q);
@@ -590,7 +601,7 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
     state.send_to_background({ event, data });
 }
 
-function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: any, state: CdpHandlerState): void {
+function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'received', params: any, state: CdpHandlerState): void {
     const resp = params?.response || {};
     // 仅拦截 undefined（CDP 控制帧不携带 payloadData），保留空字符串（合法 payload）
     const raw_payload = resp.payloadData === undefined ? null : resp.payloadData;
@@ -616,7 +627,7 @@ function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: a
         payload_encoding = is_binary ? 'base64' : 'utf8';
     }
 
-    const conn = state.ws_connections.get(req_id);
+    const conn = state.ws_connections.get(req_key);
     const frame_url = redact_url(conn?.url || '', Boolean(state.config.redact_data && state.config.redact_url_query)).url;
     const frame_data: WsFrameData = {
         ws_connection_id: req_id,
@@ -794,20 +805,20 @@ function try_resolve_deferred(cdp_req_id: string, state: CdpHandlerState): void 
     state._deferred_cdp_index.delete(cdp_req_id);
 }
 
-function schedule_orphan_check(req_id: string, state: CdpHandlerState): void {
+function schedule_orphan_check(req_key: string, req_id: string, state: CdpHandlerState): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
     // emit it as cdp_only via the callback.
     setTimeout(() => {
         if (!state.on_cdp_body_event) return;
-        const body_result = state.cdp_body_results.get(req_id);
+        const body_result = state.cdp_body_results.get(req_key);
         if (!body_result) return; // already matched and consumed by handle_completed
-        const meta = state.cdp_request_meta.get(req_id);
+        const meta = state.cdp_request_meta.get(req_key);
 
         const redact_hdrs = Boolean(state.config.redact_data && state.config.redact_sensitive_headers);
         const redact_q = Boolean(state.config.redact_data && state.config.redact_url_query);
 
         const event: CdpBodyEvent = {
-            request_id: req_id,
+            request_id: req_id || req_key,
             tab_id: state.dbg_tab_id || 0,
             url: redact_url(meta?.url || '', redact_q).url,
             method: meta?.method || 'GET',
@@ -826,9 +837,9 @@ function schedule_orphan_check(req_id: string, state: CdpHandlerState): void {
         state.on_cdp_body_event(event);
 
         // Cleanup orphan entries
-        state.cdp_request_meta.delete(req_id);
-        state.cdp_body_results.delete(req_id);
-        state._deferred_cdp_index.delete(req_id);
+        state.cdp_request_meta.delete(req_key);
+        state.cdp_body_results.delete(req_key);
+        state._deferred_cdp_index.delete(req_key);
     }, 3000); // ORPHAN_TIMEOUT_MS
 }
 

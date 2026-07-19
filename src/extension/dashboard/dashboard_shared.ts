@@ -37,6 +37,8 @@ let _dt_zoom = 50;
 let _dt_zoom_overview = true;
 let _dt_net_sel = -1;
 let _dt_net_insp_closed = false;
+let _cap_search = '';
+let _cap_status_filter: 'all' | 'capturing' | 'completed' = 'all';
 
 // state accessors
 export const get_user_config = () => _user_config;
@@ -83,6 +85,10 @@ export const get_dt_zoom_window_pct = () => (
 );
 export const get_dt_net_sel = () => _dt_net_sel;
 export const set_dt_net_sel = (v: number) => { _dt_net_sel = v; };
+export const get_cap_search = () => _cap_search;
+export const set_cap_search = (v: string) => { _cap_search = v; };
+export const get_cap_status_filter = () => _cap_status_filter;
+export const set_cap_status_filter = (v: 'all' | 'capturing' | 'completed') => { _cap_status_filter = v; };
 export const get_dt_net_insp_closed = () => _dt_net_insp_closed;
 export const set_dt_net_insp_closed = (v: boolean) => { _dt_net_insp_closed = v; };
 

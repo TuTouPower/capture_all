@@ -3,20 +3,38 @@ import {
     is_extension, esc, I, num, fmt_size, est_bytes, pct,
     capture_name, capture_dur, format_system_time,
     get_user_config, get_captures, get_selected,
+    get_cap_search, get_cap_status_filter,
+    set_cap_search, set_cap_status_filter,
     load_captures, export_capture,
+    debounce,
     router,
 } from './dashboard_shared';
+
+// 按搜索词 + 状态过滤 captures
+function filter_captures(all: ReturnType<typeof get_captures>) {
+    const q = get_cap_search().trim().toLowerCase();
+    const sf = get_cap_status_filter();
+    return all.filter((s) => {
+        if (sf !== 'all' && s.status !== sf) return false;
+        if (!q) return true;
+        const name = capture_name(s).toLowerCase();
+        const url = (s.url || '').toLowerCase();
+        const tags = (s.tags || []).join(' ').toLowerCase();
+        return name.includes(q) || url.includes(q) || tags.includes(q);
+    });
+}
 
 // Re-export export_capture so dashboard.ts can import it (already in shared)
 
 function render_captures(): string {
-    const captures = get_captures();
+    const all = get_captures();
+    const captures = filter_captures(all);
     const user_config = get_user_config();
     const selected = get_selected();
-    const total = captures.length;
-    const withErr = captures.filter((s) => (s.stats?.error_count || 0) > 0).length;
-    const completed = captures.filter((s) => s.status === 'completed').length;
-    const totalBytes = captures.reduce((a, s) => a + est_bytes(s), 0);
+    const total = all.length;
+    const withErr = all.filter((s) => (s.stats?.error_count || 0) > 0).length;
+    const completed = all.filter((s) => s.status === 'completed').length;
+    const totalBytes = all.reduce((a, s) => a + est_bytes(s), 0);
     const stats = [
         { icon: 'navCaptures', lbl: '全部采集', val: num(total), tint: 'blue', sub: `${num(captures.length)} 次采集`, subTone: 'green' },
         { icon: 'err', lbl: '有错误', val: num(withErr), tint: 'red', sub: pct(withErr, total) },
@@ -45,12 +63,17 @@ function render_captures(): string {
         </tr>`;
     }).join('');
     const empty = `<tr><td colspan="13" style="text-align:center;color:var(--ink-4);padding:40px">暂无采集记录</td></tr>`;
+    const cur_search = get_cap_search().replace(/"/g, '&quot;');
+    const cur_sf = get_cap_status_filter();
+    const sf_label = cur_sf === 'all' ? '全部' : (cur_sf === 'capturing' ? '采集中' : '已完成');
     return `<div class="page">
         <div class="pg-head">
             <div class="pg-title"><h1>采集记录</h1><p>管理和查看所有已完成的采集记录，支持导出、归档和标签管理。</p></div>
             <div class="pg-actions">
-                <div class="searchbox">${I.search}<input placeholder="搜索采集名称、URL、标签…" id="capSearch"></div>
-                <button class="btn"><span>${I.filter}</span>筛选</button>
+                <div class="searchbox">${I.search}<input placeholder="搜索采集名称、URL、标签…" id="capSearch" value="${esc(cur_search)}"></div>
+                <button class="btn fb-status-btn" data-sf="all" data-cur="${cur_sf === 'all' ? 1 : 0}">全部</button>
+                <button class="btn fb-status-btn" data-sf="capturing" data-cur="${cur_sf === 'capturing' ? 1 : 0}">采集中</button>
+                <button class="btn fb-status-btn" data-sf="completed" data-cur="${cur_sf === 'completed' ? 1 : 0}">已完成</button>
                 <button class="ibtn" id="capRefresh" title="刷新">${I.refresh}</button>
             </div>
         </div>
@@ -65,7 +88,7 @@ function render_captures(): string {
             </div>`).join('')}
         </div>
         <div class="cap-filterbar">
-            <button class="fb-select">状态: <b>全部</b> ${I.chevD}</button>
+            <span class="fb-info">状态: <b>${sf_label}</b> · 共 ${num(captures.length)} 条（全部 ${num(total)}）</span>
             <button class="fb-reset" id="capReset">${I.reset}重置</button>
             <div class="fb-spacer"></div>
             <button class="ibtn" id="capRefresh2" title="刷新">${I.refresh}</button>
@@ -121,6 +144,26 @@ function wire_captures(): void {
     });
     c.querySelector('#capClear')?.addEventListener('click', () => { selected.clear(); router.render_content(); });
     c.querySelectorAll('#capRefresh, #capRefresh2').forEach((b) => b.addEventListener('click', async () => { await load_captures(); router.render_content(); }));
+    // 搜索输入（debounce 300ms）
+    const search_input = c.querySelector('#capSearch') as HTMLInputElement | null;
+    search_input?.addEventListener('input', debounce(() => {
+        set_cap_search(search_input.value);
+        router.render_content();
+        const restored = document.getElementById('capSearch') as HTMLInputElement | null;
+        if (restored) { restored.focus(); restored.setSelectionRange(restored.value.length, restored.value.length); }
+    }, 300));
+    // 重置：清空搜索 + 状态过滤
+    c.querySelector('#capReset')?.addEventListener('click', () => {
+        set_cap_search('');
+        set_cap_status_filter('all');
+        router.render_content();
+    });
+    // 状态过滤按钮
+    c.querySelectorAll('.fb-status-btn').forEach((b) => b.addEventListener('click', () => {
+        const sf = (b as HTMLElement).dataset.sf as 'all' | 'capturing' | 'completed';
+        set_cap_status_filter(sf);
+        router.render_content();
+    }));
     c.querySelectorAll('[data-export]').forEach((b) => b.addEventListener('click', () => export_capture((b as HTMLElement).dataset.export!)));
     c.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => del_capture((b as HTMLElement).dataset.del!)));
     c.querySelector('#batchExport')?.addEventListener('click', () => selected.forEach((id) => export_capture(id)));

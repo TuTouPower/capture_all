@@ -79,7 +79,13 @@ export function headers_array_to_map(arr: Array<{ name: string; value?: string }
     const out: Record<string, string> = {};
     if (!arr) return out;
     for (const h of arr) {
-        out[h.name] = h.value || '';
+        const value = h.value || '';
+        if (h.name in out) {
+            // T055: 重复 header（如 Set-Cookie/Warning/Link）用逗号合并保留所有值
+            out[h.name] = `${out[h.name]}, ${value}`;
+        } else {
+            out[h.name] = value;
+        }
     }
     return out;
 }

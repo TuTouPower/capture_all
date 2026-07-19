@@ -108,9 +108,18 @@ export async function handle_cdp_start(
             return { status: 200, body: { ok: false, error: { code: 'cdp_target_not_found', message: 'No CDP targets available' } } };
         }
 
-        // Find matching target or use first page target
-        let target = targets.find(t => t.url === tab_url) || targets.find(t => t.type === 'page') || targets[0];
-        if (!target.webSocketDebuggerUrl) {
+        // T061: tab_url 非空时精确匹配；无匹配则 fail fast，不退回其他页面
+        let target;
+        if (tab_url) {
+            target = targets.find(t => t.url === tab_url);
+            if (!target) {
+                return { status: 200, body: { ok: false, error: { code: 'cdp_target_not_found', message: `No target matching tab_url: ${tab_url}` } } };
+            }
+        } else {
+            // tab_url 为空时退回首个 page target
+            target = targets.find(t => t.type === 'page') || targets[0];
+        }
+        if (!target || !target.webSocketDebuggerUrl) {
             return { status: 200, body: { ok: false, error: { code: 'cdp_target_not_found', message: 'Target has no WebSocket URL' } } };
         }
 

@@ -9,6 +9,46 @@ export interface ExternalCdpBridgeConfig {
     cdp_ports: number[];
 }
 
+// T052: 仅允许 http(s)://127.0.0.1 或 http(s)://localhost 的 Bridge URL
+// 防止配置错误/篡改时 token、tab URL、CDP 控制请求泄漏到远端
+export function is_allowed_bridge_url(raw_url: string): { ok: boolean; reason?: string } {
+    let parsed: URL;
+    try {
+        parsed = new URL(raw_url);
+    } catch {
+        return { ok: false, reason: 'invalid URL' };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { ok: false, reason: 'scheme must be http/https' };
+    }
+    const host = parsed.hostname;
+    // 仅允许 127.0.0.1、localhost、[::1]
+    if (host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') {
+        return { ok: false, reason: 'host must be 127.0.0.1 / localhost / [::1]' };
+    }
+    if (parsed.username || parsed.password) {
+        return { ok: false, reason: 'credentials in URL not allowed' };
+    }
+    if (parsed.hash) {
+        return { ok: false, reason: 'fragment not allowed' };
+    }
+    if (parsed.pathname !== '/' && parsed.pathname !== '') {
+        return { ok: false, reason: 'path not allowed (use root)' };
+    }
+    return { ok: true };
+}
+
+// 验证 Bridge URL，无效时抛错；返回规范化的 base URL（去 query/hash/cred）
+function validate_bridge_url(raw_url: string): string {
+    const check = is_allowed_bridge_url(raw_url);
+    if (!check.ok) {
+        throw new Error(`Bridge URL rejected: ${check.reason}`);
+    }
+    // 返回 origin（scheme://host:port），不带 path/query/hash
+    const parsed = new URL(raw_url);
+    return parsed.origin;
+}
+
 export interface BridgeBodyEvent {
     request_id: string;
     tab_id: number;
@@ -39,11 +79,12 @@ const DETECT_TIMEOUT_MS = 3000;
 export async function detect_external_cdp(
     config: ExternalCdpBridgeConfig
 ): Promise<BridgeDetectResult> {
+    const base = validate_bridge_url(config.bridge_url);
     const ports = config.cdp_ports.length > 0 ? config.cdp_ports : DEFAULT_CDP_PORTS;
 
     for (const port of ports) {
         try {
-            const res = await fetch(`${config.bridge_url}/cdp/detect`, {
+            const res = await fetch(`${base}/cdp/detect`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${config.bridge_token}`,
@@ -80,8 +121,9 @@ export async function start_external_cdp(
     redact_sensitive_headers: boolean = true,
     redact_url_query: boolean = true,
 ): Promise<{ success: boolean; error?: string; session_key?: string }> {
+    const base = validate_bridge_url(config.bridge_url);
     try {
-        const res = await fetch(`${config.bridge_url}/cdp/start`, {
+        const res = await fetch(`${base}/cdp/start`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${config.bridge_token}`,
@@ -113,9 +155,10 @@ export async function poll_external_cdp_events(
     config: ExternalCdpBridgeConfig,
     session_key: string
 ): Promise<BridgeBodyEvent[]> {
+    const base = validate_bridge_url(config.bridge_url);
     try {
         const res = await fetch(
-            `${config.bridge_url}/cdp/events?session_key=${encodeURIComponent(session_key)}`,
+            `${base}/cdp/events?session_key=${encodeURIComponent(session_key)}`,
             {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${config.bridge_token}` },
@@ -135,8 +178,9 @@ export async function stop_external_cdp(
     config: ExternalCdpBridgeConfig,
     session_key: string
 ): Promise<void> {
+    const base = validate_bridge_url(config.bridge_url);
     try {
-        await fetch(`${config.bridge_url}/cdp/stop`, {
+        await fetch(`${base}/cdp/stop`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${config.bridge_token}`,

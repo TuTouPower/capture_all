@@ -149,7 +149,27 @@ describe('service worker stale capture cleanup', () => {
         expect(storage_set).toHaveBeenCalledWith({
             is_capturing: false,
             current_capture: null,
+            active_capture_id: null,
+            active_capture_start_ms: null,
+            active_capture_config: null,
+            active_capture_generation: null,
         });
         expect(get_cleanup_errors()).toHaveLength(0);
+    });
+
+    test('reads active_capture_id key and finalizes stale capture', async () => {
+        storage_get.mockResolvedValue({
+            active_capture_id: 'cap_legacy',
+            active_capture_start_ms: Date.now(),
+        });
+        update_capture.mockResolvedValue(undefined);
+        storage_set.mockResolvedValue(undefined);
+
+        await import_and_run_cleanup();
+
+        // 即使无 current_capture record，也清空所有键
+        expect(storage_set).toHaveBeenCalledWith(expect.objectContaining({
+            active_capture_id: null,
+        }));
     });
 });

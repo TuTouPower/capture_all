@@ -122,10 +122,16 @@ setTimeout(() => {
 
 // Clean up stale capture state on service worker restart
 async function cleanup_stale_capture_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
-    if (result.is_capturing) {
-        logger.warn('Detected stale capturing state, cleaning up');
-        const stale_capture = result.current_capture as CaptureRecord | null;
+    // 读取活跃采集持久化键（T030 新增）+ 旧键（向后兼容）
+    const result = await chrome.storage.local.get([
+        'is_capturing', 'current_capture',
+        'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
+    ]);
+    const stale_capture_id = result.active_capture_id as string | undefined;
+    const legacy_active = result.is_capturing || stale_capture_id;
+    if (legacy_active) {
+        logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
+        const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
         if (stale_capture?.capture_id) {
             await update_capture({
                 ...stale_capture,
@@ -135,8 +141,32 @@ async function cleanup_stale_capture_state(): Promise<void> {
                     ? Date.now() - new Date(stale_capture.started_at).getTime()
                     : 0,
             });
+        } else if (stale_capture_id) {
+            // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
+            try {
+                const rec = await get_capture(stale_capture_id);
+                if (rec) {
+                    await update_capture({
+                        ...rec,
+                        status: 'completed',
+                        ended_at: new Date().toISOString(),
+                        duration_ms: rec.started_at
+                            ? Date.now() - new Date(rec.started_at).getTime()
+                            : 0,
+                    });
+                }
+            } catch (err) {
+                logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
+            }
         }
-        await chrome.storage.local.set({ is_capturing: false, current_capture: null });
+        await chrome.storage.local.set({
+            is_capturing: false,
+            current_capture: null,
+            active_capture_id: null,
+            active_capture_start_ms: null,
+            active_capture_config: null,
+            active_capture_generation: null,
+        });
         logger.info('Stale capture state cleaned up');
     }
 }
@@ -498,6 +528,18 @@ async function start_capture_inner(capture_id: string, config: CaptureConfig): P
         last_active_tab.set((active_tab as { windowId?: number }).windowId ?? 0, { tab_id: active_tab.id, url: active_tab.url || '' });
     }
 
+    // 持久化活跃采集状态，SW 重启时 cleanup_stale_capture_state 读取恢复/终态化
+    try {
+        await chrome.storage.local.set({
+            active_capture_id: capture_id,
+            active_capture_start_ms: now,
+            active_capture_config: config,
+            active_capture_generation: capture_state.current_generation(),
+        });
+    } catch (err) {
+        logger.warn('Failed to persist active capture state', { error: String(err).slice(0, 80) });
+    }
+
     logger.info('Capture started');
     return { success: true };
 }
@@ -597,6 +639,20 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
 
     await run_stop_step('stop_periodic_flush', () => { stop_periodic_flush(); });
     await run_stop_step('flush_all', () => flush_all());
+
+    // 清空持久化活跃采集状态
+    await run_stop_step('clear_active_capture_state', async () => {
+        try {
+            await chrome.storage.local.set({
+                active_capture_id: null,
+                active_capture_start_ms: null,
+                active_capture_config: null,
+                active_capture_generation: null,
+            });
+        } catch (err) {
+            logger.warn('Failed to clear active capture state', { error: String(err).slice(0, 80) });
+        }
+    });
 
     current_capture = null;
     last_active_tab.clear();

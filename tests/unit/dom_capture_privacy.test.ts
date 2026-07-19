@@ -5,7 +5,7 @@ import {
     start_dom_capture,
     stop_dom_capture,
 } from '../../src/extension/content/dom_capture';
-import type { InputEventData } from '../../src/shared/types';
+import type { CaptureEvent, InputEventData } from '../../src/shared/types';
 
 function capture_input_event(
     input_type: string,
@@ -20,8 +20,11 @@ function capture_input_event(
 
     start_dom_capture(
         { ...DEFAULT_CONFIG, redact_data },
-        (type, data: InputEventData) => {
-            if (type === 'input_event') events.push(data);
+        'cap_test',
+        Date.now(),
+        1,
+        (_event: CaptureEvent, data: InputEventData) => {
+            events.push(data);
         },
     );
     input.dispatchEvent(new Event('input', { bubbles: true }));

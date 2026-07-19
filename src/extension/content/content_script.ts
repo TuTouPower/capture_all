@@ -1,7 +1,6 @@
 // content/content_script.ts
 import type { CaptureConfig, CaptureEvent, EventType, RouteChangeData, DomReadyData, PageLoadData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
-import { category_for_event_type } from '../../shared/event_category';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
 import { start_scroll_capture, stop_scroll_capture } from './scroll_capture';
@@ -102,9 +101,9 @@ function start_capture(config: CaptureConfig): void {
     start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
     start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
     start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
-    start_dom_capture(config, send_event);
+    start_dom_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
     start_storage_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_network_hook(send_event);
+    start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id, config);
     start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
@@ -233,28 +232,12 @@ function send_capture_event(category: 'navigation' | 'capture_lifecycle', type: 
     });
 }
 
-function send_event(type_or_event: string | CaptureEvent, data?: unknown): void {
+function send_event(event: CaptureEvent, data?: unknown): void {
     if (!is_capturing) return;
-
-    // New format: called with (CaptureEvent, data) from migrated modules
-    // Old format: called with (type: string, data) from un-migrated modules
-    const event = typeof type_or_event === 'string'
-        ? {
-            capture_id,
-            category: category_for_event_type(type_or_event),
-            relative_time_ms: get_relative_time(capture_start_epoch_ms),
-            absolute_time: new Date().toISOString(),
-            type: type_or_event,
-            data,
-            tab_id,
-            frame_id,
-            url: window.location.href
-        }
-        : type_or_event;
 
     chrome.runtime.sendMessage({
         action: 'event',
-        event
+        event: data === undefined ? event : { ...event, data }
     }).catch((_err: unknown) => {
         // Ignore errors (e.g., extension context invalidated)
     });

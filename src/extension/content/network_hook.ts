@@ -5,6 +5,8 @@
 // Phase 2: unified network_request type with NetworkRequestData
 
 import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
+import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 const SIGNAL = '__capture_all_network_hook__';
 
@@ -233,7 +235,10 @@ const PAGE_SCRIPT = `(function() {
 })();`;
 
 let is_capturing = false;
-let send_event: (type: string, data: any) => void;
+let capture_id = '';
+let capture_start_epoch_ms = 0;
+let tab_id = 0;
+let send_event: (event: CaptureEvent, data: NetworkRequestData) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 function inject_page_script(): void {
@@ -248,10 +253,16 @@ function inject_page_script(): void {
 }
 
 export function start_network_hook(
-    sender: (type: string, data: any) => void
+    sender: (event: CaptureEvent, data: NetworkRequestData) => void,
+    new_capture_id: string,
+    new_capture_start_epoch_ms: number,
+    new_tab_id: number,
 ): void {
     if (is_capturing) return;
     send_event = sender;
+    capture_id = new_capture_id;
+    capture_start_epoch_ms = new_capture_start_epoch_ms;
+    tab_id = new_tab_id;
     is_capturing = true;
 
     inject_page_script();
@@ -263,8 +274,8 @@ export function start_network_hook(
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
 
-        send_event('network_body_hook', {
-            category: 'network',
+        const data: NetworkRequestData = {
+            request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             method: d.method || 'GET',
             url: d.url || '',
             url_status: 'captured',
@@ -281,9 +292,14 @@ export function start_network_hook(
             headers_status: 'captured',
             request_body: d.request_body ?? null,
             request_body_status: d.request_body_status || 'not_enabled',
+            request_body_encoding: null,
+            request_body_bytes: null,
+            request_body_mime: null,
             response_body: d.response_body ?? null,
             response_preview: typeof d.response_body === 'string' ? d.response_body.slice(0, 200) : null,
             response_body_status: d.response_body_status || 'failed',
+            response_body_encoding: null,
+            response_body_bytes: null,
             mime_type: null,
             request_size_bytes: null,
             response_size_bytes: null,
@@ -293,7 +309,20 @@ export function start_network_hook(
             error_text: null,
             capture_method: 'fallback_hook',
             body_capture_mode: 'fallback_hook',
-        });
+        };
+
+        send_event(
+            create_content_event({
+                capture_id,
+                category: 'network',
+                type: 'network_request',
+                relative_time_ms: get_relative_time(capture_start_epoch_ms),
+                tab_id,
+                url: location.href,
+                source: 'content_script',
+            }),
+            data,
+        );
     };
     window.addEventListener('message', message_listener, true);
 }

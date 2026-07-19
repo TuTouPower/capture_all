@@ -1,15 +1,28 @@
 // content/dom_capture.ts
-import type { CaptureConfig, InputEventData } from '../../shared/types';
+import type { CaptureConfig, CaptureEvent, InputEventData } from '../../shared/types';
 import { build_xpath } from '../shared/dom_utils';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 let is_capturing = false;
 let config: CaptureConfig;
-let send_event: (type: string, data: any) => void;
+let capture_id = '';
+let capture_start_epoch_ms = 0;
+let tab_id = 0;
+let send_event: (event: CaptureEvent, data: InputEventData) => void;
 
-export function start_dom_capture(cfg: CaptureConfig, sender: (type: string, data: any) => void): void {
+export function start_dom_capture(
+    cfg: CaptureConfig,
+    new_capture_id: string,
+    new_capture_start_epoch_ms: number,
+    new_tab_id: number,
+    sender: (event: CaptureEvent, data: InputEventData) => void,
+): void {
     if (is_capturing) return;
 
     config = cfg;
+    capture_id = new_capture_id;
+    capture_start_epoch_ms = new_capture_start_epoch_ms;
+    tab_id = new_tab_id;
     send_event = sender;
     is_capturing = true;
 
@@ -139,7 +152,18 @@ function emit_input_event(action: InputEventData['action'], target: HTMLElement)
         selected_count: null,
     };
 
-    send_event('input_event', data);
+    send_event(
+        create_content_event({
+            capture_id,
+            category: 'user_action',
+            type: 'input_event',
+            relative_time_ms: get_relative_time(capture_start_epoch_ms),
+            tab_id,
+            url: location.href,
+            source: 'content_script',
+        }),
+        data,
+    );
 }
 
 function handle_input(event: Event): void {

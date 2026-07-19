@@ -48,3 +48,28 @@
   - **scanner 仍报 `.claude/settings.json` forbidden-path**：pre-existing，非本次回归。
 - 下一步：merge main。建议顺序：先 `task_t001_align_repo_layout` → main，再 rebase `task_t002_shared_protocol_relocate` 到 main，最后 merge task_t002。
 
+---
+
+## 2026-07-20 交接：审阅修复 T011-T088（main）
+
+- **branch**: `main`
+- **head_commit**: `874ebc3`
+- **状态**: T011-T088 共 78 个 task 已完成（含 T001-T010 之前的 + T011-T088 本轮）。
+- **本轮完成范围**:
+  - P0 安全/隐私：T011-T017（token argv、URL 脱敏、redact_password、keyboard shortcuts、form_action URL、storage tab_id、WebSocket 脱敏、logger 脱敏、capture_response_body 配置、console/exception source filter）
+  - P0 正确性：T018-T027（命令 ID 全局唯一、CDP events 不丢、input_event event_id、WebSocket 单监听器、CDP 复合键、CDP 状态清理、stream_buffer 生命周期、loadingFailed 事件、SSE 字节上限、重定向链保留）
+  - SW 状态机：T028 spike + T029-T034（串行化、重启恢复、stop drain、start 回滚、listener generation、context clear）
+  - 存储/事务：T035-T038（tx.oncomplete、delete_capture 单事务、bytes_written UTF-8、buffer durability）
+  - Dashboard：T039-T042（搜索/筛选/导出 wiring、轮询单飞、navigation 列数）
+  - 导出/Agent：T043-T050（分页替代截断、HTML 转义、HAR 字节、结果投递重试、browser_label sync、dispatcher 错误码、app_log 分页、body coordinator 单飞）
+  - 隐私/安全：T051-T053（cookie scope、bridge URL allowlist、self_origin 精确化）
+  - 网络细节：T054-T056（body bytes、header 多值、correlator merge）
+  - 协议/分类：T057-T060（错误码别名、event_category exhaustive、event_id UUID、UserConfig schema）
+  - CDP/Bridge：T061-T063（target strict、connect status、boundary validation）
+  - 杂项：T064-T068（token file perm、ws cap、mouse target、keepalive idempotent）
+  - WS 修复：T072（session_id deprecated）
+  - 文档/CI：T074-T075（README 64MiB、token model）、T084-T088（PR template、scan archive skip、vite build time、screenshots path、playwright CI）
+- **未完成 backlog**: T069-T071（deferred disambiguation、external bridge response schema、WebSocket nonce）、T073（T008 finalize）、T076-T083（deployment/mcp_usage/contributing_dev/test.md/blueprint/troubleshooting/store_publish_list 文档重写）、T089（task spec template）、T090（export streaming）。
+- **测试状态**: `npm test` 102 文件 / 1137 用例全绿；`tsc --noEmit` 无错误。
+- **下一步**: 按优先级完成剩余 backlog；T076-T083 文档重写工作量大但风险低。
+

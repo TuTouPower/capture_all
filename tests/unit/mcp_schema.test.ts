@@ -254,8 +254,8 @@ describe('MCP tool schemas', () => {
         expect(pass('list_browsers', { timeout_ms: 5000 }).timeout_ms).toBe(5000);
     });
 
-    // --- browser_no passthrough ---
-    it('all tools accept optional browser_no', () => {
+    // --- target_instance_id / target_label passthrough ---
+    it('all tools accept optional target_instance_id', () => {
         const tools_without_capture_id = ['get_status', 'stop_recording', 'list_browsers', 'list_captures', 'list_sessions', 'start_recording'];
         for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
             const base_input = tools_without_capture_id.includes(tool)
@@ -269,8 +269,8 @@ describe('MCP tool schemas', () => {
                             : tool === 'export_capture' || tool === 'export_session'
                                 ? { capture_id: 'cap-001', format: 'json' }
                                 : { capture_id: 'cap-001' };
-            const result = MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, browser_no: 2 });
-            expect(result.browser_no).toBe(2);
+            const result = MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, target_instance_id: 'inst-1' });
+            expect(result.target_instance_id).toBe('inst-1');
         }
     });
 

@@ -331,35 +331,6 @@ describe('execute_mcp_tool', () => {
         }
     });
 
-    it('passes browser_no through to bridge payload', async () => {
-        const server = await start_test_server();
-        const client = new BridgeMcpClient(server.url, token);
-
-        await fetch(`${server.url}/extension/heartbeat`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
-            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null, browser_no: 2 }),
-        });
-
-        const tool_promise = execute_mcp_tool(client, {
-            name: 'start_recording',
-            arguments: { browser_no: 2 }
-        });
-        const command = await take_next_command(server.url);
-
-        expect(command.payload).toHaveProperty('browser_no', 2);
-
-        await fetch(`${server.url}/extension/result`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
-            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 'sess-1' } }),
-        });
-
-        await expect(tool_promise).resolves.toMatchObject({
-            ok: true,
-        });
-    });
-
     it('throws for unknown tool name', async () => {
         const server = await start_test_server();
         const client = new BridgeMcpClient(server.url, token);

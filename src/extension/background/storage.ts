@@ -214,32 +214,32 @@ export async function delete_capture(capture_id: string): Promise<void> {
         STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
     ];
 
-    for (const store_name of store_names) {
-        await new Promise<void>((resolve, reject) => {
-            const tx = database.transaction(store_name, 'readwrite');
-            const store = tx.objectStore(store_name);
+    // 单一 readwrite 事务覆盖全部 store，保证原子性
+    return new Promise((resolve, reject) => {
+        const tx = database.transaction(store_names, 'readwrite');
 
+        for (const store_name of store_names) {
+            const store = tx.objectStore(store_name);
             if (store_name === STORE_NAMES.CAPTURES) {
-                const request = store.delete(capture_id);
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
+                store.delete(capture_id);
             } else {
                 const index = store.index('capture_id');
                 const request = index.openCursor(IDBKeyRange.only(capture_id));
-
+                request.onerror = () => reject(request.error);
                 request.onsuccess = () => {
                     const cursor = request.result;
                     if (cursor) {
                         cursor.delete();
                         cursor.continue();
-                    } else {
-                        resolve();
                     }
                 };
-                request.onerror = () => reject(request.error);
             }
-        });
-    }
+        }
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
 }
 
 // ============================================================

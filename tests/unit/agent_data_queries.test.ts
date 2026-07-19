@@ -310,13 +310,14 @@ describe('load_agent_capture_data', () => {
         });
 
         expect(get_capture).toHaveBeenCalledWith('cap-1');
-        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'user_action', 0, 100000);
-        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'navigation', 0, 100000);
-        expect(get_network_requests).toHaveBeenCalledWith('cap-1', 0, 100000);
-        expect(get_console_events).toHaveBeenCalledWith('cap-1', 0, 100000);
-        expect(get_error_events).toHaveBeenCalledWith('cap-1', 0, 100000);
-        expect(get_storage_changes).toHaveBeenCalledWith('cap-1', 0, 100000);
-        expect(get_cookie_changes).toHaveBeenCalledWith('cap-1', 0, 100000);
+        // T043: 分页聚合，首次以 offset=0, PAGE_SIZE=5000 调用
+        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'user_action', 0, 5000);
+        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'navigation', 0, 5000);
+        expect(get_network_requests).toHaveBeenCalledWith('cap-1', 0, 5000);
+        expect(get_console_events).toHaveBeenCalledWith('cap-1', 0, 5000);
+        expect(get_error_events).toHaveBeenCalledWith('cap-1', 0, 5000);
+        expect(get_storage_changes).toHaveBeenCalledWith('cap-1', 0, 5000);
+        expect(get_cookie_changes).toHaveBeenCalledWith('cap-1', 0, 5000);
     });
 
     test('throws SESSION_NOT_FOUND when capture is missing', async () => {

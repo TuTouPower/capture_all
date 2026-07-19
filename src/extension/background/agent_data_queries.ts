@@ -48,7 +48,24 @@ const ALL_SOURCES: AgentDataSource[] = [
     'storage_changes',
     'cookie_changes'
 ];
-const FULL_DATA_LIMIT = 100000;
+
+// T043: 分页聚合，替代固定 FULL_DATA_LIMIT=100000 截断
+const PAGE_SIZE = 5000;
+
+async function fetch_all<T>(
+    fetcher: (offset: number, limit: number) => Promise<T[]>
+): Promise<T[]> {
+    const all: T[] = [];
+    let offset = 0;
+    while (true) {
+        const batch = await fetcher(offset, PAGE_SIZE);
+        if (batch.length === 0) break;
+        all.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+        offset += batch.length;
+    }
+    return all;
+}
 
 export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);
@@ -57,13 +74,13 @@ export async function load_agent_capture_data(capture_id: string): Promise<Agent
     }
 
     const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
-        get_events_by_category(capture_id, 'user_action', 0, FULL_DATA_LIMIT),
-        get_events_by_category(capture_id, 'navigation', 0, FULL_DATA_LIMIT),
-        get_network_requests(capture_id, 0, FULL_DATA_LIMIT),
-        get_console_events(capture_id, 0, FULL_DATA_LIMIT),
-        get_error_events(capture_id, 0, FULL_DATA_LIMIT),
-        get_storage_changes(capture_id, 0, FULL_DATA_LIMIT),
-        get_cookie_changes(capture_id, 0, FULL_DATA_LIMIT)
+        fetch_all((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
+        fetch_all((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
+        fetch_all((o, l) => get_network_requests(capture_id, o, l)),
+        fetch_all((o, l) => get_console_events(capture_id, o, l)),
+        fetch_all((o, l) => get_error_events(capture_id, o, l)),
+        fetch_all((o, l) => get_storage_changes(capture_id, o, l)),
+        fetch_all((o, l) => get_cookie_changes(capture_id, o, l))
     ]);
 
     return {

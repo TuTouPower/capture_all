@@ -110,12 +110,15 @@ async function init(): Promise<void> {
     // Auto-refresh: poll for capture state changes every 2s
     // TODO(M4): 改用 chrome.runtime.onMessage 监听 service worker 推送的变化通知，
     // 替代全量轮询。需 service_worker.ts 在 capture 状态变化时主动推送消息。
+    let poll_in_flight = false;
     setInterval(async () => {
         try {
             if (!is_extension) return;
-            const prev_state = get_captures().map(s => `${s.capture_id}:${s.status}`);
+            if (poll_in_flight) return; // 单飞：避免重叠
+            poll_in_flight = true;
+            const prev_state = get_captures().map(s => `${s.capture_id}:${s.status}:${s.stats?.event_count || 0}:${s.stats?.request_count || 0}`);
             await load_captures();
-            const cur_state = get_captures().map(s => `${s.capture_id}:${s.status}`);
+            const cur_state = get_captures().map(s => `${s.capture_id}:${s.status}:${s.stats?.event_count || 0}:${s.stats?.request_count || 0}`);
             const captures_changed = prev_state.join(',') !== cur_state.join(',');
             if (captures_changed) {
                 if (get_page() === 'captures' || get_page() === 'current' || get_page() === 'exports') {
@@ -128,6 +131,8 @@ async function init(): Promise<void> {
             }
         } catch (err) {
             logger.error('polling error', err);
+        } finally {
+            poll_in_flight = false;
         }
     }, 2000);
 }

@@ -70,3 +70,66 @@
 - 选项：A）保留 browser_no；B）取消 browser_no，改用 browser_label（人填备注）+ instance_id（机器生成）双键路由。
 - 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_AMBIGUOUS`。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
 - 替代：无
+
+## 009 CDP 状态按 sessionId+requestId 复合键索引（2026-07-19）
+
+- 背景：启用 `Target.setAutoAttach(flatten:true)` 后 CDP requestId 仅在 session 范围内唯一，跨主页面/iframe/worker 子目标可能重复，原按 requestId 索引的 Map 会互相覆盖。
+- 选项：A）保持 requestId 单键；B）改为 `${sessionId ?? 'root'}:${requestId}` 复合键。
+- 结论：选 B。所有 CDP 状态（cdp_request_meta/cdp_body_results/streaming_requests/finished_before_stream/ws_connections/orphan_timers）用复合键。CDP 命令 requestId 与输出 request_id 字段仍用原值。详见 T022。
+- 替代：无
+
+## 010 SW capture 状态机 + generation token（2026-07-19）
+
+- 背景：SW 用模块内存 `is_capturing` 管状态，无串行化（并发 start/stop 可同时通过入口检查）、SW 重启丢状态、异步 listener 跨采集写入。
+- 选项：A）保持现有模块变量；B）引入 capture_state 单例模块（5 阶段状态机 + run_exclusive 串行化 + generation token + 持久化恢复）。
+- 结论：选 B。`capture_state.ts` 单例，phase=idle/starting/capturing/stopping/rolling_back。run_exclusive 用 pending_promise 链串行化。generation 每次 begin_start 递增，listener 入口捕获 + await 后校验。持久化 4 个键到 chrome.storage.local，SW 重启 cleanup 恢复/终止旧采集。详见 T028-T034 spike + 实施。
+- 替代：无
+
+## 011 write_events 每次立即 flush（放弃 batch 优化换 durability）（2026-07-19）
+
+- 背景：MV3 SW 可在 buffer 未达 FLUSH_BATCH_SIZE 时被回收，调用方收到成功但数据未落 IndexedDB。
+- 选项：A）保持批量 buffer 优化；B）每次 write_events 立即 await flush_store。
+- 结论：选 B。性能代价（失去 batch 合并）换 durability，MV3 SW 回收窗口不再丢数据。flush 失败 batch 放回 buffer 头部重试。详见 T038。
+- 替代：无
+
+## 012 分页聚合替代固定 100000 截断（2026-07-19）
+
+- 背景：exporter.ts 与 agent_data_queries.ts 每类数据固定 limit=100000 静默截断，大采集无提示丢数据。
+- 选项：A）提高固定上限；B）分页循环读取至耗尽。
+- 结论：选 B。PAGE_SIZE=5000，循环 offset 直至 batch.length < PAGE_SIZE。Promise.all 并行 7 类。内存仍全量加载（流式输出留后续）。详见 T043。
+- 替代：无
+
+## 013 错误码渐进迁移：新码 + 别名兼容至 v2.0（2026-07-19）
+
+- 背景：协议仍用 SESSION_NOT_FOUND/RECORDING_ALREADY_RUNNING/NO_ACTIVE_RECORDING 旧术语，与领域文档要求的 capture 术语冲突。直接迁移是 breaking change。
+- 选项：A）一次性迁移所有错误码；B）新增 capture 系列新码 + 旧码保留为兼容别名 + ERROR_CODE_ALIASES 映射表。
+- 结论：选 B。新增 CAPTURE_NOT_FOUND/CAPTURE_ALREADY_RUNNING/NO_ACTIVE_CAPTURE。旧码保留，dispatcher 暂继续返回旧码。新客户端可用新码或通过映射表转换。v2.0 移除旧码。详见 T057。
+- 替代：无
+
+## 014 event_id 改用 crypto.randomUUID（2026-07-19）
+
+- 背景：event_id 用 Date.now()+Math.random()*1e6+counter，多 frame/SW 重启 counter 归零可碰撞。
+- 选项：A）保持原有生成方式；B）优先用 crypto.randomUUID()。
+- 结论：选 B。优先 crypto.randomUUID()（MV3 SW + content + browser 均支持），fallback 旧实现用于非 secure context。详见 T059。
+- 替代：无
+
+## 015 Cookie 按 tab domain 过滤（2026-07-19）
+
+- 背景：chrome.cookies.onChanged 是全局事件，采集期间其他标签页及后台站点 cookie 也会进入当前 capture。
+- 选项：A）保持全局采集；B）按目标 tab URL domain 过滤。
+- 结论：选 B。extract_target_domains 从 tab URL hostname 提取所有父域（含 dot 前缀），cookie.domain 匹配才采集。最小采集原则。详见 T051。
+- 替代：无
+
+## 016 外部 Bridge URL allowlist 仅 127.0.0.1（2026-07-19）
+
+- 背景：external_cdp_bridge_client 直接拼 config.bridge_url 不验证，配置被篡改时 token 泄漏到远端。
+- 选项：A）保持不校验；B）仅允许 http(s)://127.0.0.1/localhost/[::1]。
+- 结论：选 B。validate_bridge_url 解析 URL，拒绝非 http(s)/非本机/含凭据/fragment/非根 path。返回 origin 规范化。详见 T052。
+- 替代：无
+
+## 017 stop drain 顺序：先停生产者再翻 flag（2026-07-19）
+
+- 背景：stop_capture 先翻 is_capturing=false，回调入口看到 false 直接返回，stop 到生产者真正停止之间的事件被丢弃。
+- 选项：A）保持先翻 flag；B）进入 stopping 后不翻 flag，先停生产者 + drain，再翻 flag + 写 stopped。
+- 结论：选 B。capture_state.phase=stopping 拒绝新命令但继续接当前 generation 回调。先停生产者 -> flush_all drain -> 翻 is_capturing=false -> 写 stopped event（含 drain 后最终 stats）-> 清持久化键 -> idle。详见 T031。
+- 替代：无

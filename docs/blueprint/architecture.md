@@ -72,24 +72,27 @@ src/
 │   ├── _locales/                 # i18n 源（en / zh_CN）；构建复制到 artifacts/dist/_locales/
 │   ├── background/               # Service Worker - 采集核心
 │   │   ├── service_worker.ts     # 主入口，消息路由，生命周期管理
+│   │   ├── capture_state.ts      # 采集状态机单例（phase/generation/run_exclusive）
 │   │   ├── storage.ts            # IndexedDB CRUD 封装（store 路由 + flush）
 │   │   ├── network_capture.ts    # webRequest / CDP 网络采集
 │   │   ├── network_webrequest.ts # webRequest 纯工具函数
 │   │   ├── network_context.ts    # 网络上下文
 │   │   ├── network_correlator.ts # webRequest-CDP 请求关联（非活跃 tab）
+│   │   ├── cdp_handler.ts        # CDP 事件处理（复合键 sessionId:requestId）
 │   │   ├── console_capture.ts    # CDP console 采集
 │   │   ├── exception_capture.ts  # CDP runtime 异常采集
-│   │   ├── cookie_capture.ts     # chrome.cookies API 采集
-│   │   ├── body_capture_coordinator.ts # Body 捕获协调器
-│   │   ├── cdp_event_router.ts   # CDP 事件路由分发
-│   │   ├── stream_buffer.ts      # SSE / 流式响应增量缓冲
-│   │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端
-│   │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端
-│   │   ├── agent_command_dispatcher.ts # Agent 命令分发
-│   │   ├── agent_data_queries.ts # Agent 数据查询
+│   │   ├── cookie_capture.ts     # chrome.cookies API 采集（按 tab domain 过滤）
+│   │   ├── body_capture_coordinator.ts # Body 捕获协调器（单飞轮询）
+│   │   ├── cdp_event_router.ts   # CDP 事件路由分发（session 注册/注销）
+│   │   ├── stream_buffer.ts      # SSE / 流式响应增量缓冲（finish 删 entry）
+│   │   ├── webrequest_handler.ts # webRequest 事件处理
+│   │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端（URL allowlist）
+│   │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端（结果投递重试）
+│   │   ├── agent_command_dispatcher.ts # Agent 命令分发（结构化错误码）
+│   │   ├── agent_data_queries.ts # Agent 数据查询（分页聚合 PAGE_SIZE=5000）
 │   │   ├── app_log_storage.ts    # 应用日志存储
 │   │   ├── exporter.ts           # JSON / JSONL / HTML / HAR 导出
-│   │   └── keepalive.ts          # SW 保活（chrome.alarms）
+│   │   └── keepalive.ts          # SW 保活（chrome.alarms，幂等注册）
 │   ├── content/                  # Content Scripts - 页面内采集
 │   │   ├── content_script.ts     # 主入口，消息监听 + 按需激活
 │   │   ├── content_event_utils.ts
@@ -156,7 +159,9 @@ src/shared ──✗── 任何产品目录
 
 ### 4.1 Background Service Worker
 
-扩展生命周期管理、消息路由、采集协调、数据持久化。详见 `specs/capture_core.md`。
+扩展生命周期管理、消息路由、采集协调、数据持久化。
+
+**采集状态机**（`capture_state.ts`）：单例模块，5 阶段 `idle → starting → capturing → stopping → idle`（失败走 `rolling_back`）。`run_exclusive` 串行化 start/stop。generation token 防 listener 跨采集写入。持久化活跃采集状态到 `chrome.storage.local`，SW 重启时 cleanup 恢复/终止旧采集。
 
 消息协议（`chrome.runtime.sendMessage`）：
 
@@ -169,19 +174,19 @@ src/shared ──✗── 任何产品目录
 
 ### 4.2 Content Scripts
 
-`manifest.json` 声明 `matches: ["<all_urls>"]`、`run_at: "document_start"`、`all_frames: true`。启动后仅注册消息监听，收到 start 消息后才激活采集。详见 `specs/content_events.md`。
+`manifest.json` 声明 `matches: ["<all_urls>"]`、`run_at: "document_start"`、`all_frames: true`。启动后仅注册消息监听，收到 start 消息后才激活采集。所有事件通过 `create_content_event()` 统一构造（含 event_id/source/severity）。详见 `docs/specs/extension_capture.md`。
 
 ### 4.3 Popup / Dashboard / DevTools
 
-见 `specs/popup_3states.md` / `specs/dashboard.md` / `specs/devtools.md`。
+见 `docs/specs/dashboard.md`。
 
 ### 4.4 Agent / MCP 系统
 
-见 `specs/agent_mcp.md`。
+见 `docs/specs/mcp_server.md` + `docs/specs/bridge.md`。
 
 ### 4.5 Body Capture 三层架构
 
-见 `specs/network_body_capture.md`。
+Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/specs/extension_capture.md` "网络采集路径"。
 
 ## 5. 数据流
 
@@ -190,26 +195,32 @@ src/shared ──✗── 任何产品目录
 ```
 用户点击"开始采集"
   → Popup sendMessage({ action: 'start', config })
+  → capture_state.begin_start（phase=starting，generation++，run_exclusive 串行化）
   → SW 创建 CaptureRecord + 写 capture_started lifecycle 事件
+  → SW 持久化 active_capture_id/config/generation 到 chrome.storage.local
   → SW 通知所有 tab content script 激活
   → SW 按需 attach CDP（console / exception / body）
   → SW 启动 agent bridge 轮询
+  → capture_state.commit（phase=capturing）
   → Popup 切换"采集中"状态，每秒轮询 get_status
 
 采集中
-  → Content Script 捕获事件 → sendMessage → SW 规范化（生成 event_id）→ 按 category 路由到 store → IndexedDB
-  → webRequest / CDP 捕获网络 → 脱敏 → IndexedDB
-  → CDP Runtime.consoleAPICalled → console_event → console_events store
-  → CDP Runtime.exceptionThrown → runtime_exception → error_events store
-  → chrome.cookies.onChanged → cookie_change → cookie_changes store
-  → Content Script storage hook → storage_change → storage_changes store
+  → Content Script 捕获事件 → sendMessage → SW 规范化（create_base_event 生成 event_id）→ 按 category 路由到 store → 每次 write_events 立即 await flush_store → IndexedDB
+  → CDP 网络事件 → 复合键 ${sessionId}:${requestId} 索引 → 脱敏 → IndexedDB
+  → CDP Runtime.consoleAPICalled → should_handle_event(source, tab_id) 过滤 → console_events store
+  → CDP Runtime.exceptionThrown → 同上过滤 → error_events store
+  → chrome.cookies.onChanged → 按 tab domain 过滤 → cookie_changes store
+  → Content Script storage hook → storage_changes store
 
-用户点击"点击结束"
+用户点击"结束采集"
   → Popup sendMessage({ action: 'stop' })
-  → SW 通知 content script 停止
-  → SW detach debugger
-  → SW flush 所有未写入数据（批次 100，间隔 1000ms，停止时强制）
-  → SW 更新 CaptureRecord status=completed，写 capture_stopped lifecycle
+  → capture_state.begin_stop（phase=stopping，不立即翻 is_capturing）
+  → 先停生产者（network/body/cookie/console/exception + notify content scripts）
+  → drain：stop_periodic_flush + flush_all（剩余事件落库）
+  → 翻 is_capturing=false
+  → 写 stopped event + update_capture（drain 后最终 stats）+ flush
+  → 清空持久化键 + current_capture_id/start_time/config
+  → capture_state.commit（phase=idle）
   → Popup 切换"采集完成"状态
 ```
 
@@ -218,17 +229,17 @@ src/shared ──✗── 任何产品目录
 ```
 Agent → MCP 工具调用
   → MCP POST /mcp/command 到 Bridge
-  → Bridge 写入命令队列
+  → Bridge queue.enqueue（命令 ID 全局唯一 cmd_<counter>_<uuid>）
   → 扩展 Bridge Client 轮询 GET /extension/command 取命令
-  → Client 调用 Agent Data Queries
+  → Client 调用 Agent Data Queries（分页聚合 PAGE_SIZE=5000）
   → Data Queries 读 IndexedDB
-  → 结果 POST /extension/result 回 Bridge
+  → 结果 POST /extension/result 回 Bridge（失败重试 3 次）
   → Bridge 返回 MCP → Agent
 ```
 
 ### 5.3 响应体捕获流程
 
-见 `specs/network_body_capture.md`。
+见 `docs/specs/extension_capture.md` "网络采集路径"。
 
 ## 6. Chrome 权限
 
@@ -236,13 +247,11 @@ Agent → MCP 工具调用
 
 ## 7. 构建产物与依赖
 
-- 扩展输出：`artifacts/dist/`。
-- Vite 多入口：background、content、popup、dashboard、devtools、devtools_panel。
+- 扩展输出：`artifacts/dist/` + `artifacts/extension.zip`。
+- Vite 多入口：background、content、popup、dashboard、devtools。
 - Bridge 输出：`artifacts/bridge/bridge.mjs`（esbuild 单文件，`npm run build:bridge`）。
 - MCP Server 输出：`artifacts/mcp/mcp.mjs`（esbuild 单文件，`npm run build:mcp`）。
 - 测试输出：`artifacts/test-results/`。
 
 Bridge/MCP 产物为 esbuild bundled ESM，不依赖 tsx 和 node_modules，可直接 `node bridge.mjs` 运行。
-MCP Server 通过 Claude Code 的 `.claude/settings.json` `mcpServers` 注册，启动后自动加载 12 个 MCP 工具。
-
-依赖与脚本命令的完整清单见 `package.json`；测试/构建/启动命令见 `test.md`。
+MCP Server 通过 Claude Code 的 `.claude/settings.json` `mcpServers` 注册，启动后自动加载 17 个 MCP 工具（15 主工具 + 2 别名对）。

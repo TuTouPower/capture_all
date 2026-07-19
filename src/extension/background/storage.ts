@@ -148,9 +148,10 @@ export async function create_capture(capture: CaptureRecord): Promise<void> {
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readwrite');
         const store = tx.objectStore(STORE_NAMES.CAPTURES);
-        const request = store.add(capture);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        store.add(capture);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
     });
 }
 
@@ -192,9 +193,10 @@ export async function update_capture(capture: CaptureRecord): Promise<void> {
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readwrite');
         const store = tx.objectStore(STORE_NAMES.CAPTURES);
-        const request = store.put(capture);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        store.put(capture);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
     });
 }
 
@@ -367,14 +369,29 @@ async function flush_store(store_name: string): Promise<void> {
 
         for (const item of batch) {
             store.put(item);
-            const capture_id = (item as unknown as Record<string, unknown>).capture_id as string;
-            if (capture_id) {
-                update_bytes_written(capture_id, JSON.stringify(item).length);
-            }
         }
 
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+        tx.oncomplete = () => {
+            // 仅在事务提交后累计字节（避免 abort 后虚高）
+            for (const item of batch) {
+                const capture_id = (item as unknown as Record<string, unknown>).capture_id as string;
+                if (capture_id) {
+                    update_bytes_written(capture_id, JSON.stringify(item).length);
+                }
+            }
+            resolve();
+        };
+        tx.onerror = () => {
+            // 失败：batch 按原顺序放回 buffer 头部供下次重试
+            const existing = buffers.get(store_name) || [];
+            buffers.set(store_name, [...batch, ...existing]);
+            reject(tx.error);
+        };
+        tx.onabort = () => {
+            const existing = buffers.get(store_name) || [];
+            buffers.set(store_name, [...batch, ...existing]);
+            reject(tx.error);
+        };
     });
 }
 
@@ -414,7 +431,9 @@ export function start_periodic_flush(): void {
         for (const name of store_names) {
             const buf = buffers.get(name);
             if (buf && buf.length > 0) {
-                flush_store(name).catch(() => { /* best effort */ });
+                flush_store(name).catch((_err) => {
+                    // flush_store 已在 tx.onerror/onabort 回填 buffer；周期 flush 静默避免刷屏
+                });
             }
         }
     }, FLUSH_INTERVAL_MS);

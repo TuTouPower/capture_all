@@ -85,6 +85,43 @@ describe('redact_url', () => {
         const url = 'not-a-url';
         expect(redact_url(url, true).url).toBe(url);
     });
+
+    it('redacts access_token/api_key/client_secret/auth_token/session_token', () => {
+        const url = 'https://example.com?access_token=Z&api_key=K&client_secret=S&auth_token=A&session_token=T&name=ok';
+        const result = redact_url(url, true);
+        expect(result.url).toContain('access_token=%5BREDACTED%5D');
+        expect(result.url).toContain('api_key=%5BREDACTED%5D');
+        expect(result.url).toContain('client_secret=%5BREDACTED%5D');
+        expect(result.url).toContain('auth_token=%5BREDACTED%5D');
+        expect(result.url).toContain('session_token=%5BREDACTED%5D');
+        expect(result.url).toContain('name=ok');
+        expect(result.url_status).toBe('redacted');
+    });
+
+    it('matches sensitive param names case-insensitively', () => {
+        const url = 'https://example.com?API_KEY=K&Token=T&AUTH=A';
+        const result = redact_url(url, true);
+        expect(result.url).toContain('API_KEY=%5BREDACTED%5D');
+        expect(result.url).toContain('Token=%5BREDACTED%5D');
+        expect(result.url).toContain('AUTH=%5BREDACTED%5D');
+    });
+
+    it('redacts all repeated sensitive params', () => {
+        const url = 'https://example.com?token=A&token=B&token=C';
+        const result = redact_url(url, true);
+        const matches = result.url.match(/token=%5BREDACTED%5D/g) || [];
+        expect(matches.length).toBe(3);
+    });
+
+    it('does not redact non-sensitive params containing no sensitive pattern', () => {
+        const url = 'https://example.com?category=books&page=2&sort=asc';
+        const result = redact_url(url, true);
+        expect(result.url_status).toBe('captured');
+        // URL normalizes to add trailing '/' before query; only assert query preserved
+        expect(result.url).toContain('category=books');
+        expect(result.url).toContain('page=2');
+        expect(result.url).toContain('sort=asc');
+    });
 });
 
 describe('truncate', () => {
@@ -182,12 +219,14 @@ describe('redaction_and_truncation_split', () => {
         expect(result!.length).toBeLessThanOrEqual(MAX_BODY_CAPTURE_BYTES + 20); // +20 for truncation marker
     });
 
-    it('redact_password keeps value when disabled', () => {
-        expect(redact_password('secret', 'password', false)).toBe('secret');
+    it('redact_password keeps value when disabled and input is not password', () => {
+        expect(redact_password('plain', 'text', false)).toBe('plain');
     });
 
-    it('redact_password hides value when enabled', () => {
+    it('redact_password always redacts type=password regardless of enabled flag', () => {
+        expect(redact_password('secret', 'password', false)).toBe('[REDACTED]');
         expect(redact_password('secret', 'password', true)).toBe('[REDACTED]');
+        expect(redact_password('secret', 'password')).toBe('[REDACTED]');
     });
 });
 

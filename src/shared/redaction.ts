@@ -8,7 +8,7 @@ const SENSITIVE_HEADER_KEYS = [
 
 const SENSITIVE_HEADER_PATTERNS = ['token', 'key', 'secret', 'bearer'];
 
-const SENSITIVE_URL_PARAMS = ['token', 'key', 'secret', 'password', 'auth'];
+const SENSITIVE_URL_PARAM_PATTERNS = ['token', 'key', 'secret', 'password', 'passwd', 'auth', 'credential', 'jwt'];
 
 const RESPONSE_PREVIEW_LENGTH = 200;
 
@@ -55,9 +55,18 @@ export function redact_url(url: string, redact_query: boolean): RedactUrlResult 
     try {
         const parsed = new URL(url);
         let redacted = false;
-        for (const param of SENSITIVE_URL_PARAMS) {
-            if (parsed.searchParams.has(param)) {
-                parsed.searchParams.set(param, '[REDACTED]');
+        const sensitive_keys: string[] = [];
+        for (const key of parsed.searchParams.keys()) {
+            const lower_key = key.toLowerCase();
+            if (SENSITIVE_URL_PARAM_PATTERNS.some(pattern => lower_key.includes(pattern))) {
+                sensitive_keys.push(key);
+            }
+        }
+        for (const key of sensitive_keys) {
+            const values = parsed.searchParams.getAll(key);
+            parsed.searchParams.delete(key);
+            for (const _ of values) {
+                parsed.searchParams.append(key, '[REDACTED]');
                 redacted = true;
             }
         }
@@ -77,8 +86,9 @@ export function truncate(str: string, max_bytes: number, enabled: boolean = true
 }
 
 export function redact_password(value: string, input_type?: string, enabled: boolean = true): string {
-    if (!enabled) return value;
+    // type=password 永远不采集，优先于 redact_data 开关
     if (input_type === 'password') return '[REDACTED]';
+    if (!enabled) return value;
     return value;
 }
 

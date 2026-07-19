@@ -9,6 +9,8 @@ import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { headers_array_to_map, resolve_resource_type, extract_mime_type, extract_request_body } from './network_webrequest';
 import type { PendingRequest, CdpRequestMeta, CdpBodyResult, NetworkCaptureConfig, NetworkEventPayload } from './cdp_handler';
+import { is_self_origin_url as cdp_handler_is_self_origin_url, set_self_origin_excludes as cdp_handler_set_excludes } from './cdp_handler';
+export const set_self_origin_excludes = cdp_handler_set_excludes;
 
 const logger = new Logger('background/webrequest', get_app_log_transport());
 
@@ -332,14 +334,7 @@ export function find_matching_cdp_request(
 }
 
 export function is_self_origin_url(raw_url: string): boolean {
-    if (!raw_url || typeof raw_url !== 'string') return false;
-    // 扩展自身 origin（MV3 content/background 内部跳转）
-    if (raw_url.startsWith('chrome-extension://')) return true;
-    // 本地 Bridge / 开发服务器：覆盖所有端口，不硬编码
-    try {
-        const parsed = new URL(raw_url);
-        return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
-    } catch {
-        return false;
-    }
+    // T053: webRequest 路径直接复用 cdp_handler 的实现，避免逻辑分叉
+    // 共享 set_self_origin_excludes 配置的 Bridge origin 集合
+    return cdp_handler_is_self_origin_url(raw_url);
 }

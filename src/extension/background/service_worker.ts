@@ -13,6 +13,7 @@ import { start_console_capture, stop_console_capture, is_console_active } from '
 import { start_exception_capture, stop_exception_capture, is_exception_active } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import * as capture_state from './capture_state';
+import { set_self_origin_excludes } from './cdp_handler';
 import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
 import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
@@ -99,6 +100,8 @@ chrome.runtime.onInstalled.addListener(async () => {
     await init_db();
     const config = await load_user_config();
     Logger.set_level(config.log_level);
+    // T053: 设置自身 origin 排除集合为配置的 Bridge origin（精确端口）
+    set_self_origin_excludes([config.agent_bridge_url].filter((u): u is string => Boolean(u && u.trim())));
     logger.info('Extension installed');
     if (config.agent_bridge_enabled) {
         start_agent_bridge();

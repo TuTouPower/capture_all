@@ -768,14 +768,24 @@ export function base64_decoded_size(b64: string | undefined | null): number {
     return Math.floor(trimmed.length * 3 / 4) - padding;
 }
 
+// T053: 配置的 Bridge origin（精确匹配，不再排除所有 127.0.0.1 端口）
+let _self_origin_excludes: Set<string> = new Set();
+
+/** 设置额外需要排除的自身 origin（如 Bridge origin），格式 `scheme://host:port` */
+export function set_self_origin_excludes(origins: string[]): void {
+    _self_origin_excludes = new Set(origins.map((o) => {
+        try { return new URL(o).origin; } catch { return o; }
+    }));
+}
+
 export function is_self_origin_url(raw_url: string): boolean {
     if (!raw_url || typeof raw_url !== 'string') return false;
     // 扩展自身 origin（MV3 content/background 内部跳转）
     if (raw_url.startsWith('chrome-extension://')) return true;
-    // 本地 Bridge / 开发服务器：覆盖所有端口，不硬编码
+    // 仅排除显式配置的 Bridge origin，不再按 hostname 笼统排除所有本地端口
     try {
         const parsed = new URL(raw_url);
-        return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+        return _self_origin_excludes.has(parsed.origin);
     } catch {
         return false;
     }

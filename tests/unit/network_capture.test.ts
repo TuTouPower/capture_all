@@ -1,5 +1,5 @@
 // tests/network_capture.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
     redact_headers,
     truncate_request_body,
@@ -26,6 +26,7 @@ import {
     _try_resolve_deferred_for_test,
     _base64_decoded_size_for_test,
 } from '../../src/extension/background/network_capture';
+import { set_self_origin_excludes } from '../../src/extension/background/cdp_handler';
 
 // ─── request header redaction ───
 
@@ -730,19 +731,29 @@ describe('base64_decoded_size fault injection', () => {
 // (chrome-extension://) 不应进入 CDP body 采集，否则产生 cdp_failed 污染。
 
 describe('is_self_origin_url (BUG-005)', () => {
-    it('excludes 127.0.0.1 bridge log endpoint', () => {
-        expect(is_self_origin_url('http://127.0.0.1:9777/log')).toBe(true);
+    const { set_self_origin_excludes: _set } = { set_self_origin_excludes };
+    void _set;
+
+    beforeEach(() => {
+        set_self_origin_excludes(['http://127.0.0.1:17831', 'http://localhost:9777']);
     });
 
-    it('excludes 127.0.0.1 with any port', () => {
-        expect(is_self_origin_url('http://127.0.0.1:17831/extension/heartbeat')).toBe(true);
-        expect(is_self_origin_url('http://127.0.0.1:1/')).toBe(true);
-        expect(is_self_origin_url('http://127.0.0.1:65535/mcp/command')).toBe(true);
+    it('excludes 127.0.0.1 bridge log endpoint (configured origin)', () => {
+        expect(is_self_origin_url('http://127.0.0.1:17831/log')).toBe(true);
     });
 
-    it('excludes localhost with any port', () => {
+    it('excludes localhost bridge endpoint (configured origin)', () => {
         expect(is_self_origin_url('http://localhost:9777/log')).toBe(true);
-        expect(is_self_origin_url('http://localhost:3000/api')).toBe(true);
+    });
+
+    it('does NOT exclude 127.0.0.1 other ports (local dev apps)', () => {
+        expect(is_self_origin_url('http://127.0.0.1:3000/api')).toBe(false);
+        expect(is_self_origin_url('http://127.0.0.1:1/')).toBe(false);
+        expect(is_self_origin_url('http://127.0.0.1:65535/mcp/command')).toBe(false);
+    });
+
+    it('does NOT exclude localhost other ports (local dev apps)', () => {
+        expect(is_self_origin_url('http://localhost:3000/api')).toBe(false);
     });
 
     it('excludes chrome-extension origin', () => {

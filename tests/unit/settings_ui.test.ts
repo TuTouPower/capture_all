@@ -104,8 +104,8 @@ describe('BUG-008: 当前日志大小用 input 而非 span', () => {
     })
 })
 
-describe.skip('T0006: browser_no settings UI', () => {
-    it('AC-1: 设置页集成区有浏览器编号输入（正整数），无 Token 必填提示', () => {
+describe('browser_label settings UI', () => {
+    it('AC-1: 设置页集成区有浏览器备注输入，无 Token 必填提示', () => {
         set_user_config(DEFAULT_USER_CONFIG)
         const container = document.createElement('div')
         container.innerHTML = render_settings()
@@ -113,14 +113,12 @@ describe.skip('T0006: browser_no settings UI', () => {
 
         expect(integrations).not.toBeNull()
 
-        const browser_no_input = integrations?.querySelector('[data-cfg="browser_no"]') as HTMLInputElement | null
-        expect(browser_no_input).not.toBeNull()
-        expect(browser_no_input?.type).toBe('number')
-        expect(browser_no_input?.getAttribute('min')).toBe('1')
-        expect(browser_no_input?.getAttribute('step')).toBe('1')
-
         const browser_label_input = integrations?.querySelector('[data-cfg="browser_label"]') as HTMLInputElement | null
         expect(browser_label_input).not.toBeNull()
+
+        // browser_no input must not exist anymore (T008 removed it)
+        const browser_no_input = integrations?.querySelector('[data-cfg="browser_no"]')
+        expect(browser_no_input).toBeNull()
 
         const advanced = integrations?.querySelector('#bridge-advanced')
         expect(advanced).not.toBeNull()
@@ -133,7 +131,7 @@ describe.skip('T0006: browser_no settings UI', () => {
         expect(integrations?.textContent).not.toContain('必须填写')
     })
 
-    it('AC-5: 旧配置仅有手贴 token 无 browser_no，升级后渲染不崩溃', () => {
+    it('AC-5: 旧配置仅有手贴 token 无 browser_label，升级后渲染不崩溃', () => {
         const legacy_config = {
             ...DEFAULT_USER_CONFIG,
             agent_bridge_enabled: true,
@@ -149,9 +147,9 @@ describe.skip('T0006: browser_no settings UI', () => {
         const integrations = container.querySelector('#set-integrations')
         expect(integrations).not.toBeNull()
 
-        const browser_no_input = integrations?.querySelector('[data-cfg="browser_no"]') as HTMLInputElement | null
-        expect(browser_no_input).not.toBeNull()
-        expect(browser_no_input?.value).toBe('')
+        const browser_label_input = integrations?.querySelector('[data-cfg="browser_label"]') as HTMLInputElement | null
+        expect(browser_label_input).not.toBeNull()
+        expect(browser_label_input?.value).toBe('')
 
         const token_input = integrations?.querySelector('[data-cfg="agent_bridge_token"]') as HTMLInputElement | null
         expect(token_input).not.toBeNull()

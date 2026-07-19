@@ -10,7 +10,7 @@ const base_config = {
     agent_bridge_poll_interval_ms: 1000
 };
 
-describe.skip('agent bridge user config', () => {
+describe('agent bridge user config', () => {
     test('keeps a valid local bridge config', () => {
         expect(normalize_agent_bridge_config(base_config)).toEqual({
             agent_bridge_enabled: true,
@@ -67,78 +67,47 @@ describe.skip('agent bridge user config', () => {
     });
 });
 
-describe.skip('T0006: browser_no auto-enroll config', () => {
+describe('browser_label handling', () => {
     const base = {
         agent_bridge_enabled: true,
         agent_bridge_url: 'http://127.0.0.1:17831',
-        agent_bridge_token: '',
+        agent_bridge_token: '<TOKEN>',
         agent_bridge_poll_interval_ms: 1000,
         browser_label: '',
     };
 
-    test('AC-1: enables bridge when browser_no > 0 without token', () => {
+    test('trims whitespace from browser_label', () => {
         const result = normalize_agent_bridge_config({
             ...base,
-            browser_no: 2,
+            browser_label: '  work laptop  ',
         });
-        expect(result.agent_bridge_enabled).toBe(true);
-        expect(result.browser_no).toBe(2);
+        expect(result.browser_label).toBe('work laptop');
+    });
+
+    test('empty browser_label stays empty (anonymous instance)', () => {
+        const result = normalize_agent_bridge_config({
+            ...base,
+            browser_label: '',
+        });
         expect(result.browser_label).toBe('');
     });
 
-    test('disables bridge when browser_no is 0 and token is empty', () => {
-        const result = normalize_agent_bridge_config({
-            ...base,
-        });
-        expect(result.agent_bridge_enabled).toBe(false);
-    });
-
-    test('normalizes non-integer browser_no to 0', () => {
-        const result = normalize_agent_bridge_config({
-            ...base,
-            browser_no: NaN as any,
-        });
-        expect(result.browser_no).toBe(0);
-        expect(result.agent_bridge_enabled).toBe(false);
-    });
-
-    test('normalizes negative browser_no to 0', () => {
-        const result = normalize_agent_bridge_config({
-            ...base,
-            browser_no: -1,
-        });
-        expect(result.browser_no).toBe(0);
-    });
-
-    test('normalizes browser_no 0 to 0', () => {
-        const result = normalize_agent_bridge_config({
-            ...base,
-        });
-        expect(result.browser_no).toBe(0);
-    });
-
-    test('AC-5: legacy config with token but no browser_no does not crash', () => {
+    test('undefined browser_label normalizes to empty string', () => {
         const result = normalize_agent_bridge_config({
             agent_bridge_enabled: true,
             agent_bridge_url: 'http://127.0.0.1:17831',
-            agent_bridge_token: '<LEGACY_TOKEN>',
+            agent_bridge_token: '<TOKEN>',
             agent_bridge_poll_interval_ms: 1000,
-            browser_no: undefined as any,
             browser_label: undefined as any,
         });
-        expect(result.agent_bridge_enabled).toBe(true);
-        expect(result.browser_no).toBe(0);
         expect(result.browser_label).toBe('');
     });
 
-    test('legacy token and browser_no both set still work', () => {
+    test('bridge stays enabled with token even when browser_label is empty', () => {
         const result = normalize_agent_bridge_config({
             ...base,
-            agent_bridge_token: '<TOKEN>',
-            browser_no: 5,
+            browser_label: '',
         });
         expect(result.agent_bridge_enabled).toBe(true);
-        expect(result.browser_no).toBe(5);
-        expect(result.agent_bridge_token).toBe('<TOKEN>');
     });
 });

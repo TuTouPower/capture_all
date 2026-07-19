@@ -139,6 +139,6 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 - 推荐通过 `CAPTURE_ALL_BRIDGE_TOKEN` 启动 Bridge，避免 Token 出现在进程参数；兼容的 `--token` 参数会将 Token 暴露在本机进程参数列表中，仅用于受控兼容场景
 - MCP Token（Bridge 启动 Token）：`.mcp.json` 与 Bridge 使用同一 Token，供 MCP Server 访问 `/mcp/*`、`/cdp/*` 路由
 - instance_token（扩展实例 Token）：enroll 时由 Bridge 自动生成（`ext_` 前缀），扩展自动获取并用于 heartbeat/command/result 端点；Bridge 仅存储 sha256 hash。用户无需手动粘贴到扩展或 `.mcp.json`
-- 兼容模式：扩展设置中手动填入 MCP Token 的旧方式仍可使用，但不推荐；自动登记（enroll + browser_no）为首选路径
+- 兼容模式：扩展设置中手动填入 MCP Token 的旧方式仍可使用，但不推荐；自动登记（enroll + browser_label）为首选路径
 - MCP 不提供删除采集 / 清空数据功能
 - MCP 不自动脱敏 / 摘要 — 工具层不替模型判断

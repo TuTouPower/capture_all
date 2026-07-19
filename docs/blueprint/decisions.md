@@ -63,3 +63,10 @@
 - 选项：A）schema 可自由变更；B）版本化升级，保留历史数据兼容。
 - 结论：选 B。`DB_VERSION = 3`，10 stores；升级路径不得丢 records。详见 `op_blueprint/specs/storage_indexeddb.md`（已归档）。
 - 替代：无
+
+## 008 多实例路由：browser_label + instance_id（2026-07-19）
+
+- 背景：原 `browser_no`（1-99 数字）路由让人填编号、不直观；机器 ID（instance_id）已存在但只作次要路由键。
+- 选项：A）保留 browser_no；B）取消 browser_no，改用 browser_label（人填备注）+ instance_id（机器生成）双键路由。
+- 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_AMBIGUOUS`。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
+- 替代：无

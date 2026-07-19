@@ -69,11 +69,11 @@ sudo systemctl start capture-all-bridge
 
 ## 多浏览器配置
 
-每个浏览器实例需要独立的 `browser_no`（1-99）：
+每个浏览器实例建议填入唯一 `browser_label`（备注，如 "work" / "personal"）：
 
-1. 在扩展设置中配置 `browser_no`
-2. Bridge 自动路由到对应浏览器
-3. MCP 工具调用时指定 `browser_no` 参数
+1. 在扩展设置中配置 `browser_label`（单浏览器可留空，多浏览器建议唯一）
+2. Bridge 自动路由：单实例默认；多实例按 `target_label`（需唯一）或 `target_instance_id` 路由
+3. MCP 工具调用时指定 `target_label` 或 `target_instance_id` 参数；多实例未指定时返回 `TARGET_AMBIGUOUS`
 
 ## 安全加固
 

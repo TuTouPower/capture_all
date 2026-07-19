@@ -468,7 +468,29 @@ function handle_loading_failed(req_key: string, _params: any, state: CdpHandlerS
     const fail_method = fail_meta?.method?.toUpperCase() || '';
     const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
         ? 'not_enabled' : 'cdp_failed';
-    state.cdp_body_results.set(req_key, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
+    const fail_result: CdpBodyResult = { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
+
+    // 已有 meta：立即发失败主条目并清理（避免延迟丢失与内存残留）
+    if (fail_meta) {
+        const body_result: CdpBodyResult = fail_result;
+        const event = build_cdp_primary_network_event(fail_meta, body_result, req_key.split(':').pop() || req_key, state);
+        // 注入 error_text（build_cdp_primary_network_event 不设 error_text）
+        (event.data as any).error_text = _params?.errorText || null;
+        (event.data as any).response_body_status = fail_status;
+        state.send_to_background(event);
+        state.cdp_request_meta.delete(req_key);
+        state.cdp_body_results.delete(req_key);
+        state.finished_before_stream.delete(req_key);
+        const orphan_timer = state.orphan_timers.get(req_key);
+        if (orphan_timer) {
+            clearTimeout(orphan_timer);
+            state.orphan_timers.delete(req_key);
+        }
+        return;
+    }
+
+    // 无 meta：走 orphan_check 兜底
+    state.cdp_body_results.set(req_key, fail_result);
     try_resolve_deferred(req_key, state);
     schedule_orphan_check(req_key, '', state);
 }

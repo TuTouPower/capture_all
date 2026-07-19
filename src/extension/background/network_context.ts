@@ -112,6 +112,10 @@ export class NetworkCaptureContext {
     on_cdp_body_event: ((event: import('./network_correlator').CdpBodyEvent) => void) | null = null;
 
     reset(): void {
+        // 先取消所有 deferred timer，避免 reset 后回调仍执行发送过期事件
+        for (const entry of this.deferred_web_requests.values()) {
+            clearTimeout(entry.timer);
+        }
         this.pending_requests.clear();
         this.cdp_request_meta.clear();
         this.cdp_body_results.clear();

@@ -187,7 +187,17 @@ export function handle_completed(details: any, state: WebRequestHandlerState): v
 export function handle_error(details: any, state: WebRequestHandlerState): void {
     if (!state.is_capturing) return;
     if (state.dbg_tab_id !== null && details.tabId === state.dbg_tab_id) return;
+    const pending = state.pending_requests.get(details.requestId);
     state.pending_requests.delete(details.requestId);
+
+    // 已有 pending：发失败事件，含 error_text + status_code=null
+    if (pending) {
+        const event = build_network_event(pending, details, null, 'failed', state, null);
+        (event.data as any).status_code = null;
+        (event.data as any).error_text = details.error || null;
+        (event.data as any).response_body_status = 'failed';
+        state.send_to_background(event);
+    }
 }
 
 export function build_network_event(

@@ -2,6 +2,7 @@
 import {
     esc, I, num, capture_name, capture_dur, strip_proto,
     get_captures,
+    export_capture,
 } from './dashboard_shared';
 import { open_detail } from './dashboard_detail';
 
@@ -39,4 +40,15 @@ function render_exports(): string {
     </div>`;
 }
 
-export { render_current, wire_simple_open, render_exports };
+// T040: 导出按钮 wiring
+function wire_exports(): void {
+    const c = document.getElementById('content')!;
+    c.querySelectorAll('[data-export]').forEach((b) => {
+        b.addEventListener('click', () => {
+            const id = (b as HTMLElement).dataset.export!;
+            export_capture(id);
+        });
+    });
+}
+
+export { render_current, wire_simple_open, render_exports, wire_exports };

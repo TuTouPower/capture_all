@@ -15,7 +15,7 @@ import {
 import { render_captures, wire_captures } from './dashboard_captures';
 import { render_detail, wire_detail, open_detail } from './dashboard_detail';
 import { render_settings, wire_settings } from './dashboard_settings';
-import { render_current, wire_simple_open, render_exports } from './dashboard_integrations';
+import { render_current, wire_simple_open, render_exports, wire_exports } from './dashboard_integrations';
 
 // ── sidebar / shell ─────────────────────────────────────────────────────
 const NAV = [
@@ -80,7 +80,7 @@ function render_content(): void {
     else if (page === 'detail') { c.innerHTML = render_detail(); wire_detail(); }
     else if (page === 'settings') { c.innerHTML = render_settings(); wire_settings(); }
     else if (page === 'current') { c.innerHTML = render_current(); wire_simple_open(); }
-    else if (page === 'exports') { c.innerHTML = render_exports(); }
+    else if (page === 'exports') { c.innerHTML = render_exports(); wire_exports(); }
     else { c.innerHTML = render_captures(); wire_captures(); }
 }
 

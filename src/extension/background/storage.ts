@@ -291,26 +291,22 @@ export async function write_events(batch: CaptureEvent[]): Promise<void> {
     for (const [store_name, events] of grouped) {
         const buf = get_buffer(store_name);
         buf.push(...events);
-        if (buf.length >= FLUSH_BATCH_SIZE) {
-            await flush_store(store_name);
-        }
+        // T038: 每次写入立即 flush，保证调用方返回前数据已落 IndexedDB
+        // （MV3 SW 回收不再丢内存 buffer 批次）。代价：失去 batch 合并优化。
+        await flush_store(store_name);
     }
 }
 
 export async function write_network_requests(batch: NetworkRequestData[]): Promise<void> {
     const buf = get_buffer(STORE_NAMES.NETWORK_REQUESTS);
     buf.push(...(batch as unknown as CaptureEvent[]));
-    if (buf.length >= FLUSH_BATCH_SIZE) {
-        await flush_store(STORE_NAMES.NETWORK_REQUESTS);
-    }
+    await flush_store(STORE_NAMES.NETWORK_REQUESTS);
 }
 
 export async function write_console_events(batch: ConsoleEventData[]): Promise<void> {
     const buf = get_buffer(STORE_NAMES.CONSOLE_EVENTS);
     buf.push(...(batch as unknown as CaptureEvent[]));
-    if (buf.length >= FLUSH_BATCH_SIZE) {
-        await flush_store(STORE_NAMES.CONSOLE_EVENTS);
-    }
+    await flush_store(STORE_NAMES.CONSOLE_EVENTS);
 }
 
 export async function write_error_events(batch: RuntimeExceptionData[]): Promise<void> {

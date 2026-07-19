@@ -289,7 +289,17 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     for (const [id, inst] of [...instances.entries()]) {
                         if (id !== instance_id && inst.browser_label === new_label) {
                             instances.delete(id);
-                            queues.delete(id);
+                            const old_queue = queues.get(id);
+                            if (old_queue) {
+                                old_queue.cancel_all();
+                                queues.delete(id);
+                            }
+                            // 清理归属该实例的 command_owners 条目
+                            for (const [cmd_id, owner_id] of [...command_owners.entries()]) {
+                                if (owner_id === id) {
+                                    command_owners.delete(cmd_id);
+                                }
+                            }
                         }
                     }
                 }

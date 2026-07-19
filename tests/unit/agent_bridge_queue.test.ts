@@ -124,4 +124,52 @@ describe('AgentCommandQueue', () => {
 
         expect(queue.pending_count()).toBe(0);
     });
+
+    it('两个独立实例的命令 ID 不碰撞', () => {
+        const q1 = new AgentCommandQueue();
+        const q2 = new AgentCommandQueue();
+
+        const c1 = q1.enqueue('sessions.list', {}).command;
+        const c2 = q2.enqueue('sessions.list', {}).command;
+
+        expect(c1.command_id).not.toBe(c2.command_id);
+    });
+
+    it('cancel_all 后所有 pending 命令 resolve COMMAND_CANCELLED', async () => {
+        const queue = new AgentCommandQueue();
+        const p1 = queue.enqueue('sessions.list', {});
+        const p2 = queue.enqueue('sessions.get', { id: 's1' });
+
+        expect(queue.pending_count()).toBe(2);
+
+        queue.cancel_all();
+
+        expect(queue.pending_count()).toBe(0);
+        expect(queue.take_next()).toBeNull();
+
+        await expect(p1.result).resolves.toEqual({
+            command_id: p1.command.command_id,
+            ok: false,
+            error: { code: 'COMMAND_CANCELLED', message: 'Command cancelled' },
+        });
+        await expect(p2.result).resolves.toEqual({
+            command_id: p2.command.command_id,
+            ok: false,
+            error: { code: 'COMMAND_CANCELLED', message: 'Command cancelled' },
+        });
+    });
+
+    it('cancel_all 后已 take 的命令不会再被 take', () => {
+        const queue = new AgentCommandQueue();
+        const p1 = queue.enqueue('sessions.list', {});
+        queue.take_next();
+        const p2 = queue.enqueue('sessions.get', {});
+
+        queue.cancel_all();
+
+        expect(queue.take_next()).toBeNull();
+        expect(queue.pending_count()).toBe(0);
+        // p2 应被取消
+        return expect(p2.result).resolves.toMatchObject({ ok: false, error: { code: 'COMMAND_CANCELLED' } });
+    });
 });

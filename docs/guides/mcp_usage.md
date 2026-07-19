@@ -5,12 +5,12 @@
 ## 快速开始
 
 1. 构建产物：`npm run build`
-2. 在扩展设置页（Dashboard → 设置）为每个浏览器实例分配唯一编号（`browser_no`，如 1、2、3）。扩展自动登记到 Bridge，无需手动粘贴 Token
-3. 启动 Bridge：`CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' node artifacts/bridge/bridge.mjs --port 17831 &`（可选，SessionStart hook 会自动拉起；若未设置 token 则自动生成并持久化到 `.local/bridge_token`）。兼容参数 `--token` 仍可用；同时配置时 `--token` 优先
+2. 在扩展设置页（Dashboard → 设置）为每个浏览器实例分配唯一标签（`browser_label`，如 "work"、"personal"；单浏览器可留空）。扩展自动登记到 Bridge，无需手动粘贴 Token
+3. 启动 Bridge：`CAPTURE_ALL_BRIDGE_TOKEN="$(openssl rand -hex 32)" node artifacts/bridge/bridge.mjs --port 17831 &`（可选，SessionStart hook 会自动拉起；若未设置 token 则自动生成并持久化）。`--port` 必须显式指定
 4. 复制项目配置：`cp .mcp.json.example .mcp.json`，填入与 Bridge 相同的 MCP Token。`.mcp.json` 仅供本机使用，不提交到 Git
-5. 扩展自动登记（enroll）：首次需通过 `http://127.0.0.1:17831/pair` 批准 `browser_no`，后续自动连接
+5. 扩展自动登记（enroll）：首次需通过 `http://127.0.0.1:17831/pair` 打开配对窗口并使用 pairing code 完成配对，后续自动连接
 6. 重开 Claude Code 会话，确认扩展在线：`get_status`
-7. 多浏览器时通过 `browser_no` 参数指定目标（单实例无需指定）
+7. 多浏览器时通过 `target_label` 或 `target_instance_id` 参数指定目标（单实例无需指定）
 8. 开始采集：`start_recording`，结束采集：`stop_recording`
 
 ## 工具列表
@@ -135,7 +135,7 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 
 - Bridge 仅绑定 `127.0.0.1`,不暴露公网
 - 浏览器请求只允许格式合法的 `chrome-extension://` Origin；Node / MCP 等无 Origin 本地客户端保持可用
-- Token 由用户提供，禁止硬编码，无效 token → 401；Bridge 使用恒时摘要比较
+- Token 由用户提供或 Bridge 安全随机生成，禁止硬编码，无效 token → 401；Bridge 使用恒时摘要比较
 - 推荐通过 `CAPTURE_ALL_BRIDGE_TOKEN` 启动 Bridge，避免 Token 出现在进程参数；兼容的 `--token` 参数会将 Token 暴露在本机进程参数列表中，仅用于受控兼容场景
 - MCP Token（Bridge 启动 Token）：`.mcp.json` 与 Bridge 使用同一 Token，供 MCP Server 访问 `/mcp/*`、`/cdp/*` 路由
 - instance_token（扩展实例 Token）：enroll 时由 Bridge 自动生成（`ext_` 前缀），扩展自动获取并用于 heartbeat/command/result 端点；Bridge 仅存储 sha256 hash。用户无需手动粘贴到扩展或 `.mcp.json`

@@ -18,7 +18,7 @@
 
 | 层 | 框架 | 覆盖 | 运行 |
 |---|---|---|---|
-| 单元测试 | Vitest 2.x | 纯函数 / 工具 / 脱敏 / 类型映射 / 协议映射 | `npm test` |
+| 单元测试 | Vitest 4.x | 纯函数 / 工具 / 脱敏 / 类型映射 / 协议映射 | `npm test` |
 | 集成测试 | Vitest | bridge 闭环 / 采集管线 / 导出管线 / 脱敏管线 | `npm test`（与单测合并） |
 | E2E | Playwright 1.60 | 用户端到端流程（开始→采集→停止→查看→导出） | `npm run test:e2e` |
 
@@ -88,10 +88,10 @@ tests/
 | `npm run test:e2e:all` | `playwright test`（全部项目） |
 | `npm run test:e2e:server` | 启动 E2E 测试服务器（`tests/fixtures/server.ts`） |
 | `npm run serve:e2e` | `npm run build && vite preview --host 127.0.0.1 --port 4174` |
-| `npm run build:bridge` | `esbuild src/agent/bridge/main.ts --bundle --platform=node --format=esm --outfile=artifacts/bridge/bridge.mjs` |
-| `npm run build:mcp` | `esbuild src/agent/mcp/main.ts --bundle --platform=node --format=esm --outfile=artifacts/mcp/mcp.mjs` |
-| `npm run bridge` | `tsx src/agent/bridge/main.ts`（开发）；构建后：`node artifacts/bridge/bridge.mjs` |
-| `npm run mcp` | `tsx src/agent/mcp/main.ts`（开发）；构建后：`node artifacts/mcp/mcp.mjs` |
+| `npm run build:bridge` | `esbuild src/bridge/main.ts --bundle --platform=node --format=esm --outfile=artifacts/bridge/bridge.mjs` |
+| `npm run build:mcp` | `esbuild src/mcp/main.ts --bundle --platform=node --format=esm --outfile=artifacts/mcp/mcp.mjs` |
+| `npm run bridge` | `tsx src/bridge/main.ts`（开发）；构建后：`node artifacts/bridge/bridge.mjs` |
+| `npm run mcp` | `tsx src/mcp/main.ts`（开发）；构建后：`node artifacts/mcp/mcp.mjs` |
 
 ### 3.1 Bridge / MCP 生产部署
 
@@ -131,7 +131,7 @@ Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude 
 
 `playwright.config.ts` 关键项：
 
-- `testDir: ./tests`，`outputDir: artifacts/test-results`。
+- `testDir: ./tests/e2e`，`outputDir: artifacts/test-results`。
 - `timeout: 120_000`，`expect.timeout: 15_000`，`actionTimeout: 15_000`。
 - `webServer` 同时启动扩展预览（`npm run serve:e2e`，`127.0.0.1:4174`）和本地测试站点（`npm run test:e2e:server`，`127.0.0.1:17832`）。
 - config 将 `127.0.0.1`、`localhost` 合入 `NO_PROXY` / `no_proxy`，防止本机代理响应导致 `webServer` 健康检查误判。

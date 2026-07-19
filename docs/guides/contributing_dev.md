@@ -63,18 +63,19 @@ capture_all/
 │   ├── devtools/           # DevTools 面板
 │   ├── popup/              # 弹出窗口
 │   └── shared/             # 跨层共享
-├── tests/                  # 单元/集成测试
-├── e2e/                    # E2E 测试（按任务分目录）
+├── tests/                  # 测试
+│   ├── unit/               # 单元测试
+│   ├── e2e/                # E2E 测试（按任务分目录）
+│   └── support/            # 测试辅助（mock、fixture、helper）
 ├── docs/
 │   ├── blueprint/          # 架构 / 领域 / 约定 / 决策
 │   ├── guides/             # 人读指南
 │   ├── tasks/              # 活动任务
-│   ├── archive/            # 历史归档（含 omni_powers 旧工作流）
-│   └── refactor_plan.md    # 重构计划（活动）
+│   └── archive/            # 历史归档（含 omni_powers 旧工作流）
 └── artifacts/              # 构建产物（不入库）
 ```
 
-> 目录即将按 `docs/refactor_plan.md` 重构为 `src/{extension,bridge,mcp,shared}` 三产品结构。本页描述现状。
+> 源码已按 `src/{extension,bridge,mcp,shared}` 三产品结构重构。本页描述当前结构。
 
 ## 核心模块
 

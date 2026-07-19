@@ -522,7 +522,8 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     }
 
     // Start cookie change capture (always, regardless of capture_network)
-    start_cookie_capture(capture_id, start_time, handle_cookie_change);
+    // Start cookie change capture, scoped to active tab URL domain (T051)
+    start_cookie_capture(capture_id, start_time, handle_cookie_change, start_url || null, tab_id);
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});

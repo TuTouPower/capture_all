@@ -1,5 +1,5 @@
 // background/exporter.ts
-import { escape_for_html_embed } from '../../shared/escape';
+import { escape_for_html_embed, escape_html } from '../../shared/escape';
 import { get_capture, get_events_by_category, get_network_requests, get_console_events } from './storage';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
@@ -156,14 +156,17 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
     );
 
     const body_capture_info = session.body_capture_mode
-        ? `<div class="summary-item"><label>Body Capture</label><span>${session.body_capture_mode} · ${session.body_capture_status || 'unknown'}</span></div>`
+        ? `<div class="summary-item"><label>Body Capture</label><span>${escape_html(session.body_capture_mode)} · ${escape_html(session.body_capture_status || 'unknown')}</span></div>`
         : '';
+
+    const safe_capture_id = escape_html(capture_id);
+    const safe_start_date = escape_html(start_date);
 
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Capture All - Capture ${capture_id}</title>
+<title>Capture All - Capture ${safe_capture_id}</title>
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
 .container { max-width: 960px; margin: 0 auto; }
@@ -183,9 +186,9 @@ pre { background: #f8f8f8; padding: 12px; border-radius: 4px; overflow-x: auto; 
 <h1>Capture All - Capture Report</h1>
 <div class="summary">
   <div class="summary-grid">
-    <div class="summary-item"><label>Capture ID</label><span>${capture_id}</span></div>
-    <div class="summary-item"><label>Start Time</label><span>${start_date}</span></div>
-    <div class="summary-item"><label>Duration</label><span>${duration_str}</span></div>
+    <div class="summary-item"><label>Capture ID</label><span>${safe_capture_id}</span></div>
+    <div class="summary-item"><label>Start Time</label><span>${safe_start_date}</span></div>
+    <div class="summary-item"><label>Duration</label><span>${escape_html(duration_str)}</span></div>
     <div class="summary-item"><label>Events</label><span>${event_count}</span></div>
     <div class="summary-item"><label>Network Requests</label><span>${request_count}</span></div>
     <div class="summary-item"><label>Console Logs</label><span>${log_count}</span></div>

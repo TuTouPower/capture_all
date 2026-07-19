@@ -12,6 +12,7 @@ import { start_network_capture, stop_network_capture, set_cdp_body_event_handler
 import { start_console_capture, stop_console_capture, is_console_active } from './console_capture';
 import { start_exception_capture, stop_exception_capture, is_exception_active } from './exception_capture';
 import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
+import * as capture_state from './capture_state';
 import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
 import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
@@ -265,8 +266,33 @@ async function get_capture_data(capture_id: string): Promise<any> {
 }
 
 async function start_capture(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {
+    // 串行化：等待前一次 start/stop 完成
+    return capture_state.run_exclusive(async () => {
+        if (is_capturing || capture_state.get_state().phase !== 'idle') {
+            logger.warn('start_capture called while not idle', { phase: capture_state.get_state().phase });
+            return { success: false, error: 'Already capturing' };
+        }
+
+        const start_handle = capture_state.begin_start(capture_id, config);
+
+        try {
+            const result = await start_capture_inner(capture_id, config);
+            if (result.success) {
+                start_handle.commit();
+            } else {
+                start_handle.rollback();
+            }
+            return result;
+        } catch (err) {
+            start_handle.rollback();
+            throw err;
+        }
+    });
+}
+
+async function start_capture_inner(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {
     if (is_capturing) {
-        logger.warn('start_capture called while already capturing');
+        logger.warn('start_capture_inner called while already capturing');
         return { success: false, error: 'Already capturing' };
     }
 
@@ -477,6 +503,27 @@ async function start_capture(capture_id: string, config: CaptureConfig): Promise
 }
 
 async function stop_capture(): Promise<{ success: boolean }> {
+    // 串行化：等待前一次 start/stop 完成
+    return capture_state.run_exclusive(async () => {
+        if (!is_capturing && capture_state.get_state().phase === 'idle') {
+            return { success: true };
+        }
+        const stop_handle = capture_state.begin_stop();
+        try {
+            const result = await stop_capture_inner();
+            if (result.success) {
+                stop_handle.commit();
+            }
+            return result;
+        } catch (err) {
+            // 异常时也回到 idle，避免卡在 stopping
+            stop_handle.commit();
+            throw err;
+        }
+    });
+}
+
+async function stop_capture_inner(): Promise<{ success: boolean }> {
     if (!is_capturing) {
         return { success: true };
     }

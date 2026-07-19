@@ -274,7 +274,7 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
         });
     }
 
-    if (is_streaming_response(resp_headers) && state.dbg_tab_id !== null) {
+    if (state.config.capture_response_body && is_streaming_response(resp_headers) && state.dbg_tab_id !== null) {
         state.streaming_requests.add(req_id);
         if (existing) {
             existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
@@ -303,6 +303,8 @@ function handle_response_received(req_id: string, params: any, state: CdpHandler
                 }
             });
         }
+    } else if (!state.config.capture_response_body && existing) {
+        existing.response_body_status = 'not_enabled';
     }
 }
 
@@ -320,6 +322,28 @@ function handle_loading_finished(req_id: string, _params: any, state: CdpHandler
     state.finished_before_stream.add(req_id);
     const meta_for_method = state.cdp_request_meta.get(req_id);
     const http_method = meta_for_method?.method?.toUpperCase() || '';
+
+    // capture_response_body=false: 不发起 getResponseBody/streamResourceContent
+    if (!state.config.capture_response_body) {
+        if (state.streaming_requests.has(req_id)) {
+            state.streaming_requests.delete(req_id);
+        }
+        const body_result: CdpBodyResult = {
+            body: null,
+            status: 'not_enabled',
+            timestamp: Date.now(),
+            preview: null,
+            encoding: null,
+            byte_size: null,
+        };
+        const meta = state.cdp_request_meta.get(req_id);
+        if (meta) {
+            state.cdp_primary_emitted.add(req_id);
+            state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
+            state.cdp_request_meta.delete(req_id);
+        }
+        return;
+    }
 
     if (state.streaming_requests.has(req_id)) {
         state.stream_buffer_instance?.force_flush(req_id);

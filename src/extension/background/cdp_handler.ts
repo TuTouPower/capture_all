@@ -470,6 +470,7 @@ function handle_ws_handshake_response(req_id: string, params: any, state: CdpHan
 }
 
 function handle_ws_frame_error(req_id: string, params: any, state: CdpHandlerState): void {
+    const frame_url = redact_url(state.ws_connections.get(req_id)?.url || '', Boolean(state.config.redact_data && state.config.redact_url_query)).url;
     const frame_data: WsFrameData = {
         ws_connection_id: req_id,
         direction: 'error',
@@ -480,7 +481,7 @@ function handle_ws_frame_error(req_id: string, params: any, state: CdpHandlerSta
         payload_status: 'captured',
         mask: null,
         error_message: params?.errorMessage || null,
-        url: state.ws_connections.get(req_id)?.url || '',
+        url: frame_url,
         tab_id: state.dbg_tab_id ?? undefined,
     };
     const event = create_base_event({
@@ -506,13 +507,19 @@ function handle_ws_closed(req_id: string, state: CdpHandlerState): void {
 }
 
 function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_status: WsConnectionMeta['ws_status'], state: CdpHandlerState): void {
+    const redact_q = Boolean(state.config.redact_data && state.config.redact_url_query);
+    const redact_hdrs = Boolean(state.config.redact_data && state.config.redact_sensitive_headers);
+    const url_result = redact_url(conn.url, redact_q);
+    const req_hdr_result = redact_hdrs ? redact_headers(conn.request_headers, true) : { headers: conn.request_headers, headers_status: 'captured' as const };
+    const resp_hdr_result = redact_hdrs ? redact_headers(conn.response_headers, true) : { headers: conn.response_headers, headers_status: 'captured' as const };
+    const headers_redacted = req_hdr_result.headers_status === 'redacted' || resp_hdr_result.headers_status === 'redacted';
     const event = create_base_event({
         capture_id: state.capture_id,
         category: 'network',
         type: 'network_request',
         relative_time_ms: Date.now() - state.start_time,
         tab_id: state.dbg_tab_id ?? state.current_tab_id,
-        url: conn.url,
+        url: url_result.url,
         source: 'background',
         severity: 'info',
     });
@@ -521,8 +528,8 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         event_id: event.event_id,
         request_id: req_id,
         method: '',
-        url: conn.url,
-        url_status: 'captured',
+        url: url_result.url,
+        url_status: url_result.url_status,
         status_code: conn.status_code || null,
         status_text: null,
         protocol: null,
@@ -531,9 +538,9 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         duration_ms: null,
         start_time_ms: conn.created_ts,
         end_time_ms: ws_status === 'closed' ? Date.now() : null,
-        request_headers: conn.request_headers,
-        response_headers: conn.response_headers,
-        headers_status: 'captured',
+        request_headers: req_hdr_result.headers,
+        response_headers: resp_hdr_result.headers,
+        headers_status: headers_redacted ? 'redacted' : 'captured',
         request_body: null,
         request_body_status: 'not_enabled',
         request_body_encoding: null,
@@ -586,6 +593,7 @@ function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: a
     }
 
     const conn = state.ws_connections.get(req_id);
+    const frame_url = redact_url(conn?.url || '', Boolean(state.config.redact_data && state.config.redact_url_query)).url;
     const frame_data: WsFrameData = {
         ws_connection_id: req_id,
         direction,
@@ -596,7 +604,7 @@ function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: a
         payload_status,
         mask: resp.mask ?? null,
         error_message: null,
-        url: conn?.url || '',
+        url: frame_url,
         tab_id: state.dbg_tab_id ?? undefined,
     };
     const event = create_base_event({

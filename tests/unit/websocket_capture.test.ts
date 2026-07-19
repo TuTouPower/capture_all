@@ -290,4 +290,82 @@ describe('WebSocket capture', () => {
         expect(frames[0].data.payload_status).toBe('captured');
         expect(frames[0].data.payload_encoding).toBe('utf8');
     });
+
+    it('redact_data + redact_url_query 启用时 url 与 headers 脱敏', async () => {
+        await setup_capture({
+            redact_data: true,
+            redact_url_query: true,
+            redact_sensitive_headers: true,
+        });
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketCreated',
+            { requestId: 'ws_2', url: 'wss://echo.example.com/ws?token=SECRET' },
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketWillSendHandshakeRequest',
+            { requestId: 'ws_2', request: { headers: { Authorization: 'Bearer xyz', Cookie: 'session=abc' } } },
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketHandshakeResponseReceived',
+            { requestId: 'ws_2', response: { status: 101, headers: { 'Set-Cookie': 'token=abc' } } },
+        );
+
+        const conn = emitted.filter(e => e.data?.resource_type === 'websocket');
+        const open = conn[conn.length - 1];
+        expect(open.data.url).not.toContain('SECRET');
+        expect(open.data.url_status).toBe('redacted');
+        expect(open.data.headers_status).toBe('redacted');
+        expect(open.data.request_headers['Authorization']).toBe('[REDACTED]');
+        expect(open.data.request_headers['Cookie']).toBe('[REDACTED]');
+        expect(open.data.response_headers['Set-Cookie']).toBe('[REDACTED]');
+    });
+
+    it('redact 关闭时 url 与 headers 保留原值', async () => {
+        await setup_capture({
+            redact_data: false,
+            redact_url_query: false,
+            redact_sensitive_headers: false,
+        });
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketCreated',
+            { requestId: 'ws_3', url: 'wss://echo.example.com/ws?token=SECRET' },
+        );
+
+        const conn = emitted.find(e => e.data?.resource_type === 'websocket');
+        expect(conn!.data.url).toContain('SECRET');
+        expect(conn!.data.url_status).toBe('captured');
+        expect(conn!.data.headers_status).toBe('captured');
+    });
+
+    it('frame error 事件 url 在 redact 启用时被脱敏', async () => {
+        await setup_capture({
+            redact_data: true,
+            redact_url_query: true,
+            redact_sensitive_headers: true,
+        });
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketCreated',
+            { requestId: 'ws_4', url: 'wss://echo.example.com/ws?token=SECRET' },
+        );
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 1 },
+            'Network.webSocketFrameError',
+            { requestId: 'ws_4', timestamp: 1002, errorMessage: 'Protocol error' },
+        );
+
+        const error_frame = emitted.find(e => e.event?.type === 'ws_frame' && e.data?.direction === 'error');
+        expect(error_frame).toBeDefined();
+        expect(error_frame!.data.url).not.toContain('SECRET');
+    });
 });

@@ -20,8 +20,8 @@
 | T010 | test: rewrite agent_bridge_client/server tests for label routing | done | — | main | commit `12a55bb`；21+73 测试全绿；0 skip |
 | T011 | security: remove Bridge token from argv in SessionStart hook | done | claude | task_t011_security_argv_token | commit `ebbb8ea`；project_01/HIGH-1 |
 | T012 | security: broaden URL query redaction + fix redact_password precedence | done | claude | task_t012_redaction_rules_broaden | commit `31789b9`；src_bridge_mcp_shared_02/HIGH-4 + HIGH-6 |
-| T013 | privacy: keyboard shortcuts redaction + form_action URL + storage tab_id | done | claude | task_t013_content_capture_privacy | commit pending；src_extension_05/HIGH-1/2/3 + LOW-12 |
-| T014 | privacy: WebSocket URL/header/payload redaction | backlog | — | — | src_extension_02/HIGH-3 + src_extension_03/HIGH-7 |
+| T013 | privacy: keyboard shortcuts redaction + form_action URL + storage tab_id | done | claude | task_t013_content_capture_privacy | commit `83e307e`；src_extension_05/HIGH-1/2/3 + LOW-12 |
+| T014 | privacy: WebSocket URL/header/payload redaction | done | claude | task_t014_network_ws_redaction | commit pending；src_extension_02/HIGH-3 + src_extension_03/HIGH-7 |
 | T015 | privacy: logger URL redaction + size limit | backlog | — | — | src_bridge_mcp_shared_02/HIGH-3 |
 | T016 | privacy: honor capture_response_body config in CDP capture | backlog | — | — | src_extension_02/HIGH-2 |
 | T017 | privacy: console/exception source filter + startup failure cleanup | backlog | — | — | src_extension_02/HIGH-5 + HIGH-7 |

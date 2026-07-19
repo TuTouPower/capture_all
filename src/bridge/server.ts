@@ -827,8 +827,11 @@ function validate_command_request(value: unknown): CommandRequest {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'Command payload must be an object');
     }
 
-    if (value.timeout_ms !== undefined && typeof value.timeout_ms !== 'number') {
-        throw new BridgeHttpError(400, 'INVALID_QUERY', 'Command timeout must be a number');
+    if (value.timeout_ms !== undefined) {
+        // T063: timeout_ms 必须是正整数且有合理上限（300000ms=5min）
+        if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0 || value.timeout_ms > 300000) {
+            throw new BridgeHttpError(400, 'INVALID_QUERY', 'Command timeout must be a positive integer <= 300000');
+        }
     }
 
     return {

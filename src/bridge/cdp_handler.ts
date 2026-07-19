@@ -87,8 +87,10 @@ export async function handle_cdp_start(
 ): Promise<{ status: number; body: unknown }> {
     const port = typeof body.port === 'number' ? body.port : parseInt(String(body.port || ''), 10);
     const tab_url = String(body.tab_url || '');
-    const max_body_bytes = typeof body.max_body_capture_bytes === 'number'
-        ? body.max_body_capture_bytes
+    // T063: max_body_capture_bytes 校验：安全整数且 0..MAX_BODY_CAPTURE_BYTES
+    const raw_max = body.max_body_capture_bytes;
+    const max_body_bytes = (typeof raw_max === 'number' && Number.isSafeInteger(raw_max) && raw_max >= 0 && raw_max <= MAX_BODY_CAPTURE_BYTES)
+        ? raw_max
         : MAX_BODY_CAPTURE_BYTES;
     const redact_data = body.redact_data !== false;
     const redact_sensitive_headers = redact_data

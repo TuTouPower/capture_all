@@ -376,7 +376,7 @@ async function flush_store(store_name: string): Promise<void> {
             for (const item of batch) {
                 const capture_id = (item as unknown as Record<string, unknown>).capture_id as string;
                 if (capture_id) {
-                    update_bytes_written(capture_id, JSON.stringify(item).length);
+                    update_bytes_written(capture_id, json_byte_length(item));
                 }
             }
             resolve();
@@ -453,6 +453,15 @@ export function stop_periodic_flush(): void {
 function update_bytes_written(capture_id: string, bytes: number): void {
     const current = bytes_written.get(capture_id) || 0;
     bytes_written.set(capture_id, current + bytes);
+}
+
+// UTF-8 字节长度（替代 JSON.stringify().length 的字符数口径）
+function json_byte_length(item: unknown): number {
+    try {
+        return new TextEncoder().encode(JSON.stringify(item)).length;
+    } catch {
+        return 0;
+    }
 }
 
 export function get_capture_size(capture_id: string): number {

@@ -22,7 +22,6 @@ export interface WebRequestHandlerState {
     pending_requests: Map<string, PendingRequest>;
     cdp_request_meta: Map<string, CdpRequestMeta>;
     cdp_body_results: Map<string, CdpBodyResult>;
-    cdp_primary_emitted: Set<string>;
     deferred_web_requests: Map<string, { pending: PendingRequest; details: any; timer: ReturnType<typeof setTimeout>; pending_cdp_ids: Set<string> }>;
     _deferred_cdp_index: Map<string, Set<string>>;
     send_to_background: (payload: NetworkEventPayload) => void;

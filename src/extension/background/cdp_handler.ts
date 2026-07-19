@@ -27,10 +27,10 @@ export interface CdpHandlerState {
     pending_requests: Map<string, PendingRequest>;
     cdp_request_meta: Map<string, CdpRequestMeta>;
     cdp_body_results: Map<string, CdpBodyResult>;
-    cdp_primary_emitted: Set<string>;
     ws_connections: Map<string, WsConnectionMeta>;
     streaming_requests: Set<string>;
     finished_before_stream: Set<string>;
+    orphan_timers: Map<string, ReturnType<typeof setTimeout>>;
     stream_buffer_instance: ReturnType<typeof create_stream_buffer> | null;
     deferred_web_requests: Map<string, DeferredEntry>;
     _deferred_cdp_index: Map<string, Set<string>>;
@@ -349,9 +349,9 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
         };
         const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             state.cdp_request_meta.delete(req_key);
+            state.finished_before_stream.delete(req_key);
         }
         return;
     }
@@ -372,9 +372,9 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
                 encoding: 'utf8',
                 byte_size,
             };
-            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             state.cdp_request_meta.delete(req_key);
+            state.finished_before_stream.delete(req_key);
         }
         return;
     }
@@ -419,7 +419,6 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
         // CDP-first: if we have metadata, build and emit the complete entry directly
         const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             logger.debug('cdp_primary_emitted', {
                 url: meta.url?.slice(0, 120),
@@ -430,6 +429,7 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
             // Clean up — no need for orphan check since we already emitted
             state.cdp_request_meta.delete(req_key);
             state.cdp_body_results.delete(req_key);
+            state.finished_before_stream.delete(req_key);
             return;
         }
 
@@ -451,10 +451,10 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
         // CDP-first: emit even on failure (status will be cdp_failed)
         const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
-            state.cdp_primary_emitted.add(req_key);
             state.send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id, state));
             state.cdp_request_meta.delete(req_key);
             state.cdp_body_results.delete(req_key);
+            state.finished_before_stream.delete(req_key);
             return;
         }
 
@@ -808,7 +808,8 @@ function try_resolve_deferred(cdp_req_id: string, state: CdpHandlerState): void 
 function schedule_orphan_check(req_key: string, req_id: string, state: CdpHandlerState): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
     // emit it as cdp_only via the callback.
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+        state.orphan_timers.delete(req_key);
         if (!state.on_cdp_body_event) return;
         const body_result = state.cdp_body_results.get(req_key);
         if (!body_result) return; // already matched and consumed by handle_completed
@@ -840,7 +841,17 @@ function schedule_orphan_check(req_key: string, req_id: string, state: CdpHandle
         state.cdp_request_meta.delete(req_key);
         state.cdp_body_results.delete(req_key);
         state._deferred_cdp_index.delete(req_key);
+        state.finished_before_stream.delete(req_key);
     }, 3000); // ORPHAN_TIMEOUT_MS
+    state.orphan_timers.set(req_key, timer);
+}
+
+// 取消所有 orphan timer（停止采集或 reset 时调用）
+export function clear_orphan_timers(state: CdpHandlerState): void {
+    for (const timer of state.orphan_timers.values()) {
+        clearTimeout(timer);
+    }
+    state.orphan_timers.clear();
 }
 
 export const ORPHAN_TIMEOUT_MS = 3000;

@@ -137,7 +137,7 @@ E2E 项目（`playwright.config.ts` 定义，按需 `--project=<name>` 指定）
 
 项目特有约束（详情见 `docs/blueprint/` 对应文件）：
 
-- **Bridge 仅绑定 `127.0.0.1`**，禁止绑 `0.0.0.0` 或公网接口。token 优先级 `CLI > env > persisted file > generated`；生成文件 mode `0600`。token 由用户提供，禁止硬编码、默认值或示例值。
+- **Bridge 仅绑定 `127.0.0.1`**，禁止绑 `0.0.0.0` 或公网接口。token 优先级 `CLI > env > persisted file > generated`；生成文件 mode `0600`。token 必须是用户提供或 Bridge 安全随机生成的强 token，禁止硬编码、默认值或示例值。
 - **instance_token 不得访问 MCP / CDP**：MCP 路由仅接受 MCP token；扩展数据端点接受 MCP token 或 instance_token。
 - **术语**：英文 `capture`，中文"采集"；禁用 `session`/`record`/`录制`/`记录` 作产品术语。类型 `CaptureRecord`/`CaptureEvent`/`CaptureConfig`，标识 `capture_id`，MCP 命令 `capture.start`/`captures.list`/`data.list` 等。详见 `docs/blueprint/domain.md`。
 - **IndexedDB `capture_all_db` v3**，10 stores；升级路径不得丢 records。

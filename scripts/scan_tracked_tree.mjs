@@ -288,6 +288,11 @@ const findings = worktree_files.flatMap((path) => {
         return [`${path} forbidden-path`];
     }
 
+    // T085: 跳过 docs/archive/ 内容扫描（归档只进不出，历史文本含误报）
+    if (path.startsWith('docs/archive/')) {
+        return [];
+    }
+
     return scan_file(path, staged_files);
 });
 

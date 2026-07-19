@@ -3,7 +3,7 @@ import type { CaptureEvent, RuntimeExceptionData } from '../../shared/types';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
-import { register_session, unregister_session } from './cdp_event_router';
+import { register_session, unregister_session, should_handle_event } from './cdp_event_router';
 
 const logger = new Logger('background/exception', get_app_log_transport());
 
@@ -47,6 +47,14 @@ export async function start_exception_capture(
 
         return { success: true };
     } catch (error) {
+        if (attached_by_us) {
+            try {
+                await chrome.dbg.detach({ tabId: tab_id });
+            } catch {
+                // ignore detach errors during cleanup
+            }
+            attached_by_us = false;
+        }
         is_capturing = false;
         return {
             success: false,
@@ -76,12 +84,12 @@ export async function stop_exception_capture(): Promise<void> {
     }
 }
 
-function handle_debugger_event(_source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
+function handle_debugger_event(source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
     if (!is_capturing) return;
 
-    // 与 console_capture 一致：network_capture 的 setAutoAttach 会拉起
-    // worker/iframe/OOPIF 子目标；子目标默认未 Runtime.enable，exceptionThrown 不会到。
+    // Target.* lifecycle 事件用于注册/注销 session，先处理（仅校验 tabId）
     if (method === 'Target.attachedToTarget') {
+        if (source?.tabId !== tab_id) return;
         const child_session = params?.sessionId;
         if (child_session) {
             register_session(child_session);
@@ -98,12 +106,16 @@ function handle_debugger_event(_source: { tabId?: number; sessionId?: string }, 
     }
 
     if (method === 'Target.detachedFromTarget') {
+        if (source?.tabId !== tab_id) return;
         const child_session = params?.sessionId;
         if (child_session) {
             unregister_session(child_session);
         }
         return;
     }
+
+    // 其他事件按 tabId + 已登记 session 严格过滤
+    if (!should_handle_event(source, tab_id)) return;
 
     if (method !== 'Runtime.exceptionThrown') return;
 

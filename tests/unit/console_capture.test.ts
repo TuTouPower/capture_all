@@ -180,4 +180,53 @@ describe('BUG-003: console capture must emit event on Runtime.consoleAPICalled',
         expect(sender).not.toHaveBeenCalled();
         await stop_console_capture();
     });
+
+    it('过滤其他 tab 的 console 事件', async () => {
+        const sender = vi.fn();
+        await start_console_capture('cap_filter', START_TIME, TAB_ID, false, sender, false);
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 9999 },
+            'Runtime.consoleAPICalled',
+            { type: 'log', args: [{ value: 'x' }] }
+        );
+
+        expect(sender).not.toHaveBeenCalled();
+        await stop_console_capture();
+    });
+
+    it('过滤未登记 session 的 sub-target console 事件', async () => {
+        const sender = vi.fn();
+        await start_console_capture('cap_unreg', START_TIME, TAB_ID, false, sender, false);
+
+        mock_chrome_debugger.emit_event(
+            { tabId: TAB_ID, sessionId: 'unknown-session' },
+            'Runtime.consoleAPICalled',
+            { type: 'log', args: [{ value: 'x' }] }
+        );
+
+        expect(sender).not.toHaveBeenCalled();
+        await stop_console_capture();
+    });
+
+    it('Runtime.enable 失败且 attached_by_us 时 best-effort detach', async () => {
+        const sender = vi.fn();
+        const detach_spy = vi.spyOn(mock_chrome_debugger, 'detach');
+        // 让 Runtime.enable 抛错
+        const original_send = mock_chrome_debugger.sendCommand.bind(mock_chrome_debugger);
+        mock_chrome_debugger.sendCommand = vi.fn(async (target: any, command: string) => {
+            if (command === 'Runtime.enable') {
+                throw new Error('Runtime.enable failed');
+            }
+            return original_send(target, command);
+        });
+
+        const result = await start_console_capture('cap_fail', START_TIME, TAB_ID, false, sender, false);
+
+        expect(result.success).toBe(false);
+        expect(detach_spy).toHaveBeenCalled();
+        // 还原 mock
+        mock_chrome_debugger.sendCommand = original_send;
+        detach_spy.mockRestore();
+    });
 });

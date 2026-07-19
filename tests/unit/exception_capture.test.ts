@@ -119,4 +119,51 @@ describe('exception capture — sub-target Runtime.enable', () => {
         expect(sender.mock.calls[0][0].message).toContain('worker boom');
         await stop_exception_capture();
     });
+
+    it('过滤其他 tab 的 exception 事件', async () => {
+        const sender = vi.fn();
+        await start_exception_capture('cap_filter', START_TIME, TAB_ID, sender, false);
+
+        mock_chrome_debugger.emit_event(
+            { tabId: 9999 },
+            'Runtime.exceptionThrown',
+            { exceptionDetails: { text: 'x', exception: { description: 'a' } } }
+        );
+
+        expect(sender).not.toHaveBeenCalled();
+        await stop_exception_capture();
+    });
+
+    it('过滤未登记 session 的 sub-target exception 事件', async () => {
+        const sender = vi.fn();
+        await start_exception_capture('cap_unreg', START_TIME, TAB_ID, sender, false);
+
+        mock_chrome_debugger.emit_event(
+            { tabId: TAB_ID, sessionId: 'unknown-session' },
+            'Runtime.exceptionThrown',
+            { exceptionDetails: { text: 'x', exception: { description: 'a' } } }
+        );
+
+        expect(sender).not.toHaveBeenCalled();
+        await stop_exception_capture();
+    });
+
+    it('Runtime.enable 失败且 attached_by_us 时 best-effort detach', async () => {
+        const sender = vi.fn();
+        const detach_spy = vi.spyOn(mock_chrome_debugger, 'detach');
+        const original_send = mock_chrome_debugger.sendCommand.bind(mock_chrome_debugger);
+        mock_chrome_debugger.sendCommand = vi.fn(async (target: any, command: string) => {
+            if (command === 'Runtime.enable') {
+                throw new Error('Runtime.enable failed');
+            }
+            return original_send(target, command);
+        });
+
+        const result = await start_exception_capture('cap_fail', START_TIME, TAB_ID, sender, false);
+
+        expect(result.success).toBe(false);
+        expect(detach_spy).toHaveBeenCalled();
+        mock_chrome_debugger.sendCommand = original_send;
+        detach_spy.mockRestore();
+    });
 });

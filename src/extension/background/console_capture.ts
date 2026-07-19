@@ -4,7 +4,7 @@ import { create_base_event, get_relative_time } from '../../shared/event_utils';
 import { truncate_console_args } from '../../shared/redaction';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
-import { register_session, unregister_session } from './cdp_event_router';
+import { register_session, unregister_session, should_handle_event } from './cdp_event_router';
 
 const logger = new Logger('background/console', get_app_log_transport());
 
@@ -49,6 +49,15 @@ export async function start_console_capture(
 
         return { success: true };
     } catch (error) {
+        // Runtime.enable 失败时若已 attach 则 best-effort detach，避免残留 debugger attachment
+        if (attached_by_us) {
+            try {
+                await chrome.dbg.detach({ tabId: tab_id });
+            } catch {
+                // ignore detach errors during cleanup
+            }
+            attached_by_us = false;
+        }
         is_capturing = false;
         return {
             success: false,
@@ -96,17 +105,12 @@ function map_severity(level: string): 'info' | 'warning' | 'error' {
     return 'info';
 }
 
-function handle_debugger_event(_source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
+function handle_debugger_event(source: { tabId?: number; sessionId?: string }, method: string, params: any): void {
     if (!is_capturing) return;
 
-    // ── Sub-target lifecycle (BUG-003 fix) ──
-    // network_capture sets Target.setAutoAttach({flatten:true}) which causes
-    // workers/iframes/OOPIF to attach with a sessionId. Their Runtime domain
-    // is NOT enabled by network_capture (only Network.enable). Without
-    // Runtime.enable on these sub-targets, Runtime.consoleAPICalled never
-    // fires for them — and on heavy SPA sites (ChatGPT) most console output
-    // comes from workers/iframe contexts, yielding 0 console events.
+    // Target.* lifecycle 事件用于注册/注销 session，先处理（仅校验 tabId）
     if (method === 'Target.attachedToTarget') {
+        if (source?.tabId !== tab_id) return;
         const child_session = params?.sessionId;
         if (child_session) {
             register_session(child_session);
@@ -120,12 +124,16 @@ function handle_debugger_event(_source: { tabId?: number; sessionId?: string }, 
     }
 
     if (method === 'Target.detachedFromTarget') {
+        if (source?.tabId !== tab_id) return;
         const child_session = params?.sessionId;
         if (child_session) {
             unregister_session(child_session);
         }
         return;
     }
+
+    // 其他事件按 tabId + 已登记 session 严格过滤
+    if (!should_handle_event(source, tab_id)) return;
 
     if (method !== 'Runtime.consoleAPICalled') return;
 

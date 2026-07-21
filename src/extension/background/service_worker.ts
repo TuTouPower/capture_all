@@ -33,7 +33,7 @@ import type {
     CaptureStartedData, CaptureStoppedData,
     BodyCaptureStartResult,
 } from '../../shared/types';
-import { DEFAULT_CONFIG } from '../../shared/constants';
+import { DEFAULT_CONFIG, DEFAULT_USER_CONFIG } from '../../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
 
@@ -1082,7 +1082,8 @@ chrome.tabs.onRemoved.addListener((tabId: number) => {
 // Agent bridge client
 async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bridge_enabled' | 'agent_bridge_url' | 'agent_bridge_token' | 'agent_bridge_poll_interval_ms' | 'browser_label'>> {
     const result = await chrome.storage.local.get('user_config');
-    return result.user_config ?? {};
+    // T091: storage 空时合并 DEFAULT_USER_CONFIG，避免 normalize_agent_bridge_config 拿到 undefined URL 抛错。
+    return { ...DEFAULT_USER_CONFIG, ...(result.user_config ?? {}) };
 }
 
 function start_agent_bridge(): void {

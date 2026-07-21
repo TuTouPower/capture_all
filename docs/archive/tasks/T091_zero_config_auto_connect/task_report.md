@@ -28,3 +28,7 @@
 - code_f007：MCP `main.ts` 启动失败时未区分「token 文件不存在」与「权限被拒（非 0600）」两种情况，排障需用户手动 `ls -la $XDG_RUNTIME_DIR/capture-all/bridge_token`。文档 `troubleshooting.md` 已提示路径与权限要求。影响：轻微，下个 task 可加细分错误码。
 - test_f005：`resolve_client_token` 未对空白内容文件做显式护栏（依赖 `load_bridge_token_file` 内部 trim）。当前实现安全，仅缺测试覆盖。
 - `scan:tracked-tree` 在 README/docs 几处报 `credential-assignment` 误报（文档讨论 `CAPTURE_ALL_BRIDGE_TOKEN=...` 环境变量名 + `openssl rand -hex 32` 生成示例），属 T085 已知启发式误报模式，非真 secret 入库。
+
+## 补丁（commit `1de5159`）
+
+用户实跑验证暴露 `get_user_config_for_bridge` storage 空返回 `{}` → normalize URL 抛错 → 扩展从未 enroll。修复：合并 `DEFAULT_USER_CONFIG` 回退。详见 `log.md` 补丁段。此 bug 之前被「用户必须填 token」掩盖，T091 零配置才显形。实跑：扩展 reload 后 5 秒内自动 enroll，`get_status` 显示 `online=True`，label 自动「二」。

@@ -1,12 +1,12 @@
 {
-  "_comment": "SessionStart 自动拉起本地 Bridge（需环境变量 CAPTURE_ALL_BRIDGE_TOKEN；禁止写死 token）。omni_powers heavy 工作流已归档（见 docs/archive/omni_powers/_ARCHIVED.md），相关 hooks 与 env 已移除。",
+  "_comment": "SessionStart 自动拉起本地 Bridge：若 17831 未监听且 artifacts/bridge/bridge.mjs 存在，则后台启动；token 优先 CAPTURE_ALL_BRIDGE_TOKEN env，否则 Bridge 自生成并持久化到 $XDG_RUNTIME_DIR/capture-all/bridge_token（mode 0600）。禁止写死 token。",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=\"${CLAUDE_PROJECT_DIR:-.}\"; [ -n \"${CAPTURE_ALL_BRIDGE_TOKEN:-}\" ] || exit 0; curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:17831/health 2>/dev/null | grep -q 200 && exit 0; [ -f \"$root/artifacts/bridge/bridge.mjs\" ] || exit 0; CAPTURE_ALL_BRIDGE_TOKEN=\"${CAPTURE_ALL_BRIDGE_TOKEN:-}\" nohup node \"$root/artifacts/bridge/bridge.mjs\" --port 17831 > /dev/null 2>&1 &'"
+            "command": "bash -c 'root=\"${CLAUDE_PROJECT_DIR:-.}\"; curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:17831/health 2>/dev/null | grep -q 200 && exit 0; [ -f \"$root/artifacts/bridge/bridge.mjs\" ] || exit 0; CAPTURE_ALL_BRIDGE_TOKEN=\"${CAPTURE_ALL_BRIDGE_TOKEN:-}\" nohup node \"$root/artifacts/bridge/bridge.mjs\" --port 17831 > /dev/null 2>&1 &'"
           }
         ]
       }

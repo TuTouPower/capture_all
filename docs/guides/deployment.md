@@ -71,15 +71,16 @@ sudo systemctl start capture-all-bridge
 
 ## 多浏览器配置
 
-每个浏览器实例建议填入唯一 `browser_label`（备注，如 "work" / "personal"）：
+每个浏览器实例可填入唯一 `browser_label`（备注，如 "work" / "personal"）：
 
-1. 在扩展设置中配置 `browser_label`（单浏览器可留空，多浏览器建议唯一）
-2. Bridge 自动路由：单实例默认；多实例按 `target_label`（需唯一）或 `target_instance_id` 路由
-3. MCP 工具调用时指定 `target_label` 或 `target_instance_id` 参数；多实例未指定时返回 `TARGET_AMBIGUOUS`
+1. **默认零配置**：扩展装上自动 enroll，Bridge 按到达顺序自动编号（一、二、三…）。单浏览器无需任何配置。
+2. **自定义备注**：在扩展设置中改 `browser_label`，Bridge 用自定义值；未设的实例继续用自动编号。
+3. Bridge 自动路由：单实例默认；多实例按 `target_label`（"一"/"二"或自定义）或 `target_instance_id` 路由。
+4. MCP 工具调用时指定 `target_label` 或 `target_instance_id` 参数；多实例未指定时返回 `TARGET_AMBIGUOUS`。
 
 ## 安全加固
 
-1. **Token 管理**：使用随机生成的强 token，定期轮换
+1. **Token 管理**：默认零配置（Bridge 自生成并持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`，mode 0600）；如需固定 Token 用 `openssl rand -hex 32` 生成，定期轮换
 2. **网络限制**：Bridge 仅绑定 `127.0.0.1`，不暴露公网
 3. **权限控制**：限制扩展权限，仅授权必要站点
 4. **数据脱敏**：启用 `redact_data` 配置，脱敏敏感 headers/URL/body

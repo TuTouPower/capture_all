@@ -758,4 +758,43 @@ describe('T0006: auto-enroll and session management', () => {
 
         stop_bridge_client();
     });
+
+    // ─── T091: 零配置 —— 无 agent_bridge_token 时依赖 loopback origin 直通 enroll ───
+
+    test('T091: enroll succeeds without agent_bridge_token (no Authorization header sent)', async () => {
+        const no_token_config = {
+            agent_bridge_enabled: true,
+            agent_bridge_url: 'http://127.0.0.1:17831',
+            agent_bridge_token: '',
+            agent_bridge_poll_interval_ms: 250,
+            browser_label: '',
+        };
+        const fetch_spy = mock_enroll_response(true);
+
+        start_bridge_client(create_enroll_deps(vi.fn(async () => no_token_config)));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        // 1. enroll 被调用
+        const enroll_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/enroll'),
+        );
+        expect(enroll_calls.length).toBeGreaterThan(0);
+
+        // 2. enroll 请求不带 Authorization header（T091 核心行为）
+        const enroll_init = enroll_calls[0][1] as RequestInit | undefined;
+        const headers = enroll_init?.headers as Record<string, string> | undefined;
+        expect(headers?.Authorization).toBeUndefined();
+        expect(headers?.authorization).toBeUndefined();
+
+        // 3. session 仍被保存（Bridge 颁发的 instance_token 持久化）
+        expect(storage_set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                agent_bridge_session: expect.objectContaining({
+                    instance_id: 'inst_test_uuid_001',
+                    instance_token: 'ext_test_token_001',
+                }),
+            }),
+        );
+    });
 });

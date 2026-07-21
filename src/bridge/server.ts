@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
+import { next_default_label } from './label';
 
 interface PairingState {
     open: boolean;
@@ -61,7 +62,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         code: null,
         expires_at: 0,
     };
-    const is_s0 = Boolean(config.dev_mode);
 
     function get_or_create_queue(instance_id: string): AgentCommandQueue {
         let queue = queues.get(instance_id);
@@ -252,7 +252,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/enroll') {
-                // S0: trust loopback + allowed chrome-extension origin (or mcp token bootstrap).
+                // T091: loopback + chrome-extension origin 直通 enroll，pairing 不再强制。
+                // 保留 mcp token 路径作为可选；pairing 端点保留作为跨机/手动场景的可选增强。
                 const has_mcp = is_authorized(request, config.token);
                 const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
                 if (!has_mcp && !has_ext_origin) {
@@ -265,15 +266,15 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const body = validate_enroll(await read_json(request));
                 const instance_id = body.instance_id || `inst_${randomBytes(8).toString('hex')}`;
 
-                // T0009 S1: extension origin must pass pairing check (MCP bypasses)
-                if (!has_mcp && !is_s0) {
+                // T091: pairing 仅当扩展显式传 pairing_code 时校验（可选增强）；默认不要求。
+                if (!has_mcp && body.pairing_code) {
                     const allowed = is_enroll_allowed(pairing_state, body.pairing_code);
                     if (!allowed) {
                         return send_json(response, 403, {
                             ok: false,
                             error: {
                                 code: 'PAIRING_REQUIRED',
-                                message: 'Local pair approval required. Open /pair page on this machine to allow this browser.',
+                                message: 'Pairing code rejected. Open /pair page on this machine to allow this browser, or omit pairing_code for loopback auto-enroll.',
                             },
                         });
                     }
@@ -282,10 +283,16 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
                 const token_hash = hash_token(instance_token);
 
+                // T091: label 为空时按现有在线实例自动分配中文默认编号（一/二/三…）。
                 // Replace any existing binding with the same non-empty label (extension restart path);
-                // empty labels are treated as anonymous and never auto-replace.
-                const new_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
-                if (new_label) {
+                // 自定义 label 顶替旧实例；自动编号 label 不会冲突（next_default_label 已避开占用）。
+                const provided_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
+                const new_label = provided_label ?? next_default_label(
+                    [...instances.values()]
+                        .filter((inst) => inst.instance_id !== instance_id)
+                        .map((inst) => inst.browser_label),
+                );
+                if (provided_label) {
                     for (const [id, inst] of [...instances.entries()]) {
                         if (id !== instance_id && inst.browser_label === new_label) {
                             instances.delete(id);
@@ -363,10 +370,16 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     });
                 }
                 const prev = instances.get(body.instance_id);
-                // T047: browser_label 显式同步（包括清空为 null），不再回退到 prev 旧标签
-                const new_label = body.browser_label !== undefined
+                // T091: 扩展未设 label 时保留 Bridge 自动分配的默认编号；自定义 label 优先。
+                // （覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号，不再清成 null。）
+                const provided_label = body.browser_label !== undefined
                     ? (body.browser_label && body.browser_label.length > 0 ? body.browser_label : null)
-                    : prev?.browser_label ?? null;
+                    : null;
+                const new_label = provided_label ?? prev?.browser_label ?? next_default_label(
+                    [...instances.values()]
+                        .filter((inst) => inst.instance_id !== body.instance_id)
+                        .map((inst) => inst.browser_label),
+                );
                 // 检测 label 变化：若新 label 与其他实例冲突则顶替（与 enroll 一致）
                 if (new_label) {
                     for (const [id, inst] of [...instances.entries()]) {

@@ -205,27 +205,24 @@ async function resolve_token(config: AgentBridgeUserConfig, deps: AgentBridgeCli
         return session_token;
     }
 
-    if (config.agent_bridge_token.length > 0) {
-        try {
-            const instance_id = await generate_instance_id();
-            const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token);
-            runtime_instance_id = result.instance_id;
-            session_token = result.instance_token;
-            enrolled = true;
-            await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
-            logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_label: config.browser_label || null });
-            return session_token;
-        } catch (error) {
-            log_bridge_error(
-                'polling',
-                'Bridge polling failed',
-                { stage: 'enroll', failure_kind: error instanceof BridgeHttpError ? 'http' : 'exception', http_status: error instanceof BridgeHttpError ? error.status : undefined }
-            );
-            return null;
-        }
+    // T091: 无 agent_bridge_token 时也尝试 enroll —— loopback + 扩展 origin 由 Bridge 直通。
+    try {
+        const instance_id = await generate_instance_id();
+        const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token || undefined);
+        runtime_instance_id = result.instance_id;
+        session_token = result.instance_token;
+        enrolled = true;
+        await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
+        logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_label: config.browser_label || null });
+        return session_token;
+    } catch (error) {
+        log_bridge_error(
+            'polling',
+            'Bridge polling failed',
+            { stage: 'enroll', failure_kind: error instanceof BridgeHttpError ? 'http' : 'exception', http_status: error instanceof BridgeHttpError ? error.status : undefined }
+        );
+        return null;
     }
-
-    return null;
 }
 
 async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClientDeps): Promise<void> {
@@ -235,11 +232,10 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
     session_token = null;
     enrolled = false;
 
-    if (config.agent_bridge_token.length < 1) return;
-
+    // T091: 无 agent_bridge_token 也允许重 enroll（loopback + origin 直通）。
     try {
         const instance_id = runtime_instance_id || await generate_instance_id();
-        const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token);
+        const result = await enroll(config.agent_bridge_url, config.browser_label, deps.extension_version, instance_id, config.agent_bridge_token || undefined);
         runtime_instance_id = result.instance_id;
         session_token = result.instance_token;
         enrolled = true;
@@ -254,13 +250,15 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
     }
 }
 
-async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token: string): Promise<{ instance_id: string; instance_token: string }> {
+async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token?: string): Promise<{ instance_id: string; instance_token: string }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // T091: bridge_token 可选 —— 缺省时依赖 chrome-extension origin 由 Bridge 直通。
+    if (bridge_token) {
+        headers.Authorization = `Bearer ${bridge_token}`;
+    }
     const response = await fetch(`${url}/extension/enroll`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${bridge_token}`,
-        },
+        headers,
         body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id }),
     });
 

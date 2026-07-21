@@ -34,25 +34,24 @@
 
 **排查**：
 1. 检查端口是否被占用：`lsof -i :<PORT>`
-2. 检查 token 是否设置：`echo $CAPTURE_ALL_BRIDGE_TOKEN`
-3. 查看日志：前台运行看 stdout/stderr；systemd 用 `journalctl -u capture-all-bridge`
+2. 查看日志：前台运行看 stdout/stderr；systemd 用 `journalctl -u capture-all-bridge`
 
 **解决**：
 - 更换端口或停止占用进程
-- 设置环境变量：`export CAPTURE_ALL_BRIDGE_TOKEN="$(openssl rand -hex 32)"`
+- 默认无需设置 Token（Bridge 自生成并持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`）；如需固定 Token：`export CAPTURE_ALL_BRIDGE_TOKEN="$(openssl rand -hex 32)"`
 
 ### Bridge 连接超时
 
 **症状**：MCP 工具调用超时
 
 **排查**：
-1. 检查 Bridge 是否运行：`curl http://127.0.0.1:3000/health`
-2. 检查扩展是否连接到 Bridge
+1. 检查 Bridge 是否运行：`curl http://127.0.0.1:17831/health`
+2. 检查扩展是否连接到 Bridge（`get_status` 的 `extensions[].online` 应为 true）
 3. 查看 Bridge 日志中的错误
 
 **解决**：
 - 重启 Bridge 服务
-- 检查扩展设置中的 `browser_no` 配置
+- 多浏览器时通过 `target_label` 或 `target_instance_id` 指定目标
 
 ### Bridge 返回 413 错误
 
@@ -79,7 +78,7 @@
 
 **解决**：
 - 重启 MCP 服务
-- 检查 Bridge token 配置
+- 默认无需在 `.mcp.json` 填 Token —— MCP Server 自动读 Bridge 持久化文件（`$XDG_RUNTIME_DIR/capture-all/bridge_token`）。若仍报 `TOKEN_INVALID`，确认 Bridge 已启动且 token 文件权限为 0600
 
 ### 大文件导出超时
 

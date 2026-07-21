@@ -42,7 +42,7 @@ Capture All 是 Chrome Manifest V3 扩展，将浏览器活动转换为本地结
 - 导出 JSON、JSONL、HTML 或 HAR 文件。
 - 通过 MCP 控制采集，并按分页和时间范围查询数据。
 - 采集数据默认保存在本地 IndexedDB；只有主动导出或通过 MCP 查询时才会离开扩展存储。
-- 使用用户提供的 Token 鉴权本地 Bridge。
+- 本地 Bridge 零配置自动生成 Token，扩展与 MCP 客户端自动对齐。
 - 支持敏感 URL 参数和 Header 脱敏，并始终执行大小限制。
 
 ## 架构
@@ -65,7 +65,7 @@ Capture All 扩展
 MCP Server ──► Claude Code 或其他 MCP 客户端
 ```
 
-Bridge 仅绑定 `127.0.0.1`。扩展、Bridge 和 MCP 配置必须使用同一 Token。
+Bridge 仅绑定 `127.0.0.1`。默认零配置：扩展凭 chrome-extension origin 自动 enroll，Bridge 自生成 MCP Token 并持久化，MCP 客户端按 `env > 持久化文件`自动读取，三者自动对齐。
 
 ## 项目状态
 
@@ -132,31 +132,33 @@ npm run build
 
 单次采集上限为 500 MB、24 小时；单条 body 上限为 100 MB。
 
-## 连接 Bridge 与 MCP
+## 连接 Bridge 与 MCP（零配置）
 
-先构建项目，再复制仅供当前项目使用的 MCP 示例：
-
-```bash
-cp .mcp.json.example .mcp.json
-```
-
-自行生成随机 Token，并在以下三个位置使用同一值：
-
-1. **扩展：**打开 Capture All 设置，启用 Agent Bridge，保留默认 URL `http://127.0.0.1:17831`，填写 Token。
-2. **Bridge：**通过环境变量传入 Token，启动本地 Bridge。
-3. **MCP 客户端：**将本地 `.mcp.json` 中的 `<YOUR_BRIDGE_TOKEN>` 替换为同一 Token。
+Capture All 默认零配置：扩展装上自动连 Bridge，Bridge 自动生成 MCP Token，MCP 客户端自动读取，用户无需手动管理任何 Token 或配对码。
 
 ```bash
-CAPTURE_ALL_BRIDGE_TOKEN='<你的 Token>' \
-    node artifacts/bridge/bridge.mjs --port 17831
+npm run build                  # 构建扩展、Bridge、MCP 产物
+cp .mcp.json.example .mcp.json # 复制本机 MCP 配置（已被 .gitignore 忽略）
 ```
 
-创建 `.mcp.json` 后重启 MCP 客户端。在 Claude Code 中，常用流程为：
+完成后的流程：
+
+1. **Bridge 自动启动**：进入本项目目录的 Claude Code 会话时，SessionStart hook 自动拉起本地 Bridge（端口 17831，仅绑 127.0.0.1）。Bridge 首次启动自动生成随机 MCP Token，持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。
+2. **扩展自动登记**：在 Chrome 加载 `artifacts/dist/`，扩展 popup 默认启用 Agent Bridge。扩展后台轮询 `127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，无需 Token / 配对码。Bridge 按到达顺序给每个浏览器自动编号（一、二、三…），用户可在扩展设置里改成自定义备注。
+3. **MCP 客户端自动读 Token**：MCP Server 启动时按 `env > Bridge 持久化文件`的优先级解析 Token，与 Bridge 自动对齐。
 
 ```text
 get_status → start_recording → 复现问题 → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
+
+多浏览器时通过 `target_label`（如"一"、"二"或自定义备注）或 `target_instance_id` 指定目标，单实例无需指定。
+
+### 手动启动 / 高级场景
+
+- 手动启动 Bridge：`node artifacts/bridge/bridge.mjs --port 17831`（`--port` 必须显式指定；不设 `CAPTURE_ALL_BRIDGE_TOKEN` 时自动生成并持久化）。
+- 想固定 Token（如跨机部署）：`CAPTURE_ALL_BRIDGE_TOKEN='<openssl rand -hex 32 生成的值>' node artifacts/bridge/bridge.mjs --port 17831`，然后在扩展设置和 `.mcp.json` 的 `env.CAPTURE_ALL_BRIDGE_TOKEN` 使用同一值。
+- 跨机 / 高安全场景的可选 pairing：`POST /pair/open`（需 MCP Token）打开配对窗口，扩展 enroll 时携带 `pairing_code` 走人工确认路径。默认 loopback 内不要求。
 
 `.mcp.json` 已被 Git 忽略，只能保存在本机。禁止把真实 Token 写入源码、文档、Issue 或采集导出文件。完整工具、参数、限制和故障排查见 [MCP 使用指南](docs/guides/mcp_usage.md)。
 

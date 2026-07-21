@@ -1463,9 +1463,9 @@ describe('bridge server', () => {
         expect(json.enroll_path).toBe('/extension/enroll');
     });
 
-    // ─── T0009 local pair approval S1 ───
+    // ─── T0009 local pair approval S1（T091 已反转默认：loopback origin 直通，pairing 改为可选增强）───
 
-    it('AC-1: S1 default rejects extension enroll without pairing', async () => {
+    it('T091: extension origin enroll succeeds without pairing by default', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
@@ -1475,11 +1475,11 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(200);
         const json = await response.json();
-        expect(json.ok).toBe(false);
-        expect(json.error.code).toBe('PAIRING_REQUIRED');
-        expect(json.error.message).toContain('pair');
+        expect(json.ok).toBe(true);
+        expect(json.data.browser_label).toBe('work');
+        expect(typeof json.data.instance_token).toBe('string');
     });
 
     it('AC-1: MCP token enroll bypasses pairing check', async () => {
@@ -1603,7 +1603,7 @@ describe('bridge server', () => {
         expect(typeof json.data.instance_token).toBe('string');
     });
 
-    it('AC-2: extension enroll rejected when pairing window open but no code', async () => {
+    it('T091: extension enroll without pairing_code succeeds even when pairing window open (loopback bypass)', async () => {
         const server = await start_test_server();
         await fetch(`${server.url}/pair/open`, {
             method: 'POST',
@@ -1621,8 +1621,10 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
-        expect(response.status).toBe(403);
-        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+        // T091: 不传 pairing_code 即不走 pairing 校验，loopback 直通
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
     });
 
     it('AC-3: enroll with correct pairing_code succeeds', async () => {
@@ -1717,7 +1719,7 @@ describe('bridge server', () => {
         expect(response.status).toBe(200);
     });
 
-    it('extension enroll rejected when pairing window closed', async () => {
+    it('T091: extension enroll without pairing_code succeeds when pairing window closed (loopback bypass)', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
@@ -1727,8 +1729,136 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
-        expect(response.status).toBe(403);
-        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+        // T091: pairing 窗口关 + 不传 pairing_code = loopback 直通
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.ok).toBe(true);
+    });
+
+    // ─── T091 中文数字自动编号 ───
+
+    it('T091: empty browser_label auto-assigned to 一 on first enroll', async () => {
+        const server = await start_test_server();
+        const response = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: {
+                Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        });
+        expect(response.status).toBe(200);
+        const json = await response.json();
+        expect(json.data.browser_label).toBe('一');
+    });
+
+    it('T091: subsequent empty-label enrolls get 二 / 三 in order', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        const r1 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        })).json();
+        const r2 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        })).json();
+        const r3 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        })).json();
+        expect(r1.data.browser_label).toBe('一');
+        expect(r2.data.browser_label).toBe('二');
+        expect(r3.data.browser_label).toBe('三');
+    });
+
+    it('T091: custom label does not advance auto numeral; next auto still max+1', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        // 自定义 label 先入
+        const r1 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_label: '工作机', extension_version: '1.0.0' }),
+        })).json();
+        // 空 label 自动编号 → 一
+        const r2 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        })).json();
+        expect(r1.data.browser_label).toBe('工作机');
+        expect(r2.data.browser_label).toBe('一');
+    });
+
+    it('T091: heartbeat with empty browser_label keeps bridge-assigned default label', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        // 首次 enroll 不传 label → 分配「一」
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+        // heartbeat 不传 browser_label 字段 → 保留「一」
+        const hb_res = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${instance_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_id, extension_version: '1.0.0', active_capture_id: null }),
+        });
+        expect(hb_res.status).toBe(200);
+        // 验证 status 里 label 仍为「一」
+        const status_res = await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const status = await status_res.json();
+        const inst = status.extensions.find((e: { instance_id: string }) => e.instance_id === instance_id);
+        expect(inst?.browser_label).toBe('一');
+    });
+
+    it('T091: heartbeat with explicit browser_label:null keeps bridge-assigned default label (T047 cleanup semantics overridden)', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        // 首次 enroll 不传 label → 分配「一」
+        const enroll_res = await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        });
+        const { instance_id, instance_token } = (await enroll_res.json()).data;
+        // heartbeat 显式传 browser_label: null —— T047 旧语义会清成 null；T091 新语义保留「一」
+        const hb_res = await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${instance_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_id, extension_version: '1.0.0', active_capture_id: null, browser_label: null }),
+        });
+        expect(hb_res.status).toBe(200);
+        const status = await (await fetch(`${server.url}/mcp/status`, { headers: { Authorization: `Bearer ${token}` } })).json();
+        const inst = status.extensions.find((e: { instance_id: string }) => e.instance_id === instance_id);
+        expect(inst?.browser_label).toBe('一');
+    });
+
+    it('T091: custom label shaped as numeral "一" occupies the slot; next auto label skips to 二', async () => {
+        const server = await start_test_server();
+        const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        // 自定义 label 显式设为「一」
+        const r1 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ browser_label: '一', extension_version: '1.0.0' }),
+        })).json();
+        // 空 label 自动编号 → 应跳过「一」拿「二」（自定义占用了序号 1）
+        const r2 = await (await fetch(`${server.url}/extension/enroll`, {
+            method: 'POST',
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extension_version: '1.0.0' }),
+        })).json();
+        expect(r1.data.browser_label).toBe('一');
+        expect(r2.data.browser_label).toBe('二');
     });
 
     it('pair page returns HTML', async () => {

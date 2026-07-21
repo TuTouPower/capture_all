@@ -43,7 +43,9 @@ src/
 ## 硬约束
 
 - Bridge 仅绑定 `127.0.0.1`。
-- token 必须是用户提供或 Bridge 安全随机生成的强 token。
+- token 必须是用户提供或 Bridge 安全随机生成的强 token（默认零配置：Bridge 自生成并持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`，mode 0600；MCP 客户端按 `env > 持久化文件`自动读取）。
+- 扩展 enroll 默认零配置：loopback 内凭 chrome-extension origin 直通（`/^chrome-extension:\/\/[a-p]{32}$/`），无需 Token / pairing code；pairing 端点保留为可选增强（跨机 / 高安全场景）。
+- browser_label 默认按到达顺序自动编号（一/二/三…）；自定义 label 优先；自动编号 label 不触发顶替逻辑。
 - instance_token 不得访问 MCP/CDP 路由。
 - IndexedDB 升级路径不得丢 records。
 - HTML 导出必须转义动态内容。

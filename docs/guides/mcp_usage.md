@@ -5,11 +5,11 @@
 ## 快速开始
 
 1. 构建产物：`npm run build`
-2. 在 Chrome 加载 `artifacts/dist/` 扩展。扩展后台默认轮询 `http://127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，**无需 Token / 配对码**。Bridge 按到达顺序自动给每个浏览器编号（一、二、三…）；如需自定义备注，到扩展设置里改 `browser_label`。
+2. 在 Chrome 加载 `artifacts/dist/` 扩展。扩展后台默认轮询 `http://127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，**无需 Token / 配对码**。Bridge 按到达顺序自动给每个浏览器编号（`1 号` / `2 号` / `3 号` …）；如需自定义备注，到扩展设置里改 `browser_label`。
 3. 启动 Bridge：进入本项目的 Claude Code 会话时 SessionStart hook 自动拉起；手动启动用 `node artifacts/bridge/bridge.mjs --port 17831`（`--port` 必须显式；未设 `CAPTURE_ALL_BRIDGE_TOKEN` 时自动生成并持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`，mode 0600）。
 4. 复制项目配置：`cp .mcp.json.example .mcp.json`。`.mcp.json` 默认**无需填 Token** —— MCP Server 按 `env > Bridge 持久化文件`自动解析，与 Bridge 对齐。`.mcp.json` 仅供本机使用，不提交到 Git。
 5. 重开 Claude Code 会话，确认扩展在线：`get_status`（`extensions[].browser_label` 应见「一」/自定义备注）。
-6. 多浏览器时通过 `target_label`（如"一"、"二"或自定义备注）或 `target_instance_id` 指定目标，单实例无需指定。
+6. 多浏览器时通过 `target_label`（如"1 号"、"2 号"或自定义备注）或 `target_instance_id` 指定目标，单实例无需指定。
 7. 开始采集：`start_recording`，结束采集：`stop_recording`。
 
 ### 高级：固定 Token / 跨机 pairing

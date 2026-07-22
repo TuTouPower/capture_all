@@ -134,13 +134,13 @@
 - 结论：选 B。capture_state.phase=stopping 拒绝新命令但继续接当前 generation 回调。先停生产者 -> flush_all drain -> 翻 is_capturing=false -> 写 stopped event（含 drain 后最终 stats）-> 清持久化键 -> idle。详见 T031。
 - 替代：无
 
-## 018 零配置自动连接：loopback origin 直通 + 中文数字自动编号 + MCP token 文件回退（2026-07-22）
+## 018 零配置自动连接：loopback origin 直通 + 默认编号（N 号）+ MCP token 文件回退（2026-07-22）
 
 - 背景：扩展装上要用户手填 Token 并通过 `/pair` 配对码才能首次 enroll；MCP 客户端 `.mcp.json` 硬编码 Token 又与 SessionStart hook 自生成 Token 对不上，整条链路对普通用户不可用。
 - 选项：A）保持 pairing 硬门槛 + 手填 Token；B）loopback 内凭 chrome-extension origin 直通 enroll，Bridge 自生成 MCP Token，MCP 客户端按 `env > 持久化文件`自动读取，扩展未填 label 时按到达顺序自动编号。
 - 结论：选 B。
     - **Bridge enroll**：去掉「扩展 origin + 非 dev_mode 必须过 pairing」硬门槛；保留 `is_allowed_extension_origin`（`chrome-extension://<32-char-id>`）防本机非扩展页面伪造。pairing 端点保留为可选增强（扩展显式传 `pairing_code` 才校验；跨机 / 高安全场景）。
-    - **自动编号**：扩展 enroll 时未传 label，Bridge 调 `next_default_label` 分配中文数字（一/二/三…，跳过自定义 label，取已用最大序号 +1）。自定义 label 顶替逻辑保留；自动编号 label 由 `next_default_label` 保证唯一不触发顶替。heartbeat 未传 label 时保留已分配的默认编号（覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号）。
+    - **自动编号**：扩展 enroll 时未传 label，Bridge 调 `next_default_label` 分配默认编号（`1 号` / `2 号` / `3 号` …，跳过自定义 label，取已用最大序号 +1）。自定义 label 顶替逻辑保留；自动编号 label 由 `next_default_label` 保证唯一不触发顶替。heartbeat 未传 label 时保留已分配的默认编号（覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号）。
     - **MCP token 文件回退**：`resolve_client_token(env, file_path)` env 优先，缺省读 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。`.mcp.json` 默认不再出现明文 Token。
 - 安全不变量：instance_token 与 MCP token 仍分离（硬约束保留）；自登记端点仅签发 instance_token，不暴露 MCP token；保留 127.0.0.1 绑定。
 - 替代：A 方案要求用户读文档生成 / 复制 Token，违反「装上即用」目标；不予采纳。详见 T091。

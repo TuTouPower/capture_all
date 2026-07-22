@@ -143,7 +143,7 @@ cp .mcp.json.example .mcp.json # copy the local MCP config (gitignored)
 Flow after that:
 
 1. **Bridge auto-starts:** the SessionStart hook brings up the local Bridge when a Claude Code session enters this project (port 17831, loopback only). On first start Bridge generates a random MCP token and persists it to `$XDG_RUNTIME_DIR/capture-all/bridge_token` (mode 0600).
-2. **Extension auto-enrolls:** load `artifacts/dist/` in Chrome; the popup enables Agent Bridge by default. The background worker polls `127.0.0.1:17831` and enrolls on first connect via the chrome-extension origin — no token or pairing code required. Bridge numbers each browser in arrival order (一, 二, 三…); override with a custom label in extension settings if you like.
+2. **Extension auto-enrolls:** load `artifacts/dist/` in Chrome; the popup enables Agent Bridge by default. The background worker polls `127.0.0.1:17831` and enrolls on first connect via the chrome-extension origin — no token or pairing code required. Bridge numbers each browser in arrival order (1 号, 2 号, 3 号…); override with a custom label in extension settings if you like.
 3. **MCP client auto-reads the token:** the MCP server resolves the token with priority `env > Bridge-persisted file` and aligns with Bridge automatically.
 
 ```text
@@ -151,7 +151,7 @@ get_status → start_recording → reproduce the issue → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-For multiple browsers, target one with `target_label` (e.g. "一", "二", or a custom label) or `target_instance_id`; a single instance needs neither.
+For multiple browsers, target one with `target_label` (e.g. "1 号", "2 号", or a custom label) or `target_instance_id`; a single instance needs neither.
 
 ### Manual start / advanced
 

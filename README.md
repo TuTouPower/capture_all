@@ -144,7 +144,7 @@ cp .mcp.json.example .mcp.json # 复制本机 MCP 配置（已被 .gitignore 忽
 完成后的流程：
 
 1. **Bridge 自动启动**：进入本项目目录的 Claude Code 会话时，SessionStart hook 自动拉起本地 Bridge（端口 17831，仅绑 127.0.0.1）。Bridge 首次启动自动生成随机 MCP Token，持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。
-2. **扩展自动登记**：在 Chrome 加载 `artifacts/dist/`，扩展 popup 默认启用 Agent Bridge。扩展后台轮询 `127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，无需 Token / 配对码。Bridge 按到达顺序给每个浏览器自动编号（一、二、三…），用户可在扩展设置里改成自定义备注。
+2. **扩展自动登记**：在 Chrome 加载 `artifacts/dist/`，扩展 popup 默认启用 Agent Bridge。扩展后台轮询 `127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，无需 Token / 配对码。Bridge 按到达顺序给每个浏览器自动编号（1 号、2 号、3 号…），用户可在扩展设置里改成自定义备注。
 3. **MCP 客户端自动读 Token**：MCP Server 启动时按 `env > Bridge 持久化文件`的优先级解析 Token，与 Bridge 自动对齐。
 
 ```text
@@ -152,7 +152,7 @@ get_status → start_recording → 复现问题 → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
 
-多浏览器时通过 `target_label`（如"一"、"二"或自定义备注）或 `target_instance_id` 指定目标，单实例无需指定。
+多浏览器时通过 `target_label`（如"1 号"、"2 号"或自定义备注）或 `target_instance_id` 指定目标，单实例无需指定。
 
 ### 手动启动 / 高级场景
 

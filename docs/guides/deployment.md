@@ -73,9 +73,9 @@ sudo systemctl start capture-all-bridge
 
 每个浏览器实例可填入唯一 `browser_label`（备注，如 "work" / "personal"）：
 
-1. **默认零配置**：扩展装上自动 enroll，Bridge 按到达顺序自动编号（一、二、三…）。单浏览器无需任何配置。
+1. **默认零配置**：扩展装上自动 enroll，Bridge 按到达顺序自动编号（`1 号` / `2 号` / `3 号` …）。单浏览器无需任何配置。
 2. **自定义备注**：在扩展设置中改 `browser_label`，Bridge 用自定义值；未设的实例继续用自动编号。
-3. Bridge 自动路由：单实例默认；多实例按 `target_label`（"一"/"二"或自定义）或 `target_instance_id` 路由。
+3. Bridge 自动路由：单实例默认；多实例按 `target_label`（"1 号"/"2 号"或自定义）或 `target_instance_id` 路由。
 4. MCP 工具调用时指定 `target_label` 或 `target_instance_id` 参数；多实例未指定时返回 `TARGET_AMBIGUOUS`。
 
 ## 安全加固

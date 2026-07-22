@@ -131,31 +131,33 @@ After rebuilding, reload the extension in `chrome://extensions` if manifest or S
 
 A single capture is capped at 500 MB and 24 hours; a single body is capped at 100 MB.
 
-## Connect Bridge and MCP
+## Connect Bridge and MCP (zero-config)
 
-Build the project first, then copy the MCP example scoped to the current project:
-
-```bash
-cp .mcp.json.example .mcp.json
-```
-
-Generate a random token yourself and use the same value in all three places:
-
-1. **Extension:** open Capture All settings, enable Agent Bridge, keep the default URL `http://127.0.0.1:17831`, then fill in the token.
-2. **Bridge:** pass the token via environment variable and start the local Bridge.
-3. **MCP client:** replace `<YOUR_BRIDGE_TOKEN>` in the local `.mcp.json` with the same token.
+Capture All is zero-config by default: the extension auto-connects to Bridge, Bridge auto-generates the MCP token, and the MCP client auto-reads it. Users never have to manage tokens or pairing codes.
 
 ```bash
-CAPTURE_ALL_BRIDGE_TOKEN='<your token>' \
-    node artifacts/bridge/bridge.mjs --port 17831
+npm run build                  # build extension, bridge, mcp artifacts
+cp .mcp.json.example .mcp.json # copy the local MCP config (gitignored)
 ```
 
-Restart the MCP client after creating `.mcp.json`. In Claude Code, the typical flow is:
+Flow after that:
+
+1. **Bridge auto-starts:** the SessionStart hook brings up the local Bridge when a Claude Code session enters this project (port 17831, loopback only). On first start Bridge generates a random MCP token and persists it to `$XDG_RUNTIME_DIR/capture-all/bridge_token` (mode 0600).
+2. **Extension auto-enrolls:** load `artifacts/dist/` in Chrome; the popup enables Agent Bridge by default. The background worker polls `127.0.0.1:17831` and enrolls on first connect via the chrome-extension origin — no token or pairing code required. Bridge numbers each browser in arrival order (一, 二, 三…); override with a custom label in extension settings if you like.
+3. **MCP client auto-reads the token:** the MCP server resolves the token with priority `env > Bridge-persisted file` and aligns with Bridge automatically.
 
 ```text
 get_status → start_recording → reproduce the issue → stop_recording
            → list_captures → get_timeline / list_records / export_capture
 ```
+
+For multiple browsers, target one with `target_label` (e.g. "一", "二", or a custom label) or `target_instance_id`; a single instance needs neither.
+
+### Manual start / advanced
+
+- Start Bridge manually: `node artifacts/bridge/bridge.mjs --port 17831` (`--port` is required; without `CAPTURE_ALL_BRIDGE_TOKEN` it self-generates and persists).
+- To pin a token (e.g. for cross-machine deployment): `CAPTURE_ALL_BRIDGE_TOKEN='<value from openssl rand -hex 32>' node artifacts/bridge/bridge.mjs --port 17831`, then reuse the same value in extension settings and `.mcp.json`'s `env.CAPTURE_ALL_BRIDGE_TOKEN`.
+- Optional pairing for cross-machine / high-security scenarios: `POST /pair/open` (requires MCP token) opens a pairing window; the extension then passes `pairing_code` on enroll for manual approval. Loopback never requires it by default.
 
 `.mcp.json` is gitignored and must stay on the local machine. Never write real tokens into source, documentation, issue threads, or capture exports. For full tools, parameters, limits, and troubleshooting, see the [MCP usage guide](docs/guides/mcp_usage.md).
 

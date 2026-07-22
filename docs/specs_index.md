@@ -4,7 +4,7 @@
 
 | slug | 状态 | task 清单 | spec 路径 | 归档路径 |
 |------|------|----------|----------|---------|
-| capture_all | done | T001-T090 | `docs/specs/capture_all.md`（总览） | — |
+| capture_all | done | T001-T091 | `docs/specs/capture_all.md`（总览） | — |
 | extension_capture | done | — | `docs/specs/extension_capture.md` | — |
 | privacy_redaction | done | — | `docs/specs/privacy_redaction.md` | — |
 | storage | done | — | `docs/specs/storage.md` | — |

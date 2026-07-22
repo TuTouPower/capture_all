@@ -23,7 +23,9 @@ export function normalize_agent_bridge_config(config: AgentBridgeUserConfig): Ag
         : MIN_POLL_INTERVAL_MS;
 
     return {
-        agent_bridge_enabled: config.agent_bridge_enabled && token.length > 0,
+        // T091: 零配置 —— token 空时不再强制禁用 agent_bridge_enabled。
+        // 扩展可凭 chrome-extension origin 在 loopback 内直通 enroll，无需手填 token。
+        agent_bridge_enabled: config.agent_bridge_enabled,
         agent_bridge_url: url.toString().replace(/\/$/, ''),
         agent_bridge_token: token,
         agent_bridge_poll_interval_ms: poll_interval_ms,

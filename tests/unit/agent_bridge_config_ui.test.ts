@@ -21,11 +21,11 @@ describe('agent bridge user config', () => {
         });
     });
 
-    test('disables bridge when token is empty', () => {
+    test('T091: keeps bridge enabled when token is empty (zero-config auto-enroll)', () => {
         expect(normalize_agent_bridge_config({
             ...base_config,
             agent_bridge_token: ''
-        }).agent_bridge_enabled).toBe(false);
+        }).agent_bridge_enabled).toBe(true);
     });
 
     test('rejects non-local bridge URLs', () => {

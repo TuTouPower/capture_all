@@ -2,14 +2,21 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { BridgeMcpClient } from './client';
+import { resolve_client_token } from './token_resolver';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from './tools';
 import { MCP_TOOL_SCHEMAS } from './schemas';
 
 const bridge_url = process.env.CAPTURE_ALL_BRIDGE_URL;
-const bridge_token = process.env.CAPTURE_ALL_BRIDGE_TOKEN;
+const bridge_token = await resolve_client_token(process.env.CAPTURE_ALL_BRIDGE_TOKEN);
 
-if (!bridge_url || !bridge_token) {
-    throw new Error('CAPTURE_ALL_BRIDGE_URL and CAPTURE_ALL_BRIDGE_TOKEN are required');
+if (!bridge_url) {
+    throw new Error('CAPTURE_ALL_BRIDGE_URL is required');
+}
+if (!bridge_token) {
+    throw new Error(
+        'CAPTURE_ALL_BRIDGE_TOKEN required: set env, or ensure Bridge has persisted its self-generated token '
+            + '(default: $XDG_RUNTIME_DIR/capture-all/bridge_token, mode 0600)',
+    );
 }
 
 const client = new BridgeMcpClient(bridge_url, bridge_token);

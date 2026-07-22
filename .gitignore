@@ -20,5 +20,4 @@ e2e/**/artifacts/
 e2e/**/dist/
 **/e2e-data-*/
 store/
-# T087: store screenshots output (scripts/capture_store_screenshots.mjs)
 store/

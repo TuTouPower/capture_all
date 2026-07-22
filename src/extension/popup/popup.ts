@@ -479,4 +479,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     panelBtn.addEventListener('click', () => open_dashboard());
     render();
     if (state === 'capturing') start_timer();
+
+    // MCP 通过 Bridge 触发 start/stop 时，service_worker 写 storage 让 popup 实时反映状态变化。
+    chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local') return;
+        if (!('is_capturing' in changes) && !('current_capture' in changes)) return;
+        const was_capturing = state === 'capturing';
+        void load_state().then(() => {
+            render();
+            const now_capturing = state === 'capturing';
+            if (now_capturing && !was_capturing) start_timer();
+            else if (!now_capturing && was_capturing) stop_timer();
+        });
+    });
 });

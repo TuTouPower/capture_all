@@ -404,6 +404,18 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     start_time = now;
     is_capturing = true;
 
+    // 同步 storage 让 popup/dashboard 反映 MCP 触发的状态变化（popup load_state 读 is_capturing + current_capture）。
+    // 同时写 active_capture_* 持久化键供 SW 重启恢复（T030）。
+    const start_generation = capture_state.get_state().generation;
+    await chrome.storage.local.set({
+        is_capturing: true,
+        current_capture: capture,
+        active_capture_id: capture_id,
+        active_capture_start_ms: now,
+        active_capture_config: config,
+        active_capture_generation: start_generation,
+    });
+
     // Write capture_lifecycle.capture_started event
     const started_data: CaptureStartedData = {
         capture_id: capture_id,
@@ -637,6 +649,12 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
 
     // 3. drain 完成后翻 is_capturing=false，回调入口不再处理新事件
     is_capturing = false;
+
+    // 同步 storage 让 popup/dashboard 反映 MCP 触发的停止（清空 current_capture）。
+    await chrome.storage.local.set({
+        is_capturing: false,
+        current_capture: null,
+    });
 
     // 4. 写 stopped lifecycle event + 更新 CaptureRecord（含 drain 后的最终 stats）
     if (current_capture && current_capture_id) {

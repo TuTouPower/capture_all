@@ -48,6 +48,10 @@ declare namespace chrome {
             function set(items: Record<string, any>): Promise<void>;
             function remove(keys: string | string[]): Promise<void>;
         }
+        const onChanged: {
+            addListener(callback: (changes: Record<string, { oldValue?: any; newValue?: any }>, area: string) => void): void;
+            removeListener(callback: (changes: Record<string, { oldValue?: any; newValue?: any }>, area: string) => void): void;
+        };
     }
 
     namespace webRequest {

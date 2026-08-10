@@ -220,10 +220,10 @@ describe('enable_response_body_capture', () => {
             }
         );
 
-        // Verify meta was stored
+        // Verify meta was stored (T094: 内部键为 session 复合键，根 session 前缀 root:)
         const { _cdp_request_meta_for_test } = await import('../../src/extension/background/network_capture');
-        expect(_cdp_request_meta_for_test.has('req_test_1')).toBe(true);
-        const meta = _cdp_request_meta_for_test.get('req_test_1')!;
+        expect(_cdp_request_meta_for_test.has('root:req_test_1')).toBe(true);
+        const meta = _cdp_request_meta_for_test.get('root:req_test_1')!;
         expect(meta.url).toBe('https://example.com/api');
         expect(meta.method).toBe('GET');
     });

@@ -14,7 +14,7 @@ import { create_stream_buffer } from './stream_buffer';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
 import { extract_request_body, headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
-import { base64_decoded_size, is_self_origin_url, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS } from './cdp_handler';
+import { base64_decoded_size, is_self_origin_url, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS, cdp_request_key } from './cdp_handler';
 import type { NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
 import {} from './webrequest_handler';
 import {} from './ws_handler';
@@ -301,7 +301,7 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
     send_to_background({ event, data });
 }
 
-function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: any): void {
+function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'received', params: any): void {
     const resp = params?.response || {};
     // 仅拦截 undefined（CDP 控制帧不携带 payloadData），保留空字符串（合法 payload）
     const raw_payload = resp.payloadData === undefined ? null : resp.payloadData;
@@ -327,7 +327,7 @@ function send_ws_frame(req_id: string, direction: 'sent' | 'received', params: a
         payload_encoding = is_binary ? 'base64' : 'utf8';
     }
 
-    const conn = ws_connections.get(req_id);
+    const conn = ws_connections.get(req_key);
     const frame_url = redact_url(conn?.url || '', Boolean(config.redact_data && config.redact_url_query)).url;
     const frame_data: WsFrameData = {
         ws_connection_id: req_id,
@@ -397,6 +397,12 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
     const req_id: string = params?.requestId;
     if (!req_id) return;
 
+    // T094: 复合键 sessionId+requestId。CDP requestId 仅在 session 范围内唯一，
+    // flatten:auto-attach 后跨主页面/iframe/worker 子目标可能重复。
+    // 内部 Map/Set 用 req_key；CDP 命令 requestId 仍用原 req_id；输出 request_id 字段保留原 req_id。
+    const req_key = cdp_request_key(source, req_id);
+    const session_id = source?.sessionId ?? null;
+
     if (method === 'Network.requestWillBeSent') {
         const request = params?.request;
         if (request) {
@@ -423,7 +429,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
 
             // 重定向：params.redirectResponse 存在时，先 emit 前一跳（保留证据）再覆盖
             const redirect_response = params?.redirectResponse;
-            const existing = cdp_request_meta.get(req_id);
+            const existing = cdp_request_meta.get(req_key);
             if (redirect_response && existing) {
                 // 填充前一跳的响应信息
                 existing.status_code = redirect_response.status || 0;
@@ -441,7 +447,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 send_to_background(build_cdp_primary_network_event(existing, hop_body_result, req_id));
             }
 
-            cdp_request_meta.set(req_id, {
+            cdp_request_meta.set(req_key, {
                 url: request.url || '',
                 method: request.method || 'GET',
                 status_code: 0,
@@ -454,13 +460,14 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 request_body_mime,
                 mime_type: null,
                 redirect_count: existing ? (existing.redirect_count || 0) + 1 : 0,
+                session_id,
             });
         }
     }
 
     if (method === 'Network.responseReceived') {
         const response = params?.response;
-        const existing = cdp_request_meta.get(req_id);
+        const existing = cdp_request_meta.get(req_key);
         const resp_headers = headers_map_from_cdp(response?.headers || {});
         const mime = extract_mime_type(resp_headers);
         if (existing) {
@@ -468,7 +475,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             existing.response_headers = resp_headers;
             existing.mime_type = mime;
         } else {
-            cdp_request_meta.set(req_id, {
+            cdp_request_meta.set(req_key, {
                 url: response?.url || '',
                 method: '',
                 status_code: response?.status || 0,
@@ -480,33 +487,34 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 request_body_status: 'not_enabled',
                 request_body_mime: null,
                 mime_type: mime,
+                session_id,
             });
         }
 
         if (is_streaming_response(resp_headers) && dbg_tab_id !== null) {
-            streaming_requests.add(req_id);
+            streaming_requests.add(req_key);
             if (existing) {
                 existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
             }
-            if (finished_before_stream.delete(req_id)) {
+            if (finished_before_stream.delete(req_key)) {
                 // loadingFinished already fired — skip streamResourceContent, mark partial
-                logger.debug('stream_skipped_already_finished', { req_id });
+                logger.debug('stream_skipped_already_finished', { req_key });
                 if (existing) {
                     existing.response_body_status = 'partial';
                 }
             } else {
                 chrome.dbg.sendCommand(
-                    { tabId: dbg_tab_id },
+                    { tabId: dbg_tab_id, ...(session_id ? { sessionId: session_id } : {}) },
                     'Network.streamResourceContent',
                     { requestId: req_id }
                 ).then((result: any) => {
                     if (result?.bufferedData) {
-                        stream_buffer_instance?.append(req_id, result.bufferedData);
+                        stream_buffer_instance?.append(req_key, result.bufferedData);
                     }
-                    logger.debug('stream_started', { req_id, mime });
+                    logger.debug('stream_started', { req_key, mime });
                 }).catch((err: any) => {
-                    logger.debug('streamResourceContent_failed', { req_id, error: String(err).slice(0, 80) });
-                    const meta = cdp_request_meta.get(req_id);
+                    logger.debug('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
+                    const meta = cdp_request_meta.get(req_key);
                     if (meta) {
                         meta.response_body_status = 'partial';
                     }
@@ -515,23 +523,23 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
         }
     }
 
-    if (method === 'Network.dataReceived' && streaming_requests.has(req_id)) {
+    if (method === 'Network.dataReceived' && streaming_requests.has(req_key)) {
         const chunk = params?.data;
         if (chunk && stream_buffer_instance) {
-            stream_buffer_instance.append(req_id, chunk);
+            stream_buffer_instance.append(req_key, chunk);
         }
     }
 
     if (method === 'Network.loadingFinished') {
         if (dbg_tab_id === null) return;
-        finished_before_stream.add(req_id);
-        const meta_for_method = cdp_request_meta.get(req_id);
+        finished_before_stream.add(req_key);
+        const meta_for_method = cdp_request_meta.get(req_key);
         const http_method = meta_for_method?.method?.toUpperCase() || '';
 
-        if (streaming_requests.has(req_id)) {
-            stream_buffer_instance?.force_flush(req_id);
-            streaming_requests.delete(req_id);
-            const meta = cdp_request_meta.get(req_id);
+        if (streaming_requests.has(req_key)) {
+            stream_buffer_instance?.force_flush(req_key);
+            streaming_requests.delete(req_key);
+            const meta = cdp_request_meta.get(req_key);
             if (meta) {
                 const body = meta.response_body || null;
                 const byte_size = body ? new TextEncoder().encode(body).length : 0;
@@ -552,15 +560,15 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                     encoding: 'utf8',
                     byte_size,
                 };
-                cdp_primary_emitted.add(req_id);
+                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
-                cdp_request_meta.delete(req_id);
+                cdp_request_meta.delete(req_key);
             }
             return;
         }
 
         chrome.dbg.sendCommand(
-            { tabId: dbg_tab_id },
+            { tabId: dbg_tab_id, ...(session_id ? { sessionId: session_id } : {}) },
             'Network.getResponseBody',
             { requestId: req_id }
         ).then((result: any) => {
@@ -574,7 +582,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 // OPTIONS/HEAD typically have no body — not an error
                 body_status = (http_method === 'OPTIONS' || http_method === 'HEAD')
                     ? 'not_enabled' : 'cdp_failed';
-                logger.debug('get_body_failed', { req_id, reason: 'no_body_in_result', method: http_method });
+                logger.debug('get_body_failed', { req_key, reason: 'no_body_in_result', method: http_method });
             } else if (result.base64Encoded) {
                 byte_size = base64_decoded_size(result.body);
                 encoding = 'base64';
@@ -594,12 +602,12 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             }
 
             const body_result: CdpBodyResult = { body, status: body_status, timestamp: Date.now(), preview, encoding, byte_size };
-            cdp_body_results.set(req_id, body_result);
+            cdp_body_results.set(req_key, body_result);
 
             // CDP-first: if we have metadata, build and emit the complete entry directly
-            const meta = cdp_request_meta.get(req_id);
+            const meta = cdp_request_meta.get(req_key);
             if (meta) {
-                cdp_primary_emitted.add(req_id);
+                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
                 logger.debug('cdp_primary_emitted', {
                     url: meta.url?.slice(0, 120),
@@ -608,14 +616,14 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                     body_len: body?.length ?? 0,
                 });
                 // Clean up — no need for orphan check since we already emitted
-                cdp_request_meta.delete(req_id);
-                cdp_body_results.delete(req_id);
+                cdp_request_meta.delete(req_key);
+                cdp_body_results.delete(req_key);
                 return;
             }
 
             // No metadata yet — fall back to deferred/orphan resolution
-            try_resolve_deferred(req_id);
-            schedule_orphan_check(req_id);
+            try_resolve_deferred(req_key);
+            schedule_orphan_check(req_key, req_id);
         }).catch((err: any) => {
             // -32000 = "No resource with given identifier" (resource already released)
             // OPTIONS/HEAD have no body by spec
@@ -625,32 +633,32 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             const status: BodyCaptureStatus = (is_resource_released || is_no_body_method)
                 ? 'not_enabled' : 'cdp_failed';
             const fail_result: CdpBodyResult = { body: null, status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
-            cdp_body_results.set(req_id, fail_result);
-            logger.debug('get_body_error', { req_id, error: err_msg.slice(0, 100), status });
+            cdp_body_results.set(req_key, fail_result);
+            logger.debug('get_body_error', { req_key, error: err_msg.slice(0, 100), status });
 
             // CDP-first: emit even on failure (status will be cdp_failed)
-            const meta = cdp_request_meta.get(req_id);
+            const meta = cdp_request_meta.get(req_key);
             if (meta) {
-                cdp_primary_emitted.add(req_id);
+                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id));
-                cdp_request_meta.delete(req_id);
-                cdp_body_results.delete(req_id);
+                cdp_request_meta.delete(req_key);
+                cdp_body_results.delete(req_key);
                 return;
             }
 
-            try_resolve_deferred(req_id);
-            schedule_orphan_check(req_id);
+            try_resolve_deferred(req_key);
+            schedule_orphan_check(req_key, req_id);
         });
     }
 
     if (method === 'Network.loadingFailed') {
-        const fail_meta = cdp_request_meta.get(req_id);
+        const fail_meta = cdp_request_meta.get(req_key);
         const fail_method = fail_meta?.method?.toUpperCase() || '';
         const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
             ? 'not_enabled' : 'cdp_failed';
-        cdp_body_results.set(req_id, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
-        try_resolve_deferred(req_id);
-        schedule_orphan_check(req_id);
+        cdp_body_results.set(req_key, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
+        try_resolve_deferred(req_key);
+        schedule_orphan_check(req_key, req_id);
     }
 
     // ── WebSocket events ──
@@ -664,19 +672,19 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             ws_status: 'connecting',
             created_ts: Date.now(),
         };
-        ws_connections.set(req_id, conn);
+        ws_connections.set(req_key, conn);
         send_ws_connection_event(req_id, conn, 'connecting');
     }
 
     if (method === 'Network.webSocketWillSendHandshakeRequest') {
-        const conn = ws_connections.get(req_id);
+        const conn = ws_connections.get(req_key);
         if (conn) {
             conn.request_headers = headers_map_from_cdp(params?.request?.headers || {});
         }
     }
 
     if (method === 'Network.webSocketHandshakeResponseReceived') {
-        const conn = ws_connections.get(req_id);
+        const conn = ws_connections.get(req_key);
         if (conn) {
             conn.response_headers = headers_map_from_cdp(params?.response?.headers || {});
             conn.status_code = params?.response?.status || 101;
@@ -686,15 +694,15 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
     }
 
     if (method === 'Network.webSocketFrameSent') {
-        send_ws_frame(req_id, 'sent', params);
+        send_ws_frame(req_key, req_id, 'sent', params);
     }
 
     if (method === 'Network.webSocketFrameReceived') {
-        send_ws_frame(req_id, 'received', params);
+        send_ws_frame(req_key, req_id, 'received', params);
     }
 
     if (method === 'Network.webSocketFrameError') {
-        const frame_url = redact_url(ws_connections.get(req_id)?.url || '', Boolean(config.redact_data && config.redact_url_query)).url;
+        const frame_url = redact_url(ws_connections.get(req_key)?.url || '', Boolean(config.redact_data && config.redact_url_query)).url;
         const frame_data: WsFrameData = {
             ws_connection_id: req_id,
             direction: 'error',
@@ -722,45 +730,45 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
     }
 
     if (method === 'Network.webSocketClosed') {
-        const conn = ws_connections.get(req_id);
+        const conn = ws_connections.get(req_key);
         if (conn) {
             conn.ws_status = 'closed';
             send_ws_connection_event(req_id, conn, 'closed');
-            ws_connections.delete(req_id);
+            ws_connections.delete(req_key);
         }
     }
 }
 
-function try_resolve_deferred(cdp_req_id: string): void {
-    const deferred_keys = _deferred_cdp_index.get(cdp_req_id);
+function try_resolve_deferred(cdp_req_key: string): void {
+    const deferred_keys = _deferred_cdp_index.get(cdp_req_key);
     if (!deferred_keys || deferred_keys.size === 0) return;
 
-    const body_result = cdp_body_results.get(cdp_req_id);
+    const body_result = cdp_body_results.get(cdp_req_key);
     if (!body_result) {
-        _deferred_cdp_index.delete(cdp_req_id);
+        _deferred_cdp_index.delete(cdp_req_key);
         return;
     }
 
     logger.debug('deferred_resolving', {
-        cdp_req_id,
+        cdp_req_key,
         body_status: body_result.status,
         deferred_count: deferred_keys.size,
     });
 
-    // Remove this cdp_id from all deferred entries' pending sets.
+    // Remove this cdp key from all deferred entries' pending sets.
     // The first entry whose pending set becomes empty wins the body.
     for (const dk of deferred_keys) {
         const entry = deferred_web_requests.get(dk);
         if (!entry) continue;
-        entry.pending_cdp_ids.delete(cdp_req_id);
+        entry.pending_cdp_ids.delete(cdp_req_key);
 
         if (entry.pending_cdp_ids.size === 0) {
             // All CDP candidates for this deferred entry have resolved
             clearTimeout(entry.timer);
             deferred_web_requests.delete(dk);
-            cdp_body_results.delete(cdp_req_id);
-            cdp_request_meta.delete(cdp_req_id);
-            _deferred_cdp_index.delete(cdp_req_id);
+            cdp_body_results.delete(cdp_req_key);
+            cdp_request_meta.delete(cdp_req_key);
+            _deferred_cdp_index.delete(cdp_req_key);
             send_to_background(build_network_event(
                 entry.pending, entry.details, body_result.body, body_result.status, body_result.preview
             ));
@@ -769,21 +777,21 @@ function try_resolve_deferred(cdp_req_id: string): void {
     }
 
     // No deferred entry fully resolved — just clean up this CDP body
-    cdp_body_results.delete(cdp_req_id);
-    cdp_request_meta.delete(cdp_req_id);
-    _deferred_cdp_index.delete(cdp_req_id);
+    cdp_body_results.delete(cdp_req_key);
+    cdp_request_meta.delete(cdp_req_key);
+    _deferred_cdp_index.delete(cdp_req_key);
 }
 
 export const _try_resolve_deferred_for_test = try_resolve_deferred;
 
-function schedule_orphan_check(req_id: string): void {
+function schedule_orphan_check(req_key: string, req_id: string): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
     // emit it as cdp_only via the callback.
     setTimeout(() => {
         if (!on_cdp_body_event) return;
-        const body_result = cdp_body_results.get(req_id);
+        const body_result = cdp_body_results.get(req_key);
         if (!body_result) return; // already matched and consumed by handle_completed
-        const meta = cdp_request_meta.get(req_id);
+        const meta = cdp_request_meta.get(req_key);
 
         const redact_hdrs = Boolean(config.redact_data && config.redact_sensitive_headers);
         const redact_q = Boolean(config.redact_data && config.redact_url_query);
@@ -808,9 +816,9 @@ function schedule_orphan_check(req_id: string): void {
         on_cdp_body_event(event);
 
         // Cleanup orphan entries
-        cdp_request_meta.delete(req_id);
-        cdp_body_results.delete(req_id);
-        _deferred_cdp_index.delete(req_id);
+        cdp_request_meta.delete(req_key);
+        cdp_body_results.delete(req_key);
+        _deferred_cdp_index.delete(req_key);
     }, ORPHAN_TIMEOUT_MS);
 }
 

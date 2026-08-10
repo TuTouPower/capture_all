@@ -2,11 +2,11 @@
 tid: "t100"
 slug: "privacy_logger_stack_redact_url"
 title: "privacy: Logger stack 脱敏且 redact_url 相对 URL fail-closed"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t100_privacy_logger_stack_redact_url"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "e47d501b5e19cce4e486003830950beff707bebc"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P1-2 P1-15"
@@ -22,7 +22,12 @@ note: "review_20260811 P1-2 P1-15"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：Error.stack 只截断不脱敏；redact_url 对无法 new URL 的串 fail-open 泄露 query。
+- 修复：redact_url 手动拆 query/fragment、key decode、值内嵌 URL 递归；logger stack 走 sanitize_string、正则支持相对 query（key=value 形态）。
+- Round 1 code FAIL（critical 嵌套 URL 泄露、important 可选链误匹配）→ 修 + 补回归用例。
+- 全量 1204 通过，tsc 无错。
+- 遗留：三元含 = 误匹配（p017）、相对嵌套值不递归（p018）。
 
 ## Review 处置
 
@@ -44,14 +49,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 05:06 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+code FAIL（f001 critical 嵌套 URL 泄露 + f002 important 可选链误匹配 + f003/f004 minor）；test PASS。
+
+### Round 2 (2026-08-11 05:07 UTC+8)
+
+code PASS / test PASS；新增 f005/f006 minor。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t100_code_f001 | critical | 已修 | 手动路径 param 值内嵌绝对 URL 递归脱敏 | redaction.ts |
+| t100_code_f002 | important | 已修 | bare-query 要求 key=value 形态排除可选链/三元 | logger.ts |
+| t100_code_f003 | minor | 已修 | 自产 stack 走 sanitize_string | logger.ts |
+| t100_code_f004 | minor | 已修 | key 先 decode、拆分 fragment | redaction.ts |
+| t100_code_f005 | minor | 已修 | 仅递归实际脱敏才置 redacted | redaction.ts |
+| t100_code_f006 | minor | 遗留 | 三元含 = 仍误匹配（启发式权衡） | p017 |
 
 ## 收尾报告
 
@@ -60,24 +73,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL → Round 2 code：PASS → Round 3 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- redact_url 支持相对/无法 parse 的 query 脱敏（不 fail-open），Logger Error.stack 与自产 stack 走脱敏；3 轮审阅修 critical 嵌套 URL 泄露 + important 可选链误匹配。

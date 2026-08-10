@@ -27,8 +27,10 @@ function truncate_bytes_safe(s: string, max_bytes: number): string {
     return sliced + '...[TRUNCATED]';
 }
 
-// URL 子串模式：扫描字符串中嵌入的绝对 URL，便于在 message/details 文本中脱敏
-const URL_SUBSTRING_PATTERN = /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`)]+/gi;
+// URL 子串模式：扫描字符串中嵌入的 URL（绝对或相对含 query），便于脱敏
+// T100: 相对 URL（path?token=x）与绝对 URL 均纳入；bare-query 要求 key=value 形态，
+// 排除 JS 可选链（?.token）/ 三元（cond?x:y）误匹配。
+const URL_SUBSTRING_PATTERN = /(?:[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`)]+|\/[^\s"'<>`)]*\?[^\s"'<>`)]*=[^\s"'<>`)]*|\?[^\s"'<>`)]*=[^\s"'<>`)]+)/gi;
 
 function sanitize_string(s: string): string {
     let result = s.replace(URL_SUBSTRING_PATTERN, (m) => redact_url(m, true).url);
@@ -46,7 +48,8 @@ function sanitize_value(value: unknown, seen: WeakSet<object>): unknown {
         return {
             name: value.name,
             message: sanitize_string(value.message),
-            stack: typeof value.stack === 'string' ? truncate_bytes_safe(value.stack, MAX_LOG_ENTRY_BYTES) : value.stack,
+            // T100: stack 与 message 同走 URL 脱敏，不 fail-open 泄露 query 敏感值
+            stack: typeof value.stack === 'string' ? sanitize_string(value.stack) : value.stack,
         };
     }
     if (value instanceof Date || value instanceof RegExp || value instanceof ArrayBuffer ||
@@ -113,7 +116,10 @@ export class Logger {
             message: sanitized_message,
             details: sanitized_details,
             stack: level === 'error'
-                ? new Error().stack?.split('\n').slice(2).join('\n')
+                ? (() => {
+                    const st = new Error().stack?.split('\n').slice(2).join('\n');
+                    return st ? sanitize_string(st) : st;
+                })()
                 : undefined,
         };
 

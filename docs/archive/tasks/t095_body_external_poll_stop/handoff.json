@@ -1,0 +1,18 @@
+{
+  "tid": "t095",
+  "attempt": 1,
+  "execution_id": "5571ce5039984b76a7ccc9ba4dc19da2",
+  "status": "done",
+  "branch": "t095_body_external_poll_stop",
+  "base_sha": "f746378110be78b04280a973076239d616eb125d",
+  "tests": "npm test：1172 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS；Round 2 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/body_capture_external_poll_stop.test.ts 'stop 后 in-flight poll resolve 不再写网络事件' 与 'AC-001b stop_body_capture_with_cleanup 后不写' 通过"],
+    "AC-002": ["tests/unit/body_capture_external_poll_stop.test.ts 'stop 后推进 1s 无新 poll 触发网络写入' 通过"],
+    "AC-003": ["tests/unit/body_capture_external_poll_stop.test.ts 'external active 时重入 start，同时最多一路 poll' 通过"]
+  },
+  "pending": ["p008"],
+  "findings": []
+}

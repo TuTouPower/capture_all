@@ -2,11 +2,11 @@
 tid: "t095"
 slug: "body_external_poll_stop"
 title: "fix: external body 轮询 stop 真正停止且不跨 capture 脏写"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t095_body_external_poll_stop"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "f746378110be78b04280a973076239d616eb125d"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P0-4 verified"
@@ -22,7 +22,13 @@ note: "review_20260811 P0-4 verified"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：try_external_cdp_bridge 闭包有 stop() 置 poll_stopped，但 stop_body_capture* 只 clear 初始 timer 不调 stop()；递归 setTimeout 继续调度、in-flight 继续写。
+- 修复：coordinator_state 加 stop_poll 闭包；stop_body_capture/with_cleanup 调 stop_poll；重入 start 前停旧 poll；poll_once 写事件前查 poll_stopped。
+- TDD：mock external_cdp_bridge_client + network_capture，fake timers 驱动；3 红 → 修 → 4 绿（含 Round 1 后补的 cleanup 变体）。
+- Round 1 审阅 4 条 minor：2 修 1 覆盖 1 遗留（p008）。
+- 顺带修类型：poll_timer 类型改 ReturnType<typeof setTimeout>，去 as typeof coordinator_state 断言。
+- Round 2 两路 PASS；全量 1172 通过，tsc 无错。
 
 ## Review 处置
 
@@ -44,14 +50,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 03:07 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+两路审阅均 PASS，4 条 minor；2 条本 task 修复，1 条已覆盖，1 条遗留登记。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t095_code_f001 | minor | 已修 | 补 AC-001b cleanup 变体用例 | body_capture_external_poll_stop.test.ts |
+| t095_code_f002 | minor | 已修 | 删类型断言，poll_timer 类型改 ReturnType<typeof setTimeout> | body_capture_coordinator.ts |
+| t095_test_f001 | minor | 已修 | 同 code f001，AC-001b 已覆盖 cleanup 路径 | body_capture_external_poll_stop.test.ts |
+| t095_test_f002 | minor | 遗留 | AC-003 in-flight 重入变体，共享机制已覆盖 | p008 |
+
+### Round 2 (2026-08-11 03:08 UTC+8)
+
+Round 1 三条已修 + 一条遗留；code + test 均 PASS。
 
 ## 收尾报告
 
@@ -60,24 +72,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
+
+- 一句话；无额外说明可写「见上」
 
 - 一句话；无额外说明可写「见上」

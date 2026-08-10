@@ -124,54 +124,61 @@ setTimeout(() => {
 }, 0);
 
 // Clean up stale capture state on service worker restart
-async function cleanup_stale_capture_state(): Promise<void> {
-    // 读取活跃采集持久化键（T030 新增）+ 旧键（向后兼容）
-    const result = await chrome.storage.local.get([
-        'is_capturing', 'current_capture',
-        'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
-    ]);
-    const stale_capture_id = result.active_capture_id as string | undefined;
-    const legacy_active = result.is_capturing || stale_capture_id;
-    if (legacy_active) {
-        logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
-        const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
-        if (stale_capture?.capture_id) {
-            await update_capture({
-                ...stale_capture,
-                status: 'completed',
-                ended_at: new Date().toISOString(),
-                duration_ms: stale_capture.started_at
-                    ? Date.now() - new Date(stale_capture.started_at).getTime()
-                    : 0,
-            });
-        } else if (stale_capture_id) {
-            // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
-            try {
-                const rec = await get_capture(stale_capture_id);
-                if (rec) {
-                    await update_capture({
-                        ...rec,
-                        status: 'completed',
-                        ended_at: new Date().toISOString(),
-                        duration_ms: rec.started_at
-                            ? Date.now() - new Date(rec.started_at).getTime()
-                            : 0,
-                    });
+// T099: 经 run_exclusive 与 start/stop 串行，避免 cleanup 清掉并发 start 刚写入的 active 键。
+// 导出供测试驱动互斥时序。
+export async function cleanup_stale_capture_state(): Promise<void> {
+    return capture_state.run_exclusive(async () => {
+        // 有 live capturing（start 已先完成）则不清理
+        if (capture_state.get_state().phase !== 'idle') return;
+
+        // 读取活跃采集持久化键（T030 新增）+ 旧键（向后兼容）
+        const result = await chrome.storage.local.get([
+            'is_capturing', 'current_capture',
+            'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
+        ]);
+        const stale_capture_id = result.active_capture_id as string | undefined;
+        const legacy_active = result.is_capturing || stale_capture_id;
+        if (legacy_active) {
+            logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
+            const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
+            if (stale_capture?.capture_id) {
+                await update_capture({
+                    ...stale_capture,
+                    status: 'completed',
+                    ended_at: new Date().toISOString(),
+                    duration_ms: stale_capture.started_at
+                        ? Date.now() - new Date(stale_capture.started_at).getTime()
+                        : 0,
+                });
+            } else if (stale_capture_id) {
+                // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
+                try {
+                    const rec = await get_capture(stale_capture_id);
+                    if (rec) {
+                        await update_capture({
+                            ...rec,
+                            status: 'completed',
+                            ended_at: new Date().toISOString(),
+                            duration_ms: rec.started_at
+                                ? Date.now() - new Date(rec.started_at).getTime()
+                                : 0,
+                        });
+                    }
+                } catch (err) {
+                    logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
                 }
-            } catch (err) {
-                logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
             }
+            await chrome.storage.local.set({
+                is_capturing: false,
+                current_capture: null,
+                active_capture_id: null,
+                active_capture_start_ms: null,
+                active_capture_config: null,
+                active_capture_generation: null,
+            });
+            logger.info('Stale capture state cleaned up');
         }
-        await chrome.storage.local.set({
-            is_capturing: false,
-            current_capture: null,
-            active_capture_id: null,
-            active_capture_start_ms: null,
-            active_capture_config: null,
-            active_capture_generation: null,
-        });
-        logger.info('Stale capture state cleaned up');
-    }
+    });
 }
 
 setTimeout(() => {

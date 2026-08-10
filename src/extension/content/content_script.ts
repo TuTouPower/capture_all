@@ -103,7 +103,15 @@ function start_capture(config: CaptureConfig): void {
     start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
     start_dom_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
     start_storage_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id);
+    // T098: network_hook / websocket_capture 仅当 capture_network 开启时注入；
+    // 关闭时显式停用，防先前注入的 hook 继续转发事件。
+    if (config.capture_network) {
+        start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id, config.capture_response_body);
+        start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    } else {
+        stop_network_hook();
+        stop_websocket_capture();
+    }
     start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id, config);
     start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
@@ -111,7 +119,6 @@ function start_capture(config: CaptureConfig): void {
     start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_fullscreen_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
     start_print_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
 
     logger.debug('All capture modules started', {
         modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook', 'clipboard', 'form_submit', 'focus', 'visibility', 'resize', 'fullscreen', 'print', 'websocket'],

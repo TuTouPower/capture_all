@@ -10,6 +10,7 @@
 | body_external_poll_stop | t095 | 2026-08-11 |
 | bridge_auto_export_path | t096 | 2026-08-11 |
 | content_postmessage_nonce | t097 | 2026-08-11 |
+| network_hook_config_gate | t098 | 2026-08-11 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

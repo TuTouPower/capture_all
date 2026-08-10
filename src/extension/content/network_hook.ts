@@ -11,11 +11,12 @@ import { create_content_event, get_relative_time } from './content_event_utils';
 const SIGNAL = '__capture_all_network_hook__';
 
 // 注入脚本构造器（导出便于测试 eval 验证行为）
-export function build_page_script(): string {
+export function build_page_script(capture_response_body: boolean): string {
     return `(function() {
     if (window.__capture_all_network_hook_installed__) return;
     window.__capture_all_network_hook_installed__ = true;
     var SIGNAL = '${SIGNAL}';
+    var CAPTURE_BODY = ${capture_response_body};
 
     function post(data) {
         try {
@@ -80,6 +81,22 @@ export function build_page_script(): string {
                 return;
             }
 
+            if (!CAPTURE_BODY) {
+                post({
+                    source: SIGNAL,
+                    method: method,
+                    url: url,
+                    status: status,
+                    response_body: null,
+                    response_body_status: 'not_enabled',
+                    duration_ms: duration,
+                    resource_type: 'xhr',
+                    request_body: null,
+                    request_body_status: 'not_enabled',
+                    timestamp: Date.now()
+                });
+                return;
+            }
             clone.text().then(function(text) {
                 var bytes = new TextEncoder().encode(text);
                 var truncated = text;
@@ -186,7 +203,9 @@ export function build_page_script(): string {
         this.addEventListener('loadend', function() {
             try {
                 var body = null;
-                var body_status = 'captured';
+                // T098: 默认 not_enabled，CAPTURE_BODY 采集路径内才标 captured/too_large/failed
+                var body_status = CAPTURE_BODY ? 'captured' : 'not_enabled';
+                if (CAPTURE_BODY) {
                 try {
                     var text = self.responseText;
                     if (typeof text === 'string') {
@@ -200,6 +219,7 @@ export function build_page_script(): string {
                     }
                 } catch (e) {
                     body_status = 'failed';
+                }
                 }
                 post({
                     source: SIGNAL,
@@ -244,6 +264,7 @@ let capture_id = '';
 let capture_start_epoch_ms = 0;
 let tab_id = 0;
 let current_nonce = '';
+let capture_response_body = true;
 // T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
 let _nonce_override: string | null = null;
 export function _set_nonce_for_test(nonce: string | null): void {
@@ -279,7 +300,7 @@ function update_page_nonce(nonce: string): void {
 function inject_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = build_page_script();
+        s.textContent = build_page_script(capture_response_body);
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -292,6 +313,7 @@ export function start_network_hook(
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
+    new_capture_response_body = true,
 ): void {
     if (is_capturing) return;
     send_event = sender;
@@ -302,6 +324,7 @@ export function start_network_hook(
     // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
     // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
     current_nonce = _nonce_override ?? generate_nonce();
+    capture_response_body = new_capture_response_body;
     update_page_nonce(current_nonce);
     inject_page_script();
 

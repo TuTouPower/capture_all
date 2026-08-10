@@ -137,7 +137,7 @@ describe('content postMessage nonce (T097)', () => {
         // eval 注入脚本：验证脚本语法正确、NONCE 注入正确（不抛错即通过）
         (window as any).__capture_all_network_hook_installed__ = false;
         // eslint-disable-next-line no-eval
-        const script = build_page_script();
+        const script = build_page_script(true);
         expect(script).toContain('__capture_all_network_nonce__');
         // eslint-disable-next-line no-eval
         eval(script);
@@ -164,7 +164,7 @@ describe('content postMessage nonce (T097)', () => {
         // 首次注入脚本已安装（guard 置位）
         (window as any).__capture_all_network_hook_installed__ = true;
         // eslint-disable-next-line no-eval
-        eval(build_page_script());
+        eval(build_page_script(true));
 
         // stop→start，nonce 旋转
         stop_network_hook();

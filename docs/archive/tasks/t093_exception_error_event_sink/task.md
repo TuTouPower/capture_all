@@ -2,11 +2,11 @@
 tid: "t093"
 slug: "exception_error_event_sink"
 title: "fix: runtime exception 写入 error store 而非 console sink"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t093_exception_error_event_sink"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "08fe3b7e781b6d749571f283eda61b3c7d62d548"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P0-2 verified"
@@ -22,7 +22,13 @@ note: "review_20260811 P0-2 verified"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过（preflight=PASS）。
+- 根因：`exception_capture` 把 RuntimeExceptionData 展开顶层（无 event.data），`start_exception_capture` 的 sender 是 `handle_console_log`（要求 event.data 非空）→ 异常全丢。
+- 修复：sender 改为 `handle_event`（统一入口，按 category 'error' 路由 ERROR_EVENTS）。
+- TDD：先写 `tests/unit/service_worker_exception_sink.test.ts`（驱动真实 start_capture + CDP 事件 + IndexedDB），start 需 mock storage.onChanged/cookies.onChanged/tabs.sendMessage 后成功；红（ERROR_EVENTS 0 条）→ 修 → 绿。
+- 全量 1165 通过，tsc 无错。
+- 审阅：code/test 两路 Round 1 均 PASS；3 条 minor 处置为遗留，登记 p003/p004/p005。
+- 附带修复：test 报告的 `reviewed_scope` 行带 `- ` 前缀导致 `check_review_status` 判 stale，去掉后 scope=ok。
 
 ## Review 处置
 
@@ -44,14 +50,15 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 02:26 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+两路审阅均 PASS（code + test），3 条 minor，逐条处置。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t093_code_f001 | minor | 遗留 | AC-002 断言恒真判别力弱，可改断言 CONSOLE_EVENTS 为空数组 | p003 |
+| t093_code_f002 | minor | 遗留 | 测试访问未声明字段，运行时存在仅类型不安全 | p004 |
+| t093_test_f001 | minor | 遗留 | debugger mock 未 beforeEach 复位，跨用例泄漏风险 | p005 |
 
 ## 收尾报告
 
@@ -60,24 +67,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- exception sender 改走统一 handle_event，runtime_exception 落 ERROR_EVENTS；集成测试驱动真实 start_capture + CDP 事件 + IndexedDB 验证三条 AC。

@@ -469,8 +469,10 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
                 logger.warn('Console capture failed', result.error);
             }
 
+            // T093: runtime exception 事件经统一 handle_event 按 category 写入 ERROR_EVENTS，
+            // 不再经 handle_console_log（其要求 event.data，展开顶层的异常事件会被丢弃）。
             const ex_result = await start_exception_capture(
-                capture_id, start_time, tab_id, handle_console_log,
+                capture_id, start_time, tab_id, handle_event,
                 cdp_attached
             );
             if (!ex_result.success) {

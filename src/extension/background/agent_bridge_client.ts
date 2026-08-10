@@ -154,8 +154,8 @@ async function poll_cycle(
                 { command_id: command.command_id, type: command.type as AgentCommandType, payload: command.payload ?? {}, created_at: command.created_at },
                 handlers
             );
-            if (!is_active_lifecycle(active_lifecycle_id)) return;
-
+            // T102: dispatch 已产生结果，无论 lifecycle 是否失效都必须投递一次，
+            // 避免副作用命令对调用方表现为无结果超时。投递 API 幂等/忽略已关闭 command_id。
             try {
                 await send_result_with_retry(agent_bridge_url, token, result);
             } catch (error) {

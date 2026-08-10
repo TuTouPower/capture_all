@@ -14,6 +14,7 @@
 | sw_cleanup_stale_mutex | t099 | 2026-08-11 |
 | privacy_logger_stack_redact_url | t100 | 2026-08-11 |
 | bridge_cdp_idle_and_bounds | t101 | 2026-08-11 |
+| agent_result_lifecycle_delivery | t102 | 2026-08-11 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

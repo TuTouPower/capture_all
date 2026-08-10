@@ -1,0 +1,17 @@
+{
+  "tid": "t102",
+  "attempt": 1,
+  "execution_id": "6bd4571804a8496bbeb0400fc5e82b83",
+  "status": "done",
+  "branch": "t102_agent_result_lifecycle_delivery",
+  "base_sha": "d9804d45fe0a82c58fd429189ef574a59c5805d2",
+  "tests": "npm test：1212 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 2 code PASS / test PASS（R1 修测试判别力）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/agent_bridge_client.test.ts 'T102 AC-001: dispatch 后 lifecycle 失效仍投递 result 一次'（create_deferred + 突变验证）通过"],
+    "AC-002": ["tests/unit/agent_bridge_client.test.ts 'T102 AC-002: 投递路径在 lifecycle 失效后不抛未捕获异常且不继续轮询' 通过"]
+  },
+  "pending": [],
+  "findings": []
+}

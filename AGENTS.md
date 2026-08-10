@@ -1,144 +1,98 @@
-# Capture All 全采
-
 Chrome MV3 扩展，采集浏览器内的用户行为、页面导航、网络请求、控制台、错误异常、Storage、Cookie 7 类数据，并通过本地 Bridge + MCP 服务端供 AI Agent 调用。所有数据本地 IndexedDB，不入云。
 
-本文件是 agent 行为入口，包含工作流规则与按需导航。只读取当前任务需要的文档，禁止无目的全量加载。
+本文件是 agent 行为入口：目录权责、状态机与 skill 路由。只加载当前任务所需文档。
+
+命名与格式约定见 `docs/blueprint/conventions.md`「命名与格式」。
 
 ## 目录与读写规则
 
-| 路径 | 用途 | 读取规则 | 写入规则 |
-| ---- | ---- | -------- | -------- |
-| `docs/specs_index.md` | 需求 slug、状态、task 进度 | 追溯已验证需求时 | task 黑盒验证通过后更新；全 task done 后状态改 done |
-| `docs/specs/<slug>.md` | 需求 spec：已验证的实现与验收（累积） | 追溯需求时按需 | task 黑盒验证通过后累积；全 task done 后随归档 |
-| `docs/tasks_index.md` | task ID、状态、owner、branch | 接到新需求或状态流转时 | 新需求和状态流转时更新 |
-| `docs/tasks/TNNN_slug/` | active task 工作区 | 执行或审阅 task 时 | `spec.md` `plan.md` `log.md` `task_report.md` `adoption.md` 由 owner 写；`review_code.md` `review_test.md` 由 reviewer 写，reviewer 对他人报告只读 |
-| `docs/handoff.md` | 项目级交接 | 接手工作时第一个读 | 只追加，不删改历史 |
-| `docs/blueprint/` | 当前长期真相：架构、领域、约定、决策 | 修改跨模块行为前读 `architecture.md`；写代码或文档前读 `conventions.md`；接触业务概念、对齐术语时读 `domain.md`；理解历史取舍时读 `decisions.md` | finalization 阶段更新；实施和 review 期间不写入未稳定结论 |
-| `docs/reviews/review_<TS>/` | 独立 review：多模型报告 + adoption 决策 | 审阅全代码 / diff / 指定范围时 | 由 `/multi-model-review` 和 `/multi-model-adoption` skill 生成；本地无独立 review 模板；落地拆 task |
-| `docs/spikes/SNN_slug/` | 当前 spike | 技术选型或未知风险验证时 | `report.md` 必需；有实验代码时再建 `code/` |
-| `docs/templates/` | task / task review+adoption / spike 模板 | 创建对应工作项时复制 | 复制使用，不代表 active 数据 |
-| `docs/guides/` | 给人看的使用指南（部署、MCP、排障、开发者入门、商店发布） | 按需 | 不承载 agent 行为规则 |
-| `docs/archive/` | 完结或终止的 spec、task、review、spike | 追溯历史时 | 镜像原路径，只进不出；内部文件只准新增，不准修改 |
-| `src/` `tests/` `e2e/` `scripts/` `assets/` | 源码、测试、E2E、脚本、静态源 | 正常开发 | 正常开发 |
-| `artifacts/` `data/` `.scratch/` | 产物、运行数据、一次性草稿 | — | 不入库；临时日志放 `.scratch/` |
+写权归属列声明路径的写入责任与时机；具体步骤见对应 skill 或文件内注释。
 
-## 开发原则
-
-- specs driven：spec 和 plan 先行，一起写完交用户一次性审核；用户明确不审则跳过。
-- TDD：开发循环内可测试部分先写失败测试（红），再实现到通过（绿）。
-- 长期真相延后：未稳定方案留在 task；长工作需中途形成稳定长期真相时拆独立 task，在该 task 完结时更新 blueprint。
+| 路径 | 用途 | 写权归属 |
+|------|------|----------|
+| `docs/specs_index.md` | 当前生效 spec 清单（在表即生效） | task 收尾时更新；废弃删除行 |
+| `docs/specs/<slug>.md` | 需求级 spec（按已完成 task 累积） | task 收尾时累积更新；废弃移入 `docs/archive/specs/` |
+| `docs/tasks/{tid}_{slug}/` | task 工作区兼**状态权威**（backlog 起即存在） | `spec.md` / `task.md` 正文由实现侧写；`task.md` front matter 只经 `scripts/repo_template/task.py`；reviewer 写 `review_code.md` / `review_test.md`（`single` 级写 `review_general.md`）；`finish`/`drop` 由脚本移入 archive |
+| `docs/tasks/task_template/` | task 文件模板（非工作项） | 只改模板本身 |
+| `docs/archive/tasks/{tid}_{slug}/` | 已归档 task 工作区 | 仅由 `scripts/repo_template/task.py finish` / `drop` 从 `docs/tasks/` 移入；内部文件只准新增 |
+| `docs/tasks_index.json` / `docs/archive/tasks_index.json` | 活跃/归档 task 派生索引 | 工作区可由 `add`/`edit`/`rewind`/`purge` 重建；入库 commit：维护期随操作提交，合并后由 `integrate` / `integrate-chain` 单独 chore commit；`list` 只读，`list --rebuild` 手动重建；不进 task worktree 的执行 commit |
+| `docs/archive/tasks_audit.log` | rewind/purge 审计（append-only） | 仅 `scripts/repo_template/task.py rewind` / `purge` 独占 append，禁止 agent 手动修改 |
+| `docs/runtime/dispatch_ledger.jsonl` | attempt 控制面（append-only；已 gitignore，仅主仓） | exact identity 为 `(tid, attempt, execution_id)`；生命周期只经 `task.py attempt reserve/terminal/report` 写入，`integrate` / `integrate-chain` 写 `integrated`；`ledger record` 仅允许 `note`，`ledger tail` 只读；禁止手工编辑 |
+| `docs/runtime/goal_queue.json` | goal 模式冻结队列快照（已 gitignore，仅主仓） | 仅 `task.py goal` 覆盖式写入（同时只服务一个队列）；`task.py goal-check` 只读；禁止手工编辑 |
+| `docs/handoff.md` | 项目级交接（仅最新一节） | 记录须含 branch 与交出时 head_commit；过时段落迁 `docs/archive/handoff.md` |
+| `docs/pending/{todo,parked}/pNNN_{slug}.md` | 待办与不办总账（一条目一文件，统一 `pNNN`；`parked/`=用户确认暂搁，不迁 archive） | 条目创建与迁移只经 `scripts/repo_template/pending.py`；`pending-record` 持续澄清后派子代理登记；`task-bug` 分析后登记 bug；`task-work` 收尾闭环迁 archive、遗留建条目；`task-from-pending` 只捞 `todo/` 建 task；`repo-hygiene` 补迁漏项、`parked/` 保留不动 |
+| `docs/findings/dNNN_{slug}.md` | 已验证的技术发现（一条目一文件，跨 task 复用，`dNNN`） | 条目创建只经 `scripts/repo_template/findings.py`；只新增与就地修订，不迁 archive；spike 收尾或日常验证出的事实写入 |
+| `docs/archive/pending/pNNN_{slug}.md` | 已闭环待办 | 仅由 `scripts/repo_template/pending.py archive` 迁入；只准新增 |
+| `docs/archive/handoff.md` | handoff 的过时历史 | 只追加；由对应 skill 在用户调用时迁入 |
+| `docs/blueprint/` | 当前长期真相：架构、领域、约定、决策、测试 | finalization 时更新；写代码或文档前读 `conventions.md`，改跨模块行为前读 `architecture.md`，历史取舍读 `decisions.md`，`{doctor_cmd}` / `{test_cmd}` / `{blackbox_verify}` 在 `testing.md` |
+| `docs/reviews/prompts/` | review prompt 模板 | 改审查标准时更新 |
+| `docs/reviews/review_*/` | 多路 review 会话产物（my-review 等外部评审生成） | 报告 `review_*.md` 入库；`_meta/` 过程文件已 gitignore；确认过时由 `repo-hygiene` 迁 `docs/archive/reviews/` |
+| `docs/spikes/report_template.md` | spike 报告模板 | 只改模板本身 |
+| `docs/spikes/{sid}_{slug}/` | 当前 spike（`report.md` 必需；有实验代码建 `code/`） | 目录创建只经 `scripts/repo_template/spikes.py new`；流程见 `task-work`（Step 1 spike 项）；结论入 `docs/findings/`；完结由 `repo-hygiene` 迁 `docs/archive/spikes/` |
+| `.agents/skills/` | 项目 skill 正文 | 改 skill 走文档纪律；不放业务代码 |
+| `.claude/skills/` | 指向 `.agents/skills/` 的软链 | 只维护软链 |
+| `docs/guides/` | 给人看的使用指南 | 给人读，不写 agent 行为规则 |
+| `docs/archive/` | 完结或终止的历史 | 镜像原路径；内部文件只准新增 |
+| `docs_repo/` | **仅本模板仓**的设计笔记/复盘（非业务） | 不参与 task 状态机；**复制新项目时不得带入** |
+| `schemas/` | 跨服务接口契约 | 改契约走 task 流程 |
+| `config/` | 配置（默认 + 环境覆盖 + `.env.example`） | 仅 `.env.example` 入库；真值写本地 `.env` |
+| `src/` `tests/` `assets/` | 源码、测试、静态源 | 仅在 task 执行期按 spec 修改；debug 复现不得写入 |
+| `scripts/` | 用户项目脚本 | 仅在 task 执行期按 spec 修改；debug 复现不得写入 |
+| `scripts/repo_template/` | 模板自带 task 工具链：`task.py` 是 CLI/兼容 façade，业务实现位于 `repo_task/`，另含 pending.py/findings.py/spikes.py 等 | 仅模板演进时修改；复制或维护必须保留 `task.py` 与完整 `repo_task/`，并随模板复制进新项目 |
+| `artifacts/` `data/` `.scratch/` | 产物、运行数据、一次性草稿 | 运行与草稿；debug 复现和临时实验只写 `.scratch/`（已 gitignore）；需保留的 spike 验证材料写 `docs/spikes/{sid}_{slug}/code/` |
+| `../{repo}_{tid}/`（仓库外） | task 工作副本（git worktree） | `start` 仅从主仓默认分支调用（不要求干净，主仓未提交改动保留不动）：链式拓扑以 `--base` 指向上一已完成 task 分支；active/blocked task 的实施、测试、review、finish/drop 只在自身 worktree 执行；每个 task 一个执行 commit，实施阶段写 exact identity 的 `handoff.json`，调度阶段以同一 identity 清理 worktree 并合并；本地 `.env` 软链回主仓 |
 
 ## 开发工作流
 
-### 总览
+### 开发原则
 
-**需求 / task / commit**
+- specs driven：需求拆分为可独立验证的 task，填写 `spec.md`（契约区行为 AC 须非空）；版本号、底层库选型、目录结构不写进行为 AC，需要长期约束的写 `docs/blueprint/decisions.md`。
+- TDD：可测部分先红后绿；测试须触达生产逻辑。实现变更让旧测试语义失效时，新增覆盖新语义的测试；旧测试原样保留或整体删除并写明理由，**禁止就地把旧测试的预期改成当前实现的输出**。
+- 用户未明确要求修改，且当前任务不在获准写入的 skill 流程中时，禁止修改未被 gitignore 的代码文件。
+- task 状态读取优先级：登记 worktree → 未合并 task 分支 ref → 主干。进行中 task 的状态在其合并前不进主干；`list/show/preflight --ref` 用于只读分支快照，不能据主干旧 backlog 重复 start 或维护。
+- task 执行期一个实现 commit；创建期、状态维护、index 维护与 merge commit 分开。每个 commit 必须独立可验证，有工程意义。
+- 发现 commit 混入不属于当前工作的改动时，立即停止工作并向用户汇报；未经用户确认，不继续提交、合并或修正。
+- task 状态：`backlog` / `active` / `blocked` / `done` / `dropped`。
 
-- 一个**需求**拆成 N 个 **task**（TNNN，独立分支 `task_tnnn_slug`，独立可验证结果）。需求过大就拆细 task，不在 task 内拆 commit。
-- 一个 **task** = 一个 **commit**。
-- **循环执行所有 task**，每个 task 走一遍"单 task 流程"。
+### 职责分工与合并时机
 
-**需求完整周期**
+实施阶段只写 worktree，调度合并阶段写主仓；attempt 生命周期与合并授权细节见 `docs/blueprint/architecture_repo_template.md`。
 
+### skill 调用
+
+用户入口：
+
+| skill | 职责 |
+|-------|------|
+| `task-create` | 按需求拆 backlog task，批量落盘后统一创建 commit |
+| `task-schedule` | 分析依赖/冲突并落盘；可跑集由 `task.py view` 计算；本波链由 `task.py plan` 重算 |
+| `task-run` | 链式串行跑 task，链尾 `integrate-chain` 合主干 |
+| `task-preflight` | 只读汇总待做 task 缺口 |
+| `task-bug` | 复现/根因/同类位点扫描（仅 `.scratch/`）后建修复 task |
+| `pending-record` | 持续澄清后派子代理登记 pending；bug 走 task-bug 分析再记 |
+| `task-from-pending` | 从 `docs/pending/todo/` 建 task 并归档条目 |
+| `task-merge` | 合并多个 backlog task（edit 目标 + drop 源） |
+| `repo-hygiene` | 过时 handoff/pending 等迁 archive |
+| `repo-cleanup` | 清缓存等无用文件，默认 dry-run |
+| `repo-template-sync` | 消费项目从模板仓同步工具链；审批通过后才 commit |
+
+多会话并发：用户自决开多个会话各跑 `task-run`；`task.py plan` 取本波并发链，`task.py view --serve` 看看板。无自动调度器。
+
+内部调用：
+
+| skill | 职责 |
+|-------|------|
+| `task-work` | 在 task worktree 实施并写 `handoff.json`（由 `task-run` 调用） |
+| `task-integrate` | 单 task 或链式合并回主干（由 `task-run` 调用） |
+
+典型路径：`/task-create` → `/task-schedule` → `task.py plan`（本波链）/ `view --serve` → 一个或多个会话 `/task-run`（多会话手动并发各跑一段；状态变后重跑 `plan` 得下一批）。goal 模式自治跑队列：先 `task.py goal` 冻结队列并粘贴其输出的 `/goal` 行，终态以 `task.py goal-check` marker 判定。
+
+### `scripts/repo_template/task.py` 使用示例
+
+```bash
+python3 scripts/repo_template/task.py --help        # 所有子命令、参数与用法
+python3 scripts/repo_template/pending.py --help     # 待办总账
+python3 scripts/repo_template/findings.py --help    # 技术发现
+python3 scripts/repo_template/spikes.py --help      # 技术 spike
+python3 scripts/repo_template/repo_state.py --help  # 完整工作树 vs baseline 取数（清洁度/deliverable 核对）
 ```
-[新需求]
-  → 拆 N 个 task，登记 `docs/tasks_index.md`
-  → 循环每个 task：
-      单 task 流程
-  → 所有 task 完成，需求 spec 状态改 `done`
-  → `docs/specs/<slug>.md` 移入 `docs/archive/specs/`
-```
-
-tasks_index 状态只使用：`backlog`、`active`、`done`、`dropped`。specs_index 仅 `active`、`done`、`dropped`（无 backlog，未登记前放弃的需求不入 index）。
-
-### 新需求拆分与创建 task
-
-1. 读 `docs/tasks_index.md` 全部行（含 backlog，未建目录的也算），取最大 ID 加一分配 TNNN。需求拆分时一次分配多个 ID。
-2. 暂不开始：登记为 `backlog`，不建目录。
-3. 开始执行：登记为 `active`，填写 owner 和 branch，创建 `docs/tasks/TNNN_slug/`。
-4. 从 `docs/templates/task/` 创建 `docs/tasks/TNNN_slug/spec.md`、`docs/tasks/TNNN_slug/plan.md`、`docs/tasks/TNNN_slug/log.md`。
-5. 进入"单 task 流程"。
-
-### 单 task 流程
-
-一个 task 产出一个 commit，步骤：
-
-1. 写 `docs/tasks/TNNN_slug/spec.md` + `docs/tasks/TNNN_slug/plan.md`，交用户审核（明确不审则跳过），通过后再 step 2。
-2. 可测试部分先写红（运行 `npm test` 看失败）。
-3. 实现变绿（运行 `npm test` 看通过），任务量不大由自己完成，任务量大可派 sub agent。
-4. agent-verify 黑盒验证：运行 `npm test && npx tsc --noEmit`（必要时加 `npm run build`）。
-5. 更新受影响文档（仅本 task 黑盒验证已通过的部分）：`docs/specs/<slug>.md`（累积本 task 已验证的实现与验收）、`docs/specs_index.md`（同步需求状态与 task 进度）、`README.md` 等。不含 `docs/tasks/` 进度记录、`docs/blueprint/`（blueprint 在 step 8 收尾更新）。
-6. review：派两个 sub agent 并行评审当前未提交改动，均对照 task spec 判断代码、文档、测试是否仍满足最初需求。两 agent 各自从 `docs/templates/task/review.md` 复制模板，独立成报告。
-    - 文档+代码 agent：核对实现与 spec 是否一致、文档是否真实反映代码状态，写 `docs/tasks/TNNN_slug/review_code.md`，填 `reviewer_focus=文档+代码`，finding 用 `TNNN_code_fNNN` 编号。
-    - 测试 agent：核对测试覆盖与端到端行为是否对应 spec 验收标准，写 `docs/tasks/TNNN_slug/review_test.md`，填 `reviewer_focus=测试`，finding 用 `TNNN_test_fNNN` 编号。
-    - 续写规则：首次复制模板写入；后续局部重审在文件末尾追加 `## 局部重审 N (YYYY-MM-DD HH:MM UTC+8, 触发:原因)` 小节，只写本轮新发现和复核结论；首次及历史轮次内容保留不覆盖。finding ID 跨轮次全局续编（如 `TNNN_code_f003` 接上次最大号）。
-    - reviewer 对评审对象只读，不得修改被评审代码、`docs/tasks/TNNN_slug/adoption.md`、他人报告。
-7. owner adoption：读 `docs/tasks/TNNN_slug/review_code.md` 和 `docs/tasks/TNNN_slug/review_test.md`，逐条写 `docs/tasks/TNNN_slug/adoption.md`（文件不存在从 `docs/templates/task/adoption.md` 复制模板；已存在则续写追加，禁止覆盖）。
-    - 续写规则：首次复制模板写入；后续处置在文件末尾追加 `## Round N (YYYY-MM-DD HH:MM UTC+8)` 小节，对应本轮 review 的 finding；同 finding 在不同轮次决策变化各占一行，保留历史。
-    - 采纳且能当场修的立即修复，`status` 标 `已修`：
-        - 触代码或测试回到 step 4 重新黑盒验证；
-        - 仅文档改动区分：笔误类（错字、格式）直接继续；事实类触发局部重审，按改动范围分流——改 spec / AGENTS.md / blueprint / 验收标准两路都重审，改实现仅 `review_code` 重审，改测试仅 `review_test` 重审；重审发现新问题回到本 step 处置。
-    - 不采纳的 `status` 标 `无需修改`，只记 `rationale`。
-    - 不能当场修的 `status` 标 `遗留`，`rationale` 写明原因，在 `docs/tasks/TNNN_slug/task_report.md` 遗留问题中体现。
-8. 收尾
-    - 更新长期文档：`docs/blueprint/`（含 `decisions.md` 的非显然决策）、`docs/guides/`。前置：review、adoption 处置全部完成，最后一次黑盒验证通过。
-    - 更新 `docs/tasks/TNNN_slug/log.md`：追加本 task 进展、决策与关键验证。
-    - 写 `docs/tasks/TNNN_slug/task_report.md`（从 `docs/templates/task/task_report.md` 复制模板）：对照 spec 验收标准逐条勾选；adoption 处置摘要（已修 N / 遗留 K / 无需修改 M，每条一行）；遗留问题（若有，注明原因）。不记 commit SHA，本报告所在 commit 即 task commit，SHA 由 `git log --grep TNNN` 查。
-    - 更新 `docs/tasks_index.md`：本 task 状态改 `done`。
-    - 归档：将 `docs/tasks/TNNN_slug/` 移入 `docs/archive/tasks/`。
-9. commit：本 task 所有改动（代码、测试、文档、log、adoption、task_report、index 更新、归档移动）作为一个 commit。commit subject 必须含 task ID（如 `feat(T091_slug): ...`），保证 `git log --grep TNNN` 可追溯。
-
-### dropped
-
-- backlog 被放弃：index 改为 `dropped`，备注原因；无目录可归档。
-- active 被放弃：在 `docs/tasks/TNNN_slug/log.md` 记录终止原因；撤销该 task 对 `docs/specs/<slug>.md` 和 `docs/specs_index.md` 的增量（回退到 task 前状态）；确保不把半成品合入默认分支；将目录移入 `docs/archive/tasks/`；index 改为 `dropped`，specs_index 同步移除该 task 进度或标 dropped。
-- 恢复需求：新建新 ID，并在新旧任务备注中互相引用。
-
-## handoff
-
-- 只有项目级交接，追加到 `docs/handoff.md`；不设 task 内交接。
-- 交接者只追加新段落，不删改历史；接手者先读 `docs/handoff.md`。
-- 交接记录必须包含 branch 和交出时已存在的 head_commit。
-
-## spike
-
-- spike 非必需，仅在技术选型或未知风险需要实验验证时创建。
-- 创建 `docs/spikes/SNN_slug/`，从 `docs/templates/spike/` 复制 `report.md`；SNN 取 `docs/spikes/` 与 `docs/archive/spikes/` 中最大 ID 加一。
-- 有实验代码时再创建 `docs/spikes/SNN_slug/code/`；代码可入库保留，仅作为验证材料。
-- 得出结论并决定是否采纳后，将 spike 移入 `docs/archive/spikes/`。
-
-## 命令
-
-构建与开发：
-
-- `npm run dev` — Vite 开发
-- `npm run build` — `tsc && vite build && build:bridge && build:mcp && build:zip`，输出到 `artifacts/dist/`、`artifacts/bridge/`、`artifacts/mcp/`
-- `npm run bridge` — 启动 Bridge（`tsx src/bridge/main.ts`）
-- `npm run mcp` — 启动 MCP 服务端（`tsx src/mcp/main.ts`）
-
-测试：
-
-- `npm test` — vitest 全量单测（日常测试命令，TDD 红/绿循环调用）
-- `npm run test:watch` — vitest watch
-- `npm run test:e2e` — 基础 E2E（`playwright test --project=e2e`，headless）
-- `npm run test:e2e:all` — 全部 E2E 项目（含 ext/real/cdp/mcp/p1/streaming）
-- `npm run serve:e2e` — 构建 + 预览（127.0.0.1:4174，E2E webServer）
-
-E2E 项目（`playwright.config.ts` 定义，按需 `--project=<name>` 指定）：`e2e`、`e2e-ext`、`e2e-real`、`e2e-cdp-capture`、`e2e-mcp`、`e2e-p1`、`e2e-streaming`。并发策略与历史纪律可参考 `docs/archive/omni_powers/op_blueprint/test.md`。
-
-## 硬约束
-
-项目特有约束（详情见 `docs/blueprint/` 对应文件）：
-
-- **Bridge 仅绑定 `127.0.0.1`**，禁止绑 `0.0.0.0` 或公网接口。token 优先级 `CLI > env > persisted file > generated`；生成文件 mode `0600`。token 必须是用户提供或 Bridge 安全随机生成的强 token，禁止硬编码、默认值或示例值。
-- **instance_token 不得访问 MCP / CDP**：MCP 路由仅接受 MCP token；扩展数据端点接受 MCP token 或 instance_token。
-- **术语**：英文 `capture`，中文"采集"；禁用 `session`/`record`/`录制`/`记录` 作产品术语。类型 `CaptureRecord`/`CaptureEvent`/`CaptureConfig`，标识 `capture_id`，MCP 命令 `capture.start`/`captures.list`/`data.list` 等。详见 `docs/blueprint/domain.md`。
-- **IndexedDB `capture_all_db` v3**，10 stores；升级路径不得丢 records。
-- **HTML 导出必须转义动态内容**；`type=password` 永远不采集；脱敏与截断分离。
-- **禁止** `taskkill /F /IM chrome.exe` 类破坏性操作（历史事故）。
-- **生成物放 `artifacts/`**，不入版本库；本地密钥（如 `CAPTURE_ALL_BRIDGE_TOKEN`）禁止入库。
-- **同一时间只允许一次活跃采集**：start 时若已有活跃采集，返回 `CAPTURE_ALREADY_RUNNING`。
-- **MCP 不自动脱敏、不自动摘要、不自动过滤、不提供删除/清空**。
-- 日常测试命令：`npm test`（单测）。
-- 黑盒验证命令：`npm test && npx tsc --noEmit`（必要时加 `npm run build`）。
-- 测试规范（命名、层级、回归规则）见 `docs/blueprint/conventions.md`，不在此重复。

@@ -144,3 +144,15 @@
     - **MCP token 文件回退**：`resolve_client_token(env, file_path)` env 优先，缺省读 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。`.mcp.json` 默认不再出现明文 Token。
 - 安全不变量：instance_token 与 MCP token 仍分离（硬约束保留）；自登记端点仅签发 instance_token，不暴露 MCP token；保留 127.0.0.1 绑定。
 - 替代：A 方案要求用户读文档生成 / 复制 Token，违反「装上即用」目标；不予采纳。详见 T091。
+
+## 019 仓库工作流整体对齐 repo_template（2026-08-10）
+
+- 背景：项目早期基于 repo_template 手工裁剪了 task 流程（TNNN 大写、spec/plan/log/review/adoption/task_report 七件套、md 表格索引），与模板演进分叉：模板已升级为 task.py 工具链 + worktree 模型 + JSON 派生索引 + pending/findings 总账。继续维护手工流程将无法增量同步模板。
+- 选项：A）保留手工流程，仅同步部分资产；B）整体对齐模板：复制 `scripts/repo_template/` 工具链与 `tests/repo_template/`、13 个 skills + 软链、merge_guard hook，AGENTS.md 按模板结构重写并保留项目硬约束，docs 结构迁移。
+- 结论：选 B（用户要求完全对齐）。
+    - 历史 91 个 task（T001-T091）目录小写化（`TNNN_` → `tNNN_`）并各补最小 `task.md`（front matter 状态权威，title/branch 取自旧 md 索引），使 `task.py` 可扫描；旧七件套内容（spec/plan/log/review/adoption/task_report）原样保留，不重写为新 task 模板。旧 md 索引存 `docs/archive/tasks_index_legacy.md`；编号复用孤儿（`t008_phase5_finalize`）移 `docs/archive/legacy_tasks/`。新任务用 `{tid}` 小写编号（t092 起）。
+    - 9 个需求 spec 全部 done，按「在表即生效」语义移入 `docs/archive/specs/`，`docs/specs_index.md` 置空表。
+    - `docs/templates/` 删除，task 模板职责由 `docs/tasks/task_template/`（spec.md + task.md，review 处置并入 task.md）承接。
+    - `repo-template-sync` 状态文件 `sync_state.json` 由消费项目跟踪（模板 gitignore 忽略的是模板仓自身，消费侧需入库）。
+    - `.claude/skills/` 忽略规则移除——对齐后为模板 skills 软链，需入库。
+- 替代：无（一次性迁移，非渐进）。

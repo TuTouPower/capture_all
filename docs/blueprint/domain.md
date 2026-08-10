@@ -123,7 +123,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | Bridge body 上限 | 1 MiB | `read_json` |
 | 扩展结果回传上限 | 64 MiB | `MAX_EXTENSION_RESULT_BODY_BYTES` |
 
-数据库 `capture_all_db`，`DB_VERSION = 3`，10 stores。详见 `docs/specs/storage.md`。
+数据库 `capture_all_db`，`DB_VERSION = 3`，10 stores。详见 `docs/archive/specs/storage.md`。
 
 ## 7. 超时策略（Bridge）
 

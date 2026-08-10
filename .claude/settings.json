@@ -1,6 +1,18 @@
 {
   "_comment": "SessionStart 自动拉起本地 Bridge：若 17831 未监听且 artifacts/bridge/bridge.mjs 存在，则后台启动；token 优先 CAPTURE_ALL_BRIDGE_TOKEN env，否则 Bridge 自生成并持久化到 $XDG_RUNTIME_DIR/capture-all/bridge_token（mode 0600）。禁止写死 token。",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/merge_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [

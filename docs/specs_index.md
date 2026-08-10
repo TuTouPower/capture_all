@@ -1,15 +1,9 @@
-# 需求索引
+# 当前生效 spec 清单
 
-需求索引。task 黑盒验证通过后更新进度；全 task done 后状态改 `done`。新需求开始时不登记，第一个 task 黑盒通过后才首次写入。
+在表即生效。每个 task 收尾时写入或更新对应行（须已过黑盒）；废弃时整行删除，spec 移入 `docs/archive/specs/`。历史清单由 `docs/archive/specs/` 目录承载。替代旧需求时在 `supersedes` 列填旧 slug；无则填 `-`。
 
-| slug | 状态 | task 清单 | spec 路径 | 归档路径 |
-|------|------|----------|----------|---------|
-| capture_all | done | T001-T091 | `docs/specs/capture_all.md`（总览） | — |
-| extension_capture | done | — | `docs/specs/extension_capture.md` | — |
-| privacy_redaction | done | — | `docs/specs/privacy_redaction.md` | — |
-| storage | done | — | `docs/specs/storage.md` | — |
-| bridge | done | — | `docs/specs/bridge.md` | — |
-| mcp_server | done | — | `docs/specs/mcp_server.md` | — |
-| sw_lifecycle | done | — | `docs/specs/sw_lifecycle.md` | — |
-| export | done | — | `docs/specs/export.md` | — |
-| dashboard | done | — | `docs/specs/dashboard.md` | — |
+| slug | task 清单 | 最后更新时间 |
+|------|----------|--------------|
+<!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
+| example_slug | t000 | 2026-07-21 |
+-->

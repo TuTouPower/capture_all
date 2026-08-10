@@ -1,80 +1,45 @@
 # 约定（内容细节）
 
-行为规则和工作顺序见 `AGENTS.md`。本文只定义各类文档字段、命名和记录格式；流程不再重复，需要时引用 AGENTS.md 对应 step。
+行为规则和工作顺序见 `AGENTS.md`，操作步骤见 `.agents/skills/`。本文定义命名、记录格式与编码/测试的项目级约定。
 
 ## 命名与格式
 
-- 变量、函数、文件名、目录名、slug 一律 `snake_case`。
-- 例外：`AGENTS.md`、`CLAUDE.md`、`README.md` 等既定大写文件名。
-- `TNNN_`、`SNN_` 是工作项类型前缀例外；前缀后 slug 仍使用小写 `snake_case`。
+- `AGENTS.md`、`CLAUDE.md`、`README.md` 是工具入口例外。
+- task 编号：占位 `{tid}`，值小写 `t001`、`t042`…。目录 / 分支 / finding / worktree：`docs/tasks/{tid}_{slug}/`、`{tid}_{slug}`、`{tid}_code_fNNN`、`../{repo}_{tid}`。
+- spike 编号：占位 `{sid}`，值小写 `s001`、`s003`…。目录：`docs/spikes/{sid}_{slug}/`。
+- 总账编号：待办与发现均为一条目一文件，文件名 `pNNN_{slug}.md` / `dNNN_{slug}.md`，编号来自文件名。条目只经 `scripts/repo_template/pending.py new` 与 `findings.py new` 创建——脚本在 git 公共目录的排他锁内完成「扫描全部本地分支与 worktree 取号 → 建文件」，并发执行不会撞号。`pNNN` 跨 `docs/pending/todo/`、`docs/pending/parked/`、`docs/archive/pending/` 共享全局序列，`dNNN` 在 `docs/findings/` 内递增；历史编号均不复用，不维护索引文件。spike 是目录型条目（`docs/spikes/sNNN_{slug}/`），由 `scripts/repo_template/spikes.py new` 同法锁内分配，`sNNN` 与 `docs/archive/spikes/` 共享序列。
+- AC 编号：spec 验收标准每条行为 AC 用 `AC-NNN`（三位十进制，task 内从 1 顺序编号）。编号一旦分配永久归属，删除后不复用（允许断号，不强制连续），新增用下一个编号。`handoff.json` 的 `ac_evidence` 键引用同一编号，须精确覆盖 spec 验收标准全部 AC——缺或多都阻断合入。编号规范属 spec 模板门禁，见 `docs/tasks/task_template/spec.md`。
+- 占位示例（模板、示例行）不得占用真实 `tid` / `sid` / `pNNN`，也不得当作 active 工作项执行。
+- 变量、函数、文件名、目录名、slug 一律 `snake_case`；大写 `TNNN` 仅见于 git 历史与旧文档正文（旧 task 编号体系），磁盘目录与 task.py 索引统一小写 `tNNN`。
 - 类型 / 接口 / 类名 `PascalCase`（`CaptureRecord` / `CaptureEvent`）。
 - 常量 `UPPER_SNAKE_CASE`（`MAX_BODY_CAPTURE_BYTES` / `DB_VERSION`）。
 - 布尔变量用 `is_` / `has_` / `should_` 前缀。
 - Markdown 嵌套内容缩进 4 空格，禁止 tab。
+- front matter 注释独占整行；行内注释有解析器兜底，但勿依赖。
 - 行尾不留空白；文件末尾保留一个换行。
 - 时间戳统一使用中国时间，格式 `YYYY-MM-DD HH:MM UTC+8`。
+- `docs/archive/tasks_audit.log` 由 `scripts/repo_template/task.py rewind`/`purge` 自动写入。
 - TypeScript strict mode。
+- 语言和框架已有稳定惯例时，在本文件补充项目级例外，不强行覆盖生态要求。
 
-## task 文件模板
+## schema 类型落点
 
-所有 active task 固定使用以下文件。任务很小时内容可以简短，但不合并文件。创建与使用流程见 AGENTS.md 单 task 流程。
+按消费方决定落点，`schemas/` 只放跨服务契约。
 
-| 文件 | 字段 |
-|------|------|
-| `spec.md` | 背景；范围；非范围；验收标准；依赖与约束 |
-| `plan.md` | 步骤及验证；风险与回退；完结时需更新的 blueprint 条目 |
-| `log.md` | 进展；踩坑；中途决策；偏离 plan 的原因；关键验证结果 |
-| `review_code.md` | task review 报告（文档+代码 agent 写） |
-| `review_test.md` | task review 报告（测试 agent 写） |
-| `adoption.md` | review 处置清单 |
-| `task_report.md` | task 完结报告 |
+| 类型 | 例子 | 落点 |
+| ---- | ---- | ---- |
+| 跨服务接口契约 | OpenAPI、gRPC `.proto`、GraphQL `.graphql`、AsyncAPI | `schemas/`，按协议分子目录：`schemas/openapi/`、`schemas/proto/`、`schemas/graphql/`；单一协议直接扁平 |
+| 代码内数据契约 | Pydantic model、TS interface、Zod schema、Go struct tag | 跟模块走：`src/<module>/schemas/` 或语言惯例位置（`src/types/`、`src/models/`） |
+| 数据库 schema | Alembic、Prisma schema、SQL migration、Django migration | 工具默认：`migrations/` / `prisma/` / `alembic/`，不另立目录 |
+| 配置 schema | JSON Schema 校验 config、CI workflow schema、env schema | 跟配置走：`config/schemas/`，或跟消费方 |
+| 文档/元数据 schema | frontmatter、Cosmjs、yaml metadata 校验 | `docs/schemas/`，或跟文档源 |
 
-- `log.md` 记录有追溯价值的事项，不写命令流水账。
+原则：
 
-## review 报告字段
-
-`review_code.md` / `review_test.md` 共用以下字段；流程（两 agent 并行、续写规则、权限）见 AGENTS.md step 6。
-
-- task：`TNNN_slug`
-- spec：`spec.md`（同目录，随归档移动仍有效）
-- target：本 task 未提交改动（working tree）
-- reviewer_focus：`文档+代码` / `测试`
-- reviewed_at：`YYYY-MM-DD HH:MM UTC+8`
-- findings：分类别前缀的 `TNNN_code_fNNN` / `TNNN_test_fNNN`，每条含严重度、位置、问题、建议
-- conclusion：本 agent 总体判断
-
-`reviewer_focus` 与 finding 前缀映射：`文档+代码` → `code`，`测试` → `test`。
-
-## adoption 字段
-
-`adoption.md` 字段表；处置流程见 AGENTS.md step 7。
-
-| finding_id | decision | rationale | status |
-|------------|----------|-----------|--------|
-| TNNN_code_f001 | 采纳 / 不采纳 | {一句话理由} | 已修 / 遗留 / 无需修改 |
-
-字段说明：
-
-- `decision`：采纳 / 不采纳。
-- `rationale`：一句话理由；`遗留` 项在此写未修原因。
-- `status`：
-    - `已修`：在本 task commit 内修复。
-    - `遗留`：未在本 commit 修复。
-    - `无需修改`：不采纳项专用。
-
-## specs_index 字段
-
-`docs/specs_index.md` 字段表；首次写入规则与状态流转见 AGENTS.md。
-
-| slug | 状态 | task 清单 | spec 路径 | 归档路径 |
-|------|------|----------|----------|---------|
-| `<slug>` | active / done / dropped | T001, T002 | `docs/specs/<slug>.md` | `docs/archive/specs/<slug>.md` |
-
-## spike 文件模板
-
-`report.md` 包含：问题；成功判据；尝试；证据；结论；是否采纳；后续 task ID。
-
-实验代码存在时创建 `code/`。实验代码入库保留，仅作为验证材料。
+- 跨服务契约会触发上下游同步，独立根目录便于发现和工具扫描。
+- 代码内契约不外露，跟源码同源，避免双份维护。
+- 数据库 schema 跟 migration 工具走，工具约定优先于本文件。
+- 多种类型并存时，按主消费方归类；归属不清记入 `docs/blueprint/decisions.md`。
 
 ## decisions.md 条目格式
 
@@ -92,7 +57,7 @@
 - 命名、格式、lint 规则以项目实际工具为准（TypeScript strict mode、4 空格缩进）。
 - 日志优先用 `logger.ts` 模块，禁止 `console.log` / `print` 调试输出进入提交。
 - 应用日志进 IndexedDB `app_logs` store（`app_log_storage.ts`），支持 level / module / timestamp 索引。
-- 修 bug 时在对应测试层补回归用例，文件名带任务 ID，如 `tests/unit/T042_empty_token.test.ts`。
+- 修 bug 时在对应测试层补回归用例，文件名带任务 ID，如 `tests/unit/t042_empty_token.test.ts`。
 
 ## 浏览器扩展 API 规范
 
@@ -164,6 +129,6 @@
 
 ## 提交规范
 
-- commit message 格式 `<type>(<task_id>): <description>`，type：feat / fix / refactor / docs / test / chore / perf / ci。task_id 如 `T091`。
+- commit message 格式 `<type>(<task_id>): <description>`，type：feat / fix / refactor / docs / test / chore / perf / ci。task_id 如 `t091`（历史大写 `T091` 不追改）。
 - 改代码后检查 `docs/` 与 `AGENTS.md` 是否受影响，一并更新。
 - 生成物放 `artifacts/`，不入版本库。

@@ -174,19 +174,19 @@ src/shared ──✗── 任何产品目录
 
 ### 4.2 Content Scripts
 
-`manifest.json` 声明 `matches: ["<all_urls>"]`、`run_at: "document_start"`、`all_frames: true`。启动后仅注册消息监听，收到 start 消息后才激活采集。所有事件通过 `create_content_event()` 统一构造（含 event_id/source/severity）。详见 `docs/specs/extension_capture.md`。
+`manifest.json` 声明 `matches: ["<all_urls>"]`、`run_at: "document_start"`、`all_frames: true`。启动后仅注册消息监听，收到 start 消息后才激活采集。所有事件通过 `create_content_event()` 统一构造（含 event_id/source/severity）。详见 `docs/archive/specs/extension_capture.md`。
 
 ### 4.3 Popup / Dashboard / DevTools
 
-见 `docs/specs/dashboard.md`。
+见 `docs/archive/specs/dashboard.md`。
 
 ### 4.4 Agent / MCP 系统
 
-见 `docs/specs/mcp_server.md` + `docs/specs/bridge.md`。
+见 `docs/archive/specs/mcp_server.md` + `docs/archive/specs/bridge.md`。
 
 ### 4.5 Body Capture 三层架构
 
-Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/specs/extension_capture.md` "网络采集路径"。
+Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
 ## 5. 数据流
 
@@ -239,7 +239,7 @@ Agent → MCP 工具调用
 
 ### 5.3 响应体捕获流程
 
-见 `docs/specs/extension_capture.md` "网络采集路径"。
+见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
 ## 6. Chrome 权限
 

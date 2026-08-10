@@ -191,15 +191,15 @@ setTimeout(() => {
 setup_keepalive_listener();
 
 // Message handler
-chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
-    handle_message(message).then(sendResponse).catch(error => {
+chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (response: any) => void) => {
+    handle_message(message, sender).then(sendResponse).catch(error => {
         logger.error('Message handler error', serialize_error(error));
         sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
     });
     return true; // Keep channel open for async response
 });
 
-async function handle_message(message: any): Promise<any> {
+async function handle_message(message: any, sender?: any): Promise<any> {
     switch (message.action) {
         case 'start':
             return start_capture(message.capture_id, message.config || DEFAULT_CONFIG);
@@ -208,13 +208,15 @@ async function handle_message(message: any): Promise<any> {
         case 'event':
             return handle_event(message.event);
         case 'get_status':
+            // T105: tab_id 以请求方 sender.tab.id 权威，避免多 tab 串台
+            // （get_status 常由 content 脚本轮询，SW 侧 current_capture.tab_id 是启动时 active tab）。
             return {
                 is_capturing,
                 capture_id: current_capture_id,
                 current_capture,
                 config: current_config,
                 start_time,
-                tab_id: current_capture?.tab_id ?? 0,
+                tab_id: sender?.tab?.id ?? current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
             };
         case 'get_capture_data':

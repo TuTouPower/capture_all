@@ -1,0 +1,17 @@
+{
+  "tid": "t105",
+  "attempt": 1,
+  "execution_id": "dfe813c0f09d445ab38a32fa910026e2",
+  "status": "done",
+  "branch": "t105_content_status_poll_tab_id",
+  "base_sha": "287a251b6f01ed4b03daf156740134b5c6a618f0",
+  "tests": "npm test：1222 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 2 code PASS / test PASS（R1 test FAIL 修 2 important 后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/status_poll_sender_tab.test.ts 'AC-001 sender 权威' + 'AC-001b 采集进行中 tab 不同（突变验证）' 通过"],
+    "AC-002": ["tests/unit/status_poll_sender_tab.test.ts 'AC-002 content on_active 用 resp.tab_id（契约）' 通过"]
+  },
+  "pending": [],
+  "findings": []
+}

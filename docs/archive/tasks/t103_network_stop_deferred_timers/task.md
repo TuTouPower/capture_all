@@ -2,11 +2,11 @@
 tid: "t103"
 slug: "network_stop_deferred_timers"
 title: "fix: stop 时清理 network deferred/orphan timer"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t103_network_stop_deferred_timers"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "bc6207db0c640c1465bcc7f7dea40f572d013e1d"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P1-6"
@@ -22,7 +22,10 @@ note: "review_20260811 P1-6"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：stop 未清 deferred/orphan timer，跨采集串写。
+- 修复：stop 清 deferred timer + reverse index；getResponseBody 迟到回调用 capture_id 快照挡（Round 2 发现布尔挡 stop→restart 失效，改身份比较）。
+- 全量 1215 通过，tsc 无错。
 
 ## Review 处置
 
@@ -44,14 +47,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 06:20 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+code FAIL（f001 important orphan timer 未取消）；test PASS（AC-001/002 判别力实证）。
+
+### Round 2 (2026-08-11 06:21 UTC+8)
+
+code FAIL（f001 布尔挡 stop→restart 失效）；test FAIL（AC-002b 零判别力）。
+
+### Round 3 (2026-08-11 06:22 UTC+8)
+
+code PASS / test PASS。处置：
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t103_code_f001 | important | 已修 | getResponseBody 回调改 capture_id 快照比较，防 stop→restart 跨写 | network_capture.ts |
+| t103_test_f001 | important | 已修 | AC-002b 武装 orphan handler + 推进 4s，突变验证判别力 | network_stop_deferred_timers.test.ts |
 
 ## 收尾报告
 
@@ -60,24 +71,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL → Round 2 code：FAIL → Round 3 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- stop 清 deferred timer + reverse index；getResponseBody 迟到回调用 capture_id 快照挡 stop→restart 跨写；AC-002b 武装 handler 突变验证判别力。

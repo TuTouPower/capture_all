@@ -129,6 +129,13 @@ export function stop_network_capture(): void {
 
     pending_requests.clear();
 
+    // T103: 清理 deferred/orphan timer 与 reverse index，防迟到回调跨采集串写
+    for (const entry of deferred_web_requests.values()) {
+        clearTimeout(entry.timer);
+    }
+    deferred_web_requests.clear();
+    _deferred_cdp_index.clear();
+
     if (dbg_tab_id !== null) {
         const tab = dbg_tab_id;
         // M3 safety valve: release all sub-targets before detaching
@@ -567,11 +574,14 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             return;
         }
 
+        // T103: 快照 capture_id，迟到回调（stop→restart 后 resolve）不得写新 capture
+        const capture_id_at_send = capture_id;
         chrome.dbg.sendCommand(
             { tabId: dbg_tab_id, ...(session_id ? { sessionId: session_id } : {}) },
             'Network.getResponseBody',
             { requestId: req_id }
         ).then((result: any) => {
+            if (capture_id_at_send !== capture_id || !is_capturing) return;
             let body_status: BodyCaptureStatus = 'cdp_failed';
             let body: string | null = null;
             let preview: string | null = null;
@@ -625,6 +635,8 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             try_resolve_deferred(req_key);
             schedule_orphan_check(req_key, req_id);
         }).catch((err: any) => {
+            // T103: 迟到失败回调（stop→restart 后）不写任何 capture
+            if (capture_id_at_send !== capture_id || !is_capturing) return;
             // -32000 = "No resource with given identifier" (resource already released)
             // OPTIONS/HEAD have no body by spec
             const err_msg = String(err?.message || err) || '';

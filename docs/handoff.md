@@ -20,17 +20,17 @@
 
 ---
 
-## 2026-08-10 23:40 UTC+8 — 仓库工作流对齐 repo_template（未提交）
+## 2026-08-10 23:40 UTC+8 — 仓库工作流对齐 repo_template（已提交）
 
-- branch：`main`（本段交接时为未提交工作区，迁移将作为单次 commit 提交）
-- head_commit：`2aaeec9`（迁移前 main HEAD）
+- branch：`main`
+- head_commit：`ea0ff5c`（`chore: align repo with repo_template (toolchain + workflow + docs)`，374 文件）
 - 已完成：
   - 工具链：`scripts/repo_template/`（task.py + repo_task/ + pending/findings/spikes/repo_state）、`tests/repo_template/`（356 用例全绿；新增目录级 `package.json {"type":"commonjs"}` 适配 ESM 项目）、`docs/tasks/task_template/`、`docs/reviews/prompts/`、`docs/spikes/report_template.md`、`docs/blueprint/architecture_repo_template.md`、`.claude/hooks/merge_guard.py`
   - skills：`.agents/skills/` 13 个 + `.claude/skills/` 软链；`repo-template-sync/sync_state.json` 已 init（源 `/home/karon/karson_ubuntu/repo_template`，基线 21fa990a）
   - 工作流文档：AGENTS.md 按模板重写（保留项目硬约束）；CLAUDE.md 改软链；`.claude/settings.json` 合并 PreToolUse merge_guard + 保留 SessionStart Bridge hook；`.gitignore` 合并
   - docs 迁移：`tasks_index.md` → `docs/archive/tasks_index_legacy.md`；`tasks_index.json` 由 task.py 派生；9 个 done spec 归档 `docs/archive/specs/`；`docs/templates/` 删除；92 个旧归档任务目录小写化（TNNN→tNNN）并补 task.md（编号复用孤儿 `t008_phase5_finalize` 移 `docs/archive/legacy_tasks/`）；`docs/pending/`、`docs/findings/`、`docs/archive/{pending,reviews,handoff.md,tasks_audit.log}` 骨架就位；`schemas/`、`config/` 空目录
   - blueprint：conventions.md 按模板补齐编号/AC/schema 约定；testing.md 新建（doctor/test/blackbox）；decisions.md 追加 ADR 019
-- 未完成：迁移 commit 未提交（用户指示执行完不提交）
+- 未完成：无（迁移、审阅修复、AGENTS 对齐均已提交）
 - 陷阱：
   - `tests/repo_template/package.json` 是消费定制（ESM 项目需要 CJS 作用域），repo-template-sync 硬同步会视为多余文件，同步时须 keep_consumer
   - `.agents/skills/repo-template-sync/sync_state.json` 必须入库（模板 gitignore 的忽略规则不适用消费项目，已在 .gitignore 注明）

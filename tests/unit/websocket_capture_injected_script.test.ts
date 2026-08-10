@@ -2,9 +2,10 @@
 // tests/unit/websocket_capture_injected_script.test.ts
 // 验证 PAGE_SCRIPT 注入脚本行为：单 listener、UTF-8 字节、removeEventListener 透传
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_websocket_capture, stop_websocket_capture, PAGE_SCRIPT } from '../../src/extension/content/websocket_capture';
+import { start_websocket_capture, stop_websocket_capture, build_page_script, _set_nonce_for_test } from '../../src/extension/content/websocket_capture';
 
 const SIGNAL = '__capture_all_ws__';
+const NONCE = 'test-nonce';
 
 class MockOriginWS {
     static instances: MockOriginWS[] = [];
@@ -56,8 +57,18 @@ describe('websocket_capture 注入脚本', () => {
         vi.spyOn(window, 'postMessage').mockImplementation((data: any) => {
             if (data && data.source === SIGNAL) posted_messages.push(data);
         });
+        // 注入脚本发送的每条消息必须带正确 nonce（T097：接收端校验）
+        vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
+        const orig_post = posted_messages.push.bind(posted_messages);
+        posted_messages.push = (m: any) => {
+            expect(m.nonce).toBe(NONCE);
+            return orig_post(m);
+        };
+        // T097: 注入脚本从 window 动态读 nonce，测试先设 window 变量
+        (window as any).__capture_all_ws_nonce__ = NONCE;
         // eslint-disable-next-line no-eval
-        eval(PAGE_SCRIPT);
+        eval(build_page_script());
+        _set_nonce_for_test(NONCE);
         start_websocket_capture(sender, 'cap1', Date.now(), 1);
     });
 

@@ -1,0 +1,18 @@
+{
+  "tid": "t097",
+  "attempt": 1,
+  "execution_id": "dbff7c2802f545f4ac923ac5ed923aea",
+  "status": "done",
+  "branch": "t097_content_postmessage_nonce",
+  "base_sha": "5293872288edec8c210f804969d0bebb4b2b37df",
+  "tests": "npm test：1186 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 4 code PASS / test PASS（R1-3 修 3 important 后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/content_postmessage_nonce.test.ts '无 nonce / 错误 nonce 的伪造 SIGNAL 消息被拒' + ws/storage 负向用例 通过"],
+    "AC-002": ["tests/unit/content_postmessage_nonce.test.ts '带正确 nonce 的合法 hook 事件入库' + AC-003b restart 连续 + AC-002http fallback 通过"],
+    "AC-003": ["tests/unit/content_postmessage_nonce.test.ts '两次 start nonce 不同，旧 nonce 失效' 通过"]
+  },
+  "pending": ["p010", "p011", "p012", "p013", "p014"],
+  "findings": []
+}

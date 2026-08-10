@@ -10,13 +10,17 @@ import { create_content_event, get_relative_time } from './content_event_utils';
 
 const SIGNAL = '__capture_all_network_hook__';
 
-const PAGE_SCRIPT = `(function() {
+// 注入脚本构造器（导出便于测试 eval 验证行为）
+export function build_page_script(): string {
+    return `(function() {
     if (window.__capture_all_network_hook_installed__) return;
     window.__capture_all_network_hook_installed__ = true;
     var SIGNAL = '${SIGNAL}';
 
     function post(data) {
         try {
+            // T097: 每次发送从 window 动态读 nonce，content 每次 start 更新，解耦扩展重建/restart
+            data.nonce = window.__capture_all_network_nonce__;
             window.postMessage(data, window.location.origin);
         } catch (e) {}
     }
@@ -233,18 +237,49 @@ const PAGE_SCRIPT = `(function() {
         }
     };
 })();`;
+}
 
 let is_capturing = false;
 let capture_id = '';
 let capture_start_epoch_ms = 0;
 let tab_id = 0;
+let current_nonce = '';
+// T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
+let _nonce_override: string | null = null;
+export function _set_nonce_for_test(nonce: string | null): void {
+    _nonce_override = nonce;
+}
+function generate_nonce(): string {
+    // T097: crypto.randomUUID 仅 secure context 可用；http 页 fallback Math.random。
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+    } catch {
+        // ignore
+    }
+    return `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 let send_event: (event: CaptureEvent, data: NetworkRequestData) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
+
+function update_page_nonce(nonce: string): void {
+    // 每次 start 注入无 guard 的小脚本，更新页面 MAIN world 的 nonce 变量供注入脚本 post() 读取。
+    try {
+        const s = document.createElement('script');
+        s.textContent = `window.__capture_all_network_nonce__ = ${JSON.stringify(nonce)};`;
+        (document.documentElement || document.head || document.body).appendChild(s);
+        s.remove();
+    } catch {
+        // ignore
+    }
+}
 
 function inject_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = PAGE_SCRIPT;
+        s.textContent = build_page_script();
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -264,7 +299,10 @@ export function start_network_hook(
     capture_start_epoch_ms = new_capture_start_epoch_ms;
     tab_id = new_tab_id;
     is_capturing = true;
-
+    // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
+    // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
+    current_nonce = _nonce_override ?? generate_nonce();
+    update_page_nonce(current_nonce);
     inject_page_script();
 
     message_listener = (e: MessageEvent) => {
@@ -273,6 +311,7 @@ export function start_network_hook(
         if (e.source !== window) return;
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
+        if (d.nonce !== current_nonce) return;
 
         const data: NetworkRequestData = {
             request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,

@@ -7,11 +7,30 @@ let capture_id = '';
 let capture_start_epoch_ms = 0;
 let tab_id = 0;
 let send_event: (event: CaptureEvent) => void;
+let current_nonce = '';
+// T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
+let _nonce_override: string | null = null;
+export function _set_nonce_for_test(nonce: string | null): void {
+    _nonce_override = nonce;
+}
+function generate_nonce(): string {
+    // T097: crypto.randomUUID 仅 secure context 可用；http 页 fallback Math.random。
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+    } catch {
+        // ignore
+    }
+    return `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__capture_all_storage__';
 
-const PAGE_SCRIPT = `(function() {
+function build_page_script(): string {
+    return `(function() {
     if (window.__capture_all_storage_installed__) return;
     window.__capture_all_storage_installed__ = true;
     var SIGNAL = '${SIGNAL}';
@@ -20,6 +39,7 @@ const PAGE_SCRIPT = `(function() {
         try {
             window.postMessage({
                 source: SIGNAL,
+                nonce: window.__capture_all_storage_nonce__,
                 storage_type: storage_type,
                 action: action,
                 key: key,
@@ -50,11 +70,24 @@ const PAGE_SCRIPT = `(function() {
     try { wrap(window.localStorage, 'local'); } catch (e) {}
     try { wrap(window.sessionStorage, 'session'); } catch (e) {}
 })();`;
+}
+
+function update_page_nonce(nonce: string): void {
+    // 每次 start 注入无 guard 的小脚本，更新页面 MAIN world 的 nonce 变量供注入脚本 post() 读取。
+    try {
+        const s = document.createElement('script');
+        s.textContent = `window.__capture_all_storage_nonce__ = ${JSON.stringify(nonce)};`;
+        (document.documentElement || document.head || document.body).appendChild(s);
+        s.remove();
+    } catch {
+        // ignore
+    }
+}
 
 function inject_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = PAGE_SCRIPT;
+        s.textContent = build_page_script();
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -74,7 +107,10 @@ export function start_storage_capture(
     capture_start_epoch_ms = new_capture_start_epoch_ms;
     tab_id = new_tab_id;
     is_capturing = true;
-
+    // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
+    // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
+    current_nonce = _nonce_override ?? generate_nonce();
+    update_page_nonce(current_nonce);
     inject_page_script();
 
     message_listener = (e: MessageEvent) => {
@@ -83,6 +119,7 @@ export function start_storage_capture(
         if (e.source !== window) return;
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
+        if (d.nonce !== current_nonce) return;
 
         const value_length = typeof d.value_length === 'number' ? d.value_length : 0;
         const action: StorageChangeData['action'] = d.action;

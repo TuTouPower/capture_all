@@ -2,9 +2,10 @@
 // tests/unit/storage_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { CaptureEvent, StorageChangeData } from '../../src/shared/types';
-import { start_storage_capture, stop_storage_capture } from '../../src/extension/content/storage_capture';
+import { start_storage_capture, stop_storage_capture, _set_nonce_for_test } from '../../src/extension/content/storage_capture';
 
 const SIGNAL = '__capture_all_storage__';
+const NONCE = 'test-nonce';
 
 describe('storage_capture', () => {
     let events: Array<CaptureEvent & StorageChangeData>;
@@ -14,6 +15,7 @@ describe('storage_capture', () => {
         events = [];
         sender = vi.fn((evt) => events.push(evt as CaptureEvent & StorageChangeData));
         stop_storage_capture();
+        _set_nonce_for_test(NONCE);
     });
 
     afterEach(() => stop_storage_capture());
@@ -22,7 +24,7 @@ describe('storage_capture', () => {
         window.dispatchEvent(new MessageEvent('message', {
             origin: window.location.origin,
             source: window,
-            data: { source: SIGNAL, ...payload },
+            data: { source: SIGNAL, nonce: NONCE, ...payload },
         }));
     }
 
@@ -38,6 +40,26 @@ describe('storage_capture', () => {
         start_storage_capture(sender, 'cap1', Date.now(), 0);
         post_message({ storage_type: 'local', action: 'set', key: 'foo', value_length: 5 });
         expect(events[0].tab_id).toBe(0);
+    });
+
+    it('无 nonce 的伪造 SIGNAL 消息被拒', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 7);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, storage_type: 'local', action: 'set', key: 'x', value_length: 1 },
+        }));
+        expect(sender).not.toHaveBeenCalled();
+    });
+
+    it('错误 nonce 的伪造 SIGNAL 消息被拒', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 7);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, nonce: 'wrong', storage_type: 'local', action: 'set', key: 'x', value_length: 1 },
+        }));
+        expect(sender).not.toHaveBeenCalled();
     });
 
     it('stop 后不再发送', () => {

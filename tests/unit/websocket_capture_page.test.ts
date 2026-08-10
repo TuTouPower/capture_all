@@ -2,9 +2,10 @@
 // tests/websocket_capture_page.test.ts
 // Tests for content/websocket_capture.ts — page-level WebSocket monkey-patch capture.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { start_websocket_capture, stop_websocket_capture } from '../../src/extension/content/websocket_capture';
+import { start_websocket_capture, stop_websocket_capture, _set_nonce_for_test } from '../../src/extension/content/websocket_capture';
 
 const SIGNAL = '__capture_all_ws__';
+const NONCE = 'test-nonce';
 const CAPTURE_ID = 'cap_ws_page';
 const START_EPOCH = 1700000000000;
 
@@ -18,7 +19,7 @@ function post_ws_message(
     window.dispatchEvent(new MessageEvent('message', {
         origin: window.location.origin,
         source: window,
-        data: { source: SIGNAL, ws_url, direction, data_preview, data_bytes, data_status },
+        data: { source: SIGNAL, nonce: NONCE, ws_url, direction, data_preview, data_bytes, data_status },
     }));
 }
 
@@ -27,6 +28,7 @@ describe('websocket_capture (page-level)', () => {
 
     beforeEach(() => {
         stop_websocket_capture();
+        _set_nonce_for_test(NONCE);
         sender = vi.fn();
     });
 
@@ -66,6 +68,26 @@ describe('websocket_capture (page-level)', () => {
         expect(event.data_status).toBe('too_large');
         expect(event.data_preview).toBeNull();
         expect(event.data_bytes).toBe(1024);
+    });
+
+    it('无 nonce 的伪造 SIGNAL 消息被拒', () => {
+        start_websocket_capture(sender, CAPTURE_ID, START_EPOCH);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, ws_url: 'wss://x', direction: 'sent', data_preview: 'f', data_bytes: 1, data_status: 'captured' },
+        }));
+        expect(sender).not.toHaveBeenCalled();
+    });
+
+    it('错误 nonce 的伪造 SIGNAL 消息被拒', () => {
+        start_websocket_capture(sender, CAPTURE_ID, START_EPOCH);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, nonce: 'wrong', ws_url: 'wss://x', direction: 'sent', data_preview: 'f', data_bytes: 1, data_status: 'captured' },
+        }));
+        expect(sender).not.toHaveBeenCalled();
     });
 
     it('stop 后不发送', () => {

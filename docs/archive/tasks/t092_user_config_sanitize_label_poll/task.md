@@ -2,11 +2,11 @@
 tid: "t092"
 slug: "user_config_sanitize_label_poll"
 title: "fix: sanitize_user_config 保留 browser_label 与 poll_interval"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t092_user_config_sanitize_label_poll"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "1b99efb7d80a355306e46493f80036e237b56c0d"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P0-1 verified"
@@ -22,7 +22,12 @@ note: "review_20260811 P0-1 verified"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过（preflight=PASS，无 UNVERIFIED）。
+- TDD：先写 `tests/unit/user_config_persistence.test.ts`（7 例，3 红）→ 实现 → 7 绿；全量 1162 通过，tsc 无错。
+- poll 合法区间常量从 `agent_bridge_config` 导出复用（MIN/MAX_POLL_INTERVAL_MS），避免两处定义漂移。
+- worktree 无 node_modules，软链主仓 node_modules。
+- 审阅：code/test 两路 Round 1 均 PASS；仅 2 条 minor（圈复杂度、测试补 case），处置为遗留，登记 p001/p002。
+- 附带修复：review_code.md 的 `reviewed_scope` 指纹被反引号包裹导致 `check_review_status` 判 stale，去反引号后 scope=ok。
 
 ## Review 处置
 
@@ -44,14 +49,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 02:10 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+两路审阅均 PASS（code + test），仅 2 条 minor，逐条处置。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t092_code_f001 | minor | 遗留 | 圈复杂度提示，功能正确无缺陷；可并入表驱动数组降复杂度 | p001 |
+| t092_test_f001 | minor | 遗留 | AC-003 补 NaN/Infinity/250 case，行为已等价覆盖 | p002 |
 
 ## 收尾报告
 
@@ -60,24 +65,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- sanitize 白名单补齐 browser_label 与 agent_bridge_poll_interval_ms（poll 区间与 agent_bridge_config 共享常量）；partial save 不抹字段；7 例单测覆盖三条 AC。

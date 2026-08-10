@@ -12,8 +12,8 @@ export interface BridgeSession {
 }
 
 const SESSION_STORAGE_KEY = 'agent_bridge_session';
-const MIN_POLL_INTERVAL_MS = 250;
-const MAX_POLL_INTERVAL_MS = 300000;
+export const MIN_POLL_INTERVAL_MS = 250;
+export const MAX_POLL_INTERVAL_MS = 300000;
 
 export function normalize_agent_bridge_config(config: AgentBridgeUserConfig): AgentBridgeUserConfig {
     const url = parse_local_bridge_url(config.agent_bridge_url);

@@ -1868,3 +1868,99 @@ describe('bridge server', () => {
         expect(response.headers.get('content-type')).toContain('text/html');
     });
 });
+
+describe('auto export path 净化 (T096)', () => {
+    async function run_export_with_format(format: string): Promise<{ ok: boolean; data: { file_path?: string; size_bytes?: number; error?: string } }> {
+        const server = await start_test_server();
+        try {
+            await fetch(`${server.url}/extension/heartbeat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
+            });
+
+            const command_response = fetch(`${server.url}/mcp/command`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'capture.export',
+                    payload: { capture_id: 'session-x', format },
+                    timeout_ms: 5000,
+                }),
+            });
+
+            const command = await take_next_command(server.url);
+            await fetch(`${server.url}/extension/result`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+                },
+                body: JSON.stringify({
+                    command_id: command.command_id,
+                    ok: true,
+                    data: { format: 'json', content: 'x'.repeat(1024 * 1024 + 10) },
+                }),
+            });
+
+            return await (await command_response).json();
+        } finally {
+            await server.close();
+        }
+    }
+
+    it('AC-001: 恶意 format 不写出 EXPORT_DIR 外', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-escape-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const escapes = ['../../../../escape', '..%2f..%2fescape', 'foo/../../escape', 'a\\..\\..\\escape', '..\\escape'];
+            for (const format of escapes) {
+                const result = await run_export_with_format(format);
+                // 结果必须指向导出目录内的文件，且文件名以安全 capture_id 为基（无逃逸串、扩展名净化）
+                const file_path = result.data.file_path || '';
+                expect(file_path.startsWith(export_dir + '/')).toBe(true);
+                expect(file_path.endsWith('.json')).toBe(true);
+                expect(file_path.includes('/../')).toBe(false);
+                expect(file_path.includes('\\')).toBe(false);
+            }
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
+    it('AC-002: 合法 format 写出到导出目录内且文件名以安全 capture_id 为基', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-legal-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const result = await run_export_with_format('jsonl');
+            expect(result.ok).toBe(true);
+            expect(result.data.file_path).toBe(join(export_dir, 'session-x.jsonl'));
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
+    it('AC-003: resolve 后绝对路径 realpath 前缀等于导出目录 realpath', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-realpath-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const result = await run_export_with_format('json');
+            const { realpath } = await import('node:fs/promises');
+            const file_real = await realpath(result.data.file_path!);
+            const dir_real = await realpath(export_dir);
+            expect(file_real.startsWith(dir_real + '/')).toBe(true);
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+});

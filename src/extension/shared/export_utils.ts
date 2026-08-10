@@ -9,8 +9,9 @@
 //   - 传 id（按导出类型区分），浏览器按 id 持久记忆上次文件夹，等同网页下载
 //   - 用户取消（AbortError）静默返回，不报错
 // 保留 chrome.downloads.download 兜底：
-//   - filename 含 '/'（用户配置了导出目录）→ 直接静默存到该相对目录
+//   - filename 含 '/'（用户配置了导出目录）且未显式传 save_as → 直接静默存到该相对目录
 //   - showSaveFilePicker 不可用（如 service worker 环境）→ 退回 downloads API
+// T107: save_as 显式传入时优先于 has_dir 静默语义（export_save_as=true 强制另存为）。
 
 import { build_export_filename } from './export_settings';
 import type { UserConfig } from '../../shared/types';
@@ -65,6 +66,7 @@ export async function download_blob(
     blob: Blob,
     filename: string,
     picker_id?: string,
+    save_as?: boolean,
 ): Promise<number | undefined> {
     const has_dir = filename.includes('/');
     const picker = (globalThis as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
@@ -93,7 +95,7 @@ export async function download_blob(
     const download_id = await chrome.downloads.download({
         url,
         filename,
-        saveAs: !has_dir,
+        saveAs: save_as ?? !has_dir, // T107: export_save_as=true 强制 saveAs
     });
     // 延迟释放 blob URL，确保下载引擎已读取完毕
     setTimeout(() => URL.revokeObjectURL(url), 5000);

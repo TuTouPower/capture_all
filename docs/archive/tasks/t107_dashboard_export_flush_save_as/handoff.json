@@ -1,0 +1,18 @@
+{
+  "tid": "t107",
+  "attempt": 1,
+  "execution_id": "d3d1f5a3febc463f97c3d0beb4cb3e0f",
+  "status": "done",
+  "branch": "t107_dashboard_export_flush_save_as",
+  "base_sha": "85dd337d688a1a32f36d7e3120686cfa288d1cf6",
+  "tests": "npm test：1229 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 2 code PASS / Round 1 test PASS（R1 修 archive flush 静默失败）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/dashboard_export_flush_saveas.test.ts 'AC-001 export_json 请求前调用 flush_all' 通过"],
+    "AC-002": ["tests/unit/dashboard_export_flush_saveas.test.ts 'AC-002 export_save_as=true 时 saveAs=true' + export_utils.test.ts has_dir 组合 通过"],
+    "AC-003": ["tests/unit/dashboard_export_flush_saveas.test.ts 'AC-003 save_as=false 不强制 saveAs' 通过"]
+  },
+  "pending": ["p020", "p021"],
+  "findings": []
+}

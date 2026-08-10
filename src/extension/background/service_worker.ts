@@ -227,13 +227,20 @@ async function handle_message(message: any, sender?: any): Promise<any> {
             await storage_delete_capture(message.capture_id);
             return { success: true };
         case 'export_json':
+            await flush_all(); // T107: 导出前落盘缓冲事件
             return { success: true, json: await export_json(message.capture_id) };
         case 'export_jsonl':
+            await flush_all();
             return { success: true, jsonl: await export_jsonl(message.capture_id) };
         case 'export_html':
+            await flush_all();
             return { success: true, html: await export_html(message.capture_id) };
         case 'export_har':
+            await flush_all();
             return { success: true, har: await export_har(message.capture_id) };
+        case 'flush':
+            await flush_all();
+            return { success: true };
         case 'restart_bridge':
             stop_bridge_client();
             {

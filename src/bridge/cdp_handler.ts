@@ -18,6 +18,9 @@ interface CdpSession {
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
     connect_error: string | null; // T062: ws onerror/onclose 时记录
+    // T101: idle TTL 定时器与最后活动时间
+    idle_timer: ReturnType<typeof setTimeout> | null;
+    last_activity: number;
 }
 
 interface CdpStoredEvent {
@@ -40,6 +43,48 @@ interface CdpStoredEvent {
 const sessions: Map<string, CdpSession> = new Map();
 const CDP_DETECT_TIMEOUT_MS = 3000;
 const MAX_EVENTS_PER_POLL = 100;
+// T101: idle TTL（活动刷新，非固定墙钟）；events 上限防无界增长
+const CDP_SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
+const MAX_SESSION_EVENTS = 5000;
+// T101 测试钩子：jsdom 下需小 cap 触发淘汰分支
+let _max_session_events = MAX_SESSION_EVENTS;
+export function _set_max_session_events_for_test(cap: number): void {
+    _max_session_events = cap;
+}
+
+// T101: events 有界写入，超上限丢最旧（防无界增长 OOM）
+// 淘汰计数（可观测指标；桥无 logging 基础设施）
+export const _eviction_count = { value: 0 };
+function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
+    session.events.push(event);
+    if (session.events.length > _max_session_events) {
+        session.events.splice(0, session.events.length - _max_session_events);
+        _eviction_count.value += 1;
+    }
+}
+
+function destroy_session(session_key: string): void {
+    const s = sessions.get(session_key);
+    if (!s) return;
+    if (s.cdp_ws) {
+        try { s.cdp_ws.close(); } catch {}
+    }
+    if (s.idle_timer) clearTimeout(s.idle_timer);
+    sessions.delete(session_key);
+}
+
+// T101: 活动事件刷新 idle TTL
+function touch_session(session: CdpSession): void {
+    session.last_activity = Date.now();
+    if (session.idle_timer) clearTimeout(session.idle_timer);
+    session.idle_timer = setTimeout(() => {
+        // 仅当仍无新活动（last_activity 未被续期）才销毁
+        const s = sessions.get(session.session_key);
+        if (s && Date.now() - s.last_activity >= CDP_SESSION_IDLE_TTL_MS) {
+            destroy_session(session.session_key);
+        }
+    }, CDP_SESSION_IDLE_TTL_MS);
+}
 
 export async function handle_cdp_detect(
     _req: http.IncomingMessage,
@@ -60,7 +105,10 @@ export async function handle_cdp_detect(
         const version_data = await version_res.json();
 
         const list_url = `http://127.0.0.1:${port}/json/list`;
-        const list_res = await fetch(list_url);
+        const list_controller = new AbortController();
+        const list_timeout = setTimeout(() => list_controller.abort(), CDP_DETECT_TIMEOUT_MS);
+        const list_res = await fetch(list_url, { signal: list_controller.signal });
+        clearTimeout(list_timeout);
         const targets = await list_res.json() as Array<{ id: string; url: string; title: string }>;
 
         return {
@@ -104,7 +152,10 @@ export async function handle_cdp_start(
     try {
         // Get available targets
         const list_url = `http://127.0.0.1:${port}/json/list`;
-        const list_res = await fetch(list_url);
+        const list_controller = new AbortController();
+        const list_timeout = setTimeout(() => list_controller.abort(), CDP_DETECT_TIMEOUT_MS);
+        const list_res = await fetch(list_url, { signal: list_controller.signal });
+        clearTimeout(list_timeout);
         const targets = await list_res.json() as Array<{ id: string; url: string; title: string; webSocketDebuggerUrl: string; type?: string }>;
 
         if (!targets || targets.length === 0) {
@@ -139,21 +190,52 @@ export async function handle_cdp_start(
             redact_sensitive_headers,
             redact_url_query,
             connect_error: null,
+            idle_timer: null,
+            last_activity: Date.now(),
         };
 
-        // Connect to CDP WebSocket
+        // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速）
         const ws = new WebSocket(target.webSocketDebuggerUrl);
         let seq = 0;
         const body_seq_to_req_id = new Map<number, string>();
 
-        ws.onopen = () => {
-            session.cdp_ws = ws;
-            // Enable Network domain
-            ws.send(JSON.stringify({ id: ++seq, method: 'Network.enable' }));
-        };
+        const ws_connect = await new Promise<'ok' | 'timeout' | 'failed'>((resolve) => {
+            const timeout = setTimeout(() => {
+                // T101 f004: 超时关闭 socket，防迟到 onopen 留孤儿连接
+                try { ws.close(); } catch {}
+                resolve('timeout');
+            }, CDP_DETECT_TIMEOUT_MS);
+            ws.onopen = () => {
+                clearTimeout(timeout);
+                session.cdp_ws = ws;
+                // Enable Network domain
+                ws.send(JSON.stringify({ id: ++seq, method: 'Network.enable' }));
+                resolve('ok');
+            };
+            ws.onerror = () => {
+                clearTimeout(timeout);
+                session.connect_error = 'WebSocket error';
+                resolve('failed');
+            };
+            ws.onclose = () => {
+                clearTimeout(timeout);
+                session.connect_error = 'WebSocket closed';
+                resolve('failed');
+            };
+        });
+        if (ws_connect !== 'ok') {
+            sessions.delete(session_key);
+            // T101 f005: 区分超时与连接失败文案
+            const msg = ws_connect === 'timeout'
+                ? `CDP WebSocket connect timeout on port ${port}`
+                : `CDP WebSocket connect failed on port ${port} (${session.connect_error})`;
+            return { status: 200, body: { ok: false, error: { code: 'cdp_start_failed', message: msg } } };
+        }
 
         ws.onmessage = (event) => {
             try {
+                // T101: 任意 CDP 活动刷新 idle TTL
+                touch_session(session);
                 const msg = JSON.parse(event.data as string);
                 if (msg.method === 'Network.responseReceived') {
                     const params = msg.params;
@@ -163,7 +245,7 @@ export async function handle_cdp_start(
                         // Wait for loadingFinished before storing
                         const existing = session.events.find(e => e.request_id === req_id);
                         if (!existing) {
-                            session.events.push({
+                            push_bounded(session, {
                                 request_id: req_id,
                                 tab_id: 0,
                                 url: redact_url(
@@ -200,7 +282,7 @@ export async function handle_cdp_start(
                     if (req_id && request) {
                         const existing = session.events.find(e => e.request_id === req_id);
                         if (!existing) {
-                            session.events.push({
+                            push_bounded(session, {
                                 request_id: req_id,
                                 tab_id: 0,
                                 url: redact_url(
@@ -290,26 +372,9 @@ export async function handle_cdp_start(
             }
         };
 
-        ws.onerror = () => {
-            session.cdp_ws = null;
-            session.connect_error = 'WebSocket error';
-        };
-
-        ws.onclose = () => {
-            session.cdp_ws = null;
-            session.connect_error = 'WebSocket closed';
-        };
-
         sessions.set(session_key, session);
-
-        // Auto-cleanup after 5 minutes of inactivity
-        setTimeout(() => {
-            const s = sessions.get(session_key);
-            if (s && s.cdp_ws) {
-                try { s.cdp_ws.close(); } catch {}
-            }
-            sessions.delete(session_key);
-        }, 5 * 60 * 1000);
+        // T101: idle TTL 启动（活动刷新，非固定墙钟）
+        touch_session(session);
 
         return { status: 200, body: { ok: true, session_key, target: { id: target.id, url: target.url, title: target.title } } };
     } catch (e) {
@@ -367,12 +432,8 @@ export async function handle_cdp_events(
 
 export async function handle_cdp_stop(body: Record<string, unknown>): Promise<{ status: number; body: unknown }> {
     const session_key = String(body.session_key || '');
-    const session = sessions.get(session_key);
-
-    if (session && session.cdp_ws) {
-        try { session.cdp_ws.close(); } catch {}
-    }
-    sessions.delete(session_key);
+    // T101: destroy 也清 idle_timer，避免泄漏
+    destroy_session(session_key);
 
     return { status: 200, body: { ok: true } };
 }

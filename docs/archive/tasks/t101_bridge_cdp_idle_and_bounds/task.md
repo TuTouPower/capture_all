@@ -2,11 +2,11 @@
 tid: "t101"
 slug: "bridge_cdp_idle_and_bounds"
 title: "fix: Bridge CDP idle TTL、事件有界与 HTTP 超时"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t101_bridge_cdp_idle_and_bounds"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "146b0de9b400daa17ffd75a5a91dcbbb268a9620"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P1-3 P1-4"
@@ -22,7 +22,12 @@ note: "review_20260811 P1-3 P1-4"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：CDP session 固定 5 分钟墙钟误杀长采集；events 无上限；detect/start 的 /json/list 与 WS 建立无超时。
+- 修复：idle TTL（touch_session 活动刷新）、push_bounded 有界 + _eviction_count 指标、/json/list AbortController 超时、WS connect onopen/超时竞速。
+- Round 1 code FAIL（WS 无超时）+ test FAIL（AC-002 假绿 250<5000）→ 修 + cap 注入。
+- 既有 bridge_cdp_events / cdp_handler_redaction 测试适配 start onopen 时序。
+- 全量 1210 通过，tsc 无错。
 
 ## Review 处置
 
@@ -44,14 +49,27 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 05:37 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+code FAIL（f001 important WS 无超时 + f002/f003 minor）；test FAIL（f001 important AC-002 假绿）。
+
+### Round 2 (2026-08-11 05:38 UTC+8)
+
+code PASS / test PASS；新增 f004/f005/f002 minor。
+
+### Round 3 (2026-08-11 05:39 UTC+8)
+
+code PASS / test PASS；f004/f005/f002 修。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t101_code_f001 | important | 已修 | WS connect onopen/超时竞速，超时返回失败 | cdp_handler.ts |
+| t101_code_f002 | minor | 已修 | _eviction_count 指标计数 | cdp_handler.ts |
+| t101_code_f003 | minor | 已修 | _set_max_session_events_for_test 注入 cap | cdp_handler.ts |
+| t101_code_f004 | minor | 已修 | 超时分支 close ws 防孤儿连接 | cdp_handler.ts |
+| t101_code_f005 | minor | 已修 | ws_connect 三态区分 timeout/failed 文案 | cdp_handler.ts |
+| t101_test_f001 | important | 已修 | AC-002 换 cap=10 触发真淘汰三重断言 | cdp_session_idle_bounds.test.ts |
+| t101_test_f002 | minor | 已修 | 删残留 console.log | cdp_session_idle_bounds.test.ts |
 
 ## 收尾报告
 
@@ -60,24 +78,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL → Round 2 code：PASS → Round 3 code：PASS
+- Round 1 test：FAIL → Round 2 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- CDP session 固定墙钟改 idle TTL（活动刷新）；events 有界 + 淘汰指标；detect/start 的 /json/list 与 WS 建立加超时。3 轮审阅修 WS 无超时与 AC-002 假绿。

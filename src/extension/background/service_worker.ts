@@ -477,12 +477,16 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
             if (!result.success) {
                 logger.warn('Console capture failed', result.error);
             }
+        }
+    }
 
-            // T093: runtime exception 事件经统一 handle_event 按 category 写入 ERROR_EVENTS，
-            // 不再经 handle_console_log（其要求 event.data，展开顶层的异常事件会被丢弃）。
+    // T106: runtime exception 独立于 console 门控，按 error_count_enabled 启动。
+    if (config.error_count_enabled !== false) {
+        const target_tab_id = debugger_attached_tab_id ?? tabs[0]?.id;
+        if (target_tab_id != null) {
             const ex_result = await start_exception_capture(
-                capture_id, start_time, tab_id, handle_event,
-                cdp_attached
+                capture_id, start_time, target_tab_id, handle_event,
+                target_tab_id === debugger_attached_tab_id
             );
             if (!ex_result.success) {
                 logger.warn('Exception capture failed', ex_result.error);
@@ -547,9 +551,11 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
         }
     }
 
-    // Start cookie change capture (always, regardless of capture_network)
     // Start cookie change capture, scoped to active tab URL domain (T051)
-    start_cookie_capture(capture_id, start_time, handle_cookie_change, start_url || null, tab_id);
+    // T106: cookie 类别开关关闭时不启动 cookie 采集
+    if (config.cookie_change_count_enabled !== false) {
+        start_cookie_capture(capture_id, start_time, handle_cookie_change, start_url || null, tab_id);
+    }
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
@@ -930,6 +936,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         to_url: tab_url,
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const switch_event = create_base_event({
         capture_id: cap_id!,
         category: 'navigation',
@@ -970,7 +977,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             logger.info('Console capture retry succeeded on tab ' + activeInfo.tabId);
         }
     }
-    if (current_config.capture_console && !is_exception_active()) {
+    if (current_config.error_count_enabled !== false && !is_exception_active()) {
         const result = await start_exception_capture(
             current_capture_id!, start_time, activeInfo.tabId, handle_event,
             debugger_attached_tab_id === activeInfo.tabId
@@ -1018,6 +1025,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         url: tab.url || tab.pendingUrl || '',
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const event = create_base_event({
         capture_id: current_capture_id!,
         category: 'navigation',
@@ -1048,6 +1056,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         change_reason: null,
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const event = create_base_event({
         capture_id: current_capture_id!,
         category: 'navigation',
@@ -1073,7 +1082,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                 logger.info('Console capture retry succeeded on tab ' + tabId + ' (URL changed)');
             }
         }
-        if (current_config.capture_console && !is_exception_active()) {
+        if (current_config.error_count_enabled !== false && !is_exception_active()) {
             const result = await start_exception_capture(
                 current_capture_id!, start_time, tabId, handle_event,
                 debugger_attached_tab_id === tabId

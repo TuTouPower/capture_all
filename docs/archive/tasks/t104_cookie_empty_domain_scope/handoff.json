@@ -1,0 +1,18 @@
+{
+  "tid": "t104",
+  "attempt": 1,
+  "execution_id": "e7a62cb3038a443eb6688e3d041fa8f0",
+  "status": "done",
+  "branch": "t104_cookie_empty_domain_scope",
+  "base_sha": "3771ec28ee8d05f0a5e75e355669a0e8c21dd2bb",
+  "tests": "npm test：1219 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 2 code PASS / Round 1 test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cookie_empty_domain_scope.test.ts 'AC-001: 空 URL 不注册 onChanged listener' + 'AC-001b: about:/chrome: 不注册' 通过"],
+    "AC-002": ["tests/unit/cookie_empty_domain_scope.test.ts 'AC-002: https 域名按域过滤（回归）' 通过"],
+    "AC-003": ["tests/unit/cookie_empty_domain_scope.test.ts 'AC-003: 空域降级不进入 capturing 状态' + logger skip 信号 通过"]
+  },
+  "pending": [],
+  "findings": []
+}

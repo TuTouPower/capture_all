@@ -2,11 +2,11 @@
 tid: "t104"
 slug: "cookie_empty_domain_scope"
 title: "privacy: Cookie 目标域为空时不退化为全浏览器"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t104_cookie_empty_domain_scope"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "3771ec28ee8d05f0a5e75e355669a0e8c21dd2bb"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P1-7"
@@ -22,7 +22,10 @@ note: "review_20260811 P1-7"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：matches_target 空集恒 true → 空域退化全浏览器 cookie 采集。
+- 修复：start 空域不注册 onChanged + skip 日志；extract 仅 http/https；matches_target fail-closed。
+- 全量 1219 通过，tsc 无错。
 
 ## Review 处置
 
@@ -44,14 +47,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 06:42 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+code PASS（1 minor）；test PASS。
+
+### Round 2 (2026-08-11 06:43 UTC+8)
+
+code PASS / test PASS。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t104_code_f001 | minor | 已修 | matches_target 空集改 fail-closed，注释一致 | cookie_capture.ts |
 
 ## 收尾报告
 
@@ -60,24 +66,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- Cookie 空域（about:/chrome:/无法解析）不注册 onChanged listener 防全量退化；http/https 域名按域过滤回归；matches_target fail-closed。

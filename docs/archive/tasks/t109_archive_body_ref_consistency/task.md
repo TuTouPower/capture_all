@@ -2,11 +2,11 @@
 tid: "t109"
 slug: "archive_body_ref_consistency"
 title: "fix: archive body 去重后回写 JSONL body_ref"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t109_archive_body_ref_consistency"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "7de7117b9b169548962b4d5dba368bc97a079d19"
 depends_on: ""
 conflicts_with: ""
 note: "review_20260811 P1-12"
@@ -22,7 +22,11 @@ note: "review_20260811 P1-12"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- doctor/preflight 通过。
+- 根因：body 去重改名后未回写 JSONL body_ref，引用指向旧名。
+- 修复：final_seq 按出现序回写（含首现遮蔽场景）。
+- 3 轮审阅修 off-by-one swap + 遮蔽冲突；突变验证判别力。
+- 全量 1236 通过，tsc 无错。
 
 ## Review 处置
 
@@ -44,14 +48,25 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 08:10 UTC+8)
 
-有 finding 时用本表；每条 finding 一行。
+code FAIL（f001 critical off-by-one）；test FAIL（f001 critical swap）。
+
+### Round 2 (2026-08-11 08:11 UTC+8)
+
+code FAIL（f003 important 遮蔽冲突 + f002 minor）；test FAIL（f004 important）。
+
+### Round 3 (2026-08-11 08:12 UTC+8)
+
+code PASS / test PASS。处置：
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t109_code_f001 | critical | 已修 | final_seq 回写按出现序消费，2/3-way 冲突 ref 指向各自文件 | archive_builder.ts |
+| t109_code_f002 | minor | 已修 | spec AC-001 措辞更新（去重改名保留两文件） | spec.md |
+| t109_code_f003 | important | 已修 | final_seq 含首现遮蔽，req_2 自然路径二次改名回写 | archive_builder.ts |
+| t109_test_f001 | critical | 已修 | f001 判别测试（不同内容 ref 指向各自文件） | 测试 |
+| t109_test_f004 | important | 已修 | f003 遮蔽测试（req×2+req_2 第三条指向 req_2_2） | 测试 |
 
 ## 收尾报告
 
@@ -60,24 +75,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL → Round 2 code：FAIL → Round 3 code：PASS
+- Round 1 test：FAIL → Round 2 test：FAIL → Round 3 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- body 冲突改名后 final_seq 按出现序回写 body_ref（2/3-way + 遮蔽场景），每条记录指向自身最终文件；突变验证判别力。

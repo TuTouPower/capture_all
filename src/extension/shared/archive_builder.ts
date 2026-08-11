@@ -274,8 +274,11 @@ export async function build_archive(
     const console_lines = console_with_times.map((c) => JSON.stringify(c));
 
     // body 路径冲突解决（重复路径加 _2、_3 后缀）
+    // T109: 改名后同步回写 JSONL 中 response_body_ref / request_body_ref，避免引用旧名。
+    // final_seq[orig] 记录该 orig 每次出现的最终路径（含首现被遮蔽改名），回写按出现序消费。
     const used_paths = new Set<string>();
     const resolved_body_files: BodyFileEntry[] = [];
+    const final_seq = new Map<string, string[]>();
 
     for (const file of all_body_files) {
         let path = file.path;
@@ -291,6 +294,36 @@ export async function build_archive(
         }
         used_paths.add(path);
         resolved_body_files.push({ path, bytes: file.bytes });
+        // 记录该 orig 的最终路径（每次出现 append）
+        const arr = final_seq.get(file.path) ?? [];
+        arr.push(path);
+        final_seq.set(file.path, arr);
+    }
+
+    // T109: 按映射回写 network.jsonl 的 body_ref。
+    // 对每个 ref，按其出现序（第 n 次出现）取 final_seq[ref][n-1]。
+    if (final_seq.size > 0) {
+        const seen = new Map<string, number>();
+        for (let i = 0; i < network_lines.length; i++) {
+            const parsed = JSON.parse(network_lines[i]) as Record<string, unknown>;
+            let changed = false;
+            for (const key of ['response_body_ref', 'request_body_ref']) {
+                const ref = parsed[key];
+                if (typeof ref === 'string') {
+                    const finals = final_seq.get(ref);
+                    if (finals && finals.length > 0) {
+                        const n = (seen.get(ref) ?? 0) + 1;
+                        seen.set(ref, n);
+                        const final_path = finals[Math.min(n, finals.length) - 1];
+                        if (final_path !== ref) {
+                            parsed[key] = final_path;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if (changed) network_lines[i] = JSON.stringify(parsed);
+        }
     }
 
     // 图片计数

@@ -1,0 +1,17 @@
+{
+  "tid": "t109",
+  "attempt": 1,
+  "execution_id": "6ca7db9d3af14b40ba6e31878227f832",
+  "status": "done",
+  "branch": "t109_archive_body_ref_consistency",
+  "base_sha": "7de7117b9b169548962b4d5dba368bc97a079d19",
+  "tests": "npm test：1236 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / test PASS（R1-2 修 off-by-one + 遮蔽冲突）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/archive_body_ref_consistency.test.ts 'AC-001 去重改名后 body_ref 指向保留文件' + 'f001 各自文件' + 'f003 遮蔽' 通过"],
+    "AC-002": ["tests/unit/archive_body_ref_consistency.test.ts 'AC-002 无引用旧名' 通过"]
+  },
+  "pending": [],
+  "findings": []
+}

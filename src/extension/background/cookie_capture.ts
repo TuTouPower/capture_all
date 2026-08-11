@@ -26,7 +26,10 @@ const cookies_api = chrome.cookies;
 function extract_target_domains(tab_url: string): Set<string> {
     const result = new Set<string>();
     try {
-        const hostname = new URL(tab_url).hostname;
+        const parsed = new URL(tab_url);
+        // T104: 仅 http/https 可解析 cookie domain；about:/chrome:// 等无 hostname 或非 web 协议视为空域
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return result;
+        const hostname = parsed.hostname;
         if (!hostname) return result;
         const parts = hostname.split('.');
         for (let i = parts.length - 1; i >= 0; i--) {
@@ -42,7 +45,8 @@ function extract_target_domains(tab_url: string): Set<string> {
 }
 
 function matches_target(cookie_domain: string): boolean {
-    if (target_domains.size === 0) return true; // 未指定目标 → 不过滤
+    // T104: 空域已由 start_cookie_capture 前置拦截不注册 listener；此处 fail-closed 防未来空域注册路径静默全量。
+    if (target_domains.size === 0) return false;
     return target_domains.has(cookie_domain);
 }
 
@@ -108,10 +112,22 @@ export function start_cookie_capture(
     send_to_background = sender;
     tab_id = target_tab_id;
     target_domains = target_tab_url ? extract_target_domains(target_tab_url) : new Set();
+
+    // T104: 空域（无法解析目标 domain）不注册 onChanged，避免退化全浏览器 cookie 采集。
+    // 记录可观察降级信号；URL 就绪后由调用方重新 start。
+    if (target_domains.size === 0) {
+        logger.info('Cookie capture skipped: no target domain');
+        return;
+    }
+
     is_capturing = true;
     logger.info('Cookie capture started', { target_domains_count: target_domains.size });
 
     cookies_api.onChanged.addListener(handle_cookie_changed);
+}
+
+export function is_cookie_capture_active(): boolean {
+    return is_capturing;
 }
 
 export function stop_cookie_capture(): void {

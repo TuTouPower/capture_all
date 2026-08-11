@@ -1,0 +1,18 @@
+{
+  "tid": "t092",
+  "attempt": 1,
+  "execution_id": "b33a8ffd7bef416bab24856f8d528432",
+  "status": "done",
+  "branch": "t092_user_config_sanitize_label_poll",
+  "base_sha": "1b99efb7d80a355306e46493f80036e237b56c0d",
+  "tests": "npm test：105 文件 1162 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/user_config_persistence.test.ts:22 '预置非默认 label 与 poll 后 load 返回值一致' 通过"],
+    "AC-002": ["tests/unit/user_config_persistence.test.ts:34 '仅保存不含 label/poll 的 partial 后，再 load 仍保留原值' 通过"],
+    "AC-003": ["tests/unit/user_config_persistence.test.ts:47-104 '非法 poll 区间/越界/非整数/非 string label 回退默认；合法边界保留' 通过"]
+  },
+  "pending": ["p001", "p002"],
+  "findings": []
+}

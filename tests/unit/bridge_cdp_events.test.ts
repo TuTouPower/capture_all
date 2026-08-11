@@ -26,12 +26,15 @@ class MockWebSocket {
 }
 
 async function start_session(): Promise<string> {
-    const result = await handle_cdp_start({} as never, {
+    const p = handle_cdp_start({} as never, {
         port: 9222,
         tab_url: 'https://example.com',
         redact_data: false,
         max_body_capture_bytes: 1024,
     });
+    await vi.advanceTimersByTimeAsync(0);
+    MockWebSocket.instance?.onopen?.();
+    const result = await p;
     const body = result.body as { ok: boolean; session_key: string };
     expect(result.status).toBe(200);
     expect(body.ok).toBe(true);

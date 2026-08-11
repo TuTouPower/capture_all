@@ -1,0 +1,18 @@
+{
+  "tid": "t098",
+  "attempt": 1,
+  "execution_id": "8809c5e8709c42b281e8122e872406c8",
+  "status": "done",
+  "branch": "t098_network_hook_config_gate",
+  "base_sha": "6774a8057b94f883181c005194dae48999b5cbf7",
+  "tests": "npm test：1193 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / Round 2 test PASS（R1 修 2 important 后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/network_hook_config_gate.test.ts 'network_hook 与 websocket_capture 受 capture_network 条件门控' 通过"],
+    "AC-002": ["tests/unit/network_hook_gate_behavior.test.ts 'start 后事件转发（回归）' 通过"],
+    "AC-003": ["tests/unit/network_hook_gate_behavior.test.ts 'build_page_script(false) 无 body 采集路径' + content_script 传 capture_response_body 通过"]
+  },
+  "pending": ["p015"],
+  "findings": []
+}

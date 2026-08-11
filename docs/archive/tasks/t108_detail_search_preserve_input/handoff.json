@@ -1,0 +1,17 @@
+{
+  "tid": "t108",
+  "attempt": 1,
+  "execution_id": "b0abd8581761485ea643c61f3e509ec5",
+  "status": "done",
+  "branch": "t108_detail_search_preserve_input",
+  "base_sha": "3a0c79edb499de35d860e97ec6fbc9ff9765c532",
+  "tests": "npm test：1232 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/detail_search_preserve_input.test.ts 'AC-001 render_dt_rail 重绘后 input value 保留' + 'AC-001b 空输入' + 'AC-001c 转义' 通过"],
+    "AC-002": ["filtered_events 用 #dtSearch.value，重绘后 value 保留故过滤语义不变（代码复验）通过"]
+  },
+  "pending": ["p022", "p023"],
+  "findings": []
+}

@@ -1,6 +1,7 @@
 // shared/user_config.ts
 import type { UserConfig } from './types';
 import { DEFAULT_USER_CONFIG } from './constants';
+import { MAX_POLL_INTERVAL_MS, MIN_POLL_INTERVAL_MS } from './agent_bridge_config';
 
 const STORAGE_KEY = 'user_config';
 
@@ -407,6 +408,15 @@ function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
     if (src.log_level === 'debug' || src.log_level === 'info' || src.log_level === 'warn' || src.log_level === 'error' || src.log_level === 'silent') c.log_level = src.log_level;
 
     if (typeof src.log_max_size_mb === 'number' && Number.isInteger(src.log_max_size_mb) && src.log_max_size_mb > 0) c.log_max_size_mb = src.log_max_size_mb;
+
+    // T092: label 与轮询间隔纳入白名单；poll 合法区间与 agent_bridge_config 一致。
+    if (typeof src.browser_label === 'string') c.browser_label = src.browser_label;
+    if (typeof src.agent_bridge_poll_interval_ms === 'number'
+        && Number.isInteger(src.agent_bridge_poll_interval_ms)
+        && src.agent_bridge_poll_interval_ms >= MIN_POLL_INTERVAL_MS
+        && src.agent_bridge_poll_interval_ms <= MAX_POLL_INTERVAL_MS) {
+        c.agent_bridge_poll_interval_ms = src.agent_bridge_poll_interval_ms;
+    }
 
     return cfg;
 }

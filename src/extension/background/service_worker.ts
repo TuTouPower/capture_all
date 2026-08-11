@@ -5,6 +5,7 @@ import {
     delete_capture as storage_delete_capture,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
+    check_storage_limit,
     start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
@@ -124,54 +125,61 @@ setTimeout(() => {
 }, 0);
 
 // Clean up stale capture state on service worker restart
-async function cleanup_stale_capture_state(): Promise<void> {
-    // 读取活跃采集持久化键（T030 新增）+ 旧键（向后兼容）
-    const result = await chrome.storage.local.get([
-        'is_capturing', 'current_capture',
-        'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
-    ]);
-    const stale_capture_id = result.active_capture_id as string | undefined;
-    const legacy_active = result.is_capturing || stale_capture_id;
-    if (legacy_active) {
-        logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
-        const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
-        if (stale_capture?.capture_id) {
-            await update_capture({
-                ...stale_capture,
-                status: 'completed',
-                ended_at: new Date().toISOString(),
-                duration_ms: stale_capture.started_at
-                    ? Date.now() - new Date(stale_capture.started_at).getTime()
-                    : 0,
-            });
-        } else if (stale_capture_id) {
-            // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
-            try {
-                const rec = await get_capture(stale_capture_id);
-                if (rec) {
-                    await update_capture({
-                        ...rec,
-                        status: 'completed',
-                        ended_at: new Date().toISOString(),
-                        duration_ms: rec.started_at
-                            ? Date.now() - new Date(rec.started_at).getTime()
-                            : 0,
-                    });
+// T099: 经 run_exclusive 与 start/stop 串行，避免 cleanup 清掉并发 start 刚写入的 active 键。
+// 导出供测试驱动互斥时序。
+export async function cleanup_stale_capture_state(): Promise<void> {
+    return capture_state.run_exclusive(async () => {
+        // 有 live capturing（start 已先完成）则不清理
+        if (capture_state.get_state().phase !== 'idle') return;
+
+        // 读取活跃采集持久化键（T030 新增）+ 旧键（向后兼容）
+        const result = await chrome.storage.local.get([
+            'is_capturing', 'current_capture',
+            'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
+        ]);
+        const stale_capture_id = result.active_capture_id as string | undefined;
+        const legacy_active = result.is_capturing || stale_capture_id;
+        if (legacy_active) {
+            logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
+            const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
+            if (stale_capture?.capture_id) {
+                await update_capture({
+                    ...stale_capture,
+                    status: 'completed',
+                    ended_at: new Date().toISOString(),
+                    duration_ms: stale_capture.started_at
+                        ? Date.now() - new Date(stale_capture.started_at).getTime()
+                        : 0,
+                });
+            } else if (stale_capture_id) {
+                // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
+                try {
+                    const rec = await get_capture(stale_capture_id);
+                    if (rec) {
+                        await update_capture({
+                            ...rec,
+                            status: 'completed',
+                            ended_at: new Date().toISOString(),
+                            duration_ms: rec.started_at
+                                ? Date.now() - new Date(rec.started_at).getTime()
+                                : 0,
+                        });
+                    }
+                } catch (err) {
+                    logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
                 }
-            } catch (err) {
-                logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
             }
+            await chrome.storage.local.set({
+                is_capturing: false,
+                current_capture: null,
+                active_capture_id: null,
+                active_capture_start_ms: null,
+                active_capture_config: null,
+                active_capture_generation: null,
+            });
+            logger.info('Stale capture state cleaned up');
         }
-        await chrome.storage.local.set({
-            is_capturing: false,
-            current_capture: null,
-            active_capture_id: null,
-            active_capture_start_ms: null,
-            active_capture_config: null,
-            active_capture_generation: null,
-        });
-        logger.info('Stale capture state cleaned up');
-    }
+    });
 }
 
 setTimeout(() => {
@@ -184,15 +192,15 @@ setTimeout(() => {
 setup_keepalive_listener();
 
 // Message handler
-chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
-    handle_message(message).then(sendResponse).catch(error => {
+chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (response: any) => void) => {
+    handle_message(message, sender).then(sendResponse).catch(error => {
         logger.error('Message handler error', serialize_error(error));
         sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
     });
     return true; // Keep channel open for async response
 });
 
-async function handle_message(message: any): Promise<any> {
+async function handle_message(message: any, sender?: any): Promise<any> {
     switch (message.action) {
         case 'start':
             return start_capture(message.capture_id, message.config || DEFAULT_CONFIG);
@@ -201,13 +209,15 @@ async function handle_message(message: any): Promise<any> {
         case 'event':
             return handle_event(message.event);
         case 'get_status':
+            // T105: tab_id 以请求方 sender.tab.id 权威，避免多 tab 串台
+            // （get_status 常由 content 脚本轮询，SW 侧 current_capture.tab_id 是启动时 active tab）。
             return {
                 is_capturing,
                 capture_id: current_capture_id,
                 current_capture,
                 config: current_config,
                 start_time,
-                tab_id: current_capture?.tab_id ?? 0,
+                tab_id: sender?.tab?.id ?? current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
             };
         case 'get_capture_data':
@@ -215,16 +225,27 @@ async function handle_message(message: any): Promise<any> {
         case 'list_captures':
             return storage_list_captures();
         case 'delete_capture':
+            // T110: 活跃采集不可删除
+            if (is_capturing && current_capture_id === message.capture_id) {
+                return { success: false, error: 'Cannot delete an active capture' };
+            }
             await storage_delete_capture(message.capture_id);
             return { success: true };
         case 'export_json':
+            await flush_all(); // T107: 导出前落盘缓冲事件
             return { success: true, json: await export_json(message.capture_id) };
         case 'export_jsonl':
+            await flush_all();
             return { success: true, jsonl: await export_jsonl(message.capture_id) };
         case 'export_html':
+            await flush_all();
             return { success: true, html: await export_html(message.capture_id) };
         case 'export_har':
+            await flush_all();
             return { success: true, har: await export_har(message.capture_id) };
+        case 'flush':
+            await flush_all();
+            return { success: true };
         case 'restart_bridge':
             stop_bridge_client();
             {
@@ -468,10 +489,16 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
             if (!result.success) {
                 logger.warn('Console capture failed', result.error);
             }
+        }
+    }
 
+    // T106: runtime exception 独立于 console 门控，按 error_count_enabled 启动。
+    if (config.error_count_enabled !== false) {
+        const target_tab_id = debugger_attached_tab_id ?? tabs[0]?.id;
+        if (target_tab_id != null) {
             const ex_result = await start_exception_capture(
-                capture_id, start_time, tab_id, handle_console_log,
-                cdp_attached
+                capture_id, start_time, target_tab_id, handle_event,
+                target_tab_id === debugger_attached_tab_id
             );
             if (!ex_result.success) {
                 logger.warn('Exception capture failed', ex_result.error);
@@ -536,9 +563,11 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
         }
     }
 
-    // Start cookie change capture (always, regardless of capture_network)
     // Start cookie change capture, scoped to active tab URL domain (T051)
-    start_cookie_capture(capture_id, start_time, handle_cookie_change, start_url || null, tab_id);
+    // T106: cookie 类别开关关闭时不启动 cookie 采集
+    if (config.cookie_change_count_enabled !== false) {
+        start_cookie_capture(capture_id, start_time, handle_cookie_change, start_url || null, tab_id);
+    }
 
     // Notify all content scripts to start — pass capture context
     const all_tabs = await chrome.tabs.query({});
@@ -580,7 +609,7 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     return { success: true };
 }
 
-async function stop_capture(): Promise<{ success: boolean }> {
+async function stop_capture(reason: CaptureStoppedData['reason'] = 'user_stop'): Promise<{ success: boolean }> {
     // 串行化：等待前一次 start/stop 完成
     return capture_state.run_exclusive(async () => {
         if (!is_capturing && capture_state.get_state().phase === 'idle') {
@@ -588,7 +617,7 @@ async function stop_capture(): Promise<{ success: boolean }> {
         }
         const stop_handle = capture_state.begin_stop();
         try {
-            const result = await stop_capture_inner();
+            const result = await stop_capture_inner(reason);
             if (result.success) {
                 stop_handle.commit();
             }
@@ -601,7 +630,7 @@ async function stop_capture(): Promise<{ success: boolean }> {
     });
 }
 
-async function stop_capture_inner(): Promise<{ success: boolean }> {
+async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_stop'): Promise<{ success: boolean }> {
     if (!is_capturing) {
         return { success: true };
     }
@@ -670,7 +699,7 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
         });
         const stopped_data: CaptureStoppedData = {
             capture_id: current_capture_id,
-            reason: 'user_stop',
+            reason,
             duration_ms,
             stats: current_capture.stats,
         };
@@ -721,7 +750,7 @@ async function persist_stats(): Promise<void> {
     }
 }
 
-async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean }> {
+async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean; error?: string }> {
     if (!is_capturing || !current_capture_id || !current_capture) return { success: true };
 
     // Route fallback body hook events separately
@@ -743,6 +772,11 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
     }
     if (typeof event.relative_time_ms !== 'number' || event.relative_time_ms > 10_000_000_000) {
         event.relative_time_ms = Date.now() - start_time;
+    }
+
+    // T110: 存储限额超限时停止采集，不再接受新事件写入
+    if (await check_limit_and_stop()) {
+        return { success: false, error: 'storage_limit_reached' };
     }
 
     try {
@@ -834,8 +868,20 @@ function normalize_network_request(request: NetworkRequestData): void {
     if (request.body_capture_mode === undefined) request.body_capture_mode = 'none';
 }
 
+// T110: 存储限额超限检查，超限则停止采集。返回 true 表示已停止（调用方应放弃写入）。
+async function check_limit_and_stop(): Promise<boolean> {
+    if (!current_capture_id) return false;
+    if (await check_storage_limit(current_capture_id)) {
+        logger.warn('Storage limit reached, stopping capture', { capture_id: current_capture_id });
+        await stop_capture('storage_limit');
+        return true;
+    }
+    return false;
+}
+
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    if (await check_limit_and_stop()) return;
 
     const event = 'event' in payload ? (payload as { event: CaptureEvent; data: NetworkRequestData | WsFrameData }).event : null;
     const data = 'event' in payload ? (payload as { data: NetworkRequestData | WsFrameData }).data : (payload as NetworkRequestData);
@@ -857,6 +903,12 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
     const request = data as NetworkRequestData;
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
     if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    // T111: CDP primary / web_request 路径 time 字段恒 null，事件带相对偏移；
+    // 落绝对开始时间供 HAR 等导出使用；start_time_ms>0（websocket 绝对 epoch）时保留
+    if (request.absolute_time === undefined && !(request.start_time_ms && request.start_time_ms > 0)
+        && typeof event?.relative_time_ms === 'number') {
+        request.absolute_time = new Date(current_capture.started_at).getTime() + event.relative_time_ms;
+    }
     normalize_network_request(request);
     try {
         await write_network_requests([request]);
@@ -870,6 +922,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 
 async function handle_console_log(event: CaptureEvent): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    if (await check_limit_and_stop()) return;
     const data = event.data as ConsoleEventData;
     if (!data) return;
     if (!current_capture_id) {
@@ -919,6 +972,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         to_url: tab_url,
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const switch_event = create_base_event({
         capture_id: cap_id!,
         category: 'navigation',
@@ -928,6 +982,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         url: tab_url,
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...switch_event, data: switch_data }]);
     if (!capture_state.is_active_generation(gen)) return;
 
@@ -959,7 +1014,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
             logger.info('Console capture retry succeeded on tab ' + activeInfo.tabId);
         }
     }
-    if (current_config.capture_console && !is_exception_active()) {
+    if (current_config.error_count_enabled !== false && !is_exception_active()) {
         const result = await start_exception_capture(
             current_capture_id!, start_time, activeInfo.tabId, handle_event,
             debugger_attached_tab_id === activeInfo.tabId
@@ -1007,6 +1062,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         url: tab.url || tab.pendingUrl || '',
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const event = create_base_event({
         capture_id: current_capture_id!,
         category: 'navigation',
@@ -1016,6 +1072,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         url: tab.url || tab.pendingUrl || '',
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...event, data }]);
 });
 
@@ -1037,6 +1094,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         change_reason: null,
     };
 
+    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
     const event = create_base_event({
         capture_id: current_capture_id!,
         category: 'navigation',
@@ -1046,6 +1104,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         url: new_url,
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...event, data }]);
 
     // Retry CDP-based capture if navigating from restricted URL to normal page
@@ -1062,7 +1121,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
                 logger.info('Console capture retry succeeded on tab ' + tabId + ' (URL changed)');
             }
         }
-        if (current_config.capture_console && !is_exception_active()) {
+        if (current_config.error_count_enabled !== false && !is_exception_active()) {
             const result = await start_exception_capture(
                 current_capture_id!, start_time, tabId, handle_event,
                 debugger_attached_tab_id === tabId

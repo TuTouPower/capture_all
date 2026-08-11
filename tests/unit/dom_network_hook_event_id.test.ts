@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { CaptureEvent, InputEventData, NetworkRequestData } from '../../src/shared/types';
 import { start_dom_capture, stop_dom_capture } from '../../src/extension/content/dom_capture';
-import { start_network_hook, stop_network_hook } from '../../src/extension/content/network_hook';
+import { start_network_hook, stop_network_hook, _set_nonce_for_test } from '../../src/extension/content/network_hook';
 
 describe('dom_capture 与 network_hook 事件含 event_id', () => {
     let events: Array<CaptureEvent & InputEventData>;
@@ -15,11 +15,13 @@ describe('dom_capture 与 network_hook 事件含 event_id', () => {
         net_events = [];
         stop_dom_capture();
         stop_network_hook();
+        _set_nonce_for_test('test-nonce');
     });
 
     afterEach(() => {
         stop_dom_capture();
         stop_network_hook();
+        _set_nonce_for_test('test-nonce');
     });
 
     function dispatch_input(target: Element): void {
@@ -69,6 +71,7 @@ describe('dom_capture 与 network_hook 事件含 event_id', () => {
             source: window,
             data: {
                 source: '__capture_all_network_hook__',
+                nonce: 'test-nonce',
                 method: 'GET',
                 url: 'https://example.com/x',
                 status: 200,

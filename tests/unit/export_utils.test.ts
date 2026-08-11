@@ -31,9 +31,10 @@ afterEach(() => {
 
 const tz_config = { system_time_timezone: 'UTC+8' as const };
 
-// P0.61: saveAs 由 filename 是否含子目录自动决定，opts.save_as 不再参与。
+// P0.61: saveAs 由 filename 是否含子目录自动决定（未显式传 save_as 时）。
 // - filename 含 '/' → saveAs: false（直接存，不弹框）
 // - filename 不含 '/' → saveAs: true（弹框让 Chrome 记忆）
+// T107: 显式传 save_as 时优先于 has_dir 语义（export_save_as 生效）。
 describe('download_blob', () => {
     it('P0.61: saveAs=false when filename has subdirectory (captures/foo.zip)', async () => {
         const blob = new Blob(['test'], { type: 'application/zip' });
@@ -62,6 +63,16 @@ describe('download_blob', () => {
             url: 'blob:mock-url',
             filename: 'logs/bar.log',
             saveAs: false,
+        });
+    });
+
+    it('T107: save_as 显式传 true 时优先于 has_dir 静默语义', async () => {
+        const blob = new Blob(['test'], { type: 'application/zip' });
+        await download_blob(blob, 'captures/foo.zip', 'capture_export', true);
+        expect(mock_download).toHaveBeenCalledWith({
+            url: 'blob:mock-url',
+            filename: 'captures/foo.zip',
+            saveAs: true,
         });
     });
 

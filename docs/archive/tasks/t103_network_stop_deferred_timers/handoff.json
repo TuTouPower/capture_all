@@ -1,0 +1,17 @@
+{
+  "tid": "t103",
+  "attempt": 1,
+  "execution_id": "8d00635a79e4415d8eb58a27c41544a7",
+  "status": "done",
+  "branch": "t103_network_stop_deferred_timers",
+  "base_sha": "bc6207db0c640c1465bcc7f7dea40f572d013e1d",
+  "tests": "npm test：1215 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / Round 1 test PASS（R1-2 修 orphan 跨写后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/network_stop_deferred_timers.test.ts 'AC-001: stop 后推进时钟无事件写入' 通过"],
+    "AC-002": ["tests/unit/network_stop_deferred_timers.test.ts 'AC-002: 新 capture 旧 timer 不写' + 'AC-002b: stop→restart 迟到 getResponseBody 不写'（突变验证）通过"]
+  },
+  "pending": [],
+  "findings": []
+}

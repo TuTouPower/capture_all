@@ -238,6 +238,9 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
     if (!is_extension) return;
     try {
         if (format === 'archive') {
+            // T107: 导出前 flush 缓冲事件，避免丢最近数据；flush 失败则中止（不静默旧快照）
+            const flush_res = await chrome.runtime.sendMessage({ action: 'flush' });
+            if (!flush_res?.success) { alert('导出失败：无法落盘缓冲数据'); return; }
             const snapshot = await read_capture_snapshot(id);
             if (!snapshot.capture) { alert('导出失败'); return; }
             const archive = await build_archive({
@@ -261,7 +264,7 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
                 export_filename_template: get_user_config().export_filename_template,
                 system_time_timezone: get_user_config().system_time_timezone,
             }, id, 'zip');
-            await download_blob(blob, capture_filename, 'capture_export');
+            await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
             return;
         }
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
@@ -276,7 +279,7 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
             export_filename_template: get_user_config().export_filename_template,
             system_time_timezone: get_user_config().system_time_timezone,
         }, id, ext);
-        await download_blob(blob, capture_filename, 'capture_export');
+        await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
     } catch (err) { logger.error('Export error', err); }
 }
 

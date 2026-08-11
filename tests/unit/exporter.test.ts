@@ -191,5 +191,55 @@ describe('exporter', () => {
             expect(parsed.log.entries).toHaveLength(1);
             expect(parsed.log.entries[0].request.method).toBe('GET');
         });
+
+        it('AC-001a: absolute_time(number) 被用于 startedDateTime（correlator 产出形状）', async () => {
+            const req = { ...mock_network_requests[0], start_time_ms: null, absolute_time: 1704067202000 };
+            (get_network_requests as any).mockResolvedValue([req]);
+
+            const result = await export_har('test_capture');
+            const parsed = JSON.parse(result);
+
+            expect(parsed.log.entries[0].startedDateTime).toBe('2024-01-01T00:00:02.000Z');
+        });
+
+        it('AC-001b: start_time_ms 为绝对 epoch 时直接用（websocket 形状，不双计）', async () => {
+            const req = { ...mock_network_requests[0], start_time_ms: 1704067203000, absolute_time: undefined };
+            (get_network_requests as any).mockResolvedValue([req]);
+
+            const result = await export_har('test_capture');
+            const parsed = JSON.parse(result);
+
+            expect(parsed.log.entries[0].startedDateTime).toBe('2024-01-01T00:00:03.000Z');
+        });
+
+        it('AC-001c: 无时间字段时回退采集开始（非 1970）', async () => {
+            const req = { ...mock_network_requests[0], start_time_ms: null, absolute_time: undefined, relative_time: undefined };
+            (get_network_requests as any).mockResolvedValue([req]);
+
+            const result = await export_har('test_capture');
+            const parsed = JSON.parse(result);
+
+            expect(parsed.log.entries[0].startedDateTime).toBe('2024-01-01T00:00:00.000Z');
+        });
+
+        it('AC-002: base64 响应体写出时 content.encoding 为 base64', async () => {
+            const req = { ...mock_network_requests[0], response_body: 'aGVsbG8=', response_body_encoding: 'base64' };
+            (get_network_requests as any).mockResolvedValue([req]);
+
+            const result = await export_har('test_capture');
+            const parsed = JSON.parse(result);
+
+            expect(parsed.log.entries[0].response.content.encoding).toBe('base64');
+        });
+
+        it('AC-003: UTF-8 文本响应体不错误标记为 base64 encoding', async () => {
+            const req = { ...mock_network_requests[0], response_body: '{"data": "test"}', response_body_encoding: 'utf8' };
+            (get_network_requests as any).mockResolvedValue([req]);
+
+            const result = await export_har('test_capture');
+            const parsed = JSON.parse(result);
+
+            expect(parsed.log.entries[0].response.content.encoding).toBeUndefined();
+        });
     });
 });

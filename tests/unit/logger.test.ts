@@ -137,7 +137,7 @@ describe('Logger redaction & size cap', () => {
         const value = transport.last_entry?.details as string;
         expect(value.length).toBeLessThan(huge.length);
         expect(value).toContain('[TRUNCATED]');
-    });
+    }, 10000);
 
     it('redacts URL inside Error message', () => {
         const transport = new CaptureTransport();

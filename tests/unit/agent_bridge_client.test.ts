@@ -798,3 +798,88 @@ describe('T0006: auto-enroll and session management', () => {
         );
     });
 });
+
+
+describe('T102: lifecycle 失效仍投递 result', () => {
+    test('AC-001: dispatch 返回 result 后 lifecycle 失效，仍投递 result 一次', async () => {
+        const fetch_spy = vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/command')) {
+                    return new Response(JSON.stringify({
+                        command_id: 'cmd_1',
+                        type: 'capture.stop',
+                        payload: {},
+                        created_at: 1,
+                    }), { status: 200 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        // 挂起 dispatch：stop_capture 返回 pending，poll_cycle 停在 dispatch
+        const stop_deferred = create_deferred<{ success: boolean }>();
+        const deps = create_deps();
+        deps.stop_capture = vi.fn(() => stop_deferred.promise);
+
+        start_bridge_client(deps);
+        await run_initial_poll();
+
+        // dispatch 已开始（stop_capture 挂起），此时 lifecycle 失效
+        stop_bridge_client();
+
+        // 放行 dispatch，产生 result
+        stop_deferred.resolve({ success: true });
+        await vi.advanceTimersByTimeAsync(0);
+
+        // 旧代码在 dispatch 后遇失效 return，result 不投递；新代码仍投递一次
+        const result_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/result'),
+        );
+        expect(result_calls.length).toBe(1);
+    });
+
+    test('AC-002: 投递路径在 lifecycle 失效后不抛未捕获异常且不继续轮询', async () => {
+        let command_count = 0;
+        const fetch_spy = vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/command')) {
+                    command_count += 1;
+                    if (command_count === 1) {
+                        return new Response(JSON.stringify({
+                            command_id: 'cmd_1',
+                            type: 'capture.stop',
+                            payload: {},
+                            created_at: 1,
+                        }), { status: 200 });
+                    }
+                    return new Response(null, { status: 204 });
+                }
+                if (url.endsWith('/extension/result')) {
+                    return new Response('{}', { status: 413 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        const stop_deferred = create_deferred<{ success: boolean }>();
+        const deps = create_deps();
+        deps.stop_capture = vi.fn(() => stop_deferred.promise);
+
+        start_bridge_client(deps);
+        await run_initial_poll();
+        stop_bridge_client();
+        stop_deferred.resolve({ success: true });
+        await vi.advanceTimersByTimeAsync(0);
+
+        // lifecycle 失效后投递仍被尝试（result fetch 发生），413 异常被捕获不抛未捕获
+        const result_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/extension/result'),
+        );
+        expect(result_calls.length).toBe(1);
+        // 不抛未捕获异常（若抛出会 fail 测试）；stop 后投递异常经 lifecycle 检查静默不 log
+        // lifecycle 已失效，不再调度下一轮 poll
+        expect(is_bridge_client_running()).toBe(false);
+    });
+});

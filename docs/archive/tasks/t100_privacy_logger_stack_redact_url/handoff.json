@@ -1,0 +1,18 @@
+{
+  "tid": "t100",
+  "attempt": 1,
+  "execution_id": "f157241267094d7388c8f8c2dae613fd",
+  "status": "done",
+  "branch": "t100_privacy_logger_stack_redact_url",
+  "base_sha": "e47d501b5e19cce4e486003830950beff707bebc",
+  "tests": "npm test：1204 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / Round 1 test PASS（R1 修 critical+important 后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/logger_stack_redact.test.ts 'Error.stack 含敏感 URL 时输出无明文 secret' 通过"],
+    "AC-002": ["tests/unit/logger_stack_redact.test.ts '相对 URL query 脱敏' '纯 query 串脱敏' '嵌套绝对 URL 递归' '编码 key' 通过"],
+    "AC-003": ["tests/unit/logger_stack_redact.test.ts '无 query 的普通绝对 URL 保留 host/path' 通过"]
+  },
+  "pending": ["p017", "p018"],
+  "findings": []
+}

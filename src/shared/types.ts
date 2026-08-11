@@ -506,7 +506,7 @@ export interface CaptureStartedData {
 
 export interface CaptureStoppedData {
     capture_id: string;
-    reason: 'user_stop' | 'max_duration' | 'error';
+    reason: 'user_stop' | 'max_duration' | 'error' | 'storage_limit';
     duration_ms: number;
     stats: object;
 }
@@ -649,6 +649,12 @@ export interface CaptureConfig {
     redact_url_query: boolean;
     redact_data: boolean;
     sample_rate_ms: number;
+    // T106: popup 分类开关映射到采集门控（缺省视为 true）
+    event_count_enabled?: boolean;
+    nav_count_enabled?: boolean;
+    error_count_enabled?: boolean;
+    storage_change_count_enabled?: boolean;
+    cookie_change_count_enabled?: boolean;
 }
 
 export type ThemeMode = 'follow-system' | 'light' | 'dark';

@@ -1,0 +1,17 @@
+{
+  "tid": "t099",
+  "attempt": 1,
+  "execution_id": "0f0842f2e1c44b3eaa8a176944eb2d6d",
+  "status": "done",
+  "branch": "t099_sw_cleanup_stale_mutex",
+  "base_sha": "2ed15462623d02006637d97f88bcd8caeeb94e1f",
+  "tests": "npm test：1195 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 2 code PASS / test PASS（R1 修 2 finding 后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cleanup_start_mutex.test.ts 'start 成功后（phase=capturing）cleanup 不置空 active 键'（突变验证判别力）通过"],
+    "AC-002": ["tests/unit/cleanup_start_mutex.test.ts '冷启动陈旧键 cleanup 终态化并清键（回归）' 通过"]
+  },
+  "pending": ["p016"],
+  "findings": []
+}

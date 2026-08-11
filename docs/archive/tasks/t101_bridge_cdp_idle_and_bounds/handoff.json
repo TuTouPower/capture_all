@@ -1,0 +1,18 @@
+{
+  "tid": "t101",
+  "attempt": 1,
+  "execution_id": "6f0fb601c1f1445db90fc1f76a84eb16",
+  "status": "done",
+  "branch": "t101_bridge_cdp_idle_and_bounds",
+  "base_sha": "146b0de9b400daa17ffd75a5a91dcbbb268a9620",
+  "tests": "npm test：1210 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / Round 2 test PASS（R1 修 WS 无超时 + AC-002 假绿）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cdp_session_idle_bounds.test.ts 'AC-001 持续活动时 session 存活' + 'AC-001b idle 销毁' 通过"],
+    "AC-002": ["tests/unit/cdp_session_idle_bounds.test.ts 'AC-002 超过上限旧数据丢弃（cap=10 真淘汰 + 计数递增）' 通过"],
+    "AC-003": ["tests/unit/cdp_session_idle_bounds.test.ts 'AC-003/003b list 超时' + 'AC-003c WS 超时' 通过"]
+  },
+  "pending": [],
+  "findings": []
+}

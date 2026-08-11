@@ -36,7 +36,9 @@ let coordinator_state: {
     failure_reason?: BodyCaptureFailureReason;
     message?: string;
     external_session_key?: string;
-    poll_timer?: ReturnType<typeof setInterval>;
+    poll_timer?: ReturnType<typeof setTimeout>;
+    // T095: 闭包 stop 回调，置 poll_stopped 并清当前 timer；stop_body_capture* 与重入 start 必须调用。
+    stop_poll?: () => void;
 } | null = null;
 
 export function get_body_capture_result(): BodyCaptureStartResult | null {
@@ -57,6 +59,10 @@ export async function start_body_capture(
     deps: CoordinatorDeps,
     already_attached_tab_id?: number | null
 ): Promise<BodyCaptureStartResult> {
+    // T095: 重入 start 前先停旧 external poll，避免双闭包双 timer 双写。
+    coordinator_state?.stop_poll?.();
+    coordinator_state = null;
+
     if (!config.capture_response_body) {
         coordinator_state = {
             mode: 'none',
@@ -164,15 +170,9 @@ export async function start_body_capture(
 export async function stop_body_capture(): Promise<void> {
     if (!coordinator_state) return;
 
-    // Stop external CDP bridge polling
-    if (coordinator_state.external_session_key) {
-        if (coordinator_state.poll_timer) {
-            // T050: 兼容 setTimeout/setInterval
-            clearInterval(coordinator_state.poll_timer);
-            clearTimeout(coordinator_state.poll_timer);
-            coordinator_state.poll_timer = undefined;
-        }
-    }
+    // T095: 必须调闭包 stop_poll 置 poll_stopped，否则递归 setTimeout 继续调度、in-flight 继续写。
+    coordinator_state.stop_poll?.();
+    coordinator_state.poll_timer = undefined;
 
     coordinator_state = null;
 }
@@ -183,10 +183,8 @@ export async function stop_body_capture_with_cleanup(
     if (!coordinator_state) return;
 
     if (coordinator_state.external_session_key && coordinator_state.mode === 'external_cdp_bridge') {
-        if (coordinator_state.poll_timer) {
-            clearInterval(coordinator_state.poll_timer);
-            clearTimeout(coordinator_state.poll_timer);
-        }
+        coordinator_state.stop_poll?.();
+        coordinator_state.poll_timer = undefined;
         try {
             const bridge_config = await deps.get_bridge_config();
             await stop_external_cdp(bridge_config, coordinator_state.external_session_key!);
@@ -241,6 +239,8 @@ async function try_external_cdp_bridge(
             poll_in_flight = true;
             try {
                 const events = await poll_external_cdp_events(bridge_config, session_key);
+                // T095: stop 后 in-flight poll 返回不得再写网络事件
+                if (poll_stopped) return;
                 for (const evt of events) {
                     const req = convert_bridge_event_to_request(evt, capture_id);
                     deps.on_network_request(req);
@@ -261,13 +261,13 @@ async function try_external_cdp_bridge(
             status: 'active',
             message: `External CDP bridge active on port ${detect_result.cdp_port}`,
             external_session_key: session_key,
-            // 包装 stop 函数：清 timer + 标记停止
             poll_timer,
-            stop: () => {
+            // T095: stop_poll 供 stop_body_capture* 与重入 start 调用，置 poll_stopped + 清 timer
+            stop_poll: () => {
                 poll_stopped = true;
                 clearTimeout(poll_timer);
             }
-        } as BodyCaptureStartResult;
+        };
     } catch {
         return null;
     }

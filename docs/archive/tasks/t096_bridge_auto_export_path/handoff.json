@@ -1,0 +1,18 @@
+{
+  "tid": "t096",
+  "attempt": 1,
+  "execution_id": "243bb62cb0ee4c7a84d074e3c1243590",
+  "status": "done",
+  "branch": "t096_bridge_auto_export_path",
+  "base_sha": "4fd96ee173d1d567e5e38856000df49824f30d18",
+  "tests": "npm test：1175 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS；Round 2 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/agent_bridge_server.test.ts '恶意 format 不写出 EXPORT_DIR 外'（5 逃逸样例）通过"],
+    "AC-002": ["tests/unit/agent_bridge_server.test.ts '合法 format 写出到导出目录内'（jsonl 精确路径）通过"],
+    "AC-003": ["tests/unit/agent_bridge_server.test.ts 'resolve 后绝对路径 realpath 前缀等于导出目录' 通过"]
+  },
+  "pending": ["p009"],
+  "findings": []
+}

@@ -1,0 +1,18 @@
+{
+  "tid": "t093",
+  "attempt": 1,
+  "execution_id": "0cf6958a8ce34fea966db4810cc41f7e",
+  "status": "done",
+  "branch": "t093_exception_error_event_sink",
+  "base_sha": "08fe3b7e781b6d749571f283eda61b3c7d62d548",
+  "tests": "npm test：106 文件 1165 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/service_worker_exception_sink.test.ts:75 'Runtime.exceptionThrown 后 ERROR_EVENTS 出现 runtime_exception 记录' 通过"],
+    "AC-002": ["tests/unit/service_worker_exception_sink.test.ts:110 '异常不写入 CONSOLE_EVENTS' 通过"],
+    "AC-003": ["tests/unit/service_worker_exception_sink.test.ts:141 '停止后迟到的 exception 不写入任何 capture' 通过"]
+  },
+  "pending": ["p003", "p004", "p005"],
+  "findings": []
+}

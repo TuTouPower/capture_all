@@ -18,6 +18,14 @@ function utf8_byte_len(s: string): number {
     return new TextEncoder().encode(s).length;
 }
 
+// base64 文本解码后字节数：每 4 字符 = 3 字节，尾部 padding（=）减 1 字节
+function base64_decoded_len(s: string): number {
+    const cleaned = s.replace(/\s+/g, '').replace(/=+$/, '');
+    const triples = Math.floor(cleaned.length / 4) * 3;
+    const rem = cleaned.length % 4;
+    return triples + (rem >= 2 ? (rem === 2 ? 1 : 2) : 0);
+}
+
 // T043: 分页读取直到耗尽，替代固定 100000 截断
 async function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
     const all: CaptureEvent[] = [];
@@ -249,7 +257,7 @@ interface HarEntry {
         httpVersion: string;
         headers: HarNameValue[];
         cookies: HarNameValue[];
-        content: { size: number; mimeType: string; text?: string };
+        content: { size: number; mimeType: string; encoding?: string; text?: string };
         redirectURL: string;
         headersSize: number;
         bodySize: number;
@@ -282,9 +290,9 @@ interface HarLog {
 }
 
 function build_har(session: CaptureRecord, requests: NetworkRequestData[], user_config: Pick<UserConfig, 'system_time_timezone'>): HarLog {
-    const entries = requests.map(r => build_har_entry(r, user_config));
     const started_at_ms = new Date(session.started_at).getTime();
     const ended_at_ms = session.ended_at ? new Date(session.ended_at).getTime() : -1;
+    const entries = requests.map(r => build_har_entry(r, started_at_ms, user_config));
     return {
         log: {
             version: '1.2',
@@ -305,7 +313,7 @@ function build_har(session: CaptureRecord, requests: NetworkRequestData[], user_
     };
 }
 
-function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 'system_time_timezone'>): HarEntry {
+function build_har_entry(r: NetworkRequestData, started_at_ms: number, user_config: Pick<UserConfig, 'system_time_timezone'>): HarEntry {
     const req_headers = headers_to_array(r.request_headers);
     const res_headers = headers_to_array(r.response_headers);
     const query_string = parse_query_string(r.url);
@@ -313,8 +321,19 @@ function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 's
     const res_mime = get_header(r.response_headers, 'content-type') || 'application/octet-stream';
     const duration = Math.max(0, r.duration_ms || 0);
 
-    // Use request start_time_ms as absolute time proxy (relative to capture start)
-    const abs_time_ms = r.start_time_ms ?? 0;
+    // 绝对开始时间解析：absolute_time(number, correlator/接线产出) 优先；
+    // start_time_ms 为绝对 epoch（websocket 语义）；relative_time 为相对采集偏移；
+    // 全缺回退采集开始（非 1970）。
+    const abs_time_ms = typeof r.absolute_time === 'number' && r.absolute_time > 0
+        ? r.absolute_time
+        : (typeof r.start_time_ms === 'number' && r.start_time_ms > 0
+            ? r.start_time_ms
+            : (typeof r.relative_time === 'number'
+                ? started_at_ms + r.relative_time
+                : started_at_ms));
+
+    // HAR 规范：encoding='base64' 表示 text 为 base64；文本体不设 encoding
+    const body_encoding = r.response_body_encoding === 'base64' ? 'base64' : undefined;
 
     const entry: HarEntry = {
         startedDateTime: new Date(abs_time_ms).toISOString(),
@@ -338,8 +357,9 @@ function build_har_entry(r: NetworkRequestData, user_config: Pick<UserConfig, 's
             headers: res_headers,
             cookies: [],
             content: {
-                size: r.response_body_bytes ?? (r.response_body ? utf8_byte_len(r.response_body) : 0),
+                size: r.response_body_bytes ?? (r.response_body ? (body_encoding === 'base64' ? base64_decoded_len(r.response_body) : utf8_byte_len(r.response_body)) : 0),
                 mimeType: res_mime,
+                ...(body_encoding ? { encoding: body_encoding } : {}),
                 ...(r.response_body ? { text: r.response_body } : {})
             },
             redirectURL: get_header(r.response_headers, 'location') || '',

@@ -768,9 +768,11 @@ async function resolve_auto_output_path(payload: Record<string, unknown>): Promi
     const capture_id = typeof payload.capture_id === 'string' && payload.capture_id.length > 0
         ? payload.capture_id
         : `export_${Date.now()}`;
-    const format = typeof payload.format === 'string' && payload.format.length > 0
+    const raw_format = typeof payload.format === 'string' && payload.format.length > 0
         ? payload.format
         : 'json';
+    // T096: format 白名单净化，杜绝 `..` / 路径分隔逃逸 EXPORT_DIR。
+    const format = /^[a-zA-Z0-9]{1,16}$/.test(raw_format) ? raw_format.toLowerCase() : 'json';
     const safe_id = capture_id.replace(/[^a-zA-Z0-9._-]/g, '_');
     return join(dir, `${safe_id}.${format}`);
 }

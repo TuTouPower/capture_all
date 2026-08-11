@@ -31,6 +31,7 @@ let last_url = window.location.href;
 let capture_id = '';
 let capture_start_epoch_ms = 0;
 let tab_id = 0;
+let nav_enabled = true; // T106: 导航类别开关（handler 内判）
 
 // Determine frame ID
 if (window !== window.top) {
@@ -83,35 +84,53 @@ function start_capture(config: CaptureConfig): void {
     if (is_capturing) return;
 
     is_capturing = true;
+    nav_enabled = config.nav_count_enabled !== false;
     logger.info('Content capture started');
 
-    // Send page load event
-    const page_load_data: PageLoadData = {
-        url: window.location.href,
-        title: document.title,
-        load_event_time_ms: performance.timing.loadEventEnd - performance.timing.navigationStart || null,
-        dom_content_loaded_time_ms: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart || null,
-        navigation_start_time: performance.timeOrigin ? new Date(performance.timeOrigin).toISOString() : null,
-    };
-    send_capture_event('navigation', 'page_load', page_load_data);
+    // Send page load event（T106: 导航类别开关关闭时不发导航事件）
+    if (config.nav_count_enabled !== false) {
+        const page_load_data: PageLoadData = {
+            url: window.location.href,
+            title: document.title,
+            load_event_time_ms: performance.timing.loadEventEnd - performance.timing.navigationStart || null,
+            dom_content_loaded_time_ms: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart || null,
+            navigation_start_time: performance.timeOrigin ? new Date(performance.timeOrigin).toISOString() : null,
+        };
+        send_capture_event('navigation', 'page_load', page_load_data);
+    }
 
     // Start capture modules based on config
     // Wrapper adapts send_event's union-param signature to the typed sender each module expects.
     const sender: ContentSender = (event, data) => send_event(event, data);
-    start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
-    start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
-    start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
-    start_dom_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
-    start_storage_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id, config);
-    start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_visibility_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_fullscreen_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_print_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
-    start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    // T106: 用户行为开关关闭时不启动任何 user_action 生产者
+    if (config.event_count_enabled !== false) {
+        start_mouse_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
+        start_keyboard_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
+        start_scroll_capture(sender, { capture_id, capture_start_epoch_ms, tab_id });
+        start_dom_capture(config, capture_id, capture_start_epoch_ms, tab_id, sender);
+        start_clipboard_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+        start_form_submit_capture(sender, capture_id, capture_start_epoch_ms, tab_id, config);
+        start_focus_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+        start_resize_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+        start_fullscreen_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+        start_print_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    }
+    if (config.storage_change_count_enabled !== false) {
+        start_storage_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    }
+    // T098: network_hook / websocket_capture 仅当 capture_network 开启时注入；
+    // 关闭时显式停用，防先前注入的 hook 继续转发事件。
+    if (config.capture_network) {
+        start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id, config.capture_response_body);
+        start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    } else {
+        stop_network_hook();
+        stop_websocket_capture();
+    }
+    // T106: 导航类别开关关闭时不启动 visibility（navigation 类别）
+    if (config.nav_count_enabled !== false) {
+        start_visibility_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+    }
 
     logger.debug('All capture modules started', {
         modules: ['mouse', 'keyboard', 'scroll', 'dom', 'storage', 'network_hook', 'clipboard', 'form_submit', 'focus', 'visibility', 'resize', 'fullscreen', 'print', 'websocket'],
@@ -136,6 +155,7 @@ function start_capture(config: CaptureConfig): void {
 
 function handle_popstate_navigation(): void {
     if (!is_capturing) return;
+    if (!nav_enabled) return; // T106: 导航类别关闭时不发 route_change
     const new_url = window.location.href;
     if (new_url === last_url) return;
     const from = last_url;
@@ -155,6 +175,7 @@ function handle_popstate_navigation(): void {
 
 function handle_hashchange_navigation(event: HashChangeEvent): void {
     if (!is_capturing) return;
+    if (!nav_enabled) return; // T106: 导航类别关闭时不发 route_change
     const from = event.oldURL;
     const to = event.newURL;
     last_url = to;
@@ -173,6 +194,7 @@ function handle_hashchange_navigation(event: HashChangeEvent): void {
 
 function handle_dom_ready(): void {
     if (!is_capturing) return;
+    if (!nav_enabled) return; // T106: 导航类别关闭时不发 dom_ready
     const data: DomReadyData = {
         url: window.location.href,
         title: document.title,

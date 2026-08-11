@@ -1,0 +1,18 @@
+{
+  "tid": "t106",
+  "attempt": 1,
+  "execution_id": "05291502e9ad4c369b10fac4e319037a",
+  "status": "done",
+  "branch": "t106_popup_category_capture_gates",
+  "base_sha": "adba86003c7ce829aa0ac98bbc11022b9d038fc0",
+  "tests": "npm test：1225 passed",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / test PASS（R1-2 修生产者覆盖后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/popup_category_capture_gates.test.ts 'AC-001 capture_network 映射且 SW 尊重' 通过"],
+    "AC-002": ["tests/unit/popup_category_capture_gates.test.ts 'AC-002 类别开关全生产者门控'（event/nav/error/cookie/storage）通过"],
+    "AC-003": ["tests/unit/popup_category_capture_gates.test.ts 'AC-003 开关缺省视为开启' 通过"]
+  },
+  "pending": ["p019"],
+  "findings": []
+}

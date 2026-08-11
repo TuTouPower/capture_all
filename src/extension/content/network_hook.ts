@@ -417,7 +417,3 @@ export function stop_network_hook(): void {
         message_listener = null;
     }
 }
-
-export function is_network_hook_active(): boolean {
-    return is_capturing;
-}

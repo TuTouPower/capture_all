@@ -8,19 +8,12 @@ import type {
     RuntimeExceptionData,
     StorageChangeData,
     CookieChangeData,
-    CaptureStartedData,
-    CaptureStoppedData,
-    CaptureConfigChangedData,
-    PermissionMissingData,
-    DebuggerAttachStatusData,
-    BodyCaptureStatusChangedData,
 } from '../../shared/types';
 import {
     DB_NAME,
     DB_VERSION,
     STORE_NAMES,
     MAX_SESSION_SIZE_BYTES,
-    FLUSH_BATCH_SIZE,
     FLUSH_INTERVAL_MS,
 } from '../../shared/constants';
 
@@ -315,39 +308,6 @@ export async function write_error_events(batch: RuntimeExceptionData[]): Promise
     await flush_store(STORE_NAMES.ERROR_EVENTS);
 }
 
-export async function write_storage_changes(batch: StorageChangeData[]): Promise<void> {
-    const buf = get_buffer(STORE_NAMES.STORAGE_CHANGES);
-    buf.push(...(batch as unknown as CaptureEvent[]));
-    if (buf.length >= FLUSH_BATCH_SIZE) {
-        await flush_store(STORE_NAMES.STORAGE_CHANGES);
-    }
-}
-
-export async function write_cookie_changes(batch: CookieChangeData[]): Promise<void> {
-    const buf = get_buffer(STORE_NAMES.COOKIE_CHANGES);
-    buf.push(...(batch as unknown as CaptureEvent[]));
-    if (buf.length >= FLUSH_BATCH_SIZE) {
-        await flush_store(STORE_NAMES.COOKIE_CHANGES);
-    }
-}
-
-export async function write_lifecycle_events(
-    batch: (
-        | CaptureStartedData
-        | CaptureStoppedData
-        | CaptureConfigChangedData
-        | PermissionMissingData
-        | DebuggerAttachStatusData
-        | BodyCaptureStatusChangedData
-    )[],
-): Promise<void> {
-    const buf = get_buffer(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS);
-    buf.push(...(batch as unknown as CaptureEvent[]));
-    if (buf.length >= FLUSH_BATCH_SIZE) {
-        await flush_store(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS);
-    }
-}
-
 // ============================================================
 // Generic flush
 // ============================================================
@@ -557,32 +517,3 @@ export async function get_lifecycle_events(
 ): Promise<CaptureEvent[]> {
     return query_by_store<CaptureEvent>(STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, capture_id, offset, limit);
 }
-
-// ============================================================
-// Deprecated aliases — backward compatibility
-// ============================================================
-
-/** @deprecated Use create_capture */
-export const create_session = create_capture;
-/** @deprecated Use get_capture */
-export const get_session = get_capture as unknown as (id: string) => Promise<import('../../shared/types').Session | null>;
-/** @deprecated Use list_captures */
-export const list_sessions = list_captures as unknown as () => Promise<import('../../shared/types').Session[]>;
-/** @deprecated Use update_capture */
-export const update_session = update_capture as unknown as (session: import('../../shared/types').Session) => Promise<void>;
-/** @deprecated Use delete_capture */
-export const delete_session = delete_capture;
-/** @deprecated Use write_network_requests */
-export const write_requests = write_network_requests;
-/** @deprecated Use write_console_events */
-export const write_logs = write_console_events;
-/** @deprecated Use write_error_events */
-export const write_errors = write_error_events;
-/** @deprecated Use get_capture_size */
-export const get_session_size = get_capture_size;
-/** @deprecated Use get_events_by_category */
-export const get_events = get_events_by_category;
-/** @deprecated Use get_console_events */
-export const get_console_logs = get_console_events;
-/** @deprecated Use get_error_events */
-export const get_error_logs = get_error_events;

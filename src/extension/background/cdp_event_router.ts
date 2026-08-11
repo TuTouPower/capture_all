@@ -12,10 +12,6 @@ export function unregister_session(session_id: string): void {
     attached_sessions.delete(session_id);
 }
 
-export function has_session(session_id: string): boolean {
-    return attached_sessions.has(session_id);
-}
-
 export function get_attached_sessions(): ReadonlySet<string> {
     return attached_sessions;
 }

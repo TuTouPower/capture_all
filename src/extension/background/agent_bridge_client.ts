@@ -20,14 +20,6 @@ let runtime_instance_id = '';
 let session_token: string | null = null;
 let enrolled = false;
 
-export function set_bridge_instance_id_for_tests(instance_id: string): void {
-    runtime_instance_id = instance_id;
-}
-
-export function get_bridge_instance_id(): string {
-    return runtime_instance_id;
-}
-
 export function set_bridge_session_for_tests(token: string | null): void {
     session_token = token;
     if (token) enrolled = true;

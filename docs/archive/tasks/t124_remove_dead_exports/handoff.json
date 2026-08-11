@@ -1,0 +1,19 @@
+{
+  "tid": "t124",
+  "attempt": 1,
+  "execution_id": "92ab1bc0c0bd484aa15cee85f30a59ea",
+  "status": "done",
+  "branch": "t124_remove_dead_exports",
+  "base_sha": "6c562ac1af850795109aacd010714f855c2ad15b",
+  "tests": "vitest run: 129 files / 1368 tests passed",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS（0 finding）",
+  "ac_evidence": {
+    "AC-001": ["grep src+tests 验证范围符号无 import 引用；storage.test.ts 的 get_session_size 迁移到 get_capture_size"],
+    "AC-002": ["detect_locale 私有化(i18n.ts:365 去 export)，385 行内部调用保留，tsc 通过"],
+    "AC-003": ["network_webrequest.ts 删除 create_webrequest_handlers(含 3 处 require())，grep 无 require( 残留"],
+    "AC-004": ["npm test 129 files/1368 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

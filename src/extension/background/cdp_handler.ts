@@ -422,7 +422,7 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
         const meta = state.cdp_request_meta.get(req_key);
         if (meta) {
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
-            logger.debug('cdp_primary_emitted', {
+            logger.debug('cdp_primary_event_emitted', {
                 url: meta.url?.slice(0, 120),
                 method: meta.method,
                 body_status,

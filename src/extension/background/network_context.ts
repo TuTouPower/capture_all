@@ -98,7 +98,6 @@ export class NetworkCaptureContext {
     pending_requests: Map<string, PendingRequest> = new Map();
     cdp_request_meta: Map<string, CdpRequestMeta> = new Map();
     cdp_body_results: Map<string, CdpBodyResult> = new Map();
-    cdp_primary_emitted: Set<string> = new Set();
     ws_connections: Map<string, WsConnectionMeta> = new Map();
     streaming_requests: Set<string> = new Set();
     finished_before_stream: Set<string> = new Set();
@@ -119,7 +118,6 @@ export class NetworkCaptureContext {
         this.pending_requests.clear();
         this.cdp_request_meta.clear();
         this.cdp_body_results.clear();
-        this.cdp_primary_emitted.clear();
         this.ws_connections.clear();
         this.streaming_requests.clear();
         this.finished_before_stream.clear();

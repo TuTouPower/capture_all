@@ -1,0 +1,18 @@
+{
+  "tid": "t117",
+  "attempt": 1,
+  "execution_id": "7aec43d5b6db46978c745e7e9c5a9615",
+  "status": "done",
+  "branch": "t117_dead_code_shared_helper_cleanup",
+  "base_sha": "28ae56f5ae23947db17962add84e81145c2c6269",
+  "tests": "npm test 全量：128 文件 1354 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 2 轮 PASS（code+test 双路；round 1 code important f001 已修）",
+  "ac_evidence": {
+    "AC-001": ["grep cdp_primary_emitted：src/ 零命中，tests/ 仅「字段已删除」负向断言", "tests/unit/cdp_state_cleanup.test.ts 负向断言通过", "全量 128 文件 1354 用例回归绿"],
+    "AC-002": ["src/extension/content/content_nonce.ts 单一 generate_nonce 实现", "network_hook/websocket_capture/storage_capture 三通道 import 复用", "nonce 相关测试全绿（content_postmessage_nonce/websocket_capture/storage_capture）"],
+    "AC-003": ["src/extension/dashboard/dashboard_detail.ts render_dt_rail 用 esc", "tests/unit/detail_search_preserve_input.test.ts AC-003 断言（a&gt;b&#39;c 向量）通过"]
+  },
+  "pending": [],
+  "findings": []
+}

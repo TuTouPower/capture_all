@@ -23,6 +23,7 @@
 | detail_search_preserve_input | t108 | 2026-08-11 |
 | archive_body_ref_consistency | t109 | 2026-08-11 |
 | test_case_coverage_pack | t116 | 2026-08-11 |
+| dead_code_shared_helper_cleanup | t117 | 2026-08-11 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

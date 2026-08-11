@@ -44,6 +44,15 @@ describe('详情时间线搜索保留输入 (T108)', () => {
         expect(html).toContain('value="a&quot;b"');
     });
 
+    it('AC-003: value 转义与统一 esc 一致（含 > 与 单引号 向量）', () => {
+        // p023：内联 replace 链少转 `>` 与 `'`，统一到 esc 后输出与 esc 一致
+        document.body.innerHTML = '<input id="dtSearch" value="a&gt;b&#39;c">';
+        const html = render_dt_rail();
+        expect(html).toContain('value="a&gt;b&#39;c"');
+        expect(html).not.toContain('value="a>b');
+        expect(html).not.toContain('value="a>b\'c"');
+    });
+
     it('AC-002: 输入搜索词后可见列表仅含匹配事件（p022）', () => {
         document.body.innerHTML = '<input id="dtSearch">';
         set_detail_events([

@@ -2,11 +2,11 @@
 tid: "t117"
 slug: "dead_code_shared_helper_cleanup"
 title: "清理死代码并抽取共享 helper"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t117_dead_code_shared_helper_cleanup"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "28ae56f5ae23947db17962add84e81145c2c6269"
 depends_on: ""
 conflicts_with: ""
 note: "p006 cdp_primary_emitted 死 Set + p011 generate_nonce 三通道重复 + p023 detail 转义未复用 esc"
@@ -44,6 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-11 16:06 UTC+8)
+
+code 路 1 条 important，test 路 0 finding。
+
+| finding_id | severity | status | rationale | fix_ref |
+|------------|----------|--------|-----------|---------|
+| t117_code_f001 | important | 已修 | cdp_state_cleanup.test.ts:47 fixture 残留 `cdp_primary_emitted: undefined` 占位（grep 命中 + 断言恒真）；删除占位行，负向断言保留 | tests/unit/cdp_state_cleanup.test.ts:47 |
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,8 +68,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 grep 无残留（负向断言除外）；AC-002 共享 helper 三通道复用；AC-003 esc 转义断言。`handoff.json` 的 `ac_evidence` 逐条给出引用。
 
 ### Reviewer verdict
 
@@ -69,15 +77,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：FAIL（important f001：cdp_state_cleanup fixture 残留占位，已修）
+- Round 1 test：PASS（0 finding）
+- Round 2 code：PASS（0 新 finding）
+- Round 2 test：PASS（0 新 finding）
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- N/A
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+三处代码质量遗留清理完成：死 Set 删除、generate_nonce 收敛共享、detail 转义统一 esc。全量 vitest 128 文件 1354 用例绿，tsc 0 错误。无新 pending/findings。

@@ -7,6 +7,7 @@
 import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
 import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
+import { generate_nonce } from './content_nonce';
 
 const SIGNAL = '__capture_all_network_hook__';
 
@@ -269,17 +270,6 @@ let capture_response_body = true;
 let _nonce_override: string | null = null;
 export function _set_nonce_for_test(nonce: string | null): void {
     _nonce_override = nonce;
-}
-function generate_nonce(): string {
-    // T097: crypto.randomUUID 仅 secure context 可用；http 页 fallback Math.random。
-    try {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-    } catch {
-        // ignore
-    }
-    return `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 let send_event: (event: CaptureEvent, data: NetworkRequestData) => void;

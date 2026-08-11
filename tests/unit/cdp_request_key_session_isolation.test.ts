@@ -61,7 +61,6 @@ function make_state(emitted: any[]): CdpHandlerState {
         pending_requests: new Map(),
         cdp_request_meta: new Map(),
         cdp_body_results: new Map(),
-        cdp_primary_emitted: new Set(),
         ws_connections: new Map(),
         streaming_requests: new Set(),
         finished_before_stream: new Set(),

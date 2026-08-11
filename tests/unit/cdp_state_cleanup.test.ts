@@ -43,8 +43,6 @@ function make_state(emitted: any[]): CdpHandlerState {
         pending_requests: new Map(),
         cdp_request_meta: new Map(),
         cdp_body_results: new Map(),
-        // @ts-expect-error - 已删除字段，验证不存在
-        cdp_primary_emitted: undefined,
         ws_connections: new Map(),
         streaming_requests: new Set(),
         finished_before_stream: new Set(),

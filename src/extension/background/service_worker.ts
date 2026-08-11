@@ -5,6 +5,7 @@ import {
     delete_capture as storage_delete_capture,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
+    check_storage_limit,
     start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
@@ -224,6 +225,10 @@ async function handle_message(message: any, sender?: any): Promise<any> {
         case 'list_captures':
             return storage_list_captures();
         case 'delete_capture':
+            // T110: 活跃采集不可删除
+            if (is_capturing && current_capture_id === message.capture_id) {
+                return { success: false, error: 'Cannot delete an active capture' };
+            }
             await storage_delete_capture(message.capture_id);
             return { success: true };
         case 'export_json':
@@ -604,7 +609,7 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     return { success: true };
 }
 
-async function stop_capture(): Promise<{ success: boolean }> {
+async function stop_capture(reason: CaptureStoppedData['reason'] = 'user_stop'): Promise<{ success: boolean }> {
     // 串行化：等待前一次 start/stop 完成
     return capture_state.run_exclusive(async () => {
         if (!is_capturing && capture_state.get_state().phase === 'idle') {
@@ -612,7 +617,7 @@ async function stop_capture(): Promise<{ success: boolean }> {
         }
         const stop_handle = capture_state.begin_stop();
         try {
-            const result = await stop_capture_inner();
+            const result = await stop_capture_inner(reason);
             if (result.success) {
                 stop_handle.commit();
             }
@@ -625,7 +630,7 @@ async function stop_capture(): Promise<{ success: boolean }> {
     });
 }
 
-async function stop_capture_inner(): Promise<{ success: boolean }> {
+async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_stop'): Promise<{ success: boolean }> {
     if (!is_capturing) {
         return { success: true };
     }
@@ -694,7 +699,7 @@ async function stop_capture_inner(): Promise<{ success: boolean }> {
         });
         const stopped_data: CaptureStoppedData = {
             capture_id: current_capture_id,
-            reason: 'user_stop',
+            reason,
             duration_ms,
             stats: current_capture.stats,
         };
@@ -745,7 +750,7 @@ async function persist_stats(): Promise<void> {
     }
 }
 
-async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean }> {
+async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean; error?: string }> {
     if (!is_capturing || !current_capture_id || !current_capture) return { success: true };
 
     // Route fallback body hook events separately
@@ -767,6 +772,11 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
     }
     if (typeof event.relative_time_ms !== 'number' || event.relative_time_ms > 10_000_000_000) {
         event.relative_time_ms = Date.now() - start_time;
+    }
+
+    // T110: 存储限额超限时停止采集，不再接受新事件写入
+    if (await check_limit_and_stop()) {
+        return { success: false, error: 'storage_limit_reached' };
     }
 
     try {
@@ -858,8 +868,20 @@ function normalize_network_request(request: NetworkRequestData): void {
     if (request.body_capture_mode === undefined) request.body_capture_mode = 'none';
 }
 
+// T110: 存储限额超限检查，超限则停止采集。返回 true 表示已停止（调用方应放弃写入）。
+async function check_limit_and_stop(): Promise<boolean> {
+    if (!current_capture_id) return false;
+    if (await check_storage_limit(current_capture_id)) {
+        logger.warn('Storage limit reached, stopping capture', { capture_id: current_capture_id });
+        await stop_capture('storage_limit');
+        return true;
+    }
+    return false;
+}
+
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    if (await check_limit_and_stop()) return;
 
     const event = 'event' in payload ? (payload as { event: CaptureEvent; data: NetworkRequestData | WsFrameData }).event : null;
     const data = 'event' in payload ? (payload as { data: NetworkRequestData | WsFrameData }).data : (payload as NetworkRequestData);
@@ -894,6 +916,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 
 async function handle_console_log(event: CaptureEvent): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    if (await check_limit_and_stop()) return;
     const data = event.data as ConsoleEventData;
     if (!data) return;
     if (!current_capture_id) {
@@ -953,6 +976,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         url: tab_url,
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...switch_event, data: switch_data }]);
     if (!capture_state.is_active_generation(gen)) return;
 
@@ -1042,6 +1066,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         url: tab.url || tab.pendingUrl || '',
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...event, data }]);
 });
 
@@ -1073,6 +1098,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         url: new_url,
         source: 'background',
     });
+    if (await check_limit_and_stop()) return; // T110: 限额停止
     await write_events([{ ...event, data }]);
 
     // Retry CDP-based capture if navigating from restricted URL to normal page

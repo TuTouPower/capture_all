@@ -506,7 +506,7 @@ export interface CaptureStartedData {
 
 export interface CaptureStoppedData {
     capture_id: string;
-    reason: 'user_stop' | 'max_duration' | 'error';
+    reason: 'user_stop' | 'max_duration' | 'error' | 'storage_limit';
     duration_ms: number;
     stats: object;
 }

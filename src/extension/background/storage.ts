@@ -464,6 +464,11 @@ export function get_capture_size(capture_id: string): number {
     return bytes_written.get(capture_id) || 0;
 }
 
+// T110 测试钩子：jsdom 下直接设 capture 写入字节数
+export function set_capture_size_for_test(capture_id: string, size: number): void {
+    bytes_written.set(capture_id, size);
+}
+
 export async function check_storage_limit(capture_id: string): Promise<boolean> {
     const size = get_capture_size(capture_id);
     return size >= MAX_SESSION_SIZE_BYTES;

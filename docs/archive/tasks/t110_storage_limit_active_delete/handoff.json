@@ -1,0 +1,18 @@
+{
+  "tid": "t110",
+  "attempt": 1,
+  "execution_id": "6ee2583352fe490793124f7ab6b32a73",
+  "status": "done",
+  "branch": "t110_storage_limit_active_delete",
+  "base_sha": "ef496b886c6af8b698814fbb92869568016fac55",
+  "tests": "npm test：1243 passed（vitest tests/unit 122 文件）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS / test PASS（R2 f003 导航写路径接入限额后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/storage_limit_active_delete.test.ts 'AC-001 超限时不再接受新事件写入' + 'AC-001b handle_event 超限拒写且停止' + 'AC-001c 超限前导航正常写入' + 'AC-001d 超限后导航写入被拒且停止' 通过"],
+    "AC-002": ["tests/unit/storage_limit_active_delete.test.ts 'AC-002 active capture 不可删除' + 'AC-002b 非活跃可删除' 通过"],
+    "AC-003": ["tests/unit/storage_limit_active_delete.test.ts 'AC-003 cleanup_stale 终态化陈旧 active（status 非 active 且 update_capture 被调）' 通过"]
+  },
+  "pending": ["p024"],
+  "findings": []
+}

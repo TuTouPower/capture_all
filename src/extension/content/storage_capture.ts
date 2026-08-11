@@ -27,7 +27,8 @@ let message_listener: ((e: MessageEvent) => void) | null = null;
 const SIGNAL = '__capture_all_storage__';
 
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
-function build_page_script(secret: string): string {
+// 导出便于测试 eval 验证注入脚本级重注入（与 websocket_capture 一致）。
+export function build_page_script(secret: string): string {
     return `(function() {
     // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
     if (window.__capture_all_storage_installed__) {

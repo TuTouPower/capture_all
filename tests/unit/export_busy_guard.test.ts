@@ -135,4 +135,50 @@ describe('export_capture 防重入 (p027)', () => {
 
         expect(download_blob).toHaveBeenCalledTimes(2);
     });
+
+    it('json 格式导出 in-flight 防重入（非 archive 分支，p030）', async () => {
+        const { set_user_config, export_capture } = await import('../../src/extension/dashboard/dashboard_shared');
+        set_user_config({
+            export_capture_directory: '',
+            export_filename_template: '{capture_id}.{ext}',
+            export_log_directory: '',
+            system_time_timezone: 'UTC+8',
+            inline_text_max_bytes: 32768,
+        } as any);
+
+        // sendMessage（export_json action）挂起 → in-flight
+        let resolve_msg: (v: any) => void = () => {};
+        send_message_impl = vi.fn(() => new Promise((r) => { resolve_msg = r; }));
+
+        const first = export_capture('cap_json', 'json');
+        // in-flight 期间重复触发 → 拦截
+        const second = export_capture('cap_json', 'json');
+        await second;
+
+        resolve_msg({ success: true, json: '{"ok":1}' });
+        await first;
+
+        // 单次 export action + 单次下载
+        const json_calls = (globalThis as any).chrome.runtime.sendMessage.mock.calls.filter((c: any) => c[0].action === 'export_json');
+        expect(json_calls).toHaveLength(1);
+        expect(download_blob).toHaveBeenCalledTimes(1);
+    });
+
+    it('har 格式导出串行两次均执行（格式无关 guard 释放，p030）', async () => {
+        const { set_user_config, export_capture } = await import('../../src/extension/dashboard/dashboard_shared');
+        set_user_config({
+            export_capture_directory: '',
+            export_filename_template: '{capture_id}.{ext}',
+            export_log_directory: '',
+            system_time_timezone: 'UTC+8',
+            inline_text_max_bytes: 32768,
+        } as any);
+
+        await export_capture('cap_har', 'har');
+        await export_capture('cap_har', 'har');
+
+        expect(download_blob).toHaveBeenCalledTimes(2);
+        const har_calls = (globalThis as any).chrome.runtime.sendMessage.mock.calls.filter((c: any) => c[0].action === 'export_har');
+        expect(har_calls).toHaveLength(2);
+    });
 });

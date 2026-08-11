@@ -2,7 +2,8 @@
 // tests/unit/storage_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { CaptureEvent, StorageChangeData } from '../../src/shared/types';
-import { start_storage_capture, stop_storage_capture, _set_nonce_for_test, _set_secret_for_test } from '../../src/extension/content/storage_capture';
+import { start_storage_capture, stop_storage_capture, _set_nonce_for_test, _set_secret_for_test, build_page_script } from '../../src/extension/content/storage_capture';
+import { verify_payload } from '../../src/extension/content/content_hmac';
 import { sign_message, sign_message_with_secret, TEST_SECRET } from '../support/helpers/signed_message';
 
 const SIGNAL = '__capture_all_storage__';
@@ -103,5 +104,54 @@ describe('storage_capture', () => {
             data: sign_message_with_secret({ source: SIGNAL, nonce: NONCE, storage_type: 'local', action: 'set', key: 'k2', value_length: 1 }, TEST_SECRET),
         }));
         expect(sender).toHaveBeenCalledTimes(1);
+    });
+
+    it('stop→start 重注入后注入脚本持新 SECRET（storage 注入脚本级，p031）', async () => {
+        // jsdom 的 localStorage.setItem 不可覆盖，替换为可赋值 mock（注入脚本 hook 目标）
+        const store: Record<string, string> = {};
+        const mock_storage = {
+            setItem: (k: string, v: string) => { store[k] = v; },
+            removeItem: (k: string) => { delete store[k]; },
+            clear: () => { for (const k in store) delete store[k]; },
+        };
+        const orig_ls = Object.getOwnPropertyDescriptor(window, 'localStorage');
+        Object.defineProperty(window, 'localStorage', { value: mock_storage, configurable: true });
+        try {
+            // 首轮注入：SECRET-s1 闭包
+            (window as any).__capture_all_storage_nonce__ = NONCE;
+            (window as any).__capture_all_storage_installed__ = false;
+            // eslint-disable-next-line no-eval
+            eval(build_page_script('secret-s1'));
+
+            const capture_posted = async (): Promise<any[]> => {
+                const msgs: any[] = [];
+                const listener = (e: MessageEvent) => { if (e.data?.source === SIGNAL) msgs.push(e.data); };
+                window.addEventListener('message', listener);
+                window.localStorage.setItem('probe', 'v');
+                // jsdom postMessage 事件异步派发
+                await new Promise((r) => setTimeout(r, 10));
+                window.removeEventListener('message', listener);
+                return msgs;
+            };
+
+            // 首轮：注入脚本（SECRET-s1）签名
+            const msgs1 = await capture_posted();
+            expect(msgs1.length).toBe(1);
+            expect(verify_payload('secret-s1', msgs1[0])).toBe(true);
+
+            // 重注入（已安装 → 还原上次 hook 后重装，持 SECRET-s2）
+            (window as any).__capture_all_storage_installed__ = true;
+            // eslint-disable-next-line no-eval
+            eval(build_page_script('secret-s2'));
+
+            const msgs2 = await capture_posted();
+            expect(msgs2.length).toBe(1);
+            expect(verify_payload('secret-s2', msgs2[0])).toBe(true);
+            // 旧 SECRET 不再匹配（跨采集旧签名失效）
+            expect(verify_payload('secret-s1', msgs2[0])).toBe(false);
+        } finally {
+            if (orig_ls) Object.defineProperty(window, 'localStorage', orig_ls);
+            else delete (window as any).localStorage;
+        }
     });
 });

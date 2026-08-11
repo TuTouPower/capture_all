@@ -108,7 +108,7 @@ function render_detail_tab(showInsp: boolean): string {
     </div>`;
 }
 
-function render_dt_rail(): string {
+export function render_dt_rail(): string {
     const detail_events = get_detail_events();
     const dt_quick = get_dt_quick();
     const counts: Record<string, number> = { all: detail_events.length };
@@ -125,7 +125,7 @@ function render_dt_rail(): string {
         ['dom', 'dom', 'DOM', 'var(--src-dom)'],
     ];
     return `<aside class="dt-rail scroll">
-        <div class="dt-rail-search">${I.search}<input placeholder="搜索事件、URL、Storage key…" id="dtSearch"><kbd>⌘K</kbd></div>
+        <div class="dt-rail-search">${I.search}<input placeholder="搜索事件、URL、Storage key…" id="dtSearch" value="${String((document.getElementById('dtSearch') as HTMLInputElement | null)?.value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"><kbd>⌘K</kbd></div>
         <div class="dt-rail-sec">
             <div class="dt-rail-hd">快速筛选</div>
             ${quick.map(([k, ic, lbl, color]) => `<button class="qfilter" data-quick="${k}" data-on="${dt_quick === k ? 1 : 0}">

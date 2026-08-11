@@ -44,8 +44,6 @@ import {
     _deferred_cdp_index_for_test,
 } from '../../src/extension/background/network_capture';
 import { register_session, clear_sessions } from '../../src/extension/background/cdp_event_router';
-import { handle_cdp_event, type CdpHandlerState } from '../../src/extension/background/cdp_handler';
-import { create_stream_buffer } from '../../src/extension/background/stream_buffer';
 
 function make_cfg(overrides: Record<string, any> = {}) {
     return {
@@ -232,6 +230,17 @@ describe('t112 finished_before_stream 生命周期', () => {
         const child_calls = body_calls.filter((c) => c.sessionId === 'child_session');
         expect(child_calls.length).toBe(50);
     });
+
+    it('loadingFailed 无 meta 后 marker 清理（t119 迁移：原 cdp_handler 直驱）', async () => {
+        await start_capture();
+        // loadingFinished 无 meta → marker 写入
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'lf' });
+        expect(_finished_before_stream_for_test.has('root:lf')).toBe(true);
+
+        // loadingFailed → marker 清理（生产分支 finished_before_stream.delete）
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFailed', { requestId: 'lf', errorText: 'ERR' });
+        expect(_finished_before_stream_for_test.has('root:lf')).toBe(false);
+    });
 });
 
 describe('t112 deferred 终态清理（生产 network_capture）', () => {
@@ -303,163 +312,5 @@ describe('t112 deferred 终态清理（生产 network_capture）', () => {
         expect(_finished_before_stream_for_test.has(cdp_a)).toBe(false);
         // entry 保留（pending 还有 cdp_b 未 resolve）
         expect(_deferred_web_requests_for_test.has('dk_m')).toBe(true);
-    });
-});
-
-describe('t112 cdp_handler 复制实现 marker 清理', () => {
-    let state: CdpHandlerState;
-
-    function make_state(emitted: any[], overrides: Record<string, any> = {}): CdpHandlerState {
-        return {
-            is_capturing: true,
-            capture_id: 'cap_t112',
-            start_time: Date.now(),
-            current_tab_id: 1,
-            config: {
-                redact_sensitive_headers: false,
-                redact_url_query: false,
-                redact_data: false,
-                capture_request_body: false,
-                capture_response_body: true,
-                max_body_capture_bytes: 104857600,
-                inline_text_max_bytes: 32768,
-                ...(overrides.config || {}),
-            },
-            dbg_tab_id: 1,
-            dbg_attached_externally: false,
-            pending_requests: new Map(),
-            cdp_request_meta: new Map(),
-            cdp_body_results: new Map(),
-            ws_connections: new Map(),
-            streaming_requests: new Set(),
-            finished_before_stream: new Set(),
-            orphan_timers: new Map(),
-            stream_buffer_instance: create_stream_buffer(() => {}, 1024 * 1024),
-            deferred_web_requests: new Map(),
-            _deferred_cdp_index: new Map(),
-            on_cdp_body_event: () => {},
-            send_to_background: (payload: any) => emitted.push(payload),
-            ...overrides,
-        };
-    }
-
-    beforeEach(() => {
-        vi.useFakeTimers();
-        state = make_state([]);
-        mock_chrome_debugger.reset();
-        vi.clearAllMocks();
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it('capture_response_body=false 早退后 marker 清理', async () => {
-        state = make_state([], { config: { capture_response_body: false } });
-        mock_chrome_debugger.emit_event(
-            { tabId: 1 },
-            'Network.requestWillBeSent',
-            { requestId: 'nb', type: 'Fetch', request: { url: 'https://example.com/nb', method: 'GET', headers: {} } },
-        );
-        // 注意：cdp_handler 直驱走 handle_cdp_event(state)
-        handle_cdp_event({ tabId: 1 }, 'Network.requestWillBeSent', {
-            requestId: 'nb', type: 'Fetch', request: { url: 'https://example.com/nb', method: 'GET', headers: {} },
-        }, state);
-        handle_cdp_event({ tabId: 1 }, 'Network.responseReceived', {
-            requestId: 'nb', response: { url: 'https://example.com/nb', status: 200, headers: {} },
-        }, state);
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'nb' }, state);
-
-        expect(state.finished_before_stream.has('root:nb')).toBe(false);
-    });
-
-    it('SSE 无 metadata 早退后 marker 清理（orphan 兜底）', async () => {
-        // loadingFinished 时无 meta：marker 先写入，orphan 3s 兜底清理
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'sse_nometa' }, state);
-        expect(state.finished_before_stream.has('root:sse_nometa')).toBe(true);
-        await vi.advanceTimersByTimeAsync(3000);
-        expect(state.finished_before_stream.has('root:sse_nometa')).toBe(false);
-    });
-
-    it('loadingFailed 无 meta 后 marker 清理', async () => {
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'lf' }, state);
-        expect(state.finished_before_stream.has('root:lf')).toBe(true);
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFailed', { requestId: 'lf', errorText: 'ERR' }, state);
-        expect(state.finished_before_stream.has('root:lf')).toBe(false);
-    });
-
-    it('orphan 回调早退（事件已被消费）也清理 marker', async () => {
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'orph' }, state);
-        expect(state.finished_before_stream.has('root:orph')).toBe(true);
-
-        // 模拟事件已被 handle_completed 消费：body/meta 已删，仅 orphan timer 残留
-        state.cdp_body_results.delete('root:orph');
-        state.cdp_request_meta.delete('root:orph');
-
-        // orphan 3s 触发：即使 body_result 不存在也须清理 marker
-        await vi.advanceTimersByTimeAsync(3000);
-        expect(state.finished_before_stream.has('root:orph')).toBe(false);
-    }, 5000);
-
-    it('SSE streaming 完成 emit 后 marker 清理', async () => {
-        // requestWillBeSent + responseReceived(event-stream) + loadingFinished
-        // streaming 分支 force_flush + emit 后须删除 marker
-        handle_cdp_event({ tabId: 1 }, 'Network.requestWillBeSent', {
-            requestId: 'sse', type: 'Fetch', request: { url: 'https://example.com/sse', method: 'GET', headers: {} },
-        }, state);
-        handle_cdp_event({ tabId: 1 }, 'Network.responseReceived', {
-            requestId: 'sse', type: 'Fetch',
-            response: { url: 'https://example.com/sse', status: 200, headers: { 'Content-Type': 'text/event-stream' } },
-        }, state);
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'sse' }, state);
-
-        expect(state.finished_before_stream.has('root:sse')).toBe(false);
-    });
-
-    it('deferred 完整解析终态后 marker 清理', async () => {
-        // seed deferred entry：webRequest 侧 pending 与 CDP req_key 关联
-        const cdp_key = 'root:req_dfd2';
-        state.deferred_web_requests.set('dk_1', {
-            pending: {
-                cdp_request_id: 'req_dfd2', tab_id: 1, method: 'GET', url: 'https://example.com/d',
-                timestamp: 1, request_headers: {}, response_headers: {},
-                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
-            },
-            details: { statusCode: 200, timeStamp: 1, requestId: 'req_dfd2' },
-            timer: null as any,
-            pending_cdp_ids: new Set([cdp_key]),
-        });
-        state._deferred_cdp_index.set(cdp_key, new Set(['dk_1']));
-
-        // loadingFinished 无 meta → getResponseBody resolve → try_resolve_deferred 完整解析
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'req_dfd2' }, state);
-        await vi.advanceTimersByTimeAsync(0);
-
-        expect(state.finished_before_stream.has(cdp_key)).toBe(false);
-    });
-
-    it('deferred 多候选兜底分支终态后 marker 清理', async () => {
-        // entry 有多个 CDP 候选：当前候选 resolve 后 pending 仍非空 → 走兜底清理分支
-        const cdp_a = 'root:req_ma';
-        const cdp_b = 'root:req_mb';
-        state.deferred_web_requests.set('dk_m', {
-            pending: {
-                cdp_request_id: 'req_ma', tab_id: 1, method: 'GET', url: 'https://example.com/m',
-                timestamp: 1, request_headers: {}, response_headers: {},
-                request_body: null, request_body_status: 'not_enabled', resource_type: 'xhr',
-            },
-            details: { statusCode: 200, timeStamp: 1, requestId: 'req_ma' },
-            timer: null as any,
-            pending_cdp_ids: new Set([cdp_a, cdp_b]),
-        });
-        state._deferred_cdp_index.set(cdp_a, new Set(['dk_m']));
-
-        // cdp_a resolve → 从 pending 移除后仍有 cdp_b → 兜底清理，不 emit
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFinished', { requestId: 'req_ma' }, state);
-        await vi.advanceTimersByTimeAsync(0);
-
-        expect(state.finished_before_stream.has(cdp_a)).toBe(false);
-        // entry 保留（pending 还有 cdp_b 未 resolve）
-        expect(state.deferred_web_requests.has('dk_m')).toBe(true);
     });
 });

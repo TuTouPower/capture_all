@@ -4,12 +4,12 @@
 
 | slug | task 清单 | 最后更新时间 |
 |------|----------|--------------|
-| user_config | t092 | 2026-08-11 |
+| user_config | t092, t118 | 2026-08-11 |
 | runtime_exception | t093 | 2026-08-11 |
-| network_capture_session_key | t094, t112 | 2026-08-11 |
+| network_capture_session_key | t094, t112, t119 | 2026-08-11 |
 | body_external_poll_stop | t095 | 2026-08-11 |
 | bridge_auto_export_path | t096 | 2026-08-11 |
-| content_postmessage_nonce | t097 | 2026-08-11 |
+| content_postmessage_nonce | t097, t121 | 2026-08-11 |
 | network_hook_config_gate | t098 | 2026-08-11 |
 | sw_cleanup_stale_mutex | t099 | 2026-08-11 |
 | privacy_logger_stack_redact_url | t100, t113, t114 | 2026-08-11 |
@@ -18,10 +18,12 @@
 | network_stop_deferred_timers | t103 | 2026-08-11 |
 | cookie_empty_domain_scope | t104 | 2026-08-11 |
 | content_status_poll_tab_id | t105 | 2026-08-11 |
-| popup_category_capture_gates | t106 | 2026-08-11 |
-| dashboard_export_flush_save_as | t107, t115 | 2026-08-11 |
+| popup_category_capture_gates | t106, t120 | 2026-08-11 |
+| dashboard_export_flush_save_as | t107, t115, t120 | 2026-08-11 |
 | detail_search_preserve_input | t108 | 2026-08-11 |
 | archive_body_ref_consistency | t109 | 2026-08-11 |
+| test_case_coverage_pack | t116 | 2026-08-11 |
+| dead_code_shared_helper_cleanup | t117 | 2026-08-11 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

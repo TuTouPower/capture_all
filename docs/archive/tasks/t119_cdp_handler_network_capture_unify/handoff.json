@@ -1,0 +1,18 @@
+{
+  "tid": "t119",
+  "attempt": 1,
+  "execution_id": "9e6cb00a42a94fdb99b8b494949cfb64",
+  "status": "done",
+  "branch": "t119_cdp_handler_network_capture_unify",
+  "base_sha": "849b739e78b5509c1925838a98abfd2f22d7205c",
+  "tests": "npm test 全量：129 文件 1364 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 4 轮 PASS（code+test 双路；round 1-3 minor 全部已修）",
+  "ac_evidence": {
+    "AC-001": ["cdp_handler.ts 897→117 行：删除 handle_cdp_event/CdpHandlerState 及全部内部事件 handler，仅保留生产引用的辅助/类型/常量", "grep 全仓：无指向废弃事件路径的 import"],
+    "AC-002": ["全量 129 文件 1364 用例回归绿", "tests/unit/t112_finished_before_stream_lifecycle.test.ts（production 段）+ 新增 loadingFailed production 用例", "tests/unit/cdp_response_body_config.test.ts 迁移 production 路径 3 用例", "tests/unit/loading_failed_events.test.ts 迁移 + 新增 loadingFailed 带 meta 用例"],
+    "AC-003": ["grep handle_cdp_event/CdpHandlerState：src/ 仅 network_capture 自身 handler 与注释，无废弃路径引用", "npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

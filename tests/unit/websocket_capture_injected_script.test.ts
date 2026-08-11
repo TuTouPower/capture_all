@@ -2,7 +2,8 @@
 // tests/unit/websocket_capture_injected_script.test.ts
 // 验证 PAGE_SCRIPT 注入脚本行为：单 listener、UTF-8 字节、removeEventListener 透传
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { start_websocket_capture, stop_websocket_capture, build_page_script, _set_nonce_for_test } from '../../src/extension/content/websocket_capture';
+import { start_websocket_capture, stop_websocket_capture, build_page_script, _set_nonce_for_test, _set_secret_for_test } from '../../src/extension/content/websocket_capture';
+import { TEST_SECRET } from '../support/helpers/signed_message';
 
 const SIGNAL = '__capture_all_ws__';
 const NONCE = 'test-nonce';
@@ -67,8 +68,9 @@ describe('websocket_capture 注入脚本', () => {
         // T097: 注入脚本从 window 动态读 nonce，测试先设 window 变量
         (window as any).__capture_all_ws_nonce__ = NONCE;
         // eslint-disable-next-line no-eval
-        eval(build_page_script());
+        eval(build_page_script(TEST_SECRET));
         _set_nonce_for_test(NONCE);
+        _set_secret_for_test(TEST_SECRET);
         start_websocket_capture(sender, 'cap1', Date.now(), 1);
     });
 

@@ -78,6 +78,10 @@ async function wait_flush(): Promise<void> {
 }
 
 describe('service_worker runtime exception → error event sink', () => {
+    beforeEach(() => {
+        mock_chrome_debugger.reset();
+    });
+
     it('AC-001: Runtime.exceptionThrown 后 ERROR_EVENTS 出现 runtime_exception 记录', async () => {
         install_chrome_mock();
         load_user_config.mockResolvedValue({ agent_bridge_enabled: false, log_level: 'error' });
@@ -106,7 +110,8 @@ describe('service_worker runtime exception → error event sink', () => {
         const { get_error_events } = await import('../../src/extension/background/storage');
         const errors = await get_error_events('cap_ex_sink', 0, 100);
         expect(errors.length).toBe(1);
-        expect(errors[0].type).toBe('runtime_exception');
+        // 收敛到 RuntimeExceptionData 已声明字段（error_name/message/capture_id），不访问未声明的 type
+        expect(errors[0].error_name).toBe('TypeError');
         expect(errors[0].message).toContain('TypeError');
         expect(errors[0].capture_id).toBe('cap_ex_sink');
 
@@ -139,7 +144,8 @@ describe('service_worker runtime exception → error event sink', () => {
 
         const { get_console_events } = await import('../../src/extension/background/storage');
         const logs = await get_console_events('cap_ex_console', 0, 100);
-        expect(logs.some((l) => l.type === 'runtime_exception')).toBe(false);
+        // p003: emit exception 后 console store 无任何事件（实现若误写 exception 到 console 即触发失败）
+        expect(logs).toHaveLength(0);
 
         await send_message('stop');
     });

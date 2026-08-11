@@ -156,3 +156,12 @@
     - `repo-template-sync` 状态文件 `sync_state.json` 由消费项目跟踪（模板 gitignore 忽略的是模板仓自身，消费侧需入库）。
     - `.claude/skills/` 忽略规则移除——对齐后为模板 skills 软链，需入库。
 - 替代：无（一次性迁移，非渐进）。
+
+## 020 content 采集认证升级为 per-message HMAC（2026-08-11）
+
+- 背景：content 采集认证依赖存于页面 MAIN world `window.__capture_all_*_nonce__` 的 nonce，页面脚本可直读直写、伪造匹配消息使采集门控退化。t097 曾评估「更强抗伪造需 per-message HMAC，超出本 task」，用户确认采用 per-message HMAC 方案。
+- 选项：A）保留 window nonce 门控；B）per-message HMAC：content 每次 start 生成 secret，内联进注入脚本闭包（不写 window），注入脚本对每条采集消息计算 HMAC-SHA256 签名，content 侧同一同步实现校验；注入脚本每次 start 重注入（先还原上次 hook 再重装）以持有最新 secret。
+- 结论：选 B。签名与校验共用同一同步 HMAC-SHA256 实现（`content_hmac.ts` + 注入脚本内联 `SYNC_HMAC_JS`，测试向量锁定双实现一致）。nonce 门控保留为第一道防线，签名缺失或不匹配即拒收。
+  - **威胁模型边界**：防御对象是「仅读取 window nonce 的页面脚本」（直接全局访问）；对抗性页面（MutationObserver / DOM hook 拦截注入脚本文本）可窃取内联 secret——扩展与页面 MAIN world 同权，无隐藏共享通道，该暴露面不在本方案防御范围。
+  - **断流规避**：注入脚本 guard 语义从「阻止重注入」改为「还原上次 hook 后重装」，保证 stop→start 后注入脚本持最新 secret，采集不断流。
+- 替代：t097 的 window-nonce 门控（保留为第一道防线，未废弃）。

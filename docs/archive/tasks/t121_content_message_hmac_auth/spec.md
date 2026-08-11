@@ -68,7 +68,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- 注入脚本与 content 隔离域共享 secret 的通道：实施期以 `.scratch/` spike 或直接验证确定，成功后删除本标记并注明。
+- ~~注入脚本与 content 隔离域共享 secret 的通道~~ → 已定：content 每次 start 生成 secret，内联进注入脚本闭包（不写 window），注入脚本持 secret 签名、content 持同一 secret 校验；每次 start 重注入（还原上次 hook 后重装）以持有最新 secret。威胁模型边界见 `docs/blueprint/decisions.md` ADR-020。
 
 ### 风险与回退
 

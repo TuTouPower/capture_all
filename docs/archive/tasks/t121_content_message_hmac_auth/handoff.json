@@ -1,0 +1,19 @@
+{
+  "tid": "t121",
+  "attempt": 1,
+  "execution_id": "0c9f1d84dd9240b2b1a51c2d8e41a314",
+  "status": "done",
+  "branch": "t121_content_message_hmac_auth",
+  "base_sha": "0d2b4f4be83c58d16acf3a3a401bf77d61fdb517",
+  "tests": "npm test 全量：131 文件 1375 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 3 轮 PASS（code+test 双路；round 1 critical/important 全部已修）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/content_hmac_vectors.test.ts：TS/JS 双实现对照标准向量", "tests/unit/content_postmessage_nonce.test.ts AC-001s：secret 不写 window 全局、仅读 nonce 消息被拒", "tests/unit/content_postmessage_nonce.test.ts T121e2e：注入脚本 fetch hook 真实签名被 TS verify 接受"],
+    "AC-002": ["tests/unit/content_postmessage_nonce.test.ts AC-002b：正确 nonce 签名缺失/不匹配被拒", "tests/unit/storage_capture.test.ts / websocket_capture_page.test.ts：正确 nonce 签名缺失被拒"],
+    "AC-003": ["tests/unit/content_postmessage_nonce.test.ts AC-003s：secret 旋转旧签名失效", "tests/unit/content_postmessage_nonce.test.ts T121restart：stop→start 重注入持新 SECRET 不断流", "tests/unit/storage_capture.test.ts：secret 旋转新签接受旧签被拒"],
+    "AC-004": ["三通道注入脚本统一 sign_str + content verify_payload 校验", "全量回归绿（network/ws/storage 通道既有测试保留为 nonce 基线）"]
+  },
+  "pending": ["p031"],
+  "findings": []
+}

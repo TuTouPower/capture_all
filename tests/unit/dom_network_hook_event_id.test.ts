@@ -4,7 +4,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { CaptureEvent, InputEventData, NetworkRequestData } from '../../src/shared/types';
 import { start_dom_capture, stop_dom_capture } from '../../src/extension/content/dom_capture';
-import { start_network_hook, stop_network_hook, _set_nonce_for_test } from '../../src/extension/content/network_hook';
+import { start_network_hook, stop_network_hook, _set_nonce_for_test, _set_secret_for_test } from '../../src/extension/content/network_hook';
+import { sign_message, TEST_SECRET } from '../support/helpers/signed_message';
 
 describe('dom_capture 与 network_hook 事件含 event_id', () => {
     let events: Array<CaptureEvent & InputEventData>;
@@ -16,12 +17,14 @@ describe('dom_capture 与 network_hook 事件含 event_id', () => {
         stop_dom_capture();
         stop_network_hook();
         _set_nonce_for_test('test-nonce');
+        _set_secret_for_test(TEST_SECRET);
     });
 
     afterEach(() => {
         stop_dom_capture();
         stop_network_hook();
         _set_nonce_for_test('test-nonce');
+        _set_secret_for_test(null);
     });
 
     function dispatch_input(target: Element): void {
@@ -65,11 +68,11 @@ describe('dom_capture 与 network_hook 事件含 event_id', () => {
         };
         start_network_hook(sender, 'cap2', Date.now(), 2);
 
-        // 直接 emit 模拟 page script postMessage
+        // 直接 emit 模拟 page script postMessage（带 T121 签名）
         window.dispatchEvent(new MessageEvent('message', {
             origin: window.location.origin,
             source: window,
-            data: {
+            data: sign_message({
                 source: '__capture_all_network_hook__',
                 nonce: 'test-nonce',
                 method: 'GET',
@@ -77,7 +80,7 @@ describe('dom_capture 与 network_hook 事件含 event_id', () => {
                 status: 200,
                 duration_ms: 10,
                 response_body_status: 'failed',
-            },
+            }),
         }));
 
         expect(net_events.length).toBeGreaterThanOrEqual(1);

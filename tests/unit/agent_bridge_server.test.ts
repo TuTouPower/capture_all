@@ -1947,6 +1947,51 @@ describe('auto export path 净化 (T096)', () => {
         }
     });
 
+    it('AC-002b: har 是合法 format，写出 .har 文件', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-har-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const result = await run_export_with_format('har');
+            expect(result.ok).toBe(true);
+            expect(result.data.file_path).toBe(join(export_dir, 'session-x.har'));
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
+    it('AC-002c: 17 字符非法 format 回退 json', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-longfmt-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const result = await run_export_with_format('a'.repeat(17));
+            expect(result.ok).toBe(true);
+            expect(result.data.file_path).toBe(join(export_dir, 'session-x.json'));
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
+    it('AC-002d: 大写 format 归一为小写扩展名', async () => {
+        const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-upper-'));
+        const previous = process.env.CAPTURE_ALL_EXPORT_DIR;
+        process.env.CAPTURE_ALL_EXPORT_DIR = export_dir;
+
+        try {
+            const result = await run_export_with_format('JSON');
+            expect(result.ok).toBe(true);
+            expect(result.data.file_path).toBe(join(export_dir, 'session-x.json'));
+        } finally {
+            if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
+            else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
+        }
+    });
+
     it('AC-003: resolve 后绝对路径 realpath 前缀等于导出目录 realpath', async () => {
         const export_dir = await mkdtemp(join(tmpdir(), 'capture-all-realpath-'));
         const previous = process.env.CAPTURE_ALL_EXPORT_DIR;

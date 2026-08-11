@@ -99,6 +99,12 @@ describe('存储限额 + 禁删活跃 (T110)', () => {
 
         const del = await send_message('delete_capture', { capture_id: 'cap_active' });
         expect(del.success).toBe(false);
+
+        // p024 分句：delete 被拒后 capture 记录仍在存储
+        const { get_capture } = await import('../../src/extension/background/storage');
+        const rec = await get_capture('cap_active');
+        expect(rec).not.toBeNull();
+        expect(rec!.capture_id).toBe('cap_active');
     });
 
     it('AC-002b: 非活跃 capture 可删除', async () => {
@@ -121,10 +127,11 @@ describe('存储限额 + 禁删活跃 (T110)', () => {
         });
         await cleanup_stale_capture_state();
 
-        // update_capture 被调终态化
+        // update_capture 被调终态化；p024 分句：ended_at 非空
         expect(update_capture).toHaveBeenCalledWith(expect.objectContaining({
             capture_id: 'cap_stale',
             status: 'completed',
+            ended_at: expect.any(String),
         }));
     });
 });
@@ -146,6 +153,13 @@ describe('handle_event 限额停止 (T110 AC-001b)', () => {
         // capture 已停止：get_status 显示未采集
         const status = await send_message('get_status');
         expect(status.is_capturing).toBe(false);
+
+        // p024 分句：限额停止写入 capture_stopped 事件且 reason === 'storage_limit'
+        const { get_events_by_category } = await import('../../src/extension/background/storage');
+        const lifecycle = await get_events_by_category('cap_limit', 'capture_lifecycle');
+        const stopped = lifecycle.find((e) => e.type === 'capture_stopped');
+        expect(stopped).toBeDefined();
+        expect((stopped!.data as { reason?: string }).reason).toBe('storage_limit');
     });
 });
 

@@ -19,85 +19,10 @@ import { mock_chrome_debugger } from '../support/__mocks__/chrome_debugger';
     tabs: { query: vi.fn().mockResolvedValue([]), get: vi.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }), sendMessage: vi.fn().mockResolvedValue(undefined), onActivated: { addListener: vi.fn() }, onUpdated: { addListener: vi.fn() }, onRemoved: { addListener: vi.fn() }, onCreated: { addListener: vi.fn() } },
 };
 
-import { handle_cdp_event, type CdpHandlerState } from '../../src/extension/background/cdp_handler';
 import { handle_error, type WebRequestHandlerState } from '../../src/extension/background/webrequest_handler';
+import { start_network_capture, stop_network_capture, enable_response_body_capture, _cdp_request_meta_for_test } from '../../src/extension/background/network_capture';
 import type { PendingRequest } from '../../src/extension/background/cdp_handler';
 import { NetworkCaptureContext } from '../../src/extension/background/network_context';
-
-function make_cdp_state(emitted: any[]): CdpHandlerState {
-    return {
-        is_capturing: true,
-        capture_id: 'cap_fail',
-        start_time: Date.now(),
-        current_tab_id: 1,
-        config: {
-            redact_sensitive_headers: false,
-            redact_url_query: false,
-            redact_data: false,
-            capture_request_body: false,
-            capture_response_body: true,
-            max_body_capture_bytes: 104857600,
-            inline_text_max_bytes: 32768,
-        },
-        dbg_tab_id: 1,
-        dbg_attached_externally: false,
-        pending_requests: new Map(),
-        cdp_request_meta: new Map(),
-        cdp_body_results: new Map(),
-        ws_connections: new Map(),
-        streaming_requests: new Set(),
-        finished_before_stream: new Set(),
-        orphan_timers: new Map(),
-        stream_buffer_instance: null,
-        deferred_web_requests: new Map(),
-        _deferred_cdp_index: new Map(),
-        on_cdp_body_event: null,
-        send_to_background: (payload: any) => emitted.push(payload),
-    };
-}
-
-describe('loading_failed 立即发主条目', () => {
-    let emitted: any[];
-    let state: CdpHandlerState;
-
-    beforeEach(() => {
-        emitted = [];
-        state = make_cdp_state(emitted);
-        mock_chrome_debugger.reset();
-        vi.clearAllMocks();
-    });
-
-    it('handle_loading_failed 已有 meta 时立即发失败主条目并清理', () => {
-        handle_cdp_event({ tabId: 1 }, 'Network.requestWillBeSent', {
-            requestId: 'FAIL_1',
-            type: 'Fetch',
-            request: { url: 'https://example.com/fail', method: 'GET', headers: {} },
-        }, state);
-
-        expect(state.cdp_request_meta.size).toBe(1);
-
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFailed', {
-            requestId: 'FAIL_1',
-            errorText: 'net::ERR_CONNECTION_RESET',
-            type: 'Fetch',
-        }, state);
-
-        expect(emitted.length).toBe(1);
-        expect(emitted[0].data.error_text).toContain('ERR_CONNECTION_RESET');
-        expect(state.cdp_request_meta.has('root:FAIL_1')).toBe(false);
-    });
-
-    it('handle_loading_failed 无 meta 时走 orphan_check 兜底', () => {
-        // 无 requestWillBeSent 前置，直接 loadingFailed
-        handle_cdp_event({ tabId: 1 }, 'Network.loadingFailed', {
-            requestId: 'ORPHAN_FAIL',
-            errorText: 'net::ERR_NAME_NOT_RESOLVED',
-        }, state);
-
-        // 无 meta 不发主条目，但仍记录 body_results 等
-        expect(emitted.length).toBe(0);
-    });
-});
 
 describe('webRequest handle_error 发失败事件', () => {
     function make_wr_state(emitted: any[]): WebRequestHandlerState {
@@ -181,5 +106,51 @@ describe('NetworkCaptureContext.reset 取消 deferred timer', () => {
         expect(spy).toHaveBeenCalledTimes(2);
         expect(ctx.deferred_web_requests.size).toBe(0);
         spy.mockRestore();
+    });
+});
+
+describe('loadingFailed 带 meta（生产 network_capture 路径）', () => {
+    let emitted: Array<{ event: any; data: any }>;
+
+    beforeEach(async () => {
+        vi.useFakeTimers();
+        try { stop_network_capture(); } catch { /* not started */ }
+        mock_chrome_debugger.reset();
+        vi.clearAllMocks();
+        emitted = [];
+        start_network_capture('cap_lf_meta', Date.now(), {
+            redact_sensitive_headers: false, redact_url_query: false, redact_data: false,
+            capture_request_body: false, capture_response_body: true,
+            max_body_capture_bytes: 104857600, inline_text_max_bytes: 32768,
+        }, 1, (payload: any) => emitted.push(payload));
+        await enable_response_body_capture(1, false);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        try { stop_network_capture(); } catch { /* not started */ }
+    });
+
+    it('已有 meta 时 loadingFailed 不发立即主事件（t119 f001）', async () => {
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.requestWillBeSent', {
+            requestId: 'LF1',
+            type: 'Fetch',
+            request: { url: 'https://example.com/lf', method: 'GET' },
+        });
+        expect(_cdp_request_meta_for_test.has('root:LF1')).toBe(true);
+
+        mock_chrome_debugger.emit_event({ tabId: 1 }, 'Network.loadingFailed', {
+            requestId: 'LF1',
+            errorText: 'net::ERR_CONNECTION_RESET',
+            type: 'Fetch',
+        });
+        // 生产语义：不发立即失败主事件（失败事件由 webRequest handle_error 通道发出）
+        expect(emitted.length).toBe(0);
+        // meta 保留（生产语义：等待消费路径，非 orphan 职责）
+        expect(_cdp_request_meta_for_test.has('root:LF1')).toBe(true);
+
+        // orphan 3s 兜底触发不抛错（handler 未设时早退）
+        await vi.advanceTimersByTimeAsync(3000);
+        // marker 清理由 t112 loadingFinished→loadingFailed 序列用例锁定（此处未建立 marker）
     });
 });

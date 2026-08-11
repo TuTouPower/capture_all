@@ -1,15 +1,15 @@
 ---
-tid: "t121"
-slug: "content_message_hmac_auth"
-title: "content 采集消息 per-message HMAC 认证"
-status: "backlog"
-branch: ""
+tid: "t119"
+slug: "cdp_handler_network_capture_unify"
+title: "统一 cdp_handler 与 network_capture 重复 CDP 实现"
+status: "done"
+branch: "t119_cdp_handler_network_capture_unify"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "849b739e78b5509c1925838a98abfd2f22d7205c"
 depends_on: ""
 conflicts_with: ""
-note: "p010 页面可伪造 nonce 门控，升级 per-message HMAC"
+note: "p029 复制实现合并或显式废弃"
 ---
 
 # Task 过程总账
@@ -44,6 +44,23 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-11 19:12 UTC+8)
+
+code 路 1 minor；test 路 1 minor（同一 finding）。
+
+| finding_id | severity | status | rationale | fix_ref |
+|------------|----------|--------|-----------|---------|
+| t119_code_f001 | minor | 已修 | 补生产 network_capture 路径 loadingFailed 带 meta 用例（不发立即主事件 + marker 清理；orphan 兜底不抛错） | tests/unit/loading_failed_events.test.ts |
+| t119_test_f001 | minor | 已修 | 同 code_f001 | tests/unit/loading_failed_events.test.ts |
+
+### Round 2 (2026-08-11 19:24 UTC+8)
+
+code 路 0 finding；test 路 1 minor。
+
+| finding_id | severity | status | rationale | fix_ref |
+|------------|----------|--------|-----------|---------|
+| t119_test_f002 | minor | 已修 | 移除恒真 marker 断言（用例未 emit loadingFinished，marker 从未建立）；保留 emitted 0 核心 + meta 保留断言；marker 清理由 t112 序列用例锁定 | tests/unit/loading_failed_events.test.ts |
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,8 +77,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 cdp_handler 事件路径废弃（897→117 行，保留辅助逐项核对）；AC-002 全量回归 + 迁移测试；AC-003 grep 无悬挂引用。`handoff.json` 的 `ac_evidence` 逐条给出引用。
 
 ### Reviewer verdict
 
@@ -69,15 +86,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：PASS（minor f001：补 production loadingFailed 用例，已修）
+- Round 1 test：PASS（minor f001 同源，已修）
+- Round 2 code：PASS（0 新 finding）
+- Round 2 test：PASS（minor f002 恒真断言，已修）
+- Round 3 code：PASS（minor f003 测试名，已修）
+- Round 3 test：PASS（0 新 finding）
+- Round 4 code：PASS（0 新 finding）
+- Round 4 test：PASS（0 新 finding）
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- N/A
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+cdp_handler.ts 事件路径显式废弃（删除 handle_cdp_event/CdpHandlerState 及全部内部事件 handler 790 行），仅保留生产引用的辅助/类型/常量；5 个直驱测试迁移到 network_capture 生产路径或删除（行为由等价 production 用例覆盖），补 loadingFailed 带 meta 生产用例。全量 vitest 129 文件 1364 用例绿，tsc 0 错误。无新 pending/findings。

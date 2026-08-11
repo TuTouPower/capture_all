@@ -45,10 +45,6 @@ export const _cdp_request_meta_for_test = cdp_request_meta;
 const cdp_body_results: Map<string, CdpBodyResult> = new Map();
 export const _cdp_body_results_for_test = cdp_body_results;
 
-// CDP-first: track request IDs that CDP has already emitted as primary entries.
-// webRequest handlers skip these to avoid duplicates.
-const cdp_primary_emitted: Set<string> = new Set();
-
 const ws_connections: Map<string, WsConnectionMeta> = new Map();
 export const _ws_connections_for_test = ws_connections;
 
@@ -166,7 +162,6 @@ export function stop_network_capture(): void {
 
     cdp_request_meta.clear();
     cdp_body_results.clear();
-    cdp_primary_emitted.clear();
     ws_connections.clear();
     streaming_requests.clear();
     finished_before_stream.clear();
@@ -599,7 +594,6 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                     encoding: 'utf8',
                     byte_size,
                 };
-                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
                 cdp_request_meta.delete(req_key);
             }
@@ -650,9 +644,8 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             // CDP-first: if we have metadata, build and emit the complete entry directly
             const meta = cdp_request_meta.get(req_key);
             if (meta) {
-                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
-                logger.debug('cdp_primary_emitted', {
+                logger.debug('cdp_primary_event_emitted', {
                     url: meta.url?.slice(0, 120),
                     method: meta.method,
                     body_status,
@@ -685,7 +678,6 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             // CDP-first: emit even on failure (status will be cdp_failed)
             const meta = cdp_request_meta.get(req_key);
             if (meta) {
-                cdp_primary_emitted.add(req_key);
                 send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id));
                 cdp_request_meta.delete(req_key);
                 cdp_body_results.delete(req_key);

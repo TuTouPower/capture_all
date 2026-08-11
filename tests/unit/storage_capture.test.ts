@@ -2,7 +2,8 @@
 // tests/unit/storage_capture.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { CaptureEvent, StorageChangeData } from '../../src/shared/types';
-import { start_storage_capture, stop_storage_capture, _set_nonce_for_test } from '../../src/extension/content/storage_capture';
+import { start_storage_capture, stop_storage_capture, _set_nonce_for_test, _set_secret_for_test } from '../../src/extension/content/storage_capture';
+import { sign_message, sign_message_with_secret, TEST_SECRET } from '../support/helpers/signed_message';
 
 const SIGNAL = '__capture_all_storage__';
 const NONCE = 'test-nonce';
@@ -16,15 +17,19 @@ describe('storage_capture', () => {
         sender = vi.fn((evt) => events.push(evt as CaptureEvent & StorageChangeData));
         stop_storage_capture();
         _set_nonce_for_test(NONCE);
+        _set_secret_for_test(TEST_SECRET);
     });
 
-    afterEach(() => stop_storage_capture());
+    afterEach(() => {
+        stop_storage_capture();
+        _set_secret_for_test(null);
+    });
 
     function post_message(payload: Record<string, unknown>): void {
         window.dispatchEvent(new MessageEvent('message', {
             origin: window.location.origin,
             source: window,
-            data: { source: SIGNAL, nonce: NONCE, ...payload },
+            data: sign_message({ source: SIGNAL, nonce: NONCE, ...payload }),
         }));
     }
 
@@ -62,10 +67,41 @@ describe('storage_capture', () => {
         expect(sender).not.toHaveBeenCalled();
     });
 
+    it('正确 nonce 但签名缺失的消息被拒（T121）', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 7);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, nonce: NONCE, storage_type: 'local', action: 'set', key: 'x', value_length: 1 },
+        }));
+        expect(sender).not.toHaveBeenCalled();
+    });
+
     it('stop 后不再发送', () => {
         start_storage_capture(sender, 'cap1', Date.now(), 7);
         stop_storage_capture();
         post_message({ storage_type: 'local', action: 'set', key: 'foo', value_length: 5 });
         expect(sender).not.toHaveBeenCalled();
+    });
+
+    it('stop→start secret 旋转后新签名接受、旧签名被拒（T121 storage 通道）', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 1);
+        stop_storage_capture();
+        _set_secret_for_test('secret-2');
+        start_storage_capture(sender, 'cap2', Date.now(), 1);
+        // 新 secret 签名的消息被接受（旋转后采集不中断）
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: sign_message_with_secret({ source: SIGNAL, nonce: NONCE, storage_type: 'local', action: 'set', key: 'k', value_length: 1 }, 'secret-2'),
+        }));
+        expect(sender).toHaveBeenCalledTimes(1);
+        // 旧 secret 签名被拒（跨采集旧签名失效）
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: sign_message_with_secret({ source: SIGNAL, nonce: NONCE, storage_type: 'local', action: 'set', key: 'k2', value_length: 1 }, TEST_SECRET),
+        }));
+        expect(sender).toHaveBeenCalledTimes(1);
     });
 });

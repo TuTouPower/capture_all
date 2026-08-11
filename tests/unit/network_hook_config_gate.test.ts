@@ -29,4 +29,10 @@ describe('content_script network_hook 配置门控 (T098)', () => {
         // start_network_hook 第 5 参传 config.capture_response_body
         expect(start_section).toMatch(/start_network_hook\([^)]*config\.capture_response_body\)/);
     });
+
+    it('AC-004: start_network_hook 在 start_capture 内恰好出现一次（p015）', () => {
+        const start_section = content_script_src.split(/function\s+start_capture/)[1] ?? '';
+        const matches = start_section.match(/start_network_hook\(/g) ?? [];
+        expect(matches).toHaveLength(1);
+    });
 });

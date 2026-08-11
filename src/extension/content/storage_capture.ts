@@ -1,6 +1,8 @@
 // content/storage_capture.ts
 import type { CaptureEvent, StorageChangeData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
+import { generate_nonce } from './content_nonce';
+import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
 
 let is_capturing = false;
 let capture_id = '';
@@ -13,38 +15,49 @@ let _nonce_override: string | null = null;
 export function _set_nonce_for_test(nonce: string | null): void {
     _nonce_override = nonce;
 }
-function generate_nonce(): string {
-    // T097: crypto.randomUUID 仅 secure context 可用；http 页 fallback Math.random。
-    try {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-    } catch {
-        // ignore
-    }
-    return `nonce_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+// T121: per-start secret（每次 start 旋转）；测试钩子显式注入确定性 secret。
+let current_secret = '';
+let _secret_override: string | null = null;
+export function _set_secret_for_test(secret: string | null): void {
+    _secret_override = secret;
 }
 
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__capture_all_storage__';
 
-function build_page_script(): string {
+// secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
+function build_page_script(secret: string): string {
     return `(function() {
-    if (window.__capture_all_storage_installed__) return;
+    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
+    if (window.__capture_all_storage_installed__) {
+        var prev_hook = window.__capture_all_storage_prev__;
+        if (prev_hook) {
+            window.localStorage.setItem = prev_hook.local_setItem;
+            window.localStorage.removeItem = prev_hook.local_removeItem;
+            window.localStorage.clear = prev_hook.local_clear;
+            window.sessionStorage.setItem = prev_hook.session_setItem;
+            window.sessionStorage.removeItem = prev_hook.session_removeItem;
+            window.sessionStorage.clear = prev_hook.session_clear;
+        }
+    }
     window.__capture_all_storage_installed__ = true;
     var SIGNAL = '${SIGNAL}';
-
+    var SECRET = '${secret}';
+${SYNC_HMAC_JS}
     function post(storage_type, action, key, value_length) {
         try {
-            window.postMessage({
+            var payload = {
                 source: SIGNAL,
                 nonce: window.__capture_all_storage_nonce__,
                 storage_type: storage_type,
                 action: action,
                 key: key,
                 value_length: value_length
-            }, window.location.origin);
+            };
+            // T121: per-message HMAC 签名（secret 仅注入脚本闭包持有）
+            payload.sig = sign_str(SECRET, payload);
+            window.postMessage(payload, window.location.origin);
         } catch (e) {}
     }
 
@@ -52,6 +65,18 @@ function build_page_script(): string {
         var orig_set = storage.setItem.bind(storage);
         var orig_remove = storage.removeItem.bind(storage);
         var orig_clear = storage.clear.bind(storage);
+        // T121: 保存还原点供下次 start 重注入时还原
+        if (storage_type === 'local') {
+            window.__capture_all_storage_prev__ = window.__capture_all_storage_prev__ || {};
+            window.__capture_all_storage_prev__.local_setItem = storage.setItem;
+            window.__capture_all_storage_prev__.local_removeItem = storage.removeItem;
+            window.__capture_all_storage_prev__.local_clear = storage.clear;
+        } else {
+            window.__capture_all_storage_prev__ = window.__capture_all_storage_prev__ || {};
+            window.__capture_all_storage_prev__.session_setItem = storage.setItem;
+            window.__capture_all_storage_prev__.session_removeItem = storage.removeItem;
+            window.__capture_all_storage_prev__.session_clear = storage.clear;
+        }
 
         storage.setItem = function(key, value) {
             try { post(storage_type, 'set', String(key), String(value == null ? '' : value).length); } catch (e) {}
@@ -87,7 +112,7 @@ function update_page_nonce(nonce: string): void {
 function inject_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = build_page_script();
+        s.textContent = build_page_script(current_secret);
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -110,6 +135,8 @@ export function start_storage_capture(
     // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
     // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
     current_nonce = _nonce_override ?? generate_nonce();
+    // T121: secret 每次 start 旋转（内联进注入脚本闭包，不写 window）。
+    current_secret = _secret_override ?? generate_secret();
     update_page_nonce(current_nonce);
     inject_page_script();
 
@@ -120,6 +147,8 @@ export function start_storage_capture(
         const d = e.data;
         if (!d || d.source !== SIGNAL) return;
         if (d.nonce !== current_nonce) return;
+        // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
+        if (!verify_payload(current_secret, d)) return;
 
         const value_length = typeof d.value_length === 'number' ? d.value_length : 0;
         const action: StorageChangeData['action'] = d.action;

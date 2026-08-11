@@ -1,0 +1,29 @@
+{
+  "tid": "t116",
+  "attempt": 1,
+  "execution_id": "3c9fc087ddbd462e8c76b1d9484b3f94",
+  "status": "done",
+  "branch": "t116_test_case_coverage_pack",
+  "base_sha": "b6c03aac4cd6cadcc91a6eaed739147f8941961e",
+  "tests": "npm test 全量：128 文件 1353 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 3 轮 PASS（code+test 双路，round 2 后 0 finding）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/user_config_persistence.test.ts NaN/Infinity/精确下边界 250 三用例通过"],
+    "AC-002": ["tests/unit/service_worker_exception_sink.test.ts AC-002 断言 logs.length===0 通过"],
+    "AC-003": ["tests/unit/service_worker_exception_sink.test.ts AC-001 收敛 errors[0].error_name 已声明字段"],
+    "AC-004": ["tests/unit/service_worker_exception_sink.test.ts beforeEach 调 mock_chrome_debugger.reset()"],
+    "AC-005": ["tests/unit/body_capture_external_poll_stop.test.ts AC-004 in-flight 重入变体通过（旧闭包不写、单路新 poll）"],
+    "AC-006": ["tests/unit/agent_bridge_server.test.ts AC-002b/c/d：har 合法、17 字符非法回退 json、大写归一"],
+    "AC-007": ["tests/unit/content_postmessage_nonce.test.ts AC-004 真实 randomUUID 两次 start 不同 nonce 通过"],
+    "AC-008": ["tests/unit/content_postmessage_nonce.test.ts AC-005 捕获 update_page_nonce 注入脚本验证 window 变量写入"],
+    "AC-009": ["tests/unit/content_postmessage_nonce.test.ts AC-002httpb fallback nonce 非空且被接受正向断言"],
+    "AC-010": ["tests/unit/network_hook_config_gate.test.ts AC-004 start_network_hook 恰好一次"],
+    "AC-011": ["tests/unit/cleanup_start_mutex.test.ts AC-003 cleanup 挂起→start 排队→resolve 后键保留"],
+    "AC-012": ["tests/unit/detail_search_preserve_input.test.ts AC-002/AC-002b 搜索过滤仅含匹配项"],
+    "AC-013": ["tests/unit/storage_limit_active_delete.test.ts AC-002 记录仍在 + AC-003 ended_at 非空 + AC-001b capture_stopped.reason==='storage_limit'"],
+    "AC-014": ["tests/unit/ws_absolute_time_wiring.test.ts AC-001/AC-002 接线守卫两分支直连断言"]
+  },
+  "pending": [],
+  "findings": ["d003"]
+}

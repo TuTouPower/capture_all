@@ -125,7 +125,7 @@ export function render_dt_rail(): string {
         ['dom', 'dom', 'DOM', 'var(--src-dom)'],
     ];
     return `<aside class="dt-rail scroll">
-        <div class="dt-rail-search">${I.search}<input placeholder="搜索事件、URL、Storage key…" id="dtSearch" value="${String((document.getElementById('dtSearch') as HTMLInputElement | null)?.value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"><kbd>⌘K</kbd></div>
+        <div class="dt-rail-search">${I.search}<input placeholder="搜索事件、URL、Storage key…" id="dtSearch" value="${esc((document.getElementById('dtSearch') as HTMLInputElement | null)?.value ?? '')}"><kbd>⌘K</kbd></div>
         <div class="dt-rail-sec">
             <div class="dt-rail-hd">快速筛选</div>
             ${quick.map(([k, ic, lbl, color]) => `<button class="qfilter" data-quick="${k}" data-on="${dt_quick === k ? 1 : 0}">
@@ -723,6 +723,11 @@ function wire_trace(): void {
 }
 
 export { render_detail, wire_detail, open_detail, render_trace };
+
+// 测试钩子（p022）：直连 filtered 列表渲染，供详情搜索过滤语义断言。
+export function _render_dt_list_for_test(): string {
+    return render_dt_list();
+}
 
 async function open_detail(id: string): Promise<void> {
     set_page('detail'); set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all'); set_dt_sel(-1); set_dt_insp_open(false);

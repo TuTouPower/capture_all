@@ -71,7 +71,11 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- 边界启发式的最终判定规则：UNVERIFIED-SPIKE，执行期在 `.scratch/` 用候选规则验证既有 URL 形态与三元反例后固化进实现与测试。
+- 边界启发式的最终判定规则：已核实（s001 spike，2026-08-11）。候选规则为 bare-query 与 path-query 分支加 lookbehind `(?<=^|[=\s([,<"'])`，绝对 URL 分支不变；13/13 用例验证三元（紧邻）/可选链/无斜杠相对路径保留原文，绝对 URL/独立 `?query`/`/path?...`/合法冒号 query/data URL/base64 query 均脱敏。已确认收缩面：
+  - 无斜杠相对路径（`file?token=x`）退出任意文本扫描（用户确认的边界启发式语义）。
+  - 带空格三元（`cond ?token=x:y`）与独立 `?query` 同享 `\s` URL 边界语义，会被当作 query 脱敏；这是 `\s`=URL 边界判定的已知权衡，非静默 false negative。
+  - 紧邻三元（`cond?token=x:y`）与可选链（`user?.token`）不受影响。
+  实现与测试按此规则固化。
 
 ### 风险与回退
 

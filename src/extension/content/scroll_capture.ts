@@ -1,32 +1,21 @@
 // content/scroll_capture.ts
 import type { CaptureEvent, ScrollEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 
-let is_capturing = false;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
-let send_event: (event: CaptureEvent, data: ScrollEventData) => void;
+const state = create_capture_state<ScrollEventData>();
 let scroll_timer: ReturnType<typeof setTimeout> | null = null;
 
 export function start_scroll_capture(
     sender: (event: CaptureEvent, data: ScrollEventData) => void,
     params: { capture_id: string; capture_start_epoch_ms: number; tab_id: number },
 ): void {
-    if (is_capturing) return;
-
-    send_event = sender;
-    capture_id = params.capture_id;
-    capture_start_epoch_ms = params.capture_start_epoch_ms;
-    tab_id = params.tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, params)) return;
 
     document.addEventListener('scroll', handle_scroll, { passive: true });
 }
 
 export function stop_scroll_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     document.removeEventListener('scroll', handle_scroll);
 
@@ -37,19 +26,19 @@ export function stop_scroll_capture(): void {
 }
 
 function handle_scroll(): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     if (scroll_timer) clearTimeout(scroll_timer);
 
     scroll_timer = setTimeout(() => {
-        if (!is_capturing) return;
+        if (!state.is_capturing) return;
 
         const event = create_content_event({
-            capture_id,
+            capture_id: state.capture_id,
             category: 'user_action',
             type: 'scroll_event',
-            relative_time_ms: get_relative_time(capture_start_epoch_ms),
-            tab_id,
+            relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+            tab_id: state.tab_id,
             source: 'content_script',
         });
 
@@ -65,6 +54,6 @@ function handle_scroll(): void {
             is_document_scroll: true,
         };
 
-        send_event(event, data);
+        state.sender?.(event, data);
     }, 200);
 }

@@ -1,12 +1,8 @@
 // content/resize_capture.ts
 import type { CaptureEvent, ResizeEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 
-let is_capturing = false;
-let _capture_id = '';
-let _capture_start_epoch_ms = 0;
-let _tab_id = 0;
-let _send_event: (event: CaptureEvent, data: ResizeEventData) => void;
+const state = create_capture_state<ResizeEventData>();
 let _timer: ReturnType<typeof setTimeout> | null = null;
 
 export function start_resize_capture(
@@ -15,33 +11,31 @@ export function start_resize_capture(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
 ): void {
-    if (is_capturing) return;
-    _send_event = sender;
-    _capture_id = new_capture_id;
-    _capture_start_epoch_ms = new_capture_start_epoch_ms;
-    _tab_id = new_tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
     window.addEventListener('resize', handle_resize);
 }
 
 export function stop_resize_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
     window.removeEventListener('resize', handle_resize);
     if (_timer) { clearTimeout(_timer); _timer = null; }
 }
 
 function handle_resize(): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(() => {
-        if (!is_capturing) return;
+        if (!state.is_capturing) return;
         const event = create_content_event({
-            capture_id: _capture_id,
+            capture_id: state.capture_id,
             category: 'user_action',
             type: 'resize_event',
-            relative_time_ms: get_relative_time(_capture_start_epoch_ms),
-            tab_id: _tab_id,
+            relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+            tab_id: state.tab_id,
             source: 'content_script',
         });
         const data: ResizeEventData = {
@@ -51,6 +45,6 @@ function handle_resize(): void {
             inner_height: window.innerHeight,
             device_pixel_ratio: window.devicePixelRatio,
         };
-        _send_event(event, data);
+        state.sender?.(event, data);
     }, 200);
 }

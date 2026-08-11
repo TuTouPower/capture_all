@@ -1,12 +1,8 @@
 // content/fullscreen_capture.ts
 import type { CaptureEvent, FullscreenChangeData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 
-let is_capturing = false;
-let _capture_id = '';
-let _capture_start_epoch_ms = 0;
-let _tab_id = 0;
-let _send_event: (event: CaptureEvent, data: FullscreenChangeData) => void;
+const state = create_capture_state<FullscreenChangeData>();
 
 export function start_fullscreen_capture(
     sender: (event: CaptureEvent, data: FullscreenChangeData) => void,
@@ -14,30 +10,28 @@ export function start_fullscreen_capture(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
 ): void {
-    if (is_capturing) return;
-    _send_event = sender;
-    _capture_id = new_capture_id;
-    _capture_start_epoch_ms = new_capture_start_epoch_ms;
-    _tab_id = new_tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
     document.addEventListener('fullscreenchange', handle_fullscreen);
 }
 
 export function stop_fullscreen_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
     document.removeEventListener('fullscreenchange', handle_fullscreen);
 }
 
 function handle_fullscreen(): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const fs_element = document.fullscreenElement;
     const event = create_content_event({
-        capture_id: _capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: 'fullscreen_change',
-        relative_time_ms: get_relative_time(_capture_start_epoch_ms),
-        tab_id: _tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         source: 'content_script',
     });
     const data: FullscreenChangeData = {
@@ -45,5 +39,5 @@ function handle_fullscreen(): void {
         element_tag: fs_element?.tagName ?? null,
         element_id: fs_element?.id ?? null,
     };
-    _send_event(event, data);
+    state.sender?.(event, data);
 }

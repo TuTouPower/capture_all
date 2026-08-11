@@ -1,0 +1,18 @@
+{
+  "tid": "t127",
+  "attempt": 1,
+  "execution_id": "8192fa7536ee4301be9848aa8de6410e",
+  "status": "done",
+  "branch": "t127_content_capture_state_factory",
+  "base_sha": "5f985fbe01996d1fd8e884075d84e847261e07d7",
+  "tests": "vitest run: 130 files / 1373 tests passed（含新增 content_capture_state.test.ts 5 用例）",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS + test PASS（均 0 finding）",
+  "ac_evidence": {
+    "AC-001": ["content_event_utils.ts 新增 create_capture_state 工厂，9 模块经工厂管理，grep 无模块级 is_capturing/capture_id/capture_start_epoch_ms/tab_id 声明残留"],
+    "AC-002": ["capture_state.test.ts 5 用例覆盖重入守卫与 stop 复位；各模块既有测试 beforeEach/afterEach 反复 start/stop 全绿"],
+    "AC-003": ["npm test 130 files/1373 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": ["p032"],
+  "findings": []
+}

@@ -1,15 +1,11 @@
 // content/mouse_capture.ts
 import type { CaptureConfig, CaptureEvent, MouseEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { truncate_target_text } from '../../shared/redaction';
 import { build_xpath } from '../shared/dom_utils';
 
-let is_capturing = false;
+const state = create_capture_state<MouseEventData>();
 let config: CaptureConfig;
-let capture_id: string;
-let capture_start_epoch_ms: number;
-let tab_id: number;
-let send_event: (event: CaptureEvent, data: MouseEventData) => void;
 let raf_id: number | null = null;
 let last_mouse_time = 0;
 
@@ -20,14 +16,13 @@ export function start_mouse_capture(
     tid: number,
     sender: (event: CaptureEvent, data: MouseEventData) => void
 ): void {
-    if (is_capturing) return;
+    if (!state.begin(sender, {
+        capture_id: cid,
+        capture_start_epoch_ms: start_ms,
+        tab_id: tid,
+    })) return;
 
     config = cfg;
-    capture_id = cid;
-    capture_start_epoch_ms = start_ms;
-    tab_id = tid;
-    send_event = sender;
-    is_capturing = true;
 
     document.addEventListener('click', handle_click);
     document.addEventListener('dblclick', handle_dblclick);
@@ -45,8 +40,7 @@ export function start_mouse_capture(
 }
 
 export function stop_mouse_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     document.removeEventListener('click', handle_click);
     document.removeEventListener('dblclick', handle_dblclick);
@@ -89,11 +83,11 @@ function build_mouse_event(
     const target = target_override ?? get_target_info(event as MouseEvent);
 
     const base_event = create_content_event({
-        capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: 'mouse_event',
-        relative_time_ms: get_relative_time(capture_start_epoch_ms),
-        tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         url: location.href,
         source: 'content_script',
     });
@@ -113,26 +107,26 @@ function build_mouse_event(
         is_trusted: null,
     };
 
-    send_event(base_event, mouse_data);
+    state.sender?.(base_event, mouse_data);
 }
 
 function handle_click(event: MouseEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     build_mouse_event(event, 'click');
 }
 
 function handle_dblclick(event: MouseEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     build_mouse_event(event, 'dblclick');
 }
 
 function handle_contextmenu(event: MouseEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     build_mouse_event(event, 'contextmenu');
 }
 
 function handle_wheel(event: WheelEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'wheel', {
         selector: info.selector,
@@ -143,7 +137,7 @@ function handle_wheel(event: WheelEvent): void {
 }
 
 function handle_dragstart(event: DragEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'dragstart', {
         selector: info.selector,
@@ -154,7 +148,7 @@ function handle_dragstart(event: DragEvent): void {
 }
 
 function handle_dragend(event: DragEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const info = get_target_info(event as MouseEvent);
     build_mouse_event(event, 'dragend', {
         selector: info.selector,
@@ -165,7 +159,7 @@ function handle_dragend(event: DragEvent): void {
 }
 
 function handle_mousemove(event: MouseEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     const now = performance.now();
     if (now - last_mouse_time < config.sample_rate_ms) return;
@@ -175,7 +169,7 @@ function handle_mousemove(event: MouseEvent): void {
 
     const el = event.target as HTMLElement;
     raf_id = requestAnimationFrame(() => {
-        if (!is_capturing) return;
+        if (!state.is_capturing) return;
         build_mouse_event(event, 'mousemove', {
             selector: get_selector(el),
             xpath: build_xpath(el),

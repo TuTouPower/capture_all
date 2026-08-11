@@ -18,8 +18,8 @@
 | network_stop_deferred_timers | t103 | 2026-08-11 |
 | cookie_empty_domain_scope | t104 | 2026-08-11 |
 | content_status_poll_tab_id | t105 | 2026-08-11 |
-| popup_category_capture_gates | t106 | 2026-08-11 |
-| dashboard_export_flush_save_as | t107, t115 | 2026-08-11 |
+| popup_category_capture_gates | t106, t120 | 2026-08-11 |
+| dashboard_export_flush_save_as | t107, t115, t120 | 2026-08-11 |
 | detail_search_preserve_input | t108 | 2026-08-11 |
 | archive_body_ref_consistency | t109 | 2026-08-11 |
 | test_case_coverage_pack | t116 | 2026-08-11 |

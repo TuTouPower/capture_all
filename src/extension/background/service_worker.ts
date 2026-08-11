@@ -974,18 +974,20 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         to_url: tab_url,
     };
 
-    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
-    const switch_event = create_base_event({
-        capture_id: cap_id!,
-        category: 'navigation',
-        type: 'tab_switch',
-        relative_time_ms: get_relative_time(cap_start),
-        tab_id: activeInfo.tabId,
-        url: tab_url,
-        source: 'background',
-    });
-    if (await check_limit_and_stop()) return; // T110: 限额停止
-    await write_events([{ ...switch_event, data: switch_data }]);
+    // T106/p019: 导航类别关闭只跳过 tab_switch 事件写入，start-send 与 CDP 重试仍需触发。
+    if (current_config.nav_count_enabled !== false) {
+        const switch_event = create_base_event({
+            capture_id: cap_id!,
+            category: 'navigation',
+            type: 'tab_switch',
+            relative_time_ms: get_relative_time(cap_start),
+            tab_id: activeInfo.tabId,
+            url: tab_url,
+            source: 'background',
+        });
+        if (await check_limit_and_stop()) return; // T110: 限额停止
+        await write_events([{ ...switch_event, data: switch_data }]);
+    }
     if (!capture_state.is_active_generation(gen)) return;
 
     // Update tracking
@@ -1096,18 +1098,20 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         change_reason: null,
     };
 
-    if (current_config.nav_count_enabled === false) return; // T106: 导航类别关闭
-    const event = create_base_event({
-        capture_id: current_capture_id!,
-        category: 'navigation',
-        type: 'tab_url_change',
-        relative_time_ms: get_relative_time(start_time),
-        tab_id: tabId,
-        url: new_url,
-        source: 'background',
-    });
-    if (await check_limit_and_stop()) return; // T110: 限额停止
-    await write_events([{ ...event, data }]);
+    // T106/p019: 导航类别关闭只跳过 tab_url_change 事件写入，CDP 重试仍需触发。
+    if (current_config.nav_count_enabled !== false) {
+        const event = create_base_event({
+            capture_id: current_capture_id!,
+            category: 'navigation',
+            type: 'tab_url_change',
+            relative_time_ms: get_relative_time(start_time),
+            tab_id: tabId,
+            url: new_url,
+            source: 'background',
+        });
+        if (await check_limit_and_stop()) return; // T110: 限额停止
+        await write_events([{ ...event, data }]);
+    }
 
     // Retry CDP-based capture if navigating from restricted URL to normal page
     const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');

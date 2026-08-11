@@ -234,8 +234,15 @@ export async function load_detail(id: string): Promise<void> {
     } catch { /* best effort */ }
 }
 
+// p027: 导出 in-flight 标记（按 id+format key），防同一导出的重复触发并行执行；
+// 不同 capture 的合法导出（批量导出）互不拦截。
+const export_in_flight = new Map<string, true>();
+
 export async function export_capture(id: string, format: string = 'archive'): Promise<void> {
     if (!is_extension) return;
+    const key = `${id}:${format}`;
+    if (export_in_flight.has(key)) return; // 同 key 重复触发被拦截，单次执行
+    export_in_flight.set(key, true);
     try {
         if (format === 'archive') {
             // T107: 导出前 flush 缓冲事件，避免丢最近数据；flush 失败则中止（不静默旧快照）
@@ -281,6 +288,9 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
         }, id, ext);
         await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
     } catch (err) { logger.error('Export error', err); }
+    finally {
+        export_in_flight.delete(key);
+    }
 }
 
 // ── router（避免循环依赖，由 dashboard.ts 初始化时注入） ──────────────

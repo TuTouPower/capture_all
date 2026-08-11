@@ -1,0 +1,18 @@
+{
+  "tid": "t120",
+  "attempt": 1,
+  "execution_id": "60b247790b784fc492f1ec31b6427c3f",
+  "status": "done",
+  "branch": "t120_nav_retry_decouple_export_busy_guard",
+  "base_sha": "ae15ca2565bb592790bbc3fed40c2ea9a95c2201",
+  "tests": "npm test 全量：128 文件 1362 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 3 轮 PASS（code+test 双路；round 1 code important f001 已修）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/nav_retry_decouple.test.ts：onActivated nav off 时 start-send 仍发送 + console 未激活时 CDP 重试仍触发", "tests/unit/nav_retry_decouple.test.ts：onUpdated restricted→normal CDP 重试仍触发"],
+    "AC-002": ["tests/unit/nav_retry_decouple.test.ts：nav on 回归用例 tab_switch 正常写入", "全量回归绿（poll_capture_status 等轮询兜底测试保留）"],
+    "AC-003": ["tests/unit/export_busy_guard.test.ts：同 (id,format) in-flight 重复触发拦截单次执行", "tests/unit/export_busy_guard.test.ts：不同 capture 导出互不拦截 + 串行释放"]
+  },
+  "pending": ["p030"],
+  "findings": []
+}

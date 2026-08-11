@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -11,6 +11,12 @@ import {
     persist_bridge_token,
     resolve_bridge_token,
 } from '../../src/bridge/config';
+
+// chmod 需可注入失败（ESM 命名导出不可 spyOn），包裹为 vi.fn 转发原实现
+vi.mock('node:fs/promises', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs/promises')>();
+    return { ...actual, chmod: vi.fn(actual.chmod) };
+});
 
 describe('parse_bridge_config', () => {
     it('parses valid user config', () => {
@@ -156,24 +162,42 @@ describe('bridge token file persistence', () => {
         await persist_bridge_token(token, file_path);
         const loaded = await load_bridge_token_file(file_path);
 
-        expect(loaded).toBe(token);
+        expect(loaded.token).toBe(token);
+        expect(loaded.reason).toBeNull();
     });
 
-    it('returns null when file does not exist', async () => {
+    it('reports stat_failed when file does not exist', async () => {
         const file_path = join(temp_dir, 'nonexistent_token');
 
         const result = await load_bridge_token_file(file_path);
 
-        expect(result).toBeNull();
+        expect(result.token).toBeNull();
+        expect(result.reason).toBe('stat_failed');
     });
 
-    it('returns null when file is empty', async () => {
+    it('reports empty when file is empty', async () => {
         const file_path = join(temp_dir, 'empty_token');
 
         await persist_bridge_token('', file_path);
         const result = await load_bridge_token_file(file_path);
 
-        expect(result).toBeNull();
+        expect(result.token).toBeNull();
+        expect(result.reason).toBe('empty');
+    });
+
+    it('reports chmod_failed when mode is not 0600 and chmod cannot tighten', async () => {
+        const file_path = join(temp_dir, 'insecure_token');
+        await writeFile(file_path, 'secret', { mode: 0o644 });
+
+        const { chmod } = await import('node:fs/promises');
+        (chmod as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('EACCES'));
+        try {
+            const result = await load_bridge_token_file(file_path);
+            expect(result.token).toBeNull();
+            expect(result.reason).toBe('chmod_failed');
+        } finally {
+            (chmod as unknown as ReturnType<typeof vi.fn>).mockReset();
+        }
     });
 });
 
@@ -236,7 +260,7 @@ describe('resolve_bridge_token', () => {
         expect(result.file_path).toBe(file_path);
 
         const loaded = await load_bridge_token_file(file_path);
-        expect(loaded).toBe(result.token);
+        expect(loaded.token).toBe(result.token);
     });
 
     it('prefers env token over file token', async () => {

@@ -26,7 +26,8 @@ describe('resolve_client_token (T091 MCP token file fallback)', () => {
         await writeFile(file, 'file_token_value', { mode: 0o600 });
         await chmod(file, 0o600);
         const result = await resolve_client_token('env_token_value', file);
-        expect(result).toBe('env_token_value');
+        expect(result.token).toBe('env_token_value');
+        expect(result.reason).toBeNull();
     });
 
     it('falls back to file when env missing', async () => {
@@ -35,23 +36,27 @@ describe('resolve_client_token (T091 MCP token file fallback)', () => {
         await writeFile(file, 'persisted_token_value', { mode: 0o600 });
         await chmod(file, 0o600);
         const result = await resolve_client_token(undefined, file);
-        expect(result).toBe('persisted_token_value');
+        expect(result.token).toBe('persisted_token_value');
+        expect(result.reason).toBeNull();
     });
 
-    it('returns null when env missing and file missing', async () => {
+    it('returns token null with stat_failed when env missing and file missing', async () => {
         const tmp = await make_tmp();
         const result = await resolve_client_token(undefined, join(tmp, 'does_not_exist'));
-        expect(result).toBeNull();
+        expect(result.token).toBeNull();
+        expect(result.reason).toBe('stat_failed');
     });
 
-    it('returns null when env empty and file missing', async () => {
+    it('returns token null when env empty and file missing', async () => {
         const tmp = await make_tmp();
         const result = await resolve_client_token('', join(tmp, 'does_not_exist'));
-        expect(result).toBeNull();
+        expect(result.token).toBeNull();
+        expect(result.reason).toBe('stat_failed');
     });
 
     it('trims env token whitespace', async () => {
         const result = await resolve_client_token('  spaced_env_token  ', '/nonexistent');
-        expect(result).toBe('spaced_env_token');
+        expect(result.token).toBe('spaced_env_token');
+        expect(result.reason).toBeNull();
     });
 });

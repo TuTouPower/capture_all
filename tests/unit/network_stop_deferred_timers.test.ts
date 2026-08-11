@@ -43,6 +43,7 @@ import {
     _cdp_request_meta_for_test,
     _cdp_body_results_for_test,
     _deferred_cdp_index_for_test,
+    _orphan_timers_for_test,
 } from '../../src/extension/background/network_capture';
 import { DEFERRED_TIMEOUT_MS } from '../../src/extension/background/cdp_handler';
 
@@ -76,10 +77,14 @@ function emit_request(req_id: string, url: string): void {
 beforeEach(() => {
     vi.useFakeTimers();
     mock_chrome_debugger.reset();
+    // AC-002b 覆盖 sendCommand 后须恢复，避免污染后续用例
+    const proto = Object.getPrototypeOf(mock_chrome_debugger);
+    mock_chrome_debugger.sendCommand = proto.sendCommand.bind(mock_chrome_debugger);
     _deferred_web_requests_for_test.clear();
     _cdp_request_meta_for_test.clear();
     _cdp_body_results_for_test.clear();
     _deferred_cdp_index_for_test.clear();
+    _orphan_timers_for_test.clear();
 });
 
 afterEach(() => {
@@ -184,5 +189,26 @@ describe('network stop 清理 deferred/orphan timer (T103)', () => {
         // 新 capture 无旧 body 写入；orphan handler 不得收到退化数据
         expect(new_events.length).toBe(0);
         expect(orphan_events.length).toBe(0);
+    });
+
+    test('AC-003 (p028): orphan timer 被跟踪，stop 后清空不再触发', async () => {
+        const events: any[] = [];
+        start_network_capture('cap1', Date.now(), make_cfg(), TAB_ID, (p) => { events.push(p); });
+        const enable_res = await enable_response_body_capture(TAB_ID, false);
+        expect(enable_res.success).toBe(true);
+
+        // loadingFinished 无 metadata → 走 orphan 兜底（与 t112 AC-003 同型触发）
+        mock_chrome_debugger.emit_event({ tabId: TAB_ID }, 'Network.loadingFinished', { requestId: 'req_orphan' });
+        await vi.advanceTimersByTimeAsync(0);
+
+        // orphan 兜底 timer 已登记
+        expect(_orphan_timers_for_test.size).toBeGreaterThan(0);
+
+        stop_network_capture();
+        expect(_orphan_timers_for_test.size).toBe(0);
+
+        // 推进时钟超过 orphan 超时，timer 已清，无事件写入
+        await vi.advanceTimersByTimeAsync(4000);
+        expect(events.length).toBe(0);
     });
 });

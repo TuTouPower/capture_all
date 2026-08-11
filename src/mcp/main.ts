@@ -7,16 +7,24 @@ import { execute_mcp_tool, MCP_TOOL_NAMES } from './tools';
 import { MCP_TOOL_SCHEMAS } from './schemas';
 
 const bridge_url = process.env.CAPTURE_ALL_BRIDGE_URL;
-const bridge_token = await resolve_client_token(process.env.CAPTURE_ALL_BRIDGE_TOKEN);
+const token_result = await resolve_client_token(process.env.CAPTURE_ALL_BRIDGE_TOKEN);
+const bridge_token = token_result.token;
 
 if (!bridge_url) {
     throw new Error('CAPTURE_ALL_BRIDGE_URL is required');
 }
 if (!bridge_token) {
-    throw new Error(
-        'CAPTURE_ALL_BRIDGE_TOKEN required: set env, or ensure Bridge has persisted its self-generated token '
-            + '(default: $XDG_RUNTIME_DIR/capture-all/bridge_token, mode 0600)',
-    );
+    const reason = token_result.reason;
+    const hint = reason === 'stat_failed'
+        ? 'token 文件不存在（默认：$XDG_RUNTIME_DIR/capture-all/bridge_token）'
+        : reason === 'chmod_failed'
+            ? 'token 文件存在但权限非 0600 且无法自动收紧'
+            : reason === 'read_failed'
+                ? 'token 文件存在但读取失败'
+                : reason === 'empty'
+                    ? 'token 文件为空'
+                    : 'set env CAPTURE_ALL_BRIDGE_TOKEN，或确认 Bridge 已持久化自生成 token';
+    throw new Error(`CAPTURE_ALL_BRIDGE_TOKEN required: ${hint}`);
 }
 
 const client = new BridgeMcpClient(bridge_url, bridge_token);

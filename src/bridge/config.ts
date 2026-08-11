@@ -78,7 +78,14 @@ export function generate_bridge_token(): string {
     return `mcp_${randomBytes(24).toString('base64url')}`;
 }
 
-export async function load_bridge_token_file(file_path: string): Promise<string | null> {
+export type TokenFileFailureReason = 'stat_failed' | 'chmod_failed' | 'read_failed' | 'empty';
+
+export interface TokenFileLoadResult {
+    token: string | null;
+    reason: TokenFileFailureReason | null;
+}
+
+export async function load_bridge_token_file(file_path: string): Promise<TokenFileLoadResult> {
     try {
         // T064: 检查文件权限；非 0600 拒绝读取并记录
         const stat_result = await stat(file_path);
@@ -89,13 +96,23 @@ export async function load_bridge_token_file(file_path: string): Promise<string 
                 await chmod(file_path, 0o600);
             } catch {
                 // 无法收紧权限，拒绝读取避免泄露
-                return null;
+                return { token: null, reason: 'chmod_failed' };
             }
         }
-        const content = await readFile(file_path, 'utf-8');
-        return content.trim() || null;
+        let content: string;
+        try {
+            content = await readFile(file_path, 'utf-8');
+        } catch {
+            return { token: null, reason: 'read_failed' };
+        }
+        const trimmed = content.trim();
+        if (!trimmed) {
+            return { token: null, reason: 'empty' };
+        }
+        return { token: trimmed, reason: null };
     } catch {
-        return null;
+        // 主要覆盖 stat 失败（文件不存在）
+        return { token: null, reason: 'stat_failed' };
     }
 }
 
@@ -130,9 +147,9 @@ export async function resolve_bridge_token(
     }
 
     const file_path = token_file_path ?? default_token_file_path();
-    const existing = await load_bridge_token_file(file_path);
-    if (existing) {
-        return { token: existing, source: 'file', file_path };
+    const loaded = await load_bridge_token_file(file_path);
+    if (loaded.token) {
+        return { token: loaded.token, source: 'file', file_path };
     }
 
     const generated = generate_bridge_token();

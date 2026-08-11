@@ -63,6 +63,10 @@ let stream_buffer_instance: ReturnType<typeof create_stream_buffer> | null = nul
 const deferred_web_requests: Map<string, DeferredEntry> = new Map();
 export const _deferred_web_requests_for_test = deferred_web_requests;
 
+// 跟踪 orphan 兜底 timer，stop 时清理防迟到回调跨采集串写（p028）
+const orphan_timers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+export const _orphan_timers_for_test = orphan_timers;
+
 // Callback for external consumers (only used for orphan CDP events)
 let on_cdp_body_event: ((event: CdpBodyEvent) => void) | null = null;
 
@@ -135,6 +139,12 @@ export function stop_network_capture(): void {
     }
     deferred_web_requests.clear();
     _deferred_cdp_index.clear();
+
+    // p028: 清理 orphan 兜底 timer
+    for (const timer of orphan_timers.values()) {
+        clearTimeout(timer);
+    }
+    orphan_timers.clear();
 
     if (dbg_tab_id !== null) {
         const tab = dbg_tab_id;
@@ -827,7 +837,8 @@ export const _try_resolve_deferred_for_test = try_resolve_deferred;
 function schedule_orphan_check(req_key: string, req_id: string): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
     // emit it as cdp_only via the callback.
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+        orphan_timers.delete(req_key);
         // marker 生命周期与消费无关：即使事件已被 handle_completed 消费，
         // orphan 终态也须清理 finished_before_stream，避免残留影响同 key 复用。
         finished_before_stream.delete(req_key);
@@ -864,6 +875,7 @@ function schedule_orphan_check(req_key: string, req_id: string): void {
         _deferred_cdp_index.delete(req_key);
         finished_before_stream.delete(req_key);
     }, ORPHAN_TIMEOUT_MS);
+    orphan_timers.set(req_key, timer);
 }
 
 function headers_map_from_cdp(headers: Record<string, string>): Record<string, string> {

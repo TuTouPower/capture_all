@@ -1,6 +1,6 @@
 // background/network_capture.ts
 // Network capture orchestrator.
-// Delegates to specialized handlers: cdp_handler, webrequest_handler, ws_handler
+// Delegates to specialized handlers: cdp_handler, webrequest_handler
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
@@ -17,7 +17,6 @@ import { extract_request_body, headers_array_to_map, resolve_resource_type, extr
 import { base64_decoded_size, is_self_origin_url, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS, cdp_request_key } from './cdp_handler';
 import type { NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
 import {} from './webrequest_handler';
-import {} from './ws_handler';
 
 const logger = new Logger('background/network', get_app_log_transport());
 

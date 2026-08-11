@@ -41,6 +41,7 @@ function make_cdp_event(overrides: Partial<CdpBodyEvent> = {}): CdpBodyEvent {
         request_body: null,
         request_body_status: 'not_enabled',
         response_body: '{"ok":true}',
+        response_preview: null,
         response_body_status: 'captured',
         request_headers: { 'Accept': 'application/json' },
         response_headers: { 'Content-Type': 'application/json' },

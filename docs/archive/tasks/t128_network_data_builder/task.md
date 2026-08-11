@@ -2,11 +2,11 @@
 tid: "t128"
 slug: "network_data_builder"
 title: "refactor: extract NetworkRequestData builder"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t128_network_data_builder"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "9d36ca0b95e7f8c33922d8af99c8b010c8c8fc37"
 depends_on: "t123"
 conflicts_with: ""
 note: "审阅发现:3+ 处 ~40 字段手工构造"
@@ -50,8 +50,11 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t128_code_f001|important|已修|build_network_event 迁移后 response_body_encoding/bytes 自动派生,CDP base64 body 误标 utf8;加 extra 覆盖 null 还原旧语义|network_capture.ts:968|
+|t128_code_f002|minor|已修|三处构造点 `|| 'failed'`→builder `?? 'not_enabled'` 漂移;改显式传 `X || 'failed'` 消除|body_capture_coordinator.ts:299 / service_worker.ts:837 / network_hook.ts:375|
+|t128_test_f001|important|已修|web_request 路径 response_body 字段零断言;新增判别性用例(base64 body)锁死不派发语义|network_cdp.test.ts:651|
+|t128_test_f002|minor|已修|builder 单测缺多字节用例;补 '你好'=6/'👋'=4|network_builder.test.ts|
+|t128_test_f003|important|已修|Round 3 null-body 断言无判别力;改注入 base64 body 判别性用例|network_cdp.test.ts:651|
 
 ## 收尾报告
 

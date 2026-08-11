@@ -1,0 +1,20 @@
+{
+  "tid": "t123",
+  "attempt": 1,
+  "execution_id": "4e0e9945520248fe9560e482bd935a1f",
+  "status": "done",
+  "branch": "t123_remove_webrequest_handler_legacy",
+  "base_sha": "b442162c637afca237439ad04171a3bf40681969",
+  "tests": "vitest run: 130 files / 1372 tests passed",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS(2 finding: f001 important改spec / f002 minor) + test PASS(2 finding)；Round 2 code PASS + test PASS（前轮 finding 全消除）",
+  "ac_evidence": {
+    "AC-001": ["git rm src/extension/background/webrequest_handler.ts，src+tests grep 无 webrequest_handler/WebRequestHandlerState 引用"],
+    "AC-002": ["network_capture.ts 删除 import {} from './webrequest_handler' 空导入与过时注释"],
+    "AC-003": ["tests/unit grep 无 webrequest_handler 或 ws_handler import；loading_failed_events.test.ts:22 旧 import 已删"],
+    "AC-004": ["loading_failed_events.test.ts 不再 import 旧 handler，过时 handle_error 死用例删除（生产失败经 CDP loadingFailed→cdp_body_results 表达），保留 describe 验证生产路径"],
+    "AC-005": ["npm test 130 files/1372 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -1,15 +1,15 @@
 ---
-tid: "t129"
-slug: "split_long_functions"
-title: "refactor: split long functions"
-status: "backlog"
-branch: ""
+tid: "t127"
+slug: "content_capture_state_factory"
+title: "refactor: unify content capture state boilerplate"
+status: "done"
+branch: "t127_content_capture_state_factory"
 worktree: ""
-review_level: "single"
-diff_anchor: ""
-depends_on: "t128"
+review_level: "full"
+diff_anchor: "5f985fbe01996d1fd8e884075d84e847261e07d7"
+depends_on: ""
 conflicts_with: ""
-note: "审阅发现:build_archive/wire_trace/handle_message/start_body_capture 拆分"
+note: "审阅发现:9 个 content 捕获模块重复状态样板"
 ---
 
 # Task 过程总账

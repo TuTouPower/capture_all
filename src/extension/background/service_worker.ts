@@ -24,6 +24,7 @@ import { create_base_event, get_relative_time } from '../../shared/event_utils';
 import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
 import { category_for_event_type } from '../../shared/event_category';
 import { Logger } from '../../shared/logger';
+import { build_network_data } from '../../shared/network_builder';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
 import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
@@ -225,64 +226,29 @@ async function handle_message(message: any, sender?: any): Promise<any> {
         case 'list_captures':
             return storage_list_captures();
         case 'delete_capture':
-            // T110: 活跃采集不可删除
-            if (is_capturing && current_capture_id === message.capture_id) {
-                return { success: false, error: 'Cannot delete an active capture' };
-            }
-            await storage_delete_capture(message.capture_id);
-            return { success: true };
+            return handle_delete_capture(message.capture_id);
         case 'export_json':
-            await flush_all(); // T107: 导出前落盘缓冲事件
-            return { success: true, json: await export_json(message.capture_id) };
+            return handle_export('json', message.capture_id);
         case 'export_jsonl':
-            await flush_all();
-            return { success: true, jsonl: await export_jsonl(message.capture_id) };
+            return handle_export('jsonl', message.capture_id);
         case 'export_html':
-            await flush_all();
-            return { success: true, html: await export_html(message.capture_id) };
+            return handle_export('html', message.capture_id);
         case 'export_har':
-            await flush_all();
-            return { success: true, har: await export_har(message.capture_id) };
+            return handle_export('har', message.capture_id);
         case 'flush':
             await flush_all();
             return { success: true };
         case 'restart_bridge':
-            stop_bridge_client();
-            {
-                const cfg = await load_user_config();
-                if (cfg.agent_bridge_enabled) start_agent_bridge();
-            }
-            return { success: true };
+            return handle_restart_bridge();
         case 'test_bridge_fetch':
-            try {
-                const cfg = await get_user_config_for_bridge();
-                const bridge_url = cfg.agent_bridge_url || '';
-                const res = await fetch(`${bridge_url}/health`);
-                const data = await res.json();
-                return { success: true, bridge_url, health: data };
-            } catch (e: unknown) {
-                return { success: false, error: e instanceof Error ? e.message : String(e) };
-            }
-        case 'app_log_batch': {
-            const transport = get_app_log_transport();
-            for (const entry of (message.entries || [])) {
-                if (!entry.id) continue;
-                transport.write(entry);
-            }
-            return { success: true };
-        }
-        case 'export_app_logs': {
-            try {
-                const content = await export_app_logs(message.options || {});
-                return { success: true, data: content };
-            } catch (e) {
-                return { success: false, error: e instanceof Error ? e.message : String(e) };
-            }
-        }
-        case 'clear_app_logs': {
+            return handle_test_bridge_fetch();
+        case 'app_log_batch':
+            return handle_app_log_batch(message);
+        case 'export_app_logs':
+            return handle_export_app_logs(message);
+        case 'clear_app_logs':
             await get_app_log_transport().clear();
             return { success: true };
-        }
         case 'get_app_log_size': {
             const size_bytes = await get_app_log_transport().get_total_size_bytes();
             return { success: true, size_bytes };
@@ -301,6 +267,74 @@ async function handle_message(message: any, sender?: any): Promise<any> {
         default:
             logger.warn('Unknown message action', { action: message.action });
             return { success: false, error: 'Unknown action' };
+    }
+}
+
+/** 活跃采集不可删除的 guard + 删除。 */
+async function handle_delete_capture(capture_id: string): Promise<{ success: boolean; error?: string }> {
+    // T110: 活跃采集不可删除
+    if (is_capturing && current_capture_id === capture_id) {
+        return { success: false, error: 'Cannot delete an active capture' };
+    }
+    await storage_delete_capture(capture_id);
+    return { success: true };
+}
+
+/** export 系列：导出前落盘缓冲事件。 */
+async function handle_export(
+    format: 'json' | 'jsonl' | 'html' | 'har',
+    capture_id: string,
+): Promise<{ success: boolean; [k: string]: unknown }> {
+    await flush_all(); // T107: 导出前落盘缓冲事件
+    const export_map = {
+        json: export_json,
+        jsonl: export_jsonl,
+        html: export_html,
+        har: export_har,
+    };
+    return { success: true, [format]: await export_map[format](capture_id) };
+}
+
+/** 重启 Bridge 客户端并读最新配置。 */
+async function handle_restart_bridge(): Promise<{ success: boolean }> {
+    stop_bridge_client();
+    {
+        const cfg = await load_user_config();
+        if (cfg.agent_bridge_enabled) start_agent_bridge();
+    }
+    return { success: true };
+}
+
+/** Bridge /health 探测。 */
+async function handle_test_bridge_fetch(): Promise<{ success: boolean; bridge_url?: string; health?: unknown; error?: string }> {
+    try {
+        const cfg = await get_user_config_for_bridge();
+        const bridge_url = cfg.agent_bridge_url || '';
+        const res = await fetch(`${bridge_url}/health`);
+        const data = await res.json();
+        return { success: true, bridge_url, health: data };
+    } catch (e: unknown) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
+}
+
+/** app_log 批量写入。 */
+async function handle_app_log_batch(message: any): Promise<{ success: boolean }> {
+    const transport = get_app_log_transport();
+    for (const entry of (message.entries || [])) {
+        if (!entry.id) continue;
+        transport.write(entry);
+    }
+    return { success: true };
+}
+
+/** app_log 导出。 */
+async function handle_export_app_logs(message: any): Promise<{ success: boolean; data?: string; error?: string }> {
+    try {
+        const content = await export_app_logs(message.options || {});
+        return { success: true, data: content };
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) };
     }
 }
 
@@ -816,7 +850,7 @@ async function handle_fallback_body_event(data: any): Promise<void> {
         ? redact_url(data.url || '', true)
         : data.url || '';
 
-    const request: NetworkRequestData = {
+    const request = build_network_data({
         capture_id: current_capture_id ?? undefined,
         event_id: `fallback_${Date.now().toString(36)}`,
         request_id: `fallback_${Date.now()}`,
@@ -824,36 +858,19 @@ async function handle_fallback_body_event(data: any): Promise<void> {
         url,
         url_status: 'captured',
         status_code: data.status || null,
-        status_text: null,
-        protocol: null,
         resource_type: (data.resource_type || 'xhr') as NetworkRequestData['resource_type'],
-        initiator: null,
         duration_ms: data.duration_ms || null,
-        start_time_ms: null,
-        end_time_ms: null,
         request_headers: {},
         response_headers: {},
         headers_status: 'captured',
         request_body: data.request_body ?? null,
         request_body_status: data.request_body_status || 'not_enabled',
-        request_body_encoding: data.request_body ? 'utf8' : null,
-        request_body_bytes: data.request_body ? new TextEncoder().encode(data.request_body).length : null,
-        request_body_mime: null,
         response_body: data.response_body ?? null,
         response_preview: data.response_preview ?? null,
         response_body_status: data.response_body_status || 'failed',
-        response_body_encoding: data.response_body ? 'utf8' : null,
-        response_body_bytes: data.response_body ? new TextEncoder().encode(data.response_body).length : null,
-        mime_type: null,
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'fallback_hook',
         body_capture_mode: 'fallback_hook',
-    };
+    });
 
     await handle_network_request(request);
 }

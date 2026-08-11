@@ -1,0 +1,18 @@
+{
+  "tid": "t122",
+  "attempt": 1,
+  "execution_id": "52b5c0488b4049d9b063692a73651633",
+  "status": "done",
+  "branch": "t122_remove_ws_handler_dead_code",
+  "base_sha": "63c843e4d131cc0dc71e3e531d627aec6440c6d0",
+  "tests": "vitest run: 129 files / 1368 tests passed",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS（0 finding）",
+  "ac_evidence": {
+    "AC-001": ["git rm src/extension/background/ws_handler.ts，文件已删除，grep ws_handler src tests 无引用"],
+    "AC-002": ["network_capture.ts 删除 import {} from './ws_handler'，头部注释改为 Delegates to specialized handlers: cdp_handler, webrequest_handler"],
+    "AC-003": ["npm test 129 files/1368 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

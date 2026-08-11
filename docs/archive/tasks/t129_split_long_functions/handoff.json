@@ -1,0 +1,18 @@
+{
+  "tid": "t129",
+  "attempt": 1,
+  "execution_id": "3e98744295a74a4092014a3fad413877",
+  "status": "done",
+  "branch": "t129_split_long_functions",
+  "base_sha": "9e4e311a8ea206bf6b24e7d0ad2b8395e5be71f2",
+  "tests": "vitest run: 131 files / 1379 tests passed",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS(2 minor)；Round 2 general PASS（前轮 finding 全消除）",
+  "ac_evidence": {
+    "AC-001": ["build_archive 23 行/wire_trace 27 行/handle_message 68 行/start_body_capture 60 行，均 <80 行，验证脚本实测"],
+    "AC-002": ["npm test 131 files/1379 tests passed；archive_builder/dashboard_detail/service_worker/body_capture_coordinator 相关测试全绿"],
+    "AC-003": ["npm test 131 files/1379 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

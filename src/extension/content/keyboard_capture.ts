@@ -1,14 +1,10 @@
 // content/keyboard_capture.ts
 import type { CaptureConfig, CaptureEvent, KeyboardEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { build_xpath } from '../shared/dom_utils';
 
-let is_capturing = false;
+const state = create_capture_state<KeyboardEventData>();
 let config: CaptureConfig;
-let capture_id: string;
-let capture_start_epoch_ms: number;
-let tab_id: number;
-let send_event: (event: CaptureEvent, data: KeyboardEventData) => void;
 
 export function start_keyboard_capture(
     cfg: CaptureConfig,
@@ -17,23 +13,21 @@ export function start_keyboard_capture(
     tid: number,
     sender: (event: CaptureEvent, data: KeyboardEventData) => void
 ): void {
-    if (is_capturing) return;
     if (cfg.keyboard_capture_mode === 'none') return;
+    if (!state.begin(sender, {
+        capture_id: cid,
+        capture_start_epoch_ms: start_ms,
+        tab_id: tid,
+    })) return;
 
     config = cfg;
-    capture_id = cid;
-    capture_start_epoch_ms = start_ms;
-    tab_id = tid;
-    send_event = sender;
-    is_capturing = true;
 
     document.addEventListener('keydown', handle_keydown);
     document.addEventListener('keyup', handle_keyup);
 }
 
 export function stop_keyboard_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     document.removeEventListener('keydown', handle_keydown);
     document.removeEventListener('keyup', handle_keyup);
@@ -65,7 +59,7 @@ function build_key_event(
     event: KeyboardEvent,
     action: 'keydown' | 'keyup'
 ): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     // In shortcuts mode, only capture modifier combinations
     if (is_shortcut_mode() && !has_modifier(event)) {
@@ -77,11 +71,11 @@ function build_key_event(
     const masked = config.redact_data;
 
     const base_event = create_content_event({
-        capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: 'keyboard_event',
-        relative_time_ms: get_relative_time(capture_start_epoch_ms),
-        tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         url: location.href,
         source: 'content_script',
     });
@@ -103,7 +97,7 @@ function build_key_event(
         target_input_type: (event.target as HTMLInputElement)?.type ?? null,
     };
 
-    send_event(base_event, key_data);
+    state.sender?.(base_event, key_data);
 }
 
 function handle_keydown(event: KeyboardEvent): void {

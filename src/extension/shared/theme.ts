@@ -36,10 +36,6 @@ export function apply_theme(mode: ThemeMode): void {
     }
 }
 
-export function get_theme(): ThemeMode {
-    return current_theme;
-}
-
 export async function init_theme(): Promise<void> {
     let mode: ThemeMode = 'follow-system';
     try {

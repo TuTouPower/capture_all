@@ -1,0 +1,18 @@
+{
+  "tid": "t128",
+  "attempt": 1,
+  "execution_id": "6830ea5e7dc24e8aa809b9044ff11bf0",
+  "status": "done",
+  "branch": "t128_network_data_builder",
+  "base_sha": "9d36ca0b95e7f8c33922d8af99c8b010c8c8fc37",
+  "tests": "vitest run: 131 files / 1379 tests passed（含 network_builder.test.ts 6 用例 + 判别性用例）",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 code FAIL(1 important) + test FAIL(1 important+1 minor)；Round 2 code PASS(1 minor) + test FAIL(1 important)；Round 3 code PASS + test FAIL(1 important)；Round 4 code PASS + test PASS（前轮 finding 全消除）",
+  "ac_evidence": {
+    "AC-001": ["src/shared/network_builder.ts 新增 build_network_data，7 处构造点迁移，grep 无内联 NetworkRequestData 字面量残留"],
+    "AC-002": ["网络测试全绿(131/1379)，判别性用例锁死 web_request 路径 body 不派发语义，base64 body 断言透传+encoding/bytes null"],
+    "AC-003": ["npm test 131 files/1379 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

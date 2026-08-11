@@ -99,7 +99,7 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
     const result = await handlers.start_capture(capture_id, config);
 
     if (!result.success) {
-        // T048: 区分"已有活跃采集"与"存储失败"。错误信息含 'already capturing'/'already recording'/'not idle' 用 RECORDING_ALREADY_RUNNING，
+        // T048: 区分"已有活跃采集"与"存储失败"。错误信息含 'already capturing'/'already recording'/'not idle' 用 CAPTURE_ALREADY_RUNNING，
         // 其他失败（如 create_capture 抛错）用 STORAGE_READ_FAILED，不再一律覆盖。
         const err_msg = (result.error || '').toLowerCase();
         const is_busy = err_msg.includes('already capturing')
@@ -107,7 +107,7 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
             || err_msg.includes('already_capturing')
             || err_msg.includes('not idle');
         if (is_busy) {
-            throw new AgentCommandError('RECORDING_ALREADY_RUNNING', result.error || 'Recording already running');
+            throw new AgentCommandError('CAPTURE_ALREADY_RUNNING', result.error || 'Recording already running');
         }
         throw new AgentCommandError('STORAGE_READ_FAILED', result.error || 'Start capture failed');
     }
@@ -120,7 +120,7 @@ async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
     const result = await handlers.stop_capture();
 
     if (!result.success) {
-        throw new AgentCommandError('NO_ACTIVE_RECORDING', 'No active recording');
+        throw new AgentCommandError('NO_ACTIVE_CAPTURE', 'No active capture');
     }
 
     return { capture_id: active_capture_id, status: 'stopped' };
@@ -144,7 +144,7 @@ async function list_captures(payload: Record<string, unknown>): Promise<unknown>
 async function get_capture_metadata(capture_id: string): Promise<unknown> {
     const capture = await get_capture(capture_id);
     if (!capture) {
-        throw new AgentCommandError('SESSION_NOT_FOUND', 'Capture not found');
+        throw new AgentCommandError('CAPTURE_NOT_FOUND', 'Capture not found');
     }
     return capture;
 }
@@ -302,7 +302,7 @@ function to_agent_error(error: unknown): AgentError {
 
 function is_agent_error_code(value: string): value is AgentErrorCode {
     return [
-        'SESSION_NOT_FOUND',
+        'CAPTURE_NOT_FOUND',
         'SOURCE_NOT_FOUND',
         'RECORD_NOT_FOUND',
         'INVALID_QUERY',

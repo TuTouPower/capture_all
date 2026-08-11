@@ -1,15 +1,11 @@
 // content/form_submit_capture.ts
 import type { CaptureConfig, CaptureEvent, FormSubmitData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { build_xpath } from '../shared/dom_utils';
 import { redact_url } from '../../shared/redaction';
 
-let is_capturing = false;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
+const state = create_capture_state<FormSubmitData>();
 let config: CaptureConfig;
-let send_event: (event: CaptureEvent, data: FormSubmitData) => void;
 let submit_listener: ((e: Event) => void) | null = null;
 
 export function start_form_submit_capture(
@@ -19,21 +15,19 @@ export function start_form_submit_capture(
     new_tab_id: number,
     new_config: CaptureConfig,
 ): void {
-    if (is_capturing) return;
-    send_event = sender;
-    capture_id = new_capture_id;
-    capture_start_epoch_ms = new_capture_start_epoch_ms;
-    tab_id = new_tab_id;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
     config = new_config;
-    is_capturing = true;
 
     submit_listener = handle_submit;
     document.addEventListener('submit', submit_listener, true);
 }
 
 export function stop_form_submit_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     if (submit_listener) {
         document.removeEventListener('submit', submit_listener, true);
@@ -50,7 +44,7 @@ function get_target_selector(el: Element): string | null {
 }
 
 function handle_submit(e: Event): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     const target = e.target;
     if (!(target instanceof HTMLFormElement)) return;
@@ -70,13 +64,13 @@ function handle_submit(e: Event): void {
     };
 
     const event = create_content_event({
-        capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: 'form_submit',
-        relative_time_ms: get_relative_time(capture_start_epoch_ms),
-        tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         source: 'content_script',
     });
 
-    send_event(event, data);
+    state.sender?.(event, data);
 }

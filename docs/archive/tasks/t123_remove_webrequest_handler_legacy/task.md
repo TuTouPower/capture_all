@@ -2,11 +2,11 @@
 tid: "t123"
 slug: "remove_webrequest_handler_legacy"
 title: "refactor: remove legacy webrequest_handler path"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t123_remove_webrequest_handler_legacy"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "b442162c637afca237439ad04171a3bf40681969"
 depends_on: ""
 conflicts_with: ""
 note: "审阅发现:生产 0 引用仅测试直驱,迁移测试后删文件"
@@ -50,8 +50,10 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t123_code_f001|important|已修|spec AC-004 前提内部矛盾，改为描述真实迁移结果（删过时 handle_error 死用例），改 spec 上下文区不计 FAIL|spec.md:37/66|
+|t123_code_f002|minor|已修|测试 line 88 残留注释引用已删 webRequest handle_error 通道，改为 CDP loadingFailed→cdp_body_results 表述|tests/unit/loading_failed_events.test.ts:88|
+|t123_test_f001|important|已修|同 code f001，spec 修订后消除|spec.md:37/66|
+|t123_test_f002|minor|已修|同 code f002，注释修复后消除|tests/unit/loading_failed_events.test.ts:88|
 
 ## 收尾报告
 

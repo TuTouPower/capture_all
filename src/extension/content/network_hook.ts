@@ -9,6 +9,7 @@ import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { build_network_data } from '../../shared/network_builder';
 
 const SIGNAL = '__capture_all_network_hook__';
 
@@ -356,42 +357,26 @@ export function start_network_hook(
         // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
         if (!verify_payload(current_secret, d)) return;
 
-        const data: NetworkRequestData = {
+        const data = build_network_data({
             request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             method: d.method || 'GET',
             url: d.url || '',
             url_status: 'captured',
             status_code: typeof d.status === 'number' ? d.status : 0,
-            status_text: null,
-            protocol: null,
             resource_type: 'fetch',
-            initiator: null,
             duration_ms: typeof d.duration_ms === 'number' ? Math.round(d.duration_ms * 100) / 100 : 0,
-            start_time_ms: null,
-            end_time_ms: null,
             request_headers: null,
             response_headers: null,
             headers_status: 'captured',
             request_body: d.request_body ?? null,
             request_body_status: d.request_body_status || 'not_enabled',
-            request_body_encoding: null,
-            request_body_bytes: null,
-            request_body_mime: null,
             response_body: d.response_body ?? null,
             response_preview: typeof d.response_body === 'string' ? d.response_body.slice(0, 200) : null,
             response_body_status: d.response_body_status || 'failed',
-            response_body_encoding: null,
-            response_body_bytes: null,
-            mime_type: null,
-            request_size_bytes: null,
-            response_size_bytes: null,
-            transfer_size_bytes: null,
-            from_cache: null,
-            cache_status: null,
-            error_text: null,
             capture_method: 'fallback_hook',
             body_capture_mode: 'fallback_hook',
-        };
+            derive_body: false,
+        });
 
         send_event(
             create_content_event({
@@ -416,8 +401,4 @@ export function stop_network_hook(): void {
         window.removeEventListener('message', message_listener, true);
         message_listener = null;
     }
-}
-
-export function is_network_hook_active(): boolean {
-    return is_capturing;
 }

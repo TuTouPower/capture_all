@@ -3,6 +3,7 @@
 
 import type { NetworkRequestData, NetworkCorrelationStatus, BodyCaptureStatus } from '../../shared/types';
 import { resolve_resource_type, extract_mime_type } from './network_webrequest';
+import { build_network_data } from '../../shared/network_builder';
 
 export interface CdpBodyEvent {
     request_id: string;
@@ -64,49 +65,34 @@ export function merge_matched(
     // T056: 空对象 {} 为 truthy 但无内容；用 keys 长度判断是否真正可用
     const has_headers = (h: Record<string, string> | null | undefined): boolean =>
         !!h && Object.keys(h).length > 0;
-    const request: NetworkRequestData = {
+    const merged_body = web_meta.request_body ?? cdp_event.request_body;
+    const request: NetworkRequestData = build_network_data({
         capture_id: web_meta.capture_id,
         relative_time: web_meta.relative_time,
         absolute_time: web_meta.absolute_time,
         tab_id: web_meta.tab_id || cdp_event.tab_id,
+        request_id: cdp_event.request_id,
         method: web_meta.method || cdp_event.method,
         url: web_meta.url || cdp_event.url,
         url_status: 'captured',
         status_code: web_meta.status_code || cdp_event.status_code,
-        status_text: null,
-        protocol: null,
         resource_type: resolve_resource_type(web_meta.resource_type || cdp_event.resource_type),
-        initiator: null,
         duration_ms: web_meta.duration_ms,
-        start_time_ms: null,
-        end_time_ms: null,
         // T056: 空对象 {} 为 truthy 但无内容；用 has_headers 判断是否真正可用
         request_headers: has_headers(web_meta.request_headers) ? web_meta.request_headers : (cdp_event.request_headers || {}),
         response_headers: has_headers(web_meta.response_headers) ? web_meta.response_headers : (cdp_event.response_headers || {}),
         headers_status: 'captured',
-        request_body: web_meta.request_body ?? cdp_event.request_body,
+        request_body: merged_body,
         request_body_status: web_meta.request_body_status || cdp_event.request_body_status,
-        request_body_encoding: (web_meta.request_body ?? cdp_event.request_body) ? 'utf8' : null,
-        request_body_bytes: (web_meta.request_body ?? cdp_event.request_body) ? new TextEncoder().encode(web_meta.request_body ?? cdp_event.request_body!).length : null,
-        request_body_mime: null,
         response_body: cdp_event.response_body,
         response_preview: cdp_event.response_preview,
         response_body_status: cdp_event.response_body_status,
-        response_body_encoding: cdp_event.response_body ? 'utf8' : null,
-        response_body_bytes: cdp_event.response_body ? new TextEncoder().encode(cdp_event.response_body).length : null,
         mime_type: extract_mime_type(web_meta.response_headers || cdp_event.response_headers),
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'web_request',
         body_capture_mode: 'extension_cdp',
         correlation_status,
         cdp_request_id: cdp_event.request_id,
-        request_id: cdp_event.request_id,
-    };
+    });
 
     return request;
 }
@@ -116,21 +102,15 @@ export function build_cdp_only_request(
     capture_id: string,
     start_time: number
 ): NetworkRequestData {
-    return {
+    return build_network_data({
         capture_id,
-        event_id: undefined,
         request_id: cdp_event.request_id,
         method: cdp_event.method,
         url: cdp_event.url,
         url_status: 'captured',
         status_code: cdp_event.status_code,
-        status_text: null,
-        protocol: null,
         resource_type: resolve_resource_type(cdp_event.resource_type),
-        initiator: null,
         duration_ms: 0,
-        start_time_ms: null,
-        end_time_ms: null,
         relative_time: cdp_event.timestamp - start_time,
         absolute_time: cdp_event.timestamp,
         tab_id: cdp_event.tab_id,
@@ -139,30 +119,19 @@ export function build_cdp_only_request(
         headers_status: 'captured',
         request_body: cdp_event.request_body,
         request_body_status: cdp_event.request_body_status,
-        request_body_encoding: cdp_event.request_body ? 'utf8' : null,
-        request_body_bytes: cdp_event.request_body ? new TextEncoder().encode(cdp_event.request_body).length : null,
-        request_body_mime: null,
         response_body: cdp_event.response_body,
         response_preview: cdp_event.response_preview,
         response_body_status: cdp_event.response_body_status,
-        response_body_encoding: cdp_event.response_body ? 'utf8' : null,
-        response_body_bytes: cdp_event.response_body ? new TextEncoder().encode(cdp_event.response_body).length : null,
         mime_type: extract_mime_type(cdp_event.response_headers),
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'extension_cdp',
         body_capture_mode: 'extension_cdp',
         correlation_status: 'cdp_only',
         cdp_request_id: cdp_event.request_id,
-    };
+    });
 }
 
 export function build_web_request_only_request(web_meta: WebRequestMeta): NetworkRequestData {
-    return {
+    return build_network_data({
         capture_id: web_meta.capture_id,
         relative_time: web_meta.relative_time,
         absolute_time: web_meta.absolute_time,
@@ -172,35 +141,18 @@ export function build_web_request_only_request(web_meta: WebRequestMeta): Networ
         url: web_meta.url,
         url_status: 'captured',
         status_code: web_meta.status_code,
-        status_text: null,
-        protocol: null,
         resource_type: resolve_resource_type(web_meta.resource_type),
-        initiator: null,
         duration_ms: web_meta.duration_ms,
-        start_time_ms: null,
-        end_time_ms: null,
         request_headers: web_meta.request_headers,
         response_headers: web_meta.response_headers,
         headers_status: 'captured',
         request_body: web_meta.request_body,
         request_body_status: web_meta.request_body_status,
-        request_body_encoding: web_meta.request_body ? 'utf8' : null,
-        request_body_bytes: web_meta.request_body ? new TextEncoder().encode(web_meta.request_body).length : null,
-        request_body_mime: null,
         response_body: null,
-        response_preview: null,
         response_body_status: 'not_enabled',
-        response_body_encoding: null,
-        response_body_bytes: null,
         mime_type: extract_mime_type(web_meta.response_headers),
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'web_request',
         body_capture_mode: 'none',
         correlation_status: 'web_request_only',
-    };
+    });
 }

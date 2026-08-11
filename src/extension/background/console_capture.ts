@@ -70,10 +70,6 @@ export function is_console_active(): boolean {
     return is_capturing;
 }
 
-export function get_attached_tab_id(): number | null {
-    return is_capturing ? tab_id : null;
-}
-
 export async function stop_console_capture(): Promise<void> {
     if (!is_capturing) return;
     is_capturing = false;

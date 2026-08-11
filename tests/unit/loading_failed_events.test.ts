@@ -19,68 +19,9 @@ import { mock_chrome_debugger } from '../support/__mocks__/chrome_debugger';
     tabs: { query: vi.fn().mockResolvedValue([]), get: vi.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }), sendMessage: vi.fn().mockResolvedValue(undefined), onActivated: { addListener: vi.fn() }, onUpdated: { addListener: vi.fn() }, onRemoved: { addListener: vi.fn() }, onCreated: { addListener: vi.fn() } },
 };
 
-import { handle_error, type WebRequestHandlerState } from '../../src/extension/background/webrequest_handler';
 import { start_network_capture, stop_network_capture, enable_response_body_capture, _cdp_request_meta_for_test } from '../../src/extension/background/network_capture';
 import type { PendingRequest } from '../../src/extension/background/cdp_handler';
 import { NetworkCaptureContext } from '../../src/extension/background/network_context';
-
-describe('webRequest handle_error 发失败事件', () => {
-    function make_wr_state(emitted: any[]): WebRequestHandlerState {
-        return {
-            is_capturing: true,
-            capture_id: 'cap_wr',
-            start_time: Date.now(),
-            current_tab_id: 1,
-            config: {
-                redact_sensitive_headers: false,
-                redact_url_query: false,
-                redact_data: false,
-                capture_request_body: false,
-                capture_response_body: true,
-                max_body_capture_bytes: 104857600,
-                inline_text_max_bytes: 32768,
-            },
-            dbg_tab_id: null,
-            pending_requests: new Map(),
-            cdp_request_meta: new Map(),
-            cdp_body_results: new Map(),
-            deferred_web_requests: new Map(),
-            _deferred_cdp_index: new Map(),
-            send_to_background: (payload: any) => emitted.push(payload),
-        };
-    }
-
-    it('handle_error 发失败网络事件含 error_text', () => {
-        const emitted: any[] = [];
-        const state = make_wr_state(emitted);
-        const pending: PendingRequest = {
-            cdp_request_id: 'WR_1',
-            tab_id: 1,
-            method: 'GET',
-            url: 'https://example.com/api',
-            timestamp: Date.now(),
-            request_headers: {},
-            response_headers: {},
-            request_body: null,
-            request_body_status: 'not_enabled',
-            resource_type: 'xhr',
-            mime_type: null,
-        };
-        state.pending_requests.set('WR_1', pending);
-
-        handle_error({
-            requestId: 'WR_1',
-            tabId: 1,
-            error: 'net::ERR_FAILED',
-            url: 'https://example.com/api',
-        }, state);
-
-        expect(emitted.length).toBe(1);
-        expect(emitted[0].data.error_text).toBe('net::ERR_FAILED');
-        expect(emitted[0].data.status_code).toBeNull();
-        expect(state.pending_requests.has('WR_1')).toBe(false);
-    });
-});
 
 describe('NetworkCaptureContext.reset 取消 deferred timer', () => {
     it('reset 时 clearTimeout 被调用', () => {
@@ -144,7 +85,7 @@ describe('loadingFailed 带 meta（生产 network_capture 路径）', () => {
             errorText: 'net::ERR_CONNECTION_RESET',
             type: 'Fetch',
         });
-        // 生产语义：不发立即失败主事件（失败事件由 webRequest handle_error 通道发出）
+        // 生产语义：不发立即失败主事件（失败状态经 CDP loadingFailed→cdp_body_results 消费路径表达）
         expect(emitted.length).toBe(0);
         // meta 保留（生产语义：等待消费路径，非 orphan 职责）
         expect(_cdp_request_meta_for_test.has('root:LF1')).toBe(true);

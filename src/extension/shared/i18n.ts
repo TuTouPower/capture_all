@@ -362,7 +362,7 @@ const locales: Record<Locale, I18nStrings> = { en, zh };
 
 let current_locale: Locale = 'en';
 
-export function detect_locale(): Locale {
+function detect_locale(): Locale {
     const lang = navigator.language || 'en';
     if (lang.startsWith('zh')) return 'zh';
     return 'en';

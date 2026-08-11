@@ -1,10 +1,10 @@
 // background/network_capture.ts
 // Network capture orchestrator.
-// Delegates to specialized handlers: cdp_handler, webrequest_handler, ws_handler
+// Delegates to specialized handlers: cdp_handler
 //
 // Phase 2: outputs CaptureEvent + NetworkRequestData (unified network_request type)
 
-import type { NetworkRequestData, BodyCaptureStatus, WsFrameData } from '../../shared/types';
+import type { BodyCaptureStatus, WsFrameData } from '../../shared/types';
 import { create_base_event } from '../../shared/event_utils';
 import { redact_headers, redact_url, truncate_request_body, truncate_response_body } from '../../shared/redaction';
 import { DEFAULT_CONFIG } from '../../shared/constants';
@@ -16,8 +16,7 @@ import { get_app_log_transport } from './app_log_storage';
 import { extract_request_body, headers_array_to_map, resolve_resource_type, extract_mime_type } from './network_webrequest';
 import { base64_decoded_size, is_self_origin_url, ORPHAN_TIMEOUT_MS, DEFERRED_TIMEOUT_MS, cdp_request_key } from './cdp_handler';
 import type { NetworkCaptureConfig, NetworkEventPayload, PendingRequest, CdpRequestMeta, CdpBodyResult, WsConnectionMeta, DeferredEntry } from './cdp_handler';
-import {} from './webrequest_handler';
-import {} from './ws_handler';
+import { build_network_data } from '../../shared/network_builder';
 
 const logger = new Logger('background/network', get_app_log_transport());
 
@@ -270,7 +269,7 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         source: 'background',
         severity: 'info',
     });
-    const data: NetworkRequestData = {
+    const data = build_network_data({
         capture_id: event.capture_id,
         event_id: event.event_id,
         request_id: req_id,
@@ -278,38 +277,18 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         url: url_result.url,
         url_status: url_result.url_status,
         status_code: conn.status_code || null,
-        status_text: null,
-        protocol: null,
         resource_type: 'websocket',
-        initiator: null,
         duration_ms: null,
         start_time_ms: conn.created_ts,
         end_time_ms: ws_status === 'closed' ? Date.now() : null,
         request_headers: req_hdr_result.headers,
         response_headers: resp_hdr_result.headers,
         headers_status: headers_redacted ? 'redacted' : 'captured',
-        request_body: null,
-        request_body_status: 'not_enabled',
-        request_body_encoding: null,
-        request_body_bytes: null,
-        request_body_mime: null,
-        response_body: null,
-        response_preview: null,
-        response_body_status: 'not_enabled',
-        response_body_encoding: null,
-        response_body_bytes: null,
-        mime_type: null,
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'cdp_websocket',
         body_capture_mode: 'none',
         ws_connection_id: req_id,
         ws_status,
-    };
+    });
     send_to_background({ event, data });
 }
 
@@ -963,7 +942,7 @@ function build_network_event(
 
     const redacted_headers = config.redact_data && config.redact_sensitive_headers;
 
-    const data: NetworkRequestData = {
+    const data = build_network_data({
         capture_id: event.capture_id,
         event_id: event.event_id,
         request_id: pending.cdp_request_id || crypto.randomUUID(),
@@ -971,38 +950,27 @@ function build_network_event(
         url: pending.url || '',
         url_status: config.redact_data && config.redact_url_query ? 'redacted' : 'captured',
         status_code: details.statusCode ?? null,
-        status_text: null,
-        protocol: null,
         resource_type: resolve_resource_type(pending.resource_type),
-        initiator: null,
         duration_ms: details.timeStamp != null && pending.timestamp != null
             ? details.timeStamp - pending.timestamp
             : null,
-        start_time_ms: null,
-        end_time_ms: null,
         request_headers: pending.request_headers || {},
         response_headers: pending.response_headers || {},
         headers_status: redacted_headers ? 'redacted' : 'captured',
-        request_body: pending.request_body ?? null,
-        request_body_status: pending.request_body_status || 'not_enabled',
-        request_body_encoding: pending.request_body ? 'utf8' : null,
-        request_body_bytes: pending.request_body ? new TextEncoder().encode(pending.request_body).length : null,
-        request_body_mime: null,
+        request_body: pending.request_body,
+        request_body_status: pending.request_body_status,
         response_body,
         response_preview,
         response_body_status,
-        response_body_encoding: null,
-        response_body_bytes: null,
         mime_type: pending.mime_type,
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'web_request',
         body_capture_mode: config.capture_response_body ? 'extension_cdp' : 'none',
-    };
+        extra: {
+            // 旧语义：web_request 路径不派发 body 字节/编码（body 可能为 CDP base64）
+            response_body_encoding: null,
+            response_body_bytes: null,
+        },
+    });
 
     return { event, data };
 }
@@ -1034,7 +1002,7 @@ function build_cdp_primary_network_event(
     const req_headers = redact_hdrs ? redact_headers(meta.request_headers, true).headers : meta.request_headers;
     const res_headers = redact_hdrs ? redact_headers(meta.response_headers, true).headers : meta.response_headers;
 
-    const data: NetworkRequestData = {
+    const data = build_network_data({
         capture_id: event.capture_id,
         event_id: event.event_id,
         request_id: cdp_request_id,
@@ -1042,36 +1010,25 @@ function build_cdp_primary_network_event(
         url,
         url_status: redact_q ? 'redacted' : 'captured',
         status_code: meta.status_code || null,
-        status_text: null,
-        protocol: null,
         resource_type: resolve_resource_type(meta.resource_type),
-        initiator: null,
         duration_ms: null,
-        start_time_ms: null,
-        end_time_ms: null,
         request_headers: req_headers,
         response_headers: res_headers,
         headers_status: redact_hdrs ? 'redacted' : 'captured',
         request_body: meta.request_body,
         request_body_status: meta.request_body_status,
-        request_body_encoding: meta.request_body ? 'utf8' : null,
-        request_body_bytes: meta.request_body ? new TextEncoder().encode(meta.request_body).length : null,
         request_body_mime: meta.request_body_mime ?? null,
         response_body: body_result.body,
         response_preview: body_result.preview,
         response_body_status: body_result.status,
-        response_body_encoding: body_result.encoding ?? null,
-        response_body_bytes: body_result.byte_size ?? null,
         mime_type: meta.mime_type,
-        request_size_bytes: null,
-        response_size_bytes: null,
-        transfer_size_bytes: null,
-        from_cache: null,
-        cache_status: null,
-        error_text: null,
         capture_method: 'cdp_primary',
         body_capture_mode: 'extension_cdp',
-    };
+        extra: {
+            response_body_encoding: body_result.encoding ?? null,
+            response_body_bytes: body_result.byte_size ?? null,
+        },
+    });
 
     return { event, data };
 }

@@ -1,15 +1,11 @@
 // content/focus_capture.ts
 import type { CaptureEvent, FocusEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { build_xpath } from '../shared/dom_utils';
 
 const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']);
 
-let is_capturing = false;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
-let send_event: (event: CaptureEvent, data: FocusEventData) => void;
+const state = create_capture_state<FocusEventData>();
 let focus_listener: ((e: FocusEvent) => void) | null = null;
 let blur_listener: ((e: FocusEvent) => void) | null = null;
 
@@ -19,12 +15,11 @@ export function start_focus_capture(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
 ): void {
-    if (is_capturing) return;
-    send_event = sender;
-    capture_id = new_capture_id;
-    capture_start_epoch_ms = new_capture_start_epoch_ms;
-    tab_id = new_tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
 
     focus_listener = (e: FocusEvent) => handle_focus(e, 'focus');
     blur_listener = (e: FocusEvent) => handle_focus(e, 'blur');
@@ -34,8 +29,7 @@ export function start_focus_capture(
 }
 
 export function stop_focus_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     if (focus_listener) {
         document.removeEventListener('focus', focus_listener, true);
@@ -56,7 +50,7 @@ function get_target_selector(el: Element): string | null {
 }
 
 function handle_focus(e: FocusEvent, action: 'focus' | 'blur'): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     const target = e.target;
     if (!(target instanceof HTMLElement)) return;
@@ -73,13 +67,13 @@ function handle_focus(e: FocusEvent, action: 'focus' | 'blur'): void {
     };
 
     const event = create_content_event({
-        capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: 'focus_event',
-        relative_time_ms: get_relative_time(capture_start_epoch_ms),
-        tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         source: 'content_script',
     });
 
-    send_event(event, data);
+    state.sender?.(event, data);
 }

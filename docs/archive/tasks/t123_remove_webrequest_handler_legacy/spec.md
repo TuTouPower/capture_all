@@ -34,7 +34,7 @@ t119 统一网络捕获路径后，`src/extension/background/webrequest_handler.
 - [ ] AC-001：`src/extension/background/webrequest_handler.ts` 不存在。
 - [ ] AC-002：`network_capture.ts` 无 `webrequest_handler` 相关 import 语句。
 - [ ] AC-003：`tests/unit/` 无文件 import `webrequest_handler` 或 `ws_handler`（旧路径彻底清空）。
-- [ ] AC-004：`loading_failed_events.test.ts` 等迁移后测试仍验证原语义（handle_error 发失败网络事件含 error_text 等），断言目标为生产路径，非旧实现。
+- [ ] AC-004：`loading_failed_events.test.ts` 不再 import 旧 `webrequest_handler`；已过时的旧 `handle_error` 发失败事件用例删除（该语义生产从未接线，生产失败状态经 CDP loadingFailed→cdp_body_results 表达），保留的 describe（NetworkCaptureContext.reset、loadingFailed 带 meta）仍验证生产路径。
 - [ ] AC-005：`npm test` 全绿，`npx tsc --noEmit` 通过。
 
 ### 可测试性声明
@@ -63,7 +63,7 @@ t119 统一网络捕获路径后，`src/extension/background/webrequest_handler.
 mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默认」。
 <!-- /规范 -->
 
-- 迁移时保留原测试语义与断言（失败事件含 error_text、CDP-first 跳过等），仅换生产路径。生产 `handle_error` 在 network_capture 内部非 export，执行期决定触达方式（测试钩子 export 或经 start/stop 集成驱动），不得改变生产逻辑语义。fixture 沿用原测试构造。
+- 迁移时保留仍有效的测试语义（CDP-first 跳过、失败状态经 loadingFailed→cdp_body_results 表达等），仅换生产路径。生产失败事件语义与旧 webrequest_handler 不同：旧 `handle_error` 发含 error_text 的事件是生产 0 接线的死代码行为，生产实际以 `cdp_body_results` 的 `cdp_failed` 状态表达失败，故不迁移该 error_text 语义。生产 `handle_error` 在 network_capture 内部非 export，执行期决定触达方式（测试钩子 export 或经 start/stop 集成驱动），不得改变生产逻辑语义。fixture 沿用原测试构造。
 
 ### 未知契约清单
 

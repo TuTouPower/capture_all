@@ -48,7 +48,6 @@ export const set_captures = (v: CaptureRecord[]) => { _captures = v; };
 export const get_page = () => _page;
 export const set_page = (v: string) => { _page = v; };
 export const get_selected = () => _selected;
-export const set_selected = (v: Set<string>) => { _selected = v; };
 export const get_detail_capture = () => _detail_capture;
 export const set_detail_capture = (v: CaptureRecord | null) => { _detail_capture = v; };
 export const get_detail_events = () => _detail_events;

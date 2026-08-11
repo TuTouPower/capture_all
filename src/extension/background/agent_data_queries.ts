@@ -70,7 +70,7 @@ async function fetch_all<T>(
 export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);
     if (!capture) {
-        throw new Error('SESSION_NOT_FOUND');
+        throw new Error('CAPTURE_NOT_FOUND');
     }
 
     const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([

@@ -709,20 +709,3 @@ export interface LogQueryFilter {
     since?: number;
     until?: number;
 }
-
-// ============================================================
-// Backward-compatible aliases (temporary, remove after Phase 2)
-// ============================================================
-
-/** @deprecated Use CaptureRecord */
-export type Session = CaptureRecord;
-/** @deprecated Use CaptureEvent */
-export type RecordEvent = CaptureEvent;
-/** @deprecated Use CaptureConfig */
-export type RecordConfig = CaptureConfig;
-/** @deprecated Use ConsoleEventData */
-export type ConsoleLog = ConsoleEventData;
-/** @deprecated Use NetworkRequestData */
-export type NetworkRequest = NetworkRequestData;
-/** @deprecated Use RuntimeExceptionData */
-export type ErrorLog = RuntimeExceptionData;

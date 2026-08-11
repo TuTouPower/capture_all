@@ -1,15 +1,15 @@
 ---
-tid: "t124"
-slug: "remove_dead_exports"
-title: "chore: remove dead exports"
-status: "backlog"
-branch: ""
+tid: "t125"
+slug: "remove_protocol_compat_layer"
+title: "refactor: remove deprecated protocol compat layer"
+status: "done"
+branch: "t125_remove_protocol_compat_layer"
 worktree: ""
-review_level: "single"
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "ddab3729e8e2df2041740b9b73dc1cca1b2bf8b9"
 depends_on: ""
-conflicts_with: "t126"
-note: "审阅发现:12 处无消费者导出清理"
+conflicts_with: ""
+note: "审阅发现:ERROR_CODE_ALIASES 与 types.ts @deprecated 别名,用户确认破坏性升级"
 ---
 
 # Task 过程总账

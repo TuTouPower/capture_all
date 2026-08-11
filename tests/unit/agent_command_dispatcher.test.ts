@@ -115,7 +115,7 @@ describe('agent command dispatcher', () => {
 
         expect(result).toMatchObject({
             ok: false,
-            error: { code: 'RECORDING_ALREADY_RUNNING' }
+            error: { code: 'CAPTURE_ALREADY_RUNNING' }
         });
     });
 
@@ -127,14 +127,14 @@ describe('agent command dispatcher', () => {
 
         expect(result).toMatchObject({
             ok: false,
-            error: { code: 'NO_ACTIVE_RECORDING' }
+            error: { code: 'NO_ACTIVE_CAPTURE' }
         });
     });
 
     test('maps capture not found', async () => {
         await expect(dispatch_agent_command(command('captures.get', { capture_id: 'missing' }), handlers)).resolves.toMatchObject({
             ok: false,
-            error: { code: 'SESSION_NOT_FOUND' }
+            error: { code: 'CAPTURE_NOT_FOUND' }
         });
     });
 

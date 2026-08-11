@@ -3,7 +3,6 @@
 
 import type { BodyCaptureStatus, NetworkRequestData } from '../../shared/types';
 import { truncate_request_body } from '../../shared/redaction';
-import type { NetworkCaptureContext } from './network_context';
 
 // ─── Pure utility functions (no context dependency) ───
 
@@ -119,72 +118,4 @@ export function extract_mime_type(headers: Record<string, string>): string | nul
     const ct = headers['content-type'] || headers['Content-Type'] || null;
     if (!ct) return null;
     return ct.split(';')[0].trim() || null;
-}
-
-// ─── webRequest event handlers (need context) ───
-
-export function create_webrequest_handlers(ctx: NetworkCaptureContext) {
-    const { redact_headers } = require('../../shared/redaction');
-    const { redact_url } = require('../../shared/redaction');
-    const { is_self_origin_url } = require('./network_capture');
-
-    function handle_before_request(details: any): void {
-        if (!ctx.is_capturing) return;
-        if (ctx.dbg_tab_id !== null && details.tabId === ctx.dbg_tab_id) return;
-        if (is_self_origin_url(details.url)) return;
-
-        const { body, status } = extract_request_body(details, ctx.config.capture_request_body, ctx.config.max_body_capture_bytes);
-
-        const pending = {
-            cdp_request_id: details.requestId,
-            tab_id: details.tabId,
-            method: details.method,
-            url: redact_url(details.url, Boolean(ctx.config.redact_data) && ctx.config.redact_url_query).url,
-            timestamp: details.timeStamp,
-            request_headers: {},
-            response_headers: {},
-            request_body: body,
-            request_body_status: status,
-            resource_type: details.type || 'other',
-            mime_type: null as string | null,
-        };
-
-        ctx.pending_requests.set(details.requestId, pending);
-    }
-
-    function handle_before_send_headers(details: any): void {
-        if (!ctx.is_capturing) return;
-        if (ctx.dbg_tab_id !== null && details.tabId === ctx.dbg_tab_id) return;
-        const pending = ctx.pending_requests.get(details.requestId);
-        if (!pending) return;
-
-        const headers = headers_array_to_map(details.requestHeaders);
-        pending.request_headers = (ctx.config.redact_data && ctx.config.redact_sensitive_headers)
-            ? redact_headers(headers, true).headers : headers;
-    }
-
-    function handle_headers_received(details: any): void {
-        if (!ctx.is_capturing) return;
-        if (ctx.dbg_tab_id !== null && details.tabId === ctx.dbg_tab_id) return;
-        const pending = ctx.pending_requests.get(details.requestId);
-        if (!pending) return;
-
-        const headers = headers_array_to_map(details.responseHeaders);
-        pending.response_headers = (ctx.config.redact_data && ctx.config.redact_sensitive_headers)
-            ? redact_headers(headers, true).headers : headers;
-        pending.mime_type = extract_mime_type(pending.response_headers);
-    }
-
-    function handle_error(details: any): void {
-        if (!ctx.is_capturing) return;
-        if (ctx.dbg_tab_id !== null && details.tabId === ctx.dbg_tab_id) return;
-        ctx.pending_requests.delete(details.requestId);
-    }
-
-    return {
-        handle_before_request,
-        handle_before_send_headers,
-        handle_headers_received,
-        handle_error,
-    };
 }

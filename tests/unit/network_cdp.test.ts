@@ -42,6 +42,8 @@ import {
     start_network_capture,
     stop_network_capture,
     enable_response_body_capture,
+    _cdp_body_results_for_test,
+    _cdp_request_meta_for_test,
 } from '../../src/extension/background/network_capture';
 
 // Helper to create a standard capture config
@@ -641,6 +643,71 @@ describe('CDP-first: webRequest skips attached tab', () => {
         expect(emitted).toHaveLength(1);
         expect(emitted[0].data.capture_method).toBe('web_request');
         expect(emitted[0].data.response_body_status).toBe('not_enabled');
+        // web_request 路径不派发 body 字节/编码（body 可能为 CDP base64）
+        expect(emitted[0].data.response_body_encoding).toBeNull();
+        expect(emitted[0].data.response_body_bytes).toBeNull();
+    });
+
+    it('web_request 路径命中非空 CDP body 仍不派发 body 字节/编码', async () => {
+        start_network_capture(
+            'test_capture',
+            1700000000000,
+            make_cfg({ capture_response_body: true }),
+            1,
+            (payload: any) => { emitted.push(payload); }
+        );
+        await enable_response_body_capture(1, false);
+
+        // 预置 CDP meta 与 base64 body 结果（root session key）
+        _cdp_request_meta_for_test.set('root:cdp_body', {
+            url: 'https://other.com/api',
+            method: 'GET',
+            status_code: 200,
+            resource_type: 'xhr',
+            response_headers: {},
+            request_headers: {},
+            timestamp: 1700000001000,
+            request_body: null,
+            request_body_status: 'not_enabled',
+            request_body_mime: null,
+            mime_type: 'application/json',
+        });
+        _cdp_body_results_for_test.set('root:cdp_body', {
+            body: 'aGVsbG8=', // base64 编码的非空 body
+            status: 'captured',
+            timestamp: 1700000001000,
+            preview: null,
+            encoding: 'base64',
+            byte_size: 5,
+        });
+
+        const beforeReqCalls = (chrome.webRequest.onBeforeRequest.addListener as any).mock.calls;
+        const completedCalls = (chrome.webRequest.onCompleted.addListener as any).mock.calls;
+        const handle_before_request = beforeReqCalls[beforeReqCalls.length - 1][0];
+        const handle_completed = completedCalls[completedCalls.length - 1][0];
+
+        handle_before_request({
+            requestId: 'wr_body',
+            tabId: 99,
+            url: 'https://other.com/api',
+            method: 'GET',
+            type: 'xhr',
+            timeStamp: 1700000000500,
+        });
+
+        handle_completed({
+            requestId: 'wr_body',
+            tabId: 99,
+            statusCode: 200,
+            timeStamp: 1700000001000,
+        });
+
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0].data.capture_method).toBe('web_request');
+        expect(emitted[0].data.response_body).toBe('aGVsbG8=');
+        // web_request 路径恒不派发 body 字节/编码（base64 body 不误标 utf8）
+        expect(emitted[0].data.response_body_encoding).toBeNull();
+        expect(emitted[0].data.response_body_bytes).toBeNull();
     });
 });
 

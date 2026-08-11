@@ -1,15 +1,15 @@
 ---
-tid: "t127"
-slug: "content_capture_state_factory"
-title: "refactor: unify content capture state boilerplate"
-status: "backlog"
-branch: ""
+tid: "t124"
+slug: "remove_dead_exports"
+title: "chore: remove dead exports"
+status: "done"
+branch: "t124_remove_dead_exports"
 worktree: ""
-review_level: "full"
-diff_anchor: ""
+review_level: "single"
+diff_anchor: "6c562ac1af850795109aacd010714f855c2ad15b"
 depends_on: ""
-conflicts_with: ""
-note: "审阅发现:9 个 content 捕获模块重复状态样板"
+conflicts_with: "t126"
+note: "审阅发现:12 处无消费者导出清理"
 ---
 
 # Task 过程总账

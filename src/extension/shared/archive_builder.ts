@@ -236,6 +236,37 @@ export async function build_archive(
     input: ArchiveBuildInput,
     options: ArchiveBuildOptions,
 ): Promise<Uint8Array> {
+    const { capture } = input;
+
+    const { capture_with_times, event_lines, console_lines, network_lines, all_body_files } =
+        await prepare_archive_content(input, options);
+
+    const { resolved_body_files, network_lines_final } =
+        resolve_body_paths(network_lines, all_body_files);
+
+    const counts = build_counts(input, resolved_body_files);
+    const manifest = build_manifest(capture, capture_with_times, counts);
+    const readme = render_readme({
+        capture_id: capture.capture_id,
+        network_count: counts.network,
+        image_count: counts.images,
+        event_count: counts.events,
+    });
+
+    return assemble_zip(manifest, readme, event_lines, console_lines, network_lines_final, resolved_body_files);
+}
+
+/** 系统时间标注 + 网络请求处理，返回各内容序列与 body 文件。 */
+async function prepare_archive_content(
+    input: ArchiveBuildInput,
+    options: ArchiveBuildOptions,
+): Promise<{
+    capture_with_times: ReturnType<typeof add_capture_system_times>;
+    event_lines: string[];
+    console_lines: string[];
+    network_lines: string[];
+    all_body_files: BodyFileEntry[];
+}> {
     const { capture, events, network_requests, console_events } = input;
     const { inline_text_max_bytes, system_time_timezone } = options;
     const time_config = { system_time_timezone };
@@ -273,7 +304,14 @@ export async function build_archive(
     const event_lines = events_with_times.map((e) => JSON.stringify(e));
     const console_lines = console_with_times.map((c) => JSON.stringify(c));
 
-    // body 路径冲突解决（重复路径加 _2、_3 后缀）
+    return { capture_with_times, event_lines, console_lines, network_lines, all_body_files };
+}
+
+/** body 路径冲突解决（重复路径加 _2、_3 后缀），并回写 JSONL 中 body_ref。 */
+function resolve_body_paths(
+    network_lines: string[],
+    all_body_files: BodyFileEntry[],
+): { resolved_body_files: BodyFileEntry[]; network_lines_final: string[] } {
     // T109: 改名后同步回写 JSONL 中 response_body_ref / request_body_ref，避免引用旧名。
     // final_seq[orig] 记录该 orig 每次出现的最终路径（含首现被遮蔽改名），回写按出现序消费。
     const used_paths = new Set<string>();
@@ -302,10 +340,11 @@ export async function build_archive(
 
     // T109: 按映射回写 network.jsonl 的 body_ref。
     // 对每个 ref，按其出现序（第 n 次出现）取 final_seq[ref][n-1]。
+    const network_lines_final = [...network_lines];
     if (final_seq.size > 0) {
         const seen = new Map<string, number>();
-        for (let i = 0; i < network_lines.length; i++) {
-            const parsed = JSON.parse(network_lines[i]) as Record<string, unknown>;
+        for (let i = 0; i < network_lines_final.length; i++) {
+            const parsed = JSON.parse(network_lines_final[i]) as Record<string, unknown>;
             let changed = false;
             for (const key of ['response_body_ref', 'request_body_ref']) {
                 const ref = parsed[key];
@@ -322,29 +361,43 @@ export async function build_archive(
                     }
                 }
             }
-            if (changed) network_lines[i] = JSON.stringify(parsed);
+            if (changed) network_lines_final[i] = JSON.stringify(parsed);
         }
     }
 
+    return { resolved_body_files, network_lines_final };
+}
+
+/** 统计各类计数。 */
+function build_counts(
+    input: ArchiveBuildInput,
+    resolved_body_files: BodyFileEntry[],
+): { network: number; events: number; console: number; images: number; body_files: number } {
+    const { network_requests, events, console_events } = input;
     // 图片计数
     const image_count = network_requests.filter(
         (r) => r.resource_type === 'image',
     ).length;
 
-    // 统计
-    const counts = {
+    return {
         network: network_requests.length,
         events: events.length,
         console: console_events.length,
         images: image_count,
         body_files: resolved_body_files.length,
     };
+}
 
-    // manifest
+/** 构建 manifest（剥离已废弃的 mode 字段）。 */
+function build_manifest(
+    capture: ArchiveBuildInput['capture'],
+    capture_with_times: ReturnType<typeof add_capture_system_times>,
+    counts: ReturnType<typeof build_counts>,
+): Record<string, unknown> {
     // BUG-001: 剥离已废弃的 mode 字段（历史 IndexedDB 数据可能残留），
     // 防止「已删除概念：模式切换/标准采集」流入归档。
     const { mode: _deprecated_mode, ...capture_without_mode } = capture_with_times as Record<string, unknown>;
-    const manifest = {
+    return {
         format: 'capture_all_archive',
         version: 1,
         capture_id: capture.capture_id,
@@ -352,16 +405,17 @@ export async function build_archive(
         counts,
         capture: capture_without_mode,
     };
+}
 
-    // README
-    const readme = render_readme({
-        capture_id: capture.capture_id,
-        network_count: counts.network,
-        image_count: counts.images,
-        event_count: counts.events,
-    });
-
-    // 组装 ZIP 文件
+/** 组装 ZIP 文件。 */
+function assemble_zip(
+    manifest: Record<string, unknown>,
+    readme: string,
+    event_lines: string[],
+    console_lines: string[],
+    network_lines: string[],
+    resolved_body_files: BodyFileEntry[],
+): Uint8Array {
     // BUG-002: jsonl 文件每行必须以 \n 结尾（POSIX 文本规范）。
     // 仅 join('\n') 会让最后一行缺末尾换行符，导致 wc -l / grep -c 等
     // 标准工具计行数比实际少 1，与 manifest.counts 不一致。

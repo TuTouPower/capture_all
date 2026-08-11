@@ -1,4 +1,5 @@
 // dashboard/dashboard_detail.ts — 采集详情页 + 网络检查器
+import type { CaptureEvent } from '../../shared/types';
 import {
     debounce, esc, I, num,
     capture_name, capture_dur, format_system_time,
@@ -594,7 +595,30 @@ function wire_trace(): void {
     const mm_window = document.getElementById('tlMmWindow');
     if (!lanes || !overlay || !head) return;
     const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
-    const update_playhead = (playhead_pct: number) => {
+
+    const update_playhead = make_update_playhead(head, lbl, time, maxT);
+
+    wire_lane_pointerdown(lanes, overlay, detail_events, maxT, update_playhead);
+    if (mm_track && mm_window) {
+        wire_minimap_drag(mm_track, mm_window, update_playhead);
+    }
+    if (zoom) {
+        zoom.addEventListener('input', () => {
+            set_dt_zoom(Number(zoom.value));
+            apply_zoom_filter();
+        });
+    }
+    apply_zoom_filter();
+}
+
+/** 构造 playhead 更新器（含 zoom 过滤应用）。 */
+function make_update_playhead(
+    head: HTMLElement,
+    lbl: HTMLElement | null,
+    time: HTMLElement | null,
+    maxT: number,
+): (playhead_pct: number) => void {
+    return (playhead_pct: number) => {
         const p = Math.min(100, Math.max(0, playhead_pct));
         set_dt_play(p);
         head.style.left = `${p}%`;
@@ -603,6 +627,16 @@ function wire_trace(): void {
         if (time) time.textContent = txt;
         apply_zoom_filter();
     };
+}
+
+/** lanes 拖拽与 marker 点击处理。 */
+function wire_lane_pointerdown(
+    lanes: HTMLElement,
+    overlay: HTMLElement,
+    detail_events: CaptureEvent[],
+    maxT: number,
+    update_playhead: (pct: number) => void,
+): void {
     const seek = (clientX: number) => {
         const r = overlay.getBoundingClientRect();
         if (r.width <= 0) return;
@@ -658,68 +692,67 @@ function wire_trace(): void {
         window.addEventListener('pointermove', mv);
         window.addEventListener('pointerup', up);
     });
-    if (mm_track && mm_window) {
-        let active_pointer_id: number | null = null;
-        mm_window.addEventListener('pointerdown', (event) => {
-            const pointer_event = event as PointerEvent;
-            const window_pct = get_dt_zoom_window_pct();
-            const track_rect = mm_track.getBoundingClientRect();
-            if (
-                pointer_event.button !== 0
-                || window_pct >= 100
-                || track_rect.width <= 0
-                || active_pointer_id !== null
-            ) return;
+}
 
-            event.preventDefault();
-            event.stopPropagation();
-            const pointer_id = pointer_event.pointerId;
-            active_pointer_id = pointer_id;
-            const start_client_x = pointer_event.clientX;
-            const start_left_pct = parseFloat(mm_window.style.left || '0');
-            let is_active = true;
+/** 最小地图窗口拖拽。 */
+function wire_minimap_drag(
+    mm_track: HTMLElement,
+    mm_window: HTMLElement,
+    update_playhead: (pct: number) => void,
+): void {
+    let active_pointer_id: number | null = null;
+    mm_window.addEventListener('pointerdown', (event) => {
+        const pointer_event = event as PointerEvent;
+        const window_pct = get_dt_zoom_window_pct();
+        const track_rect = mm_track.getBoundingClientRect();
+        if (
+            pointer_event.button !== 0
+            || window_pct >= 100
+            || track_rect.width <= 0
+            || active_pointer_id !== null
+        ) return;
 
-            const finish_drag = () => {
-                if (!is_active) return;
-                is_active = false;
-                active_pointer_id = null;
-                mm_window.removeEventListener('pointermove', move);
-                mm_window.removeEventListener('pointerup', finish);
-                mm_window.removeEventListener('pointercancel', finish);
-                mm_window.removeEventListener('lostpointercapture', finish);
-                if (mm_window.hasPointerCapture(pointer_id)) {
-                    mm_window.releasePointerCapture(pointer_id);
-                }
-                mm_window.classList.remove('is-dragging');
-            };
-            const move = (move_event: PointerEvent) => {
-                if (!is_active || move_event.pointerId !== pointer_id) return;
-                const delta_pct = ((move_event.clientX - start_client_x) / track_rect.width) * 100;
-                const max_left_pct = Math.max(0, 100 - window_pct);
-                const left_pct = Math.min(max_left_pct, Math.max(0, start_left_pct + delta_pct));
-                update_playhead(left_pct + window_pct / 2);
-            };
-            const finish = (finish_event: Event) => {
-                const pointer_finish_event = finish_event as PointerEvent;
-                if (pointer_finish_event.pointerId !== pointer_id) return;
-                finish_drag();
-            };
+        event.preventDefault();
+        event.stopPropagation();
+        const pointer_id = pointer_event.pointerId;
+        active_pointer_id = pointer_id;
+        const start_client_x = pointer_event.clientX;
+        const start_left_pct = parseFloat(mm_window.style.left || '0');
+        let is_active = true;
 
-            mm_window.classList.add('is-dragging');
-            mm_window.setPointerCapture(pointer_id);
-            mm_window.addEventListener('pointermove', move);
-            mm_window.addEventListener('pointerup', finish);
-            mm_window.addEventListener('pointercancel', finish);
-            mm_window.addEventListener('lostpointercapture', finish);
-        });
-    }
-    if (zoom) {
-        zoom.addEventListener('input', () => {
-            set_dt_zoom(Number(zoom.value));
-            apply_zoom_filter();
-        });
-    }
-    apply_zoom_filter();
+        const finish_drag = () => {
+            if (!is_active) return;
+            is_active = false;
+            active_pointer_id = null;
+            mm_window.removeEventListener('pointermove', move);
+            mm_window.removeEventListener('pointerup', finish);
+            mm_window.removeEventListener('pointercancel', finish);
+            mm_window.removeEventListener('lostpointercapture', finish);
+            if (mm_window.hasPointerCapture(pointer_id)) {
+                mm_window.releasePointerCapture(pointer_id);
+            }
+            mm_window.classList.remove('is-dragging');
+        };
+        const move = (move_event: PointerEvent) => {
+            if (!is_active || move_event.pointerId !== pointer_id) return;
+            const delta_pct = ((move_event.clientX - start_client_x) / track_rect.width) * 100;
+            const max_left_pct = Math.max(0, 100 - window_pct);
+            const left_pct = Math.min(max_left_pct, Math.max(0, start_left_pct + delta_pct));
+            update_playhead(left_pct + window_pct / 2);
+        };
+        const finish = (finish_event: Event) => {
+            const pointer_finish_event = finish_event as PointerEvent;
+            if (pointer_finish_event.pointerId !== pointer_id) return;
+            finish_drag();
+        };
+
+        mm_window.classList.add('is-dragging');
+        mm_window.setPointerCapture(pointer_id);
+        mm_window.addEventListener('pointermove', move);
+        mm_window.addEventListener('pointerup', finish);
+        mm_window.addEventListener('pointercancel', finish);
+        mm_window.addEventListener('lostpointercapture', finish);
+    });
 }
 
 export { render_detail, wire_detail, open_detail, render_trace };

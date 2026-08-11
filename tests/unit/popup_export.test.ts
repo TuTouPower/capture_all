@@ -62,6 +62,6 @@ describe('P0.35/P0.40 export button wiring', () => {
 
     it('service worker handles export_json action', () => {
         expect(sw_src).toMatch(/case\s+'export_json'/);
-        expect(sw_src).toMatch(/await\s+export_json\(message\.capture_id\)/);
+        expect(sw_src).toMatch(/handle_export\('json'/);
     });
 });

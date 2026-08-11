@@ -2,11 +2,11 @@
 tid: "t129"
 slug: "split_long_functions"
 title: "refactor: split long functions"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t129_split_long_functions"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "9e4e311a8ea206bf6b24e7d0ad2b8395e5be71f2"
 depends_on: "t128"
 conflicts_with: ""
 note: "审阅发现:build_archive/wire_trace/handle_message/start_body_capture 拆分"
@@ -50,8 +50,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t129_gen_f001|minor|已修|handle_cdp_failure 的 null 契约未实现导致死分支;收敛返回类型非空,删 if(outcome) 与 cdp_attach_failed 死分支|body_capture_coordinator.ts:78|
+|t129_gen_f002|minor|已修|prepare_archive_content 返回未消费的 network_with_times 死字段;从返回类型与返回值移除|archive_builder.ts:265|
 
 ## 收尾报告
 

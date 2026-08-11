@@ -87,68 +87,8 @@ export async function start_body_capture(
             return build_result();
         }
 
-        const error_msg = cdp_result.error || '';
-
-        if (error_msg.includes('Another debugger is already attached')) {
-            // Tier 2: External CDP bridge
-            const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
-            if (bridge_result) {
-                coordinator_state = bridge_result;
-                return build_result();
-            }
-
-            // Tier 3: Fallback hook
-            coordinator_state = {
-                mode: 'fallback_hook',
-                status: 'partial',
-                failure_reason: 'bridge_unavailable',
-                message: 'Extension CDP blocked (another debugger), bridge unavailable, using fallback hook'
-            };
-            return build_result();
-        }
-
-        // CDP failed for other reasons
-        if (error_msg.includes('Cannot attach to this target')) {
-            coordinator_state = {
-                mode: 'fallback_hook',
-                status: 'partial',
-                failure_reason: 'restricted_url',
-                message: 'Cannot attach CDP to restricted URL, using fallback hook'
-            };
-            return build_result();
-        }
-
-        if (error_msg.includes('not allowed')
-            || error_msg.includes('does not have permission')
-            || error_msg.includes('debugger is not')) {
-            // Permission-related CDP failure — try bridge, then fallback
-            const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
-            if (bridge_result) {
-                coordinator_state = bridge_result;
-                return build_result();
-            }
-            coordinator_state = {
-                mode: 'fallback_hook',
-                status: 'partial',
-                failure_reason: 'permission_denied',
-                message: `CDP permission denied: ${error_msg}, using fallback hook`
-            };
-            return build_result();
-        }
-
-        // Permission or other error — try bridge, then fallback
-        const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
-        if (bridge_result) {
-            coordinator_state = bridge_result;
-            return build_result();
-        }
-
-        coordinator_state = {
-            mode: 'fallback_hook',
-            status: 'partial',
-            failure_reason: 'cdp_attach_failed',
-            message: `CDP attach failed: ${error_msg}, using fallback hook`
-        };
+        // CDP 附加失败：handle_cdp_failure 恒返回终态（bridge 或 fallback）
+        coordinator_state = await handle_cdp_failure(cdp_result.error || '', capture_id, config, deps);
         return build_result();
     }
 
@@ -163,9 +103,69 @@ export async function start_body_capture(
         mode: 'fallback_hook',
         status: 'partial',
         failure_reason: 'cdp_target_not_found',
-        message: 'No active tab and no CDP bridge, using fallback hook'
+        message: 'No active tab and no CDP bridge, using fallback hook',
     };
     return build_result();
+}
+
+/** CDP 附加失败分类：先按错误类型分派，再尝试 bridge → fallback。恒返回终态。 */
+async function handle_cdp_failure(
+    error_msg: string,
+    capture_id: string,
+    config: CaptureConfig,
+    deps: CoordinatorDeps,
+): Promise<BodyCaptureStartResult> {
+    if (error_msg.includes('Another debugger is already attached')) {
+        return await escalate_to_bridge_or_fallback(capture_id, config, deps, {
+            failure_reason: 'bridge_unavailable',
+            message: 'Extension CDP blocked (another debugger), bridge unavailable, using fallback hook',
+        });
+    }
+
+    if (error_msg.includes('Cannot attach to this target')) {
+        return {
+            mode: 'fallback_hook',
+            status: 'partial',
+            failure_reason: 'restricted_url',
+            message: 'Cannot attach CDP to restricted URL, using fallback hook',
+        };
+    }
+
+    if (error_msg.includes('not allowed')
+        || error_msg.includes('does not have permission')
+        || error_msg.includes('debugger is not')) {
+        return await escalate_to_bridge_or_fallback(capture_id, config, deps, {
+            failure_reason: 'permission_denied',
+            message: `CDP permission denied: ${error_msg}, using fallback hook`,
+        });
+    }
+
+    // 其它 CDP 失败
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
+    if (bridge_result) return bridge_result;
+    return {
+        mode: 'fallback_hook',
+        status: 'partial',
+        failure_reason: 'cdp_attach_failed',
+        message: `CDP attach failed: ${error_msg}, using fallback hook`,
+    };
+}
+
+/** 尝试 bridge；bridge 不可用时返回 fallback_hook 状态。 */
+async function escalate_to_bridge_or_fallback(
+    capture_id: string,
+    config: CaptureConfig,
+    deps: CoordinatorDeps,
+    fallback: { failure_reason: BodyCaptureFailureReason; message: string },
+): Promise<BodyCaptureStartResult> {
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
+    if (bridge_result) return bridge_result;
+    return {
+        mode: 'fallback_hook',
+        status: 'partial',
+        failure_reason: fallback.failure_reason,
+        message: fallback.message,
+    };
 }
 
 export async function stop_body_capture(): Promise<void> {

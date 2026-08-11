@@ -176,12 +176,16 @@ describe('t115 SW export 命令 flush 顺序（AC-004 非 archive）', () => {
             const idx = sw.indexOf(`case '${action}':`);
             expect(idx).toBeGreaterThanOrEqual(0);
             const case_block = sw.slice(idx, idx + 200);
-            const flush_idx = case_block.indexOf('await flush_all()');
-            expect(flush_idx).toBeGreaterThanOrEqual(0);
-            // flush 在返回导出结果之前
-            const ret_idx = case_block.indexOf('return { success: true');
-            expect(ret_idx).toBeGreaterThan(flush_idx);
+            expect(case_block).toMatch(/handle_export\(/);
         }
+        // handle_export helper 内先 flush_all 再调用导出
+        const helper_idx = sw.indexOf('async function handle_export(');
+        expect(helper_idx).toBeGreaterThanOrEqual(0);
+        const helper_block = sw.slice(helper_idx, helper_idx + 500);
+        const flush_idx = helper_block.indexOf('await flush_all()');
+        expect(flush_idx).toBeGreaterThanOrEqual(0);
+        const export_map_idx = helper_block.indexOf('export_map[format]');
+        expect(export_map_idx).toBeGreaterThan(flush_idx);
     });
 
     it('flush_all 失败经 handle_message catch 返回 success:false（调用方 abort 链）', () => {

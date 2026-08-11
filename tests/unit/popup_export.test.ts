@@ -39,9 +39,10 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(popup_src).toMatch(/build_capture_filename\(/);
     });
 
-    it('P0.61: popup export no longer passes save_as (auto-detected from filename)', () => {
-        expect(popup_src).not.toMatch(/save_as/);
-    });
+    // P0.61 断言「popup 不再传 save_as」已删除：t115 修复后 popup 必须传
+    // user_config.export_save_as（p020 分析确认漏传导致全局开关在 popup 失效），
+    // 该断言固化了旧错误行为。替代覆盖见 tests/unit/t115_export_save_as_consistency.test.ts
+    // 「AC-001 Popup ZIP 导出传 export_save_as 第 4 参数」。
 
     it('exportBtn still checks resp.success before downloading', () => {
         expect(popup_src).toMatch(/resp\?\.\s*success/);

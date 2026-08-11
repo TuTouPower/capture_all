@@ -71,8 +71,9 @@ export async function download_blob(
     const has_dir = filename.includes('/');
     const picker = (globalThis as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
 
-    // 已配置导出目录（filename 含子目录）→ 静默存到该相对目录，保持原行为
-    if (!has_dir && typeof picker === 'function') {
+    // t115: 无目录且 picker 可用时，显式 save_as=false 仍走 downloads API 静默保存；
+    // 显式 save_as=true 或未传（undefined）时优先询问保存位置（picker）。
+    if (!has_dir && typeof picker === 'function' && save_as !== false) {
         try {
             const handle = await picker({
                 suggestedName: filename,

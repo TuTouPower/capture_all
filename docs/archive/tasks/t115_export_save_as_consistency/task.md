@@ -2,11 +2,11 @@
 tid: "t115"
 slug: "export_save_as_consistency"
 title: "统一 export_save_as 消费语义"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t115_export_save_as_consistency"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "472509b68683056df8da1bf80d4a2ec09ff19f8d"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,13 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 13:21 UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
+| t115_gen_f001 | important | 已修 | 补 Dashboard capture AC-004 接线锚定 3 用例：export_capture 函数体内 flush 先于 read_capture_snapshot、flush 失败 abort、archive/非 archive 两处 download_blob 均传 export_save_as | 测试:t115 测试文件 |
+| t115_gen_f002 | important | 已修 | 补非 archive 路径锚定 3 用例：调用方 r?.success 检查中止、SW export_json/jsonl/html/har 命令 flush 先于导出、flush_all 失败经 handle_message catch 返回 success:false | 测试:t115 测试文件 |
 | t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
 
 ## 收尾报告
@@ -60,8 +61,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001~004 全部由 `tests/unit/t115_export_save_as_consistency.test.ts` 14 用例覆盖（helper 判别矩阵 6 + Popup/日志接线 2 + Dashboard AC-004 锚定 3 + SW 非 archive 锚定 3），黑盒 `npm test` 1335 passed + `tsc --noEmit` 通过
 
 ### Reviewer verdict
 
@@ -69,15 +70,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：N/A（review_level=single）
+- Round 1 test：N/A（review_level=single）
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：FAIL（f001 important 未修）
+- Round 2 general：FAIL（f002 important 未修）
+- Round 3 general：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 全局 export_save_as 在 Popup ZIP、Dashboard 日志、共享 helper picker 分支统一消费；helper 判别矩阵 + 全入口接线（archive/非 archive flush 顺序与 abort 链）14 用例锁定，3 轮审阅闭环。

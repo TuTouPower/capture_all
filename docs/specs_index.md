@@ -19,7 +19,7 @@
 | cookie_empty_domain_scope | t104 | 2026-08-11 |
 | content_status_poll_tab_id | t105 | 2026-08-11 |
 | popup_category_capture_gates | t106 | 2026-08-11 |
-| dashboard_export_flush_save_as | t107 | 2026-08-11 |
+| dashboard_export_flush_save_as | t107, t115 | 2026-08-11 |
 | detail_search_preserve_input | t108 | 2026-08-11 |
 | archive_body_ref_consistency | t109 | 2026-08-11 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：

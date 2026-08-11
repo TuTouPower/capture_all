@@ -353,8 +353,8 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
         if (meta) {
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             state.cdp_request_meta.delete(req_key);
-            state.finished_before_stream.delete(req_key);
         }
+        state.finished_before_stream.delete(req_key);
         return;
     }
 
@@ -376,8 +376,8 @@ function handle_loading_finished(req_key: string, req_id: string, _params: any, 
             };
             state.send_to_background(build_cdp_primary_network_event(meta, body_result, req_id, state));
             state.cdp_request_meta.delete(req_key);
-            state.finished_before_stream.delete(req_key);
         }
+        state.finished_before_stream.delete(req_key);
         return;
     }
 
@@ -493,6 +493,7 @@ function handle_loading_failed(req_key: string, _params: any, state: CdpHandlerS
 
     // 无 meta：走 orphan_check 兜底
     state.cdp_body_results.set(req_key, fail_result);
+    state.finished_before_stream.delete(req_key);
     try_resolve_deferred(req_key, state);
     schedule_orphan_check(req_key, '', state);
 }
@@ -826,6 +827,7 @@ function try_resolve_deferred(cdp_req_id: string, state: CdpHandlerState): void 
             state.cdp_body_results.delete(cdp_req_id);
             state.cdp_request_meta.delete(cdp_req_id);
             state._deferred_cdp_index.delete(cdp_req_id);
+            state.finished_before_stream.delete(cdp_req_id);
             state.send_to_background(build_network_event(
                 entry.pending, entry.details, body_result.body, body_result.status, state, body_result.preview
             ));
@@ -837,6 +839,7 @@ function try_resolve_deferred(cdp_req_id: string, state: CdpHandlerState): void 
     state.cdp_body_results.delete(cdp_req_id);
     state.cdp_request_meta.delete(cdp_req_id);
     state._deferred_cdp_index.delete(cdp_req_id);
+    state.finished_before_stream.delete(cdp_req_id);
 }
 
 function schedule_orphan_check(req_key: string, req_id: string, state: CdpHandlerState): void {
@@ -844,6 +847,8 @@ function schedule_orphan_check(req_key: string, req_id: string, state: CdpHandle
     // emit it as cdp_only via the callback.
     const timer = setTimeout(() => {
         state.orphan_timers.delete(req_key);
+        // marker 生命周期与消费无关：orphan 终态也须清理，避免残留影响同 key 复用。
+        state.finished_before_stream.delete(req_key);
         if (!state.on_cdp_body_event) return;
         const body_result = state.cdp_body_results.get(req_key);
         if (!body_result) return; // already matched and consumed by handle_completed

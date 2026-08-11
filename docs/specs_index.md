@@ -6,7 +6,7 @@
 |------|----------|--------------|
 | user_config | t092 | 2026-08-11 |
 | runtime_exception | t093 | 2026-08-11 |
-| network_capture_session_key | t094 | 2026-08-11 |
+| network_capture_session_key | t094, t112 | 2026-08-11 |
 | body_external_poll_stop | t095 | 2026-08-11 |
 | bridge_auto_export_path | t096 | 2026-08-11 |
 | content_postmessage_nonce | t097 | 2026-08-11 |

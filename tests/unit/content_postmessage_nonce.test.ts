@@ -29,6 +29,8 @@ describe('content postMessage nonce (T097)', () => {
     afterEach(() => {
         stop_network_hook();
         _set_nonce_for_test('');
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
     });
 
     it('AC-001: 无 nonce 的伪造 SIGNAL 消息被拒，sender 不被调用', () => {
@@ -221,5 +223,96 @@ describe('content postMessage nonce (T097)', () => {
             response_body_status: 'captured',
         });
         expect(sender).not.toHaveBeenCalled();
+    });
+
+    it('AC-002httpb: http fallback 生成的 nonce 非空且被接收端接受（正向断言）', () => {
+        // 与 AC-002http 相同环境：无 crypto.randomUUID，走 Math.random fallback
+        vi.stubGlobal('crypto', {});
+        _set_nonce_for_test(null);
+
+        const append_spy = vi.spyOn(document.documentElement, 'appendChild');
+        start_network_hook(sender, 'cap', Date.now(), 1);
+
+        // start 通过 update_page_nonce 注入 nonce 脚本：断言写入的 nonce 非空
+        const nonce_script = append_spy.mock.calls
+            .map((c) => c[0] as HTMLElement)
+            .find((el) => el.tagName === 'SCRIPT' && (el.textContent || '').includes('__capture_all_network_nonce__'));
+        expect(nonce_script).toBeDefined();
+        const m = nonce_script!.textContent!.match(/__capture_all_network_nonce__\s*=\s*"([^"]*)"/);
+        expect(m).not.toBeNull();
+        expect(m![1].length).toBeGreaterThan(0);
+
+        // 该 fallback nonce 真实可用：带它的事件被接受入库
+        dispatch_message({
+            source: SIGNAL,
+            nonce: m![1],
+            method: 'GET',
+            url: 'https://example.com/http',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        });
+        expect(sender).toHaveBeenCalledTimes(1);
+    });
+
+    it('AC-004: 真实 crypto.randomUUID 两次 start 生成不同 nonce', () => {
+        // p012 约束：不 stub randomUUID（jsdom 内部调用会污染调用计数），
+        // 用真实 UUID 并经 update_page_nonce 注入脚本捕获两次 start 的实际 nonce。
+        _set_nonce_for_test(null); // 前序 afterEach 可能残留 ''，先复位走真实生成路径
+        const append_spy = vi.spyOn(document.documentElement, 'appendChild');
+
+        start_network_hook(sender, 'cap1', Date.now(), 1);
+        stop_network_hook();
+        start_network_hook(sender, 'cap2', Date.now(), 1);
+
+        const nonces = append_spy.mock.calls
+            .map((c) => c[0] as HTMLElement)
+            .map((el) => el.textContent?.match(/__capture_all_network_nonce__\s*=\s*"([^"]*)"/)?.[1])
+            .filter((n): n is string => Boolean(n));
+        expect(nonces.length).toBe(2);
+        expect(nonces[0]).not.toBe(nonces[1]);
+
+        // 旧 nonce（第一次 start 的）旋转后失效
+        dispatch_message({
+            source: SIGNAL,
+            nonce: nonces[0],
+            method: 'GET',
+            url: 'https://example.com/stale',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        });
+        expect(sender).not.toHaveBeenCalled();
+
+        // 新 nonce（第二次 start 的）接受
+        dispatch_message({
+            source: SIGNAL,
+            nonce: nonces[1],
+            method: 'GET',
+            url: 'https://example.com/two',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        });
+        expect(sender).toHaveBeenCalledTimes(1);
+    });
+
+    it('AC-005: update_page_nonce 生产写路径把 nonce 写入 window 变量', () => {
+        _set_nonce_for_test('nonce-w');
+
+        const append_spy = vi.spyOn(document.documentElement, 'appendChild');
+        start_network_hook(sender, 'cap', Date.now(), 1);
+
+        // start 经 update_page_nonce 注入无 guard 的 nonce 脚本（更新页面 MAIN world 变量）
+        const nonce_script = append_spy.mock.calls
+            .map((c) => c[0] as HTMLElement)
+            .find((el) => el.tagName === 'SCRIPT' && (el.textContent || '').includes('__capture_all_network_nonce__'));
+        expect(nonce_script).toBeDefined();
+        expect(nonce_script!.textContent).toContain('nonce-w');
+
+        // jsdom 不执行注入脚本，手动 eval 模拟真实浏览器执行：验证写路径会更新 window 变量
+        // eslint-disable-next-line no-eval
+        eval(nonce_script!.textContent || '');
+        expect((window as any).__capture_all_network_nonce__).toBe('nonce-w');
     });
 });

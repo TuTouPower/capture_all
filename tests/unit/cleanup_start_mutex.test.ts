@@ -81,9 +81,9 @@ async function load_service_worker(): Promise<void> {
     }
 }
 
-function send_start(): Promise<any> {
+function send_start(capture_id = 'new_cap'): Promise<any> {
     if (!on_message_cb) return Promise.resolve({ success: false, error: 'no listener' });
-    return new Promise((resolve) => on_message_cb!({ action: 'start', capture_id: 'new_cap', config: {} }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action: 'start', capture_id, config: {} }, {}, resolve));
 }
 
 async function wait(ms: number): Promise<void> {
@@ -145,5 +145,36 @@ describe('cleanup_stale 与 start 互斥 (T099)', () => {
         }));
         const clear_set = storage_set.mock.calls.find((c) => c[0] && c[0].active_capture_id === null);
         expect(clear_set).toBeDefined();
+    });
+
+    test('AC-003: cleanup 的 storage.get 挂起时 start 排队，resolve 后 start 写入的 active 键保留', async () => {
+        let resolve_get: (v: any) => void = () => {};
+        // 第一次 get（cleanup 的）挂起；后续 get（start 内部）直接返回空
+        storage_get.mockImplementationOnce(() => new Promise((r) => { resolve_get = r; }))
+            .mockResolvedValue({});
+
+        await load_service_worker();
+        const { cleanup_stale_capture_state } = await import('../../src/extension/background/service_worker');
+
+        // cleanup 先拿 run_exclusive 锁，并卡在 storage.get
+        const cleanup_promise = cleanup_stale_capture_state();
+        // start 此时调用 → 在锁上排队（capture_id 用独立 id，避免与同文件 AC-001 写入的
+        // 'new_cap' 在共享 fake-indexeddb 中主键冲突）
+        const start_promise = send_start('new_cap_mutex');
+        await wait(0);
+
+        // 释放 cleanup 的 get：空存储无 stale → cleanup 结束释放锁
+        resolve_get({});
+        await cleanup_promise;
+
+        // start 随后执行完成
+        const start_res = await start_promise;
+        expect(start_res.success, `start error: ${JSON.stringify(start_res)}`).toBe(true);
+
+        // start 写入的 active 键存在；cleanup 不得在 start 之后清键
+        const active_set = storage_set.mock.calls.find((c) => c[0] && c[0].active_capture_id === 'new_cap_mutex');
+        expect(active_set).toBeDefined();
+        const null_set = storage_set.mock.calls.find((c) => c[0] && c[0].active_capture_id === null);
+        expect(null_set).toBeUndefined();
     });
 });

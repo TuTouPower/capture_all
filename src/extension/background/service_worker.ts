@@ -879,6 +879,8 @@ async function check_limit_and_stop(): Promise<boolean> {
     return false;
 }
 
+// p025 测试钩子导出：AC-014 直连断言 absolute_time 接线守卫（按 _for_test 命名约定）。
+export { handle_network_request as _handle_network_request_for_test };
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
     if (await check_limit_and_stop()) return;

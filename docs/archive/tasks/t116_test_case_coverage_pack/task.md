@@ -2,11 +2,11 @@
 tid: "t116"
 slug: "test_case_coverage_pack"
 title: "补测试 case 覆盖 pending 测试补强项（13 条打包）"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t116_test_case_coverage_pack"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "b6c03aac4cd6cadcc91a6eaed739147f8941961e"
 depends_on: ""
 conflicts_with: ""
 note: "p002/p003/p004/p005/p008/p012/p013/p014/p015/p016/p022/p024/p025 全部 minor 测试补强合并"
@@ -44,6 +44,15 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-11 15:25 UTC+8)
+
+code + test 双路各 1 条 minor（同一 finding）。
+
+| finding_id | severity | status | rationale | fix_ref |
+|------------|----------|--------|-----------|---------|
+| t116_code_f001 | minor | 已修 | `handle_network_request` 导出改为 `_handle_network_request_for_test` 别名，遵循 spec 上下文区 `_for_test` 命名约定；测试引用同步更新，vitest+tsc 复跑通过 | src/extension/background/service_worker.ts:882 |
+| t116_test_f001 | minor | 已修 | 同 code_f001（命名约定），同一处修复 | src/extension/background/service_worker.ts:882 |
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,8 +69,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：14 条 AC 全部落地并有对应测试用例；`handoff.json` 的 `ac_evidence` 逐条给出用例引用（覆盖闭合门禁强制）。
 
 ### Reviewer verdict
 
@@ -69,15 +78,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：PASS（minor f001：handle_network_request 导出命名约定，已修）
+- Round 1 test：PASS（minor f001 同源，已修）
+- Round 2 code：PASS（0 新 finding）
+- Round 2 test：PASS（0 新 finding）
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- N/A
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+14 条 pending 测试补强项全部落地：11 个测试文件改动 + 1 新测试文件（ws_absolute_time_wiring），src 仅两处 `_for_test` 钩子导出。全量 vitest 128 文件 1353 用例绿，tsc 0 错误。登记 findings：d003。

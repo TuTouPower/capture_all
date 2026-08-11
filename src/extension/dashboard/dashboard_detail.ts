@@ -724,6 +724,11 @@ function wire_trace(): void {
 
 export { render_detail, wire_detail, open_detail, render_trace };
 
+// 测试钩子（p022）：直连 filtered 列表渲染，供详情搜索过滤语义断言。
+export function _render_dt_list_for_test(): string {
+    return render_dt_list();
+}
+
 async function open_detail(id: string): Promise<void> {
     set_page('detail'); set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all'); set_dt_sel(-1); set_dt_insp_open(false);
     await load_detail(id);

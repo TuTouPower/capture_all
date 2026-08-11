@@ -156,4 +156,35 @@ describe('external body poll stop 生命周期', () => {
 
         await stop_body_capture();
     });
+
+    it('AC-004: 首轮 poll 已 in-flight 时重入 start，旧闭包 resolve 不写、新 poll 单路', async () => {
+        const on_network_request = vi.fn();
+        const { start_body_capture, stop_body_capture } = await import('../../src/extension/background/body_capture_coordinator');
+
+        let resolve_poll: (v: any[]) => void = () => {};
+        poll_external_cdp_events.mockImplementation(() => new Promise((r) => { resolve_poll = r; }));
+
+        const result1 = await start_body_capture('cap1', Date.now(), make_config(), 1, make_deps(on_network_request) as any, null);
+        expect(result1.mode).toBe('external_cdp_bridge');
+
+        // 首轮 poll 触发并进入 in-flight（promise 挂起）
+        await vi.advanceTimersByTimeAsync(500);
+        expect(poll_external_cdp_events).toHaveBeenCalledTimes(1);
+
+        // 首轮 poll 仍 in-flight 时重入 start（T095: 先 stop_poll 置 poll_stopped + 清 timer）
+        const result2 = await start_body_capture('cap2', Date.now(), make_config(), 1, make_deps(on_network_request) as any, null);
+        expect(result2.mode).toBe('external_cdp_bridge');
+
+        // 旧闭包 resolve 返回事件 → poll_stopped 检查拦截，不写网络事件
+        resolve_poll([bridge_event(1)]);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(on_network_request).not.toHaveBeenCalled();
+
+        // 新闭包从 500ms 后开始新一轮 poll → 单路新 poll（总共 2 次：旧 1 + 新 1）
+        await vi.advanceTimersByTimeAsync(500);
+        expect(poll_external_cdp_events).toHaveBeenCalledTimes(2);
+        expect(on_network_request).not.toHaveBeenCalled();
+
+        await stop_body_capture();
+    });
 });

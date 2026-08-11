@@ -102,4 +102,28 @@ describe('load_user_config 保留 browser_label 与 agent_bridge_poll_interval_m
         expect(cfg.browser_label).toBe('b');
         expect(cfg.agent_bridge_poll_interval_ms).toBe(300000);
     });
+
+    it('AC-003: NaN poll 回退默认值', async () => {
+        seed_user_config({ agent_bridge_poll_interval_ms: NaN });
+
+        const cfg = await load_user_config();
+
+        expect(cfg.agent_bridge_poll_interval_ms).toBe(DEFAULT_USER_CONFIG.agent_bridge_poll_interval_ms);
+    });
+
+    it('AC-003: Infinity poll 回退默认值', async () => {
+        seed_user_config({ agent_bridge_poll_interval_ms: Infinity });
+
+        const cfg = await load_user_config();
+
+        expect(cfg.agent_bridge_poll_interval_ms).toBe(DEFAULT_USER_CONFIG.agent_bridge_poll_interval_ms);
+    });
+
+    it('AC-003: 精确下边界 250 保留', async () => {
+        seed_user_config({ agent_bridge_poll_interval_ms: 250 });
+
+        const cfg = await load_user_config();
+
+        expect(cfg.agent_bridge_poll_interval_ms).toBe(250);
+    });
 });

@@ -2,7 +2,8 @@
 // tests/websocket_capture_page.test.ts
 // Tests for content/websocket_capture.ts — page-level WebSocket monkey-patch capture.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { start_websocket_capture, stop_websocket_capture, _set_nonce_for_test } from '../../src/extension/content/websocket_capture';
+import { start_websocket_capture, stop_websocket_capture, _set_nonce_for_test, _set_secret_for_test } from '../../src/extension/content/websocket_capture';
+import { sign_message, TEST_SECRET } from '../support/helpers/signed_message';
 
 const SIGNAL = '__capture_all_ws__';
 const NONCE = 'test-nonce';
@@ -19,7 +20,7 @@ function post_ws_message(
     window.dispatchEvent(new MessageEvent('message', {
         origin: window.location.origin,
         source: window,
-        data: { source: SIGNAL, nonce: NONCE, ws_url, direction, data_preview, data_bytes, data_status },
+        data: sign_message({ source: SIGNAL, nonce: NONCE, ws_url, direction, data_preview, data_bytes, data_status }),
     }));
 }
 
@@ -29,6 +30,7 @@ describe('websocket_capture (page-level)', () => {
     beforeEach(() => {
         stop_websocket_capture();
         _set_nonce_for_test(NONCE);
+        _set_secret_for_test(TEST_SECRET);
         sender = vi.fn();
     });
 
@@ -86,6 +88,16 @@ describe('websocket_capture (page-level)', () => {
             origin: window.location.origin,
             source: window,
             data: { source: SIGNAL, nonce: 'wrong', ws_url: 'wss://x', direction: 'sent', data_preview: 'f', data_bytes: 1, data_status: 'captured' },
+        }));
+        expect(sender).not.toHaveBeenCalled();
+    });
+
+    it('正确 nonce 但签名缺失的消息被拒（T121）', () => {
+        start_websocket_capture(sender, CAPTURE_ID, START_EPOCH);
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: { source: SIGNAL, nonce: NONCE, ws_url: 'wss://x', direction: 'sent', data_preview: 'f', data_bytes: 1, data_status: 'captured' },
         }));
         expect(sender).not.toHaveBeenCalled();
     });

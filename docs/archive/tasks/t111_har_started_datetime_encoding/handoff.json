@@ -1,0 +1,18 @@
+{
+  "tid": "t111",
+  "attempt": 1,
+  "execution_id": "b176244fca6147f8ba86ae897e8b0c92",
+  "status": "done",
+  "branch": "t111_har_started_datetime_encoding",
+  "base_sha": "aceba36f99e96e118dc042624facb366442aea4e",
+  "tests": "npm test：1248 passed（vitest tests/unit 122 文件）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 4 code PASS / test PASS（R1-2 修 websocket 双计 + primary 接线遮蔽后收敛）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/exporter.test.ts 'AC-001a absolute_time 用绝对时间' + 'AC-001b start_time_ms 绝对 epoch 不双计' + 'AC-001c 无时间字段回退采集开始' 通过"],
+    "AC-002": ["tests/unit/exporter.test.ts 'AC-002 base64 响应体 content.encoding=base64' 通过"],
+    "AC-003": ["tests/unit/exporter.test.ts 'AC-003 UTF-8 文本体不标记 base64' 通过"]
+  },
+  "pending": ["p025"],
+  "findings": []
+}

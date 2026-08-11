@@ -903,6 +903,12 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
     const request = data as NetworkRequestData;
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
     if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    // T111: CDP primary / web_request 路径 time 字段恒 null，事件带相对偏移；
+    // 落绝对开始时间供 HAR 等导出使用；start_time_ms>0（websocket 绝对 epoch）时保留
+    if (request.absolute_time === undefined && !(request.start_time_ms && request.start_time_ms > 0)
+        && typeof event?.relative_time_ms === 'number') {
+        request.absolute_time = new Date(current_capture.started_at).getTime() + event.relative_time_ms;
+    }
     normalize_network_request(request);
     try {
         await write_network_requests([request]);

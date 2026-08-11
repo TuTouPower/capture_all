@@ -6,11 +6,12 @@
 
 import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
 import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
 import { build_network_data } from '../../shared/network_builder';
 
+const state = create_capture_state<NetworkRequestData>();
 const SIGNAL = '__capture_all_network_hook__';
 
 // 注入脚本构造器（导出便于测试 eval 验证行为）
@@ -281,10 +282,6 @@ ${SYNC_HMAC_JS}
 })();`;
 }
 
-let is_capturing = false;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
 let current_nonce = '';
 let capture_response_body = true;
 // T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
@@ -299,7 +296,6 @@ export function _set_secret_for_test(secret: string | null): void {
     _secret_override = secret;
 }
 
-let send_event: (event: CaptureEvent, data: NetworkRequestData) => void;
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 function update_page_nonce(nonce: string): void {
@@ -332,12 +328,11 @@ export function start_network_hook(
     new_tab_id: number,
     new_capture_response_body = true,
 ): void {
-    if (is_capturing) return;
-    send_event = sender;
-    capture_id = new_capture_id;
-    capture_start_epoch_ms = new_capture_start_epoch_ms;
-    tab_id = new_tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
     // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
     // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
     current_nonce = _nonce_override ?? generate_nonce();
@@ -348,7 +343,7 @@ export function start_network_hook(
     inject_page_script();
 
     message_listener = (e: MessageEvent) => {
-        if (!is_capturing) return;
+        if (!state.is_capturing) return;
         if (e.origin !== window.location.origin) return;
         if (e.source !== window) return;
         const d = e.data;
@@ -378,13 +373,13 @@ export function start_network_hook(
             derive_body: false,
         });
 
-        send_event(
+        state.sender?.(
             create_content_event({
-                capture_id,
+                capture_id: state.capture_id,
                 category: 'network',
                 type: 'network_request',
-                relative_time_ms: get_relative_time(capture_start_epoch_ms),
-                tab_id,
+                relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+                tab_id: state.tab_id,
                 url: location.href,
                 source: 'content_script',
             }),
@@ -395,8 +390,7 @@ export function start_network_hook(
 }
 
 export function stop_network_hook(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);
         message_listener = null;

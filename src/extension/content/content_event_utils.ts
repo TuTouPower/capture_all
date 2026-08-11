@@ -38,12 +38,12 @@ export function create_content_event(params: {
 export { get_relative_time, generate_event_id, reset_event_counter };
 
 /** Content capture 模块共享状态：is_capturing + capture_id + epoch + tab_id + sender。 */
-export function create_capture_state<TData>() {
+export function create_capture_state<TData = never>() {
     let is_capturing = false;
     let capture_id = '';
     let capture_start_epoch_ms = 0;
     let tab_id = 0;
-    let send_event: ((event: CaptureEvent, data: TData) => void) | null = null;
+    let send_event: ((event: CaptureEvent, data?: TData) => void) | null = null;
 
     return {
         get is_capturing(): boolean {
@@ -58,13 +58,13 @@ export function create_capture_state<TData>() {
         get tab_id(): number {
             return tab_id;
         },
-        get sender(): ((event: CaptureEvent, data: TData) => void) | null {
+        get sender(): ((event: CaptureEvent, data?: TData) => void) | null {
             return send_event;
         },
         /** 已捕获中返回 false（重入守卫）；否则写入运行参数并返回 true。 */
         begin(sender: (event: CaptureEvent, data: TData) => void, params: { capture_id: string; capture_start_epoch_ms: number; tab_id: number }): boolean {
             if (is_capturing) return false;
-            send_event = sender;
+            send_event = sender as (event: CaptureEvent, data?: TData) => void;
             capture_id = params.capture_id;
             capture_start_epoch_ms = params.capture_start_epoch_ms;
             tab_id = params.tab_id;

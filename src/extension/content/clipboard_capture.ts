@@ -1,12 +1,8 @@
 // content/clipboard_capture.ts
 import type { CaptureEvent, ClipboardEventData } from '../../shared/types';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 
-let is_capturing = false;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
-let send_event: (event: CaptureEvent, data: ClipboardEventData) => void;
+const state = create_capture_state<ClipboardEventData>();
 
 let original_write_text: ((text: string) => Promise<void>) | null = null;
 let original_read_text: (() => Promise<string>) | null = null;
@@ -19,12 +15,11 @@ export function start_clipboard_capture(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
 ): void {
-    if (is_capturing) return;
-    send_event = sender;
-    capture_id = new_capture_id;
-    capture_start_epoch_ms = new_capture_start_epoch_ms;
-    tab_id = new_tab_id;
-    is_capturing = true;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
 
     // monkey-patch navigator.clipboard
     if (navigator?.clipboard) {
@@ -49,8 +44,7 @@ export function start_clipboard_capture(
 }
 
 export function stop_clipboard_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     // restore monkey-patched methods
     if (navigator?.clipboard && original_write_text) {
@@ -77,17 +71,17 @@ function emit_clipboard(
     method: ClipboardEventData['method'],
     action: ClipboardEventData['action'],
 ): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
 
     const event = create_content_event({
-        capture_id,
+        capture_id: state.capture_id,
         category: 'user_action',
         type: action === 'write' ? 'clipboard_write' : 'clipboard_read',
-        relative_time_ms: get_relative_time(capture_start_epoch_ms),
-        tab_id,
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
         source: 'content_script',
     });
 
     const data: ClipboardEventData = { method, action };
-    send_event(event, data);
+    state.sender?.(event, data);
 }

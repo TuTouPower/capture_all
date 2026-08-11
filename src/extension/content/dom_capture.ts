@@ -1,14 +1,10 @@
 // content/dom_capture.ts
 import type { CaptureConfig, CaptureEvent, InputEventData } from '../../shared/types';
 import { build_xpath } from '../shared/dom_utils';
-import { create_content_event, get_relative_time } from './content_event_utils';
+import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 
-let is_capturing = false;
+const state = create_capture_state<InputEventData>();
 let config: CaptureConfig;
-let capture_id = '';
-let capture_start_epoch_ms = 0;
-let tab_id = 0;
-let send_event: (event: CaptureEvent, data: InputEventData) => void;
 
 export function start_dom_capture(
     cfg: CaptureConfig,
@@ -17,14 +13,13 @@ export function start_dom_capture(
     new_tab_id: number,
     sender: (event: CaptureEvent, data: InputEventData) => void,
 ): void {
-    if (is_capturing) return;
+    if (!state.begin(sender, {
+        capture_id: new_capture_id,
+        capture_start_epoch_ms: new_capture_start_epoch_ms,
+        tab_id: new_tab_id,
+    })) return;
 
     config = cfg;
-    capture_id = new_capture_id;
-    capture_start_epoch_ms = new_capture_start_epoch_ms;
-    tab_id = new_tab_id;
-    send_event = sender;
-    is_capturing = true;
 
     document.addEventListener('input', handle_input, true);
     document.addEventListener('change', handle_change, true);
@@ -33,8 +28,7 @@ export function start_dom_capture(
 }
 
 export function stop_dom_capture(): void {
-    if (!is_capturing) return;
-    is_capturing = false;
+    if (!state.end()) return;
 
     document.removeEventListener('input', handle_input, true);
     document.removeEventListener('change', handle_change, true);
@@ -152,13 +146,13 @@ function emit_input_event(action: InputEventData['action'], target: HTMLElement)
         selected_count: null,
     };
 
-    send_event(
+    state.sender?.(
         create_content_event({
-            capture_id,
+            capture_id: state.capture_id,
             category: 'user_action',
             type: 'input_event',
-            relative_time_ms: get_relative_time(capture_start_epoch_ms),
-            tab_id,
+            relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+            tab_id: state.tab_id,
             url: location.href,
             source: 'content_script',
         }),
@@ -167,28 +161,28 @@ function emit_input_event(action: InputEventData['action'], target: HTMLElement)
 }
 
 function handle_input(event: Event): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
     emit_input_event('input', target);
 }
 
 function handle_change(event: Event): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
     emit_input_event('change', target);
 }
 
 function handle_focus(event: FocusEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
     emit_input_event('focus', target);
 }
 
 function handle_blur(event: FocusEvent): void {
-    if (!is_capturing) return;
+    if (!state.is_capturing) return;
     const target = event.target as HTMLElement;
     if (!target) return;
     emit_input_event('blur', target);

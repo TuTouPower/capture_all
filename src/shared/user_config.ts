@@ -376,6 +376,14 @@ export function migrate_iana_timezone(value: string): string {
 }
 
 // T060: 持久化边界运行时校验。
+// T092: poll 合法区间与 agent_bridge_config 一致（p001 抽取 helper 降圈复杂度）。
+function is_valid_poll_interval(v: unknown): v is number {
+    return typeof v === 'number'
+        && Number.isInteger(v)
+        && v >= MIN_POLL_INTERVAL_MS
+        && v <= MAX_POLL_INTERVAL_MS;
+}
+
 function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
     const cfg = { ...DEFAULT_USER_CONFIG };
     const src = raw || {};
@@ -386,35 +394,37 @@ function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
         if (typeof src[key] === 'boolean') c[key] = src[key];
     }
 
-    if (src.mouse_precision === 'clicks' || src.mouse_precision === 'clicks_scroll_drag' || src.mouse_precision === 'full_trajectory') c.mouse_precision = src.mouse_precision;
-    if (src.keyboard_capture_mode === 'none' || src.keyboard_capture_mode === 'shortcuts' || src.keyboard_capture_mode === 'all') c.keyboard_capture_mode = src.keyboard_capture_mode;
-    if (src.theme === 'light' || src.theme === 'dark' || src.theme === 'follow-system') c.theme = src.theme;
-    if (src.locale === 'en' || src.locale === 'zh_CN') c.locale = src.locale;
-    if (src.detail_time_display_mode === 'system' || src.detail_time_display_mode === 'relative' || src.detail_time_display_mode === 'absolute') c.detail_time_display_mode = src.detail_time_display_mode;
-
-    const num_keys = ['max_body_capture_bytes', 'inline_text_max_bytes'];
-    for (const key of num_keys) {
-        const v = src[key];
-        if (typeof v === 'number' && Number.isInteger(v) && v >= 0) c[key] = v;
+    const enum_rules: Array<[string, readonly string[]]> = [
+        ['mouse_precision', ['clicks', 'clicks_scroll_drag', 'full_trajectory']],
+        ['keyboard_capture_mode', ['none', 'shortcuts', 'all']],
+        ['theme', ['light', 'dark', 'follow-system']],
+        ['locale', ['en', 'zh_CN']],
+        ['detail_time_display_mode', ['system', 'relative', 'absolute']],
+        ['log_level', ['debug', 'info', 'warn', 'error', 'silent']],
+    ];
+    for (const [key, allowed] of enum_rules) {
+        if (allowed.includes(src[key] as string)) c[key] = src[key];
     }
 
-    const str_keys = ['export_capture_directory', 'export_log_directory', 'export_filename_template', 'agent_bridge_url', 'agent_bridge_token'];
+    // [key, 最小合法整数]
+    const num_rules: Array<[string, number]> = [
+        ['max_body_capture_bytes', 0],
+        ['inline_text_max_bytes', 0],
+        ['log_max_size_mb', 1], // 原 >0 语义（整数）等价 >=1
+    ];
+    for (const [key, min] of num_rules) {
+        const v = src[key];
+        if (typeof v === 'number' && Number.isInteger(v) && v >= min) c[key] = v;
+    }
+
+    const str_keys = ['export_capture_directory', 'export_log_directory', 'export_filename_template', 'agent_bridge_url', 'agent_bridge_token', 'browser_label'];
     for (const key of str_keys) {
         if (typeof src[key] === 'string') c[key] = src[key];
     }
 
-    if (typeof src.system_time_timezone === 'string' && src.system_time_timezone.length > 0) (c as Record<string, unknown>).system_time_timezone = src.system_time_timezone;
+    if (typeof src.system_time_timezone === 'string' && src.system_time_timezone.length > 0) c.system_time_timezone = src.system_time_timezone;
 
-    if (src.log_level === 'debug' || src.log_level === 'info' || src.log_level === 'warn' || src.log_level === 'error' || src.log_level === 'silent') c.log_level = src.log_level;
-
-    if (typeof src.log_max_size_mb === 'number' && Number.isInteger(src.log_max_size_mb) && src.log_max_size_mb > 0) c.log_max_size_mb = src.log_max_size_mb;
-
-    // T092: label 与轮询间隔纳入白名单；poll 合法区间与 agent_bridge_config 一致。
-    if (typeof src.browser_label === 'string') c.browser_label = src.browser_label;
-    if (typeof src.agent_bridge_poll_interval_ms === 'number'
-        && Number.isInteger(src.agent_bridge_poll_interval_ms)
-        && src.agent_bridge_poll_interval_ms >= MIN_POLL_INTERVAL_MS
-        && src.agent_bridge_poll_interval_ms <= MAX_POLL_INTERVAL_MS) {
+    if (is_valid_poll_interval(src.agent_bridge_poll_interval_ms)) {
         c.agent_bridge_poll_interval_ms = src.agent_bridge_poll_interval_ms;
     }
 

@@ -126,4 +126,68 @@ describe('load_user_config 保留 browser_label 与 agent_bridge_poll_interval_m
 
         expect(cfg.agent_bridge_poll_interval_ms).toBe(250);
     });
+
+    it('AC-004: 表驱动规则全字段集成——合法值保留、非法值回退默认', async () => {
+        // t118_test_f001 处置：锁定 enum/num/str 规则表全字段路径，防表内白名单笔误
+        const legal: Record<string, unknown> = {
+            mouse_precision: 'full_trajectory',
+            keyboard_capture_mode: 'all',
+            capture_input_values: false,
+            capture_request_body: false,
+            capture_response_body: false,
+            max_body_capture_bytes: 1024,
+            inline_text_max_bytes: 2048,
+            redact_data: false,
+            theme: 'dark',
+            locale: 'zh_CN',
+            system_time_timezone: 'UTC+8',
+            detail_time_display_mode: 'absolute',
+            export_capture_directory: 'captures',
+            export_log_directory: 'logs',
+            export_filename_template: '{capture_id}.{ext}',
+            export_save_as: false,
+            agent_bridge_enabled: false,
+            agent_bridge_url: 'http://127.0.0.1:9999',
+            agent_bridge_token: 'tok',
+            agent_bridge_poll_interval_ms: 5000,
+            browser_label: 'B',
+            log_level: 'warn',
+            log_max_size_mb: 5,
+        };
+        seed_user_config(legal);
+        const cfg = await load_user_config();
+        for (const [k, v] of Object.entries(legal)) {
+            expect((cfg as unknown as Record<string, unknown>)[k]).toBe(v);
+        }
+
+        const illegal: Record<string, unknown> = {
+            mouse_precision: 'drag',
+            keyboard_capture_mode: 'ctrl',
+            capture_input_values: 'x',
+            max_body_capture_bytes: -1,
+            inline_text_max_bytes: 1.5,
+            redact_data: 1,
+            theme: 'blue',
+            locale: 'fr',
+            system_time_timezone: '',
+            detail_time_display_mode: 'x',
+            export_capture_directory: 42,
+            export_log_directory: null,
+            export_filename_template: 42,
+            export_save_as: 'y',
+            agent_bridge_enabled: 1,
+            agent_bridge_url: 42,
+            agent_bridge_token: 42,
+            agent_bridge_poll_interval_ms: NaN,
+            browser_label: 42,
+            log_level: 'verbose',
+            log_max_size_mb: 0,
+        };
+        seed_user_config(illegal);
+        const cfg2 = await load_user_config();
+        for (const k of Object.keys(illegal)) {
+            expect((cfg2 as unknown as Record<string, unknown>)[k])
+                .toBe((DEFAULT_USER_CONFIG as unknown as Record<string, unknown>)[k]);
+        }
+    });
 });

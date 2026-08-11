@@ -1,0 +1,17 @@
+{
+  "tid": "t118",
+  "attempt": 1,
+  "execution_id": "8f077b98b5aa4325a87bf11ee030b58c",
+  "status": "done",
+  "branch": "t118_sanitize_user_config_complexity",
+  "base_sha": "5fdab14a9618a2501363aef1f6329bd32a3906ed",
+  "tests": "npm test 全量：128 文件 1354 用例通过",
+  "blackbox": "npm test + npx tsc --noEmit：0 错误",
+  "review": "第 2 轮 PASS（code+test 双路；round 1 test minor f001 已修）",
+  "ac_evidence": {
+    "AC-001": ["静态度量 sanitize_user_config 圈复杂度 ~11（≤15）：6 if + 4 循环 + 3 短路 ≈ 11", "src/shared/user_config.ts 表驱动（enum_rules/num_rules/str_keys + is_valid_poll_interval helper）"],
+    "AC-002": ["tests/unit/user_config_persistence.test.ts 全量 11 用例通过（含 poll NaN/Infinity/250 边界）", "AC-004 集成 case：全字段合法值保留 + 非法值回退默认", "全量 128 文件 1354 用例回归绿"]
+  },
+  "pending": [],
+  "findings": []
+}

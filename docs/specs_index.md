@@ -4,7 +4,7 @@
 
 | slug | task 清单 | 最后更新时间 |
 |------|----------|--------------|
-| user_config | t092 | 2026-08-11 |
+| user_config | t092, t118 | 2026-08-11 |
 | runtime_exception | t093 | 2026-08-11 |
 | network_capture_session_key | t094, t112 | 2026-08-11 |
 | body_external_poll_stop | t095 | 2026-08-11 |

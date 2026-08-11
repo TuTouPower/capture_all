@@ -2,11 +2,11 @@
 tid: "t118"
 slug: "sanitize_user_config_complexity"
 title: "sanitize_user_config 圈复杂度表驱动化"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t118_sanitize_user_config_complexity"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "5fdab14a9618a2501363aef1f6329bd32a3906ed"
 depends_on: ""
 conflicts_with: ""
 note: "p001 圈复杂度超阈值重构"
@@ -44,6 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-11 16:26 UTC+8)
+
+code 路 0 finding；test 路 1 条 minor。
+
+| finding_id | severity | status | rationale | fix_ref |
+|------------|----------|--------|-----------|---------|
+| t118_test_f001 | minor | 已修 | 补全字段合法/非法值集成 case，锁定 enum/num/str 规则表全部路径 | tests/unit/user_config_persistence.test.ts AC-004 |
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,8 +68,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 静态度量复杂度 ~11（≤15）；AC-002 全量测试回归绿 + AC-004 集成 case。`handoff.json` 的 `ac_evidence` 逐条给出引用。
 
 ### Reviewer verdict
 
@@ -69,15 +77,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：PASS（0 finding）
+- Round 1 test：PASS（minor f001：补全字段集成 case，已修）
+- Round 2 code：PASS（0 新 finding）
+- Round 2 test：PASS（0 新 finding）
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- N/A
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+sanitize_user_config 表驱动重构完成（圈复杂度 29 → ~11），行为不变。全量 vitest 128 文件 1354 用例绿，tsc 0 错误。无新 pending/findings。

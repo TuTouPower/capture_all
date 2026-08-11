@@ -10,8 +10,8 @@ const SENSITIVE_HEADER_PATTERNS = ['token', 'key', 'secret', 'bearer'];
 
 const SENSITIVE_URL_PARAM_PATTERNS = ['token', 'key', 'secret', 'password', 'passwd', 'auth', 'credential', 'jwt'];
 
-// 绝对 URL 子串（T100: 用于检测 param 值内嵌 URL 需递归脱敏）
-const URL_SUBSTRING_RE = /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`)]+/i;
+// t114: 嵌套 query 递归脱敏深度上限，防深层嵌套链无限递归
+const NESTED_QUERY_MAX_DEPTH = 5;
 
 const RESPONSE_PREVIEW_LENGTH = 200;
 
@@ -53,8 +53,63 @@ export function redact_headers(headers: Record<string, string>, enabled: boolean
     return { headers: result, headers_status: redacted ? 'redacted' : 'captured' };
 }
 
-export function redact_url(url: string, redact_query: boolean): RedactUrlResult {
+// t114: 检测非敏感参数值中内嵌的 query 形态（plain 或单层解码后），
+// 返回嵌套子串（自 `?` 起）与是否编码。单层解码避免重复解码误判（双编码 %253F 不触发）。
+// allow_encoded=false 用于 absolute 分支（URLSearchParams 已解码一层，再 decode 会触发双编码误判）。
+function find_nested_query(value: string, allow_encoded: boolean): { nested: string; encoded: boolean } | null {
+    const q = value.indexOf('?');
+    if (q !== -1 && /[?&][^#&]*=[^#&]+/.test(value.slice(q))) {
+        return { nested: value.slice(q), encoded: false };
+    }
+    if (!allow_encoded) return null;
+    let dec: string;
+    try {
+        dec = decodeURIComponent(value);
+    } catch {
+        return null;
+    }
+    if (dec === value) return null;
+    const dq = dec.indexOf('?');
+    if (dq !== -1 && /[?&][^#&]*=[^#&]+/.test(dec.slice(dq))) {
+        return { nested: dec.slice(dq), encoded: true };
+    }
+    return null;
+}
+
+// t114: 对非敏感参数 value 做嵌套 query 递归脱敏；无嵌套或不触发返回 null（保持原值）。
+// allow_encoded=false 时仅 plain 检测（absolute 分支 value 已被 URLSearchParams 解码）。
+// 深度超限 fail-closed：嵌套过深无法安全递归时整体置 [REDACTED]，不泄露明文。
+function redact_nested_value(value: string, depth: number, allow_encoded: boolean): string | null {
+    if (depth >= NESTED_QUERY_MAX_DEPTH) {
+        // 深度超限属异常嵌套，安全优先：整体脱敏而非保留可能含敏感值的原文
+        return '[REDACTED]';
+    }
+    const found = find_nested_query(value, allow_encoded);
+    if (!found) return null;
+    // encoded 命中的嵌套子串已解码一层，递归时不得再允许解码（避免两层解码误判，f005）；
+    // plain 命中的子串继承当前 allow_encoded 语义。
+    const nested = redact_url(found.nested, true, depth + 1, found.encoded ? false : allow_encoded);
+    if (nested.url_status !== 'redacted') return null;
+    if (found.encoded) {
+        // encoded 形态：解码重组后整体 encodeURIComponent 写回，保持 URL 编码合法性
+        let dec: string;
+        try {
+            dec = decodeURIComponent(value);
+        } catch {
+            return null;
+        }
+        const new_val = dec.slice(0, dec.length - found.nested.length) + nested.url;
+        return encodeURIComponent(new_val);
+    }
+    return value.slice(0, value.length - found.nested.length) + nested.url;
+}
+
+export function redact_url(url: string, redact_query: boolean, _depth = 0, _allow_encoded = true): RedactUrlResult {
     if (!redact_query) return { url, url_status: 'captured' };
+    if (_depth >= NESTED_QUERY_MAX_DEPTH) {
+        // f006: 深度超限 fail-closed — 无法安全递归时整体脱敏，不泄露明文也不谎报状态
+        return { url: '[REDACTED]', url_status: 'redacted' };
+    }
 
     // T100: 相对 URL / 无法 new URL 解析的串（path?token=x）也按 query 脱敏，不 fail-open。
     // 统一拆 query 再重组，保留原始串形态（相对路径/绝对 URL 均适用）。
@@ -73,6 +128,30 @@ export function redact_url(url: string, redact_query: boolean): RedactUrlResult 
             parsed.searchParams.delete(key);
             for (const _ of values) {
                 parsed.searchParams.append(key, '[REDACTED]');
+                redacted = true;
+            }
+        }
+        // t114: 非敏感 key 的 value 内嵌 query 递归脱敏（absolute/base-resolved 外层）。
+        // absolute 分支 value 已被 URLSearchParams 解码一层，只做 plain 检测避免双编码误判。
+        const non_sensitive_keys = [...parsed.searchParams.keys()].filter(
+            (k) => !sensitive_keys.includes(k)
+        );
+        for (const key of non_sensitive_keys) {
+            const values = parsed.searchParams.getAll(key);
+            let changed = false;
+            const new_values = values.map((v) => {
+                const nested = redact_nested_value(v, _depth, false);
+                if (nested !== null) {
+                    changed = true;
+                    return nested;
+                }
+                return v;
+            });
+            if (changed) {
+                parsed.searchParams.delete(key);
+                for (const nv of new_values) {
+                    parsed.searchParams.append(key, nv);
+                }
                 redacted = true;
             }
         }
@@ -104,11 +183,12 @@ export function redact_url(url: string, redact_query: boolean): RedactUrlResult 
                 redacted = true;
                 return `${raw_key}=[REDACTED]`;
             }
-            if (value && URL_SUBSTRING_RE.test(value)) {
-                // T100: 仅当递归实际脱敏才置 redacted，避免 url_status 语义失真
-                const nested = redact_url(value, true);
-                if (nested.url_status === 'redacted') redacted = true;
-                return `${raw_key}=${nested.url}`;
+            // t114: 非敏感 key 的 value 内嵌 query 递归（plain 与 %3F/%3D 编码均覆盖）。
+            // allow_encoded 继承调用方语义：absolute 递归下来的嵌套已解码，不得再允许编码解码。
+            const nested_value = redact_nested_value(value, _depth, _allow_encoded);
+            if (nested_value !== null) {
+                redacted = true;
+                return `${raw_key}=${nested_value}`;
             }
             return param;
         });

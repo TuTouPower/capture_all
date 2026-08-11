@@ -242,7 +242,7 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
                 export_log_directory: get_user_config().export_log_directory,
                 system_time_timezone: get_user_config().system_time_timezone,
             });
-            await download_blob(blob, log_filename, 'log_export');
+            await download_blob(blob, log_filename, 'log_export', get_user_config().export_save_as);
         } catch (e) { logger.error('Export logs error', e); }
     });
 

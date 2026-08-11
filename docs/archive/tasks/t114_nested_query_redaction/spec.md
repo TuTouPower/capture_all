@@ -72,7 +72,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- 编码嵌套 query 的逐层解码深度与终止条件：UNVERIFIED-SPIKE，执行期用 `.scratch/reproduce_p018.ts` 矩阵验证实现，避免无限递归或重复解码。
+- 编码嵌套 query 的逐层解码深度与终止条件：已核实（s002 spike，2026-08-11）。单层 `decodeURIComponent` 识别 `%3F`/`%3D` 编码值并脱敏；双编码（`%253F`）单层解码后仍是 `%3F` 不触发递归，避免重复解码误判；`MAX_DEPTH=5` 终止深层嵌套链（`?next=?next=?next=?token=x` 正常终止且敏感值仍脱敏）。plain 值原位替换嵌套子串，encoded 值解码重组后 `encodeURIComponent` 写回保持 URL 编码合法性。实现与测试按此规则固化。
 
 ### 风险与回退
 

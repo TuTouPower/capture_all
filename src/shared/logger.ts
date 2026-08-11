@@ -30,7 +30,10 @@ function truncate_bytes_safe(s: string, max_bytes: number): string {
 // URL 子串模式：扫描字符串中嵌入的 URL（绝对或相对含 query），便于脱敏
 // T100: 相对 URL（path?token=x）与绝对 URL 均纳入；bare-query 要求 key=value 形态，
 // 排除 JS 可选链（?.token）/ 三元（cond?x:y）误匹配。
-const URL_SUBSTRING_PATTERN = /(?:[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`)]+|\/[^\s"'<>`)]*\?[^\s"'<>`)]*=[^\s"'<>`)]*|\?[^\s"'<>`)]*=[^\s"'<>`)]+)/gi;
+// t113: 边界启发式 — bare-query 与 path-query 前加 lookbehind，仅认可明确 URL 上下文
+// （行首/空白/左括号/逗号/引号/=）后的片段；无斜杠相对路径（file?token=x）退出任意文本扫描
+// （用户确认的隐私覆盖收缩，见 docs/specs/privacy_logger_stack_redact_url.md）。
+const URL_SUBSTRING_PATTERN = /(?:[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`)]+|(?<=^|[=\s([,<"'])\/[^\s"'<>`)]*\?[^\s"'<>`)]*=[^\s"'<>`)]*|(?<=^|[=\s([,<"'])\?[^\s"'<>`)]*=[^\s"'<>`)]+)/gi;
 
 function sanitize_string(s: string): string {
     let result = s.replace(URL_SUBSTRING_PATTERN, (m) => redact_url(m, true).url);

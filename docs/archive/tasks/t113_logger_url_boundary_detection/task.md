@@ -1,12 +1,12 @@
 ---
-tid: "t112"
-slug: "finished_before_stream_lifecycle"
-title: "修复 finished_before_stream 生命周期泄漏"
-status: "backlog"
-branch: ""
+tid: "t113"
+slug: "logger_url_boundary_detection"
+title: "修复 Logger URL 边界误判"
+status: "done"
+branch: "t113_logger_url_boundary_detection"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "8b794bc9c218d63936c0957506654b8a9f3f5068"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,14 +44,19 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 12:27 UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t113_code_f001 | important | 已修 | lookbehind 白名单并入 `=`，`path=/login?token=x`、`url=?token=x` 等序列化形态恢复脱敏，测试补 3 例（等号前置 path/bare、引号内 path） | 源码:logger.ts / 测试:t113 测试文件 |
+| t113_code_f002 | minor | 已修 | spike 脚本 import 路径修正为相对仓库根，`npx tsx code/spike.ts` 13/13 可复现 | 文档:spike code/spike.ts |
+| t113_code_f003 | minor | 已修 | 带空格三元与独立 `?query` 同享 `\s` URL 边界语义，属用户确认的已知权衡；spec 上下文区与 spike 报告披露完整边界，测试固化该行为 | 文档:spec 上下文区 / 测试:t113 测试文件 |
+| t113_test_f001 | minor | 已修 | 对象负例改 `toEqual` 逐字保留断言（防对象被吞/置空仍绿） | 测试:t113 测试文件 |
+| t113_test_f002 | minor | 已修 | 补 Error 实例用例，直触达 logger.ts Error 分支（message/stack 路径） | 测试:t113 测试文件 |
+| t113_test_f003 | minor | 已修 | 补行首 path/bare、方括号/尖括号/单引号前置边界用例；逗号用例保留（逗号被 URL 字符集吞入属实际行为，另补方括号/尖括号/引号验证前置边界） | 测试:t113 测试文件 |
+| t113_code_f004 | minor | 已修 | spike.ts CANDIDATE 与 d001 规则文本同步为含 `=` 版本，报告主张可复现；review_test.md 指纹格式对齐 checker | 文档:spike code + d001 |
 
 ## 收尾报告
 
@@ -60,8 +65,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001~003 全部由 `tests/unit/t113_logger_url_boundary.test.ts` 23 用例覆盖（负例 5 + 正例 17 + Error 实例 1），黑盒 `npm test` 1289 passed + `tsc --noEmit` 通过
 
 ### Reviewer verdict
 
@@ -69,15 +74,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：FAIL（f001 important 未修）
+- Round 1 test：PASS（3 minor 建议）
+- Round 2 code：PASS（f004 minor 新增）
+- Round 3 code（指纹回写）：PASS
+- Round 2 test（指纹回写）：PASS
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：N/A（review_level=full）
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- Logger 任意文本 URL 扫描改为边界启发式（lookbehind `(?<=^|[=\s([,<"'])`），紧邻三元/可选链逐字保留，明确 URL 上下文与 `=` 前置序列化形态继续脱敏；spike s001 验证 13/13，23 用例锁定边界，4 轮审阅闭环（code 3 / test 2）。

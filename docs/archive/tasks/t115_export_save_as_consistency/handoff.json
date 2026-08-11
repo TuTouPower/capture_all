@@ -1,0 +1,19 @@
+{
+  "tid": "t115",
+  "attempt": 1,
+  "execution_id": "6f898834a7a14b93a3dd6d1e08698f95",
+  "status": "done",
+  "branch": "t115_export_save_as_consistency",
+  "base_sha": "472509b68683056df8da1bf80d4a2ec09ff19f8d",
+  "tests": "npm test：1335 passed（含 t115 14 用例）；npx tsc --noEmit 通过",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 general PASS（3 轮闭环）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t115_export_save_as_consistency.test.ts：Popup ZIP 导出传 user_config.export_save_as 第 4 参数（源码接线断言）"],
+    "AC-002": ["tests/unit/t115_export_save_as_consistency.test.ts：Dashboard 日志导出传 get_user_config().export_save_as 第 4 参数（源码接线断言）"],
+    "AC-003": ["tests/unit/t115_export_save_as_consistency.test.ts：helper 判别矩阵 6 用例——save_as=false+无目录+picker 可用走 downloads(saveAs:false)、true 优先 picker、undefined 保持原行为、有目录两态、picker 不可用兜底"],
+    "AC-004": ["tests/unit/t115_export_save_as_consistency.test.ts：export_capture 函数体 flush 先于 read + flush 失败 abort；archive/非 archive 两处 download_blob 传 export_save_as；SW export_json/jsonl/html/har 命令 flush 先于导出 + 失败经 catch 返回 success:false"]
+  },
+  "pending": [],
+  "findings": []
+}

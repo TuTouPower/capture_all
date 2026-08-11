@@ -498,7 +498,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             });
         }
 
-        if (is_streaming_response(resp_headers) && dbg_tab_id !== null) {
+        if (is_streaming_response(resp_headers) && config.capture_response_body && dbg_tab_id !== null) {
             streaming_requests.add(req_key);
             if (existing) {
                 existing.stream_mode = mime?.includes('event-stream') ? 'sse' : 'chunked';
@@ -543,6 +543,28 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
         const meta_for_method = cdp_request_meta.get(req_key);
         const http_method = meta_for_method?.method?.toUpperCase() || '';
 
+        // capture_response_body=false: 不发起 getResponseBody/streamResourceContent
+        if (!config.capture_response_body) {
+            if (streaming_requests.has(req_key)) {
+                streaming_requests.delete(req_key);
+            }
+            const body_result: CdpBodyResult = {
+                body: null,
+                status: 'not_enabled',
+                timestamp: Date.now(),
+                preview: null,
+                encoding: null,
+                byte_size: null,
+            };
+            const meta = cdp_request_meta.get(req_key);
+            if (meta) {
+                send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
+                cdp_request_meta.delete(req_key);
+            }
+            finished_before_stream.delete(req_key);
+            return;
+        }
+
         if (streaming_requests.has(req_key)) {
             stream_buffer_instance?.force_flush(req_key);
             streaming_requests.delete(req_key);
@@ -571,6 +593,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 send_to_background(build_cdp_primary_network_event(meta, body_result, req_id));
                 cdp_request_meta.delete(req_key);
             }
+            finished_before_stream.delete(req_key);
             return;
         }
 
@@ -628,6 +651,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 // Clean up — no need for orphan check since we already emitted
                 cdp_request_meta.delete(req_key);
                 cdp_body_results.delete(req_key);
+                finished_before_stream.delete(req_key);
                 return;
             }
 
@@ -655,6 +679,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 send_to_background(build_cdp_primary_network_event(meta, fail_result, req_id));
                 cdp_request_meta.delete(req_key);
                 cdp_body_results.delete(req_key);
+                finished_before_stream.delete(req_key);
                 return;
             }
 
@@ -669,6 +694,7 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
         const fail_status: BodyCaptureStatus = (fail_method === 'OPTIONS' || fail_method === 'HEAD')
             ? 'not_enabled' : 'cdp_failed';
         cdp_body_results.set(req_key, { body: null, status: fail_status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null });
+        finished_before_stream.delete(req_key);
         try_resolve_deferred(req_key);
         schedule_orphan_check(req_key, req_id);
     }
@@ -781,6 +807,7 @@ function try_resolve_deferred(cdp_req_key: string): void {
             cdp_body_results.delete(cdp_req_key);
             cdp_request_meta.delete(cdp_req_key);
             _deferred_cdp_index.delete(cdp_req_key);
+            finished_before_stream.delete(cdp_req_key);
             send_to_background(build_network_event(
                 entry.pending, entry.details, body_result.body, body_result.status, body_result.preview
             ));
@@ -792,6 +819,7 @@ function try_resolve_deferred(cdp_req_key: string): void {
     cdp_body_results.delete(cdp_req_key);
     cdp_request_meta.delete(cdp_req_key);
     _deferred_cdp_index.delete(cdp_req_key);
+    finished_before_stream.delete(cdp_req_key);
 }
 
 export const _try_resolve_deferred_for_test = try_resolve_deferred;
@@ -800,6 +828,9 @@ function schedule_orphan_check(req_key: string, req_id: string): void {
     // After a timeout, if the CDP body was not matched by a webRequest,
     // emit it as cdp_only via the callback.
     setTimeout(() => {
+        // marker 生命周期与消费无关：即使事件已被 handle_completed 消费，
+        // orphan 终态也须清理 finished_before_stream，避免残留影响同 key 复用。
+        finished_before_stream.delete(req_key);
         if (!on_cdp_body_event) return;
         const body_result = cdp_body_results.get(req_key);
         if (!body_result) return; // already matched and consumed by handle_completed
@@ -831,6 +862,7 @@ function schedule_orphan_check(req_key: string, req_id: string): void {
         cdp_request_meta.delete(req_key);
         cdp_body_results.delete(req_key);
         _deferred_cdp_index.delete(req_key);
+        finished_before_stream.delete(req_key);
     }, ORPHAN_TIMEOUT_MS);
 }
 

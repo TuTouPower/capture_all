@@ -1,0 +1,19 @@
+{
+  "tid": "t112",
+  "attempt": 1,
+  "execution_id": "9ed6e75fa7b74c4e858f35a03b4c856e",
+  "status": "done",
+  "branch": "t112_finished_before_stream_lifecycle",
+  "base_sha": "a424a8adaf63a5ca288f75ff5a72bb1ec9d65f6f",
+  "tests": "npm test：1266 passed（含 t112 18 用例）；npx tsc --noEmit 通过",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 5 test PASS + Round 3 code PASS（5 轮闭环，末轮全 PASS）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t112_finished_before_stream_lifecycle.test.ts：普通请求成功产出事件后 key 不保留、同 session 同 key 复用不受残留标记影响"],
+    "AC-002": ["tests/unit/t112_finished_before_stream_lifecycle.test.ts：SSE 完成 emit 后 key 不保留、getResponseBody 失败路径同样清理"],
+    "AC-003": ["tests/unit/t112_finished_before_stream_lifecycle.test.ts：逆序竞态、无 metadata/orphan/capture_response_body=false 早退、deferred 完整与多候选兜底终态均清理"],
+    "AC-004": ["tests/unit/t112_finished_before_stream_lifecycle.test.ts：root+子 session 连续 100 请求后集合为空（body 命令 100/50 计数断言）"]
+  },
+  "pending": ["p028", "p029"],
+  "findings": []
+}

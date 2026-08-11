@@ -1,12 +1,12 @@
 ---
-tid: "t115"
-slug: "export_save_as_consistency"
-title: "统一 export_save_as 消费语义"
-status: "backlog"
-branch: ""
+tid: "t112"
+slug: "finished_before_stream_lifecycle"
+title: "修复 finished_before_stream 生命周期泄漏"
+status: "done"
+branch: "t112_finished_before_stream_lifecycle"
 worktree: ""
-review_level: "single"
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "a424a8adaf63a5ca288f75ff5a72bb1ec9d65f6f"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,14 +44,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-11 11:42 UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
 
 | finding_id | severity | status | rationale | fix_ref |
 |------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+| t112_code_f001 | important | 已修 | orphan 回调早退路径提前清理 marker（network_capture.ts:832 / cdp_handler.ts:849），事件被 handle_completed 消费后 3s 兜底仍清理 | 源码:network_capture.ts |
+| t112_code_f002 | minor | 已修 | responseReceived 流式分支补 config.capture_response_body guard，注释与实际一致 | 源码:network_capture.ts:501 |
+| t112_code_f003 | minor | 已修 | 复制实现双点维护为 spec 明确允许选项；修复已同步两处并各自补断言，消除重复留作后续 | spec 允许选项 |
+| t112_test_f001 | important | 已修 | AC-004 测试补 register_session，子 session 事件确被路由（body 命令 100/50 断言） | 测试:t112 测试文件 |
+| t112_test_f002 | important | 已修 | 新增 cdp_handler 复制实现 describe，直驱 handle_cdp_event 断言 marker 清理（4 用例） | 测试:t112 测试文件 |
+| t112_test_f003 | important | 已修 | 新增 deferred 完整解析用例，构造 deferred entry 后 loadingFinished 走 try_resolve_deferred 真路径 | 测试:t112 测试文件 |
+| t112_test_f004 | important | 已修 | 补 cdp_handler 直驱 2 用例：SSE streaming 完成 emit 后清理、deferred 完整解析终态清理（覆盖 :380/:830 删除点） | 测试:t112 测试文件 |
+| t112_test_f005 | important | 已修 | 补多候选 deferred 兜底用例，覆盖 cdp_handler:842 兜底删除点 | 测试:t112 测试文件 |
+| t112_test_f006 | important | 已修 | 补生产 network_capture 多候选 deferred 兜底用例，覆盖 network_capture:822 兜底删除点 | 测试:t112 测试文件 |
 
 ## 收尾报告
 
@@ -60,8 +67,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001~004 全部由 `tests/unit/t112_finished_before_stream_lifecycle.test.ts` 18 用例覆盖（含 root/子 session、普通/SSE/失败/逆序/deferred/orphan 各终态），黑盒 `npm test` 1266 passed + `tsc --noEmit` 通过
 
 ### Reviewer verdict
 
@@ -69,15 +76,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：FAIL（f001 important 未修）
+- Round 1 test：FAIL（f001~f003 未修）
+- Round 2 code：PASS
+- Round 2 test：FAIL（f004 未修）
+- Round 3 test：FAIL（f005 未修）
+- Round 4 test：FAIL（f006 未修）
+- Round 5 test：PASS
+- Round 3 code（指纹回写）：PASS
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：N/A（review_level=full）
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 生产 network_capture 与复制 cdp_handler 的 finished_before_stream 全终态清理补齐，18 用例覆盖 root/子 session 全部终态，5 轮审阅闭环（code 3 轮 / test 5 轮，末轮全 PASS）。

@@ -11,13 +11,30 @@ Logger 产出的文本（message / details / Error.stack）走 URL/query 脱敏�
   - `URL_SUBSTRING_PATTERN` 匹配绝对 URL 与相对 query（key=value 形态，排除 JS 可选链/三元）。
   - `Error.stack` 与 logger 自产 stack 均经 `sanitize_string`（脱敏 + 截断）。
 
+## 任意文本 URL 扫描边界（t113，2026-08-11）
+
+Logger 对任意文本的 URL 子串扫描采用边界启发式：bare-query 与 path-query 前须为明确 URL 上下文（行首/空白/左括号/逗号/引号/`=`），绝对 URL 分支不受限。已知边界：
+
+- 紧邻三元（`cond?token=x:y`）与可选链（`user?.token`）逐字保留，不误脱敏。
+- 无斜杠相对路径（`file?token=x`）退出任意文本扫描（隐私覆盖收缩，用户确认）。
+- 带空格三元（`cond ?token=x:y`）与独立 `?query` 同享 `\s`=URL 边界语义，会被当作 query 脱敏（已知权衡）。
+
+## 嵌套 query 递归脱敏（t114，2026-08-11）
+
+`redact_url` 对非敏感参数值内嵌的 query 递归脱敏，覆盖 absolute/base-resolved、path/root/query/protocol-relative 外层与内层、plain 与 `%3F`/`%3D` 编码值：
+
+- 解码深度：单层 `decodeURIComponent`；absolute 分支 value 经 URLSearchParams 预解码后只做 plain 检测，双编码（`%253F`）在任意层不触发（避免重复解码误判）。
+- 终止条件：`NESTED_QUERY_MAX_DEPTH=5`；超限 fail-closed（整体置 `[REDACTED]`，不泄露明文也不谎报状态）。
+- 非敏感结构保留：path/hash/非敏感 key 与普通值不受影响；`url_status` 仅在真实改写时置 `redacted`。
+- 接线：form、extension network/CDP/WebSocket、Logger、external CDP Bridge 运行入口共享该 helper，继承修复；dormant handler 若重新接线同样继承。
+
 ## 已知局限
 
-- 三元含 `=`（`cond?token=x:y`）仍被 key=value 启发式误匹配（登记 p017）。
-- param 值内嵌相对 query（`?next=path?token=secret`）不递归（登记 p018）。
+- 无（p017 三元误匹配与 p018 嵌套不递归已分别由 t113 / t114 闭环）。
 
 ## 相关实现
 
 - `src/shared/redaction.ts`：`redact_url`
 - `src/shared/logger.ts`：`sanitize_string` / `sanitize_log_value`
 - `tests/unit/logger_stack_redact.test.ts`：脱敏与回归测试
+- `tests/unit/t114_nested_query_redaction.test.ts` / `t114_form_entry_redaction.test.ts`：嵌套递归回归

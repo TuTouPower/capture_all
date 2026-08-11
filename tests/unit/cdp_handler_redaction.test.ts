@@ -160,4 +160,48 @@ describe('external CDP redaction', () => {
 
         await handle_cdp_stop({ session_key });
     });
+
+    test('t114 AC-003: nested query in non-sensitive param value is redacted (response/request)', async () => {
+        const session_key = await start_session(true);
+
+        const socket = MockWebSocket.instance;
+        expect(socket).not.toBeNull();
+        socket?.onopen?.();
+        socket?.emit({
+            method: 'Network.requestWillBeSent',
+            params: {
+                requestId: 'request-nested',
+                type: 'Fetch',
+                request: {
+                    url: 'https://outer.example/start?next=/child?token=secret_nested_bridge',
+                    method: 'GET',
+                    headers: {},
+                },
+            },
+        });
+        socket?.emit({
+            method: 'Network.responseReceived',
+            params: {
+                requestId: 'request-nested',
+                type: 'Fetch',
+                response: {
+                    url: 'https://outer.example/start?next=/child?token=secret_nested_bridge',
+                    status: 200,
+                    headers: {},
+                },
+            },
+        });
+        socket?.emit({
+            method: 'Network.loadingFailed',
+            params: { requestId: 'request-nested' },
+        });
+
+        const events = await poll_session(session_key);
+        expect(events).toHaveLength(1);
+        const decoded = decodeURIComponent(String(events[0].url));
+        expect(decoded).not.toContain('secret_nested_bridge');
+        expect(decoded).toContain('REDACTED');
+
+        await handle_cdp_stop({ session_key });
+    });
 });

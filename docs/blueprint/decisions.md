@@ -99,11 +99,11 @@
 - 结论：选 B。PAGE_SIZE=5000，循环 offset 直至 batch.length < PAGE_SIZE。Promise.all 并行 7 类。内存仍全量加载（流式输出留后续）。详见 T043。
 - 替代：无
 
-## 013 错误码渐进迁移：新码 + 别名兼容至 v2.0（2026-07-19）
+## 013 错误码渐进迁移：新码 + 别名兼容至 v2.0（2026-07-19，2026-08-11 已移除）
 
 - 背景：协议仍用 SESSION_NOT_FOUND/RECORDING_ALREADY_RUNNING/NO_ACTIVE_RECORDING 旧术语，与领域文档要求的 capture 术语冲突。直接迁移是 breaking change。
 - 选项：A）一次性迁移所有错误码；B）新增 capture 系列新码 + 旧码保留为兼容别名 + ERROR_CODE_ALIASES 映射表。
-- 结论：选 B。新增 CAPTURE_NOT_FOUND/CAPTURE_ALREADY_RUNNING/NO_ACTIVE_CAPTURE。旧码保留，dispatcher 暂继续返回旧码。新客户端可用新码或通过映射表转换。v2.0 移除旧码。详见 T057。
+- 结论：原选 B，新增 CAPTURE_NOT_FOUND/CAPTURE_ALREADY_RUNNING/NO_ACTIVE_CAPTURE。2026-08-11 破坏性升级移除旧码与 ERROR_CODE_ALIASES（t125），dispatcher 与 agent_data_queries 改用 capture 新码。旧码 SESSION_NOT_FOUND/RECORDING_ALREADY_RUNNING/NO_ACTIVE_RECORDING 不再存在于 AgentErrorCode。
 - 替代：无
 
 ## 014 event_id 改用 crypto.randomUUID（2026-07-19）

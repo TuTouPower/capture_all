@@ -1,0 +1,19 @@
+{
+  "tid": "t125",
+  "attempt": 1,
+  "execution_id": "f33c36cb826d4d94bc0b3ff494bae57a",
+  "status": "done",
+  "branch": "t125_remove_protocol_compat_layer",
+  "base_sha": "ddab3729e8e2df2041740b9b73dc1cca1b2bf8b9",
+  "tests": "vitest run: 129 files / 1368 tests passed",
+  "blackbox": "npm test 全绿 + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS + test PASS（0 finding）；Round 2 重审 code PASS + test PASS（0 finding）",
+  "ac_evidence": {
+    "AC-001": ["protocol.ts 删除 ERROR_CODE_ALIASES 表与旧码注释，grep ERROR_CODE_ALIASES src+tests 零命中"],
+    "AC-002": ["types.ts 删除 6 个 @deprecated 别名，popup.ts:137 的 Session 迁移到 CaptureRecord，grep 无旧类型名引用"],
+    "AC-003": ["schemas/ 无旧码/旧类型名引用（grep 验证），与迁移后代码一致"],
+    "AC-004": ["npm test 129 files/1368 tests passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": [],
+  "findings": []
+}

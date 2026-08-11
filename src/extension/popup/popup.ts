@@ -1,6 +1,6 @@
 // popup/popup.ts — Capture All 全采 采集控制台
 // Unified popup, 3 states: 开始采集 / 采集中 / 采集完成. Real capturing wiring.
-import type { CaptureRecord, CaptureStats, Session, UserConfig } from '../../shared/types';
+import type { CaptureRecord, CaptureStats, UserConfig } from '../../shared/types';
 import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { escape_html } from '../../shared/escape';
@@ -134,7 +134,7 @@ function metric_grid(stats: CaptureStats | null, can_toggle: boolean): string {
     return `<div class="metrics">${cards}</div>`;
 }
 
-let recent_captures: Session[] = [];
+let recent_captures: CaptureRecord[] = [];
 
 function recent_list(): string {
     const rows = recent_captures.slice(0, 3).map((s) => {

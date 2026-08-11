@@ -320,10 +320,10 @@ describe('load_agent_capture_data', () => {
         expect(get_cookie_changes).toHaveBeenCalledWith('cap-1', 0, 5000);
     });
 
-    test('throws SESSION_NOT_FOUND when capture is missing', async () => {
+    test('throws CAPTURE_NOT_FOUND when capture is missing', async () => {
         vi.mocked(get_capture).mockResolvedValue(null);
 
-        await expect(load_agent_capture_data('cap-missing')).rejects.toThrow('SESSION_NOT_FOUND');
+        await expect(load_agent_capture_data('cap-missing')).rejects.toThrow('CAPTURE_NOT_FOUND');
     });
 
     test('loads non-empty data sources', async () => {

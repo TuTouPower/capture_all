@@ -1667,6 +1667,66 @@
             "schedule_status": "",
             "note": "review_20260811 P1-16",
             "dir": "docs/archive/tasks/t111_har_started_datetime_encoding"
+        },
+        {
+            "tid": "t112",
+            "slug": "finished_before_stream_lifecycle",
+            "title": "修复 finished_before_stream 生命周期泄漏",
+            "status": "done",
+            "branch": "t112_finished_before_stream_lifecycle",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "a424a8adaf63a5ca288f75ff5a72bb1ec9d65f6f",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t112_finished_before_stream_lifecycle"
+        },
+        {
+            "tid": "t113",
+            "slug": "logger_url_boundary_detection",
+            "title": "修复 Logger URL 边界误判",
+            "status": "done",
+            "branch": "t113_logger_url_boundary_detection",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "8b794bc9c218d63936c0957506654b8a9f3f5068",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t113_logger_url_boundary_detection"
+        },
+        {
+            "tid": "t114",
+            "slug": "nested_query_redaction",
+            "title": "修复嵌套 query 脱敏泄露",
+            "status": "done",
+            "branch": "t114_nested_query_redaction",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "1c8f570c56af0758afa0ecb6604e3cdc8da8eefa",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t114_nested_query_redaction"
+        },
+        {
+            "tid": "t115",
+            "slug": "export_save_as_consistency",
+            "title": "统一 export_save_as 消费语义",
+            "status": "done",
+            "branch": "t115_export_save_as_consistency",
+            "worktree": "",
+            "review_level": "single",
+            "diff_anchor": "472509b68683056df8da1bf80d4a2ec09ff19f8d",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t115_export_save_as_consistency"
         }
     ]
 }

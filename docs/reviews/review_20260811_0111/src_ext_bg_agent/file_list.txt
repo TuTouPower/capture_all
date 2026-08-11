@@ -1,0 +1,9 @@
+src/extension/background/agent_bridge_client.ts
+src/extension/background/agent_command_dispatcher.ts
+src/extension/background/agent_data_queries.ts
+src/extension/background/app_log_storage.ts
+src/extension/background/body_capture_coordinator.ts
+src/extension/background/cdp_event_router.ts
+src/extension/background/capture_state.ts
+src/extension/background/keepalive.ts
+src/extension/background/external_cdp_bridge_client.ts

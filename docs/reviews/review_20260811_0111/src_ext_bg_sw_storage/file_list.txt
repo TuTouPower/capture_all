@@ -1,0 +1,5 @@
+src/extension/background/service_worker.ts
+src/extension/background/storage.ts
+src/extension/background/stream_buffer.ts
+src/extension/background/webrequest_handler.ts
+src/extension/background/ws_handler.ts

@@ -1,0 +1,16 @@
+src/extension/content/clipboard_capture.ts
+src/extension/content/content_event_utils.ts
+src/extension/content/content_script.ts
+src/extension/content/dom_capture.ts
+src/extension/content/focus_capture.ts
+src/extension/content/form_submit_capture.ts
+src/extension/content/fullscreen_capture.ts
+src/extension/content/keyboard_capture.ts
+src/extension/content/mouse_capture.ts
+src/extension/content/network_hook.ts
+src/extension/content/print_capture.ts
+src/extension/content/resize_capture.ts
+src/extension/content/scroll_capture.ts
+src/extension/content/storage_capture.ts
+src/extension/content/visibility_capture.ts
+src/extension/content/websocket_capture.ts

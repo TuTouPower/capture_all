@@ -1,0 +1,11 @@
+src/bridge/cdp_handler.ts
+src/bridge/command_queue.ts
+src/bridge/config.ts
+src/bridge/label.ts
+src/bridge/main.ts
+src/bridge/server.ts
+src/mcp/client.ts
+src/mcp/main.ts
+src/mcp/schemas.ts
+src/mcp/token_resolver.ts
+src/mcp/tools.ts

@@ -1,0 +1,14 @@
+src/shared/agent_bridge_config.ts
+src/shared/body_routing.ts
+src/shared/constants.ts
+src/shared/escape.ts
+src/shared/event_category.ts
+src/shared/event_utils.ts
+src/shared/hash.ts
+src/shared/id.ts
+src/shared/logger.ts
+src/shared/protocol.ts
+src/shared/redaction.ts
+src/shared/system_time.ts
+src/shared/types.ts
+src/shared/user_config.ts

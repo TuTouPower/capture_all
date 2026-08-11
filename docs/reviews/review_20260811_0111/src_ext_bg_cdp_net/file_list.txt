@@ -1,0 +1,9 @@
+src/extension/background/cdp_handler.ts
+src/extension/background/console_capture.ts
+src/extension/background/cookie_capture.ts
+src/extension/background/exception_capture.ts
+src/extension/background/exporter.ts
+src/extension/background/network_capture.ts
+src/extension/background/network_context.ts
+src/extension/background/network_correlator.ts
+src/extension/background/network_webrequest.ts

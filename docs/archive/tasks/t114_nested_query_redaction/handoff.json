@@ -1,0 +1,19 @@
+{
+  "tid": "t114",
+  "attempt": 1,
+  "execution_id": "bd5ebe1771924f1b811350a4dd8a97ef",
+  "status": "done",
+  "branch": "t114_nested_query_redaction",
+  "base_sha": "1c8f570c56af0758afa0ecb6604e3cdc8da8eefa",
+  "tests": "npm test：1322 passed（含 t114 35 用例）；npx tsc --noEmit 通过",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 3 code PASS + Round 3 test PASS（6 轮闭环，末轮全 PASS）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t114_nested_query_redaction.test.ts：absolute/base-resolved 外层嵌套 query 递归脱敏（relative/root-relative/encoded 变体）"],
+    "AC-002": ["tests/unit/t114_nested_query_redaction.test.ts：path/root/query/protocol-relative 外层与 plain/%3F/%3D 编码值递归脱敏"],
+    "AC-003": ["tests/unit/t114_form_entry_redaction.test.ts（form 2）、t114_nested_query_redaction.test.ts（Logger 3 + network WS/CDP 2）、cdp_handler_redaction.test.ts（bridge 1）：运行入口输出对象不含内层明文"],
+    "AC-004": ["tests/unit/t114_nested_query_redaction.test.ts：顶层敏感 key/编码 key/既有内嵌 absolute 不回退；url_status 与改写一致"]
+  },
+  "pending": [],
+  "findings": ["d002"]
+}

@@ -12,7 +12,7 @@
 | content_postmessage_nonce | t097 | 2026-08-11 |
 | network_hook_config_gate | t098 | 2026-08-11 |
 | sw_cleanup_stale_mutex | t099 | 2026-08-11 |
-| privacy_logger_stack_redact_url | t100, t113 | 2026-08-11 |
+| privacy_logger_stack_redact_url | t100, t113, t114 | 2026-08-11 |
 | bridge_cdp_idle_and_bounds | t101 | 2026-08-11 |
 | agent_result_lifecycle_delivery | t102 | 2026-08-11 |
 | network_stop_deferred_timers | t103 | 2026-08-11 |

@@ -9,7 +9,7 @@ import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
-import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
+import { page_script_reinstall_guard, page_script_preamble, page_script_restore } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
 import { redact_url } from '../../shared/redaction';
 
@@ -316,6 +316,19 @@ function inject_page_script(): void {
     }
 }
 
+// t142: stop 时还原 window API——注入脚本在 MAIN world，content script 无法直接改 window。
+function restore_page_script(): void {
+    try {
+        const s = document.createElement('script');
+        s.textContent = page_script_restore('network_hook',
+            '            window.fetch = prev.fetch;\n            XMLHttpRequest.prototype.open = prev.open;\n            XMLHttpRequest.prototype.send = prev.send;');
+        (document.documentElement || document.head || document.body).appendChild(s);
+        s.remove();
+    } catch {
+        // ignore
+    }
+}
+
 export function start_network_hook(
     sender: (event: CaptureEvent, data: NetworkRequestData) => void,
     new_capture_id: string,
@@ -391,6 +404,8 @@ export function start_network_hook(
 }
 
 export function stop_network_hook(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在扩展刷新/状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

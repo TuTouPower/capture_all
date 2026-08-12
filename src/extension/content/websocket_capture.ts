@@ -3,7 +3,7 @@ import type { CaptureEvent, WsMessageData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
-import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
+import { page_script_reinstall_guard, page_script_preamble, page_script_restore } from './content_page_script';
 import { redact_url } from '../../shared/redaction';
 
 const state = create_capture_state<WsMessageData>();
@@ -158,6 +158,18 @@ function inject_page_script(): void {
     }
 }
 
+// t142: stop 时还原 window.WebSocket——注入脚本在 MAIN world，content script 无法直接改 window。
+function restore_page_script(): void {
+    try {
+        const s = document.createElement('script');
+        s.textContent = page_script_restore('ws', '            window.WebSocket = prev;');
+        (document.documentElement || document.head || document.body).appendChild(s);
+        s.remove();
+    } catch {
+        // ignore
+    }
+}
+
 export function start_websocket_capture(
     sender: (event: CaptureEvent) => void,
     new_capture_id: string,
@@ -219,6 +231,8 @@ export function start_websocket_capture(
 }
 
 export function stop_websocket_capture(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

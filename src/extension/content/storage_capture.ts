@@ -3,6 +3,7 @@ import type { CaptureEvent, StorageChangeData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { page_script_restore } from './content_page_script';
 
 const state = create_capture_state<StorageChangeData>();
 let current_nonce = '';
@@ -117,6 +118,24 @@ function inject_page_script(): void {
     }
 }
 
+// t142: stop 时还原 localStorage/sessionStorage hook——注入脚本在 MAIN world，content script 无法直接改。
+function restore_page_script(): void {
+    try {
+        const s = document.createElement('script');
+        s.textContent = page_script_restore('storage',
+            '            if (prev.local_setItem) window.localStorage.setItem = prev.local_setItem;\n'
+            + '            if (prev.local_removeItem) window.localStorage.removeItem = prev.local_removeItem;\n'
+            + '            if (prev.local_clear) window.localStorage.clear = prev.local_clear;\n'
+            + '            if (prev.session_setItem) window.sessionStorage.setItem = prev.session_setItem;\n'
+            + '            if (prev.session_removeItem) window.sessionStorage.removeItem = prev.session_removeItem;\n'
+            + '            if (prev.session_clear) window.sessionStorage.clear = prev.session_clear;');
+        (document.documentElement || document.head || document.body).appendChild(s);
+        s.remove();
+    } catch {
+        // ignore
+    }
+}
+
 export function start_storage_capture(
     sender: (event: CaptureEvent) => void,
     new_capture_id: string,
@@ -176,6 +195,8 @@ export function start_storage_capture(
 }
 
 export function stop_storage_capture(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

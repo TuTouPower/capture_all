@@ -1,12 +1,12 @@
 ---
-tid: t142
-slug: stop_restore_page_hooks
+tid: "t142"
+slug: "stop_restore_page_hooks"
 title: "fix: stop 后还原注入脚本改写的页面 API"
-status: backlog
-branch: ""
+status: "done"
+branch: "t142_stop_restore_page_hooks"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "51e0843c0bff79665b8d2e166edc584b7da11f22"
 depends_on: ""
 conflicts_with: ""
 note: "review H-13 (B3-H4): stop 仅删 message_listener，fetch/XHR/localStorage/WebSocket 永久改写且持续读 body"
@@ -44,14 +44,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 19:23 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t142_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t142_test_f002|minor|遗留|一句话|pNNN|
+|t142_code_f001|minor|已修|restore 移到 state.end 之前无条件调用（状态丢失时 MAIN world hook 仍残留）|network_hook.ts/websocket_capture.ts/storage_capture.ts stop|
+|t142_code_f002|minor|已修|storage restore 复用 page_script_restore 模板（收敛单模板）|storage_capture.ts restore_page_script|
+
+### Round 2 (2026-08-12 19:28 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t142_test_f001|important|已修|AC-001 改用 eval 执行注入脚本 + restore 验证真实 hook 安装/还原（jsdom 不执行 appendChild 注入）|tests/unit/t142_stop_restore_page_hooks.test.ts:AC-001|
+|t142_test_f002|important|已修|补 ws eval 安装 + restore 还原行为断言|tests/unit/t142_stop_restore_page_hooks.test.ts:ws|
+|t142_test_f003|important|已修|补 storage restore 结构断言（page_script_restore('storage') + localStorage/sessionStorage 还原语句）|tests/unit/t142_stop_restore_page_hooks.test.ts:storage|
+|t142_test_f004|important|已修|AC-003 改 try/catch 结构断言（删恒真不抛错）|tests/unit/t142_stop_restore_page_hooks.test.ts:AC-003|
 
 ## 收尾报告
 
@@ -60,24 +67,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 eval 行为级验证 hook 安装/还原 + stop 接线断言、AC-002 采集中不变、AC-003 降级；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：PASS（2 minor 已修）
+- Round 2 code：PASS
+- Round 1 test：FAIL（恒真/零接线）
+- Round 2 test：FAIL（stop 接线未断言）
+- Round 3 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- stop 时经 page_script_restore 注入还原脚本，还原 network_hook（fetch/XHR）、websocket（WebSocket）、storage（localStorage/sessionStorage）改写的页面 API；restore 无条件调用（状态丢失时 MAIN world hook 不残留）。

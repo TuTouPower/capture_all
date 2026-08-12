@@ -23,3 +23,16 @@ export function page_script_preamble(signal: string, secret: string): string {
     var SECRET = '${secret}';
 ${SYNC_HMAC_JS}`;
 }
+
+// stop 还原脚本：用 __capture_all_{signal}_prev__ 还原点还原 window API，并清理 installed/prev 标记。
+// restore_body 为模块特有还原语句（引用 prev），由调用方提供。
+export function page_script_restore(signal: string, restore_body: string): string {
+    return `if (window.__capture_all_${signal}_installed__) {
+    var prev = window.__capture_all_${signal}_prev__;
+    if (prev) {
+${restore_body}
+    }
+    delete window.__capture_all_${signal}_installed__;
+    delete window.__capture_all_${signal}_prev__;
+}`;
+}

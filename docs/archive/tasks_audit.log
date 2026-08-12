@@ -1,0 +1,7 @@
+2026-08-12T12:59:44+08:00 | purge | tid=t132 | from=backlog | to=deleted | head=8c82218 | slug=content_ws_fallback_redaction | title=fix: content 侧 ws/fallback 网络路径应用 URL 与消息脱敏 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:44+08:00 | purge | tid=t134 | from=backlog | to=deleted | head=8c82218 | slug=storage_limit_persist | title=fix: 500MB 存储限额持久化，SW 重启不失效 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:44+08:00 | purge | tid=t138 | from=backlog | to=deleted | head=8c82218 | slug=enroll_takeover_guard | title=security: enroll 防伪造 origin 顶替既有实例 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:44+08:00 | purge | tid=t139 | from=backlog | to=deleted | head=8c82218 | slug=cdp_session_body_budget | title=fix: bridge CDP 会话 body 总量预算 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:44+08:00 | purge | tid=t141 | from=backlog | to=deleted | head=8c82218 | slug=result_64mib_budget | title=fix: 扩展侧命令结果 64MiB 预算与降级 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:45+08:00 | purge | tid=t145 | from=backlog | to=deleted | head=8c82218 | slug=detail_incremental_render | title=perf: 详情页轮询改为增量更新，消除整页重渲染 | reason=与主 task 合并（intensive-review 去重聚合）
+2026-08-12T12:59:45+08:00 | purge | tid=t147 | from=backlog | to=deleted | head=8c82218 | slug=logger_credential_redact | title=fix: logger 对 credential 形字段脱敏 | reason=与主 task 合并（intensive-review 去重聚合）

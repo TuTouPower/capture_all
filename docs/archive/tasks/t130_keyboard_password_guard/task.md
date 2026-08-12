@@ -1,12 +1,12 @@
 ---
-tid: t130
-slug: keyboard_password_guard
+tid: "t130"
+slug: "keyboard_password_guard"
 title: "fix: keyboard 采集对 password 输入框置空击键"
-status: backlog
-branch: ""
+status: "done"
+branch: "t130_keyboard_password_guard"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "4cf960b1918f8eb0dc5572dc692c41fb2fdccd19"
 depends_on: ""
 conflicts_with: ""
 note: "review H-4 (B3-H1): keyboard_capture 无 password 守卫，redact_data=false 时明文密码击键入库"
@@ -44,14 +44,11 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 13:33 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t130_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t130_test_f002|minor|遗留|一句话|pNNN|
+|t130_code_f001|important|已修|shadow DOM 场景改用 event.composedPath() 判明实际目标，补 shadow 测试；等待 code reviewer 复核|src/extension/content/keyboard_capture.ts:60-65|
 
 ## 收尾报告
 
@@ -60,24 +57,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002 password 击键不采集（keydown/keyup + shadow DOM 场景），AC-003 非密码框行为不变；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（f001 shadow DOM 明文泄漏，已修）
+- Round 1 test：PASS
+- Round 2 code：PASS
+- Round 2 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- keyboard_capture 增加 password 输入框守卫（composedPath 判明 shadow DOM 实际目标），password 击键值永不采集，不受 redact_data 影响；10 用例全绿。

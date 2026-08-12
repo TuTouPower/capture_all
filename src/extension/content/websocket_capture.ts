@@ -226,7 +226,8 @@ export function start_websocket_capture(
             source: 'content_script',
         });
 
-        state.sender?.({ ...base, ...data } as CaptureEvent & WsMessageData);
+        // t152 AC-004: payload 放 event.data（与 mouse/keyboard 等模块一致，sender 第二参数合并进 data）
+        state.sender?.(base, data);
     };
     window.addEventListener('message', message_listener, true);
 }

@@ -1,13 +1,8 @@
 // shared/event_utils.ts
 import type { CaptureEvent, CategoryKey, EventType, EventSource, Severity } from './types';
+import { generate_unique_suffix } from './id';
 
 let event_counter = 0;
-
-function random_chars(len: number): string {
-    let s = Math.random().toString(36).slice(2, 2 + len);
-    while (s.length < len) s = '0' + s;
-    return s;
-}
 
 export function generate_event_id(): string {
     // T059: 优先用 crypto.randomUUID（MV3 service worker + content script + browser 均支持）
@@ -21,7 +16,8 @@ export function generate_event_id(): string {
     }
     event_counter++;
     const ts = Date.now().toString(36);
-    return `evt_${ts}_${random_chars(6)}_${event_counter}`;
+    // t152 AC-007: 复用 id.ts generate_unique_suffix（消除 random_chars 重复实现）
+    return `evt_${ts}_${generate_unique_suffix(6)}_${event_counter}`;
 }
 
 export function reset_event_counter(): void {
@@ -29,7 +25,8 @@ export function reset_event_counter(): void {
 }
 
 export function get_relative_time(capture_start_epoch_ms: number): number {
-    return Date.now() - capture_start_epoch_ms;
+    // t152 AC-009: 时钟回拨（now < start）时 clamp 到 0，避免负相对时间
+    return Math.max(0, Date.now() - capture_start_epoch_ms);
 }
 
 export function create_base_event(params: {

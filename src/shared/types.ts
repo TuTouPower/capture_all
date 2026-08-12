@@ -677,7 +677,8 @@ export interface UserConfig {
     inline_text_max_bytes: number;
     redact_data: boolean;
     theme: ThemeMode;
-    locale: string;
+    /** t152: 单一事实来源，与 i18n Locale（'en' | 'zh'）对齐。 */
+    locale: 'en' | 'zh';
     system_time_timezone: SystemTimeTimezone;
     detail_time_display_mode: DetailTimeDisplayMode;
     export_capture_directory: string;

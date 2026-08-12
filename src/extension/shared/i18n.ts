@@ -786,18 +786,25 @@ export function get_locale(): Locale {
     return current_locale;
 }
 
+// t152: 单一事实来源 = user_config.locale（持久化由调用方经 save_user_config 落盘）。
+// set_locale 只切内存语言，不再写独立 'locale' storage key。
 export function set_locale(locale: Locale): void {
     current_locale = locale;
-    chrome.storage.local.set({ locale });
 }
 
 export async function init_locale(): Promise<void> {
-    const result = await chrome.storage.local.get('locale');
-    if (result.locale) {
-        current_locale = result.locale;
-    } else {
-        current_locale = detect_locale();
+    // 从 user_config.locale 恢复；未显式设置过（无 locale 键）时按浏览器语言自动检测。
+    try {
+        const result = await chrome.storage.local.get('user_config');
+        const stored = (result.user_config as Record<string, unknown> | undefined) ?? null;
+        if (stored && (stored.locale === 'en' || stored.locale === 'zh')) {
+            current_locale = stored.locale as Locale;
+            return;
+        }
+    } catch {
+        // fall through to detect
     }
+    current_locale = detect_locale();
 }
 
 export function t(key: keyof I18nStrings): string {

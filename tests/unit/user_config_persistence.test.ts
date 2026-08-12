@@ -139,9 +139,9 @@ describe('load_user_config 保留 browser_label 与 agent_bridge_poll_interval_m
             inline_text_max_bytes: 2048,
             redact_data: false,
             theme: 'dark',
-            locale: 'zh_CN',
+            locale: 'zh',
             system_time_timezone: 'UTC+8',
-            detail_time_display_mode: 'absolute',
+            detail_time_display_mode: 'relative',
             export_capture_directory: 'captures',
             export_log_directory: 'logs',
             export_filename_template: '{capture_id}.{ext}',
@@ -168,9 +168,9 @@ describe('load_user_config 保留 browser_label 与 agent_bridge_poll_interval_m
             inline_text_max_bytes: 1.5,
             redact_data: 1,
             theme: 'blue',
-            locale: 'fr',
+            locale: 'zh_CN',
             system_time_timezone: '',
-            detail_time_display_mode: 'x',
+            detail_time_display_mode: 'absolute',
             export_capture_directory: 42,
             export_log_directory: null,
             export_filename_template: 42,
@@ -189,5 +189,31 @@ describe('load_user_config 保留 browser_label 与 agent_bridge_poll_interval_m
             expect((cfg2 as unknown as Record<string, unknown>)[k])
                 .toBe((DEFAULT_USER_CONFIG as unknown as Record<string, unknown>)[k]);
         }
+    });
+
+    it('t152 AC-001: detail_time_display_mode \'absolute\' 非合法值回退默认', async () => {
+        seed_user_config({ detail_time_display_mode: 'absolute' });
+        const cfg = await load_user_config();
+        expect(cfg.detail_time_display_mode).toBe(DEFAULT_USER_CONFIG.detail_time_display_mode);
+    });
+
+    it('t152 AC-001: detail_time_display_mode 合法值域与类型/UI 消费端一致（relative/system）', async () => {
+        for (const mode of ['relative', 'system']) {
+            seed_user_config({ detail_time_display_mode: mode });
+            const cfg = await load_user_config();
+            expect(cfg.detail_time_display_mode).toBe(mode);
+        }
+    });
+
+    it('t152 AC-002: locale \'zh\' 合法保留（与 i18n 枚举对齐）', async () => {
+        seed_user_config({ locale: 'zh' });
+        const cfg = await load_user_config();
+        expect(cfg.locale).toBe('zh');
+    });
+
+    it('t152 AC-002: locale \'zh_CN\' 非合法值回退默认（单一事实来源=en/zh）', async () => {
+        seed_user_config({ locale: 'zh_CN' });
+        const cfg = await load_user_config();
+        expect(cfg.locale).toBe(DEFAULT_USER_CONFIG.locale);
     });
 });

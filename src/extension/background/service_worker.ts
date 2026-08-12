@@ -21,6 +21,7 @@ import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_re
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../../shared/redaction';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
+import { generate_unique_suffix } from '../../shared/id';
 import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
 import { category_for_event_type } from '../../shared/event_category';
 import { Logger } from '../../shared/logger';
@@ -962,7 +963,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 
     const request = data as NetworkRequestData;
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
-    if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${generate_unique_suffix(6)}`;
     // T111: CDP primary / web_request 路径 time 字段恒 null，事件带相对偏移；
     // 落绝对开始时间供 HAR 等导出使用；start_time_ms>0（websocket 绝对 epoch）时保留
     if (request.absolute_time === undefined && !(request.start_time_ms && request.start_time_ms > 0)

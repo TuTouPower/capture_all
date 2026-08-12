@@ -326,7 +326,7 @@ function render_net_table(selected_net_idx = get_dt_net_sel()): string {
         ${detail_network.length ? detail_network.map((r, idx) => {
         const err = (r.status_code || 0) >= 400;
         return `<div class="net-row${err ? ' err' : ''}" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px" data-netidx="${idx}" data-sel="${selected_net_idx === idx ? 1 : 0}">
-            <span class="mono dim">${esc((r as unknown as Record<string, unknown>).timestamp || rel_time(0))}</span>
+            <span class="mono dim">${esc(rel_time(typeof r.relative_time === 'number' ? r.relative_time : 0))}</span>
             <span class="mono"><span class="method-sm" data-m="${esc(r.method)}">${esc(r.method)}</span></span>
             <span class="mono url-cell" title="${esc(r.url)}">${esc(r.url)}</span>
             <span class="mono" style="color:${err ? 'var(--red-ink)' : 'var(--green-ink)'}">${esc(r.status_code)}</span>
@@ -382,7 +382,7 @@ function render_con_table(): string {
     return `<div class="dt-events"><div class="con"><div class="con-table scroll">
         <div class="con-row con-head mono"><span>${t('time')}</span><span>${t('levelLabel')}</span><span>${t('messageLabel')}</span><span>${t('source')}</span><span>${t('lineLabel')}</span></div>
         ${detail_console.length ? detail_console.map((l) => `<div class="con-row${l.level === 'error' ? ' err' : ''}">
-            <span class="mono dim">${esc((l as unknown as Record<string, unknown>).timestamp || '')}</span>
+            <span class="mono dim">${esc(rel_time(typeof l.relative_time_ms === 'number' ? l.relative_time_ms : 0))}</span>
             <span><span class="lvl-tag" data-lvl="${esc(l.level)}">${esc(l.level)}</span></span>
             <span class="con-msg" style="${l.level === 'error' ? 'color:var(--red-ink)' : ''}">${esc((l.args_preview || []).join(' '))}</span>
             <span class="mono dim">${esc(l.source_url || '')}</span>
@@ -779,6 +779,9 @@ export function _render_net_inspector_for_test(selected_net_idx?: number): strin
 }
 export function _render_con_table_for_test(): string {
     return render_con_table();
+}
+export function _render_net_table_for_test(): string {
+    return render_net_table();
 }
 export function _render_simple_events_for_test(types: string[], headers: string[]): string {
     return render_simple_events(types, headers);

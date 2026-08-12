@@ -41,6 +41,20 @@ describe('storage_capture', () => {
         expect(events[0].tab_id).toBe(42);
     });
 
+    it('t152 AC-004: payload 在 event.data（第二参数），事件顶层不混入 data 字段', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 42);
+        post_message({ storage_type: 'session', action: 'remove', key: 'bar', value_length: 0 });
+        expect(sender).toHaveBeenCalledTimes(1);
+        const [event, data] = sender.mock.calls[0];
+        expect(event.type).toBe('storage_change');
+        expect(event.category).toBe('storage');
+        expect(data.storage_type).toBe('session');
+        expect(data.action).toBe('remove');
+        expect(data.key).toBe('bar');
+        expect(event.storage_type).toBeUndefined();
+        expect(event.key).toBeUndefined();
+    });
+
     it('未传 tab_id 默认 0（向后兼容性参考，新调用必须传值）', () => {
         // 即使未来签名要求 tab_id，仍验证默认行为合理
         start_storage_capture(sender, 'cap1', Date.now(), 0);

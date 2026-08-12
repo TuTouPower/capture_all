@@ -11,6 +11,7 @@ import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
 import { inject_script_element, page_script_reinstall_guard, page_script_preamble, page_script_restore, report_injection_failure } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
+import { generate_unique_suffix } from '../../shared/id';
 import { redact_url } from '../../shared/redaction';
 import { Logger, MessageLogTransport } from '../../shared/logger';
 
@@ -368,7 +369,7 @@ export function start_network_hook(
         // H3: fallback 路径 URL 按配置脱敏，url_status 反映结果（不再恒 captured）
         const redacted_url = redact_url(d.url || '', redact_data && redact_url_query);
         const data = build_network_data({
-            request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            request_id: `hook_${Date.now()}_${generate_unique_suffix(8)}`,
             method: d.method || 'GET',
             url: redacted_url.url,
             url_status: redacted_url.url_status,

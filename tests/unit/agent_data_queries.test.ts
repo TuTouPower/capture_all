@@ -307,6 +307,45 @@ describe('agent data queries', () => {
     test('无效 source → SOURCE_NOT_FOUND', () => {
         expect(() => list_entries_from_capture_data(data, { source: 'bogus' as AgentDataSource })).toThrow('SOURCE_NOT_FOUND');
     });
+
+    test('storage_changes 事件 payload 在 event.data 内（AC-004 回归：summary/preview 读 data 字段）', () => {
+        const d = {
+            capture: {},
+            sources: {
+                user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [],
+                storage_changes: [{
+                    event_id: 's1', capture_id: 'c', type: 'storage_change',
+                    relative_time_ms: 50, tab_id: 1, url: '', source: 'test', severity: 'info',
+                    // AC-004: StorageChangeData 在 data 内，非顶层
+                    data: { action: 'set', storage_type: 'local', key: 'theme', origin: 'https://x', value_status: 'captured' },
+                } as CaptureEvent],
+                cookie_changes: [],
+            },
+        };
+        const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
+        expect(res.total).toBe(1);
+        expect(res.records[0].type).toBe('set');
+        expect(res.records[0].summary).toBe('local.set theme');
+        expect(res.records[0].preview).toEqual({ key: 'theme', origin: 'https://x', value_status: 'captured' });
+    });
+
+    test('storage_changes 旧顶层形记录（无 data 键，AC-004 前采集）fallback 读 record 自身不崩溃（f003）', () => {
+        const d = {
+            capture: {},
+            sources: {
+                user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [],
+                // 旧采集顶层形：StorageChangeData 直接顶层（无 CaptureEvent data 嵌套）
+                storage_changes: [{
+                    action: 'remove', storage_type: 'session', key: 'auth', origin: 'https://y', value_status: 'captured',
+                } as CaptureEvent],
+                cookie_changes: [],
+            },
+        };
+        const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
+        expect(res.total).toBe(1);
+        expect(res.records[0].type).toBe('remove');
+        expect(res.records[0].summary).toBe('session.remove auth');
+    });
 });
 
 describe('load_agent_capture_data', () => {

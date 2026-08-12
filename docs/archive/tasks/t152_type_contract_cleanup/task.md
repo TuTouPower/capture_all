@@ -1,12 +1,12 @@
 ---
-tid: t152
-slug: type_contract_cleanup
+tid: "t152"
+slug: "type_contract_cleanup"
 title: "refactor: 类型契约谎言与状态漂移清理"
-status: backlog
-branch: ""
+status: "done"
+branch: "t152_type_contract_cleanup"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "a5d21b1d8615f445993a1d1f73192d6aab8f6f5d"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 聚合：B1-M5 absolute、B1-M6 locale 双轨、B2-M8 store 混存、B3-M1 payload 顶层、B4-M1/M2 时间列、B4-M3 event_kind、B2-M2/M13 id 冲突、B1-L8/L9 工具统一、B1-L12 passthrough、B1-L13 负相对时间、B3-L2 request_id"
@@ -44,14 +44,24 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-13 02:06 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t152_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t152_test_f002|minor|遗留|一句话|pNNN|
+|t152_code_f001|important|已修|AC-004 回归：storage_changes 查询分支改读 event.data 内 StorageChangeData（type/summary/preview 三处）+ 回归测试|agent_data_queries.ts / agent_data_queries.test.ts|
+|t152_code_f002|minor|已修|ws_message/ws_frame summary/preview url 读 data.ws_url（base 事件 url=''，Round 1 summary + Round 2 preview）|agent_data_queries.ts network summary/preview|
+
+### Round 2 (2026-08-13 02:14 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t152_code_f003|minor|已修|storage_changes 旧顶层形记录（无 data 键）fallback 读 record 自身，防升级后旧 capture 查询崩溃|agent_data_queries.ts storage 三处|
+
+### Round 3 (2026-08-13 02:16 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t152_code_f004|minor|已修|补 ws_message 真实落库形（data 内 ws_url）summary/preview 用例 + storage 旧顶层形 fallback 用例|t152_network_ws_type_route.test.ts / agent_data_queries.test.ts|
 
 ## 收尾报告
 
@@ -60,24 +70,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001-010 类型契约清理；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（storage 查询回归 f001）
+- Round 2 code：PASS
+- Round 3 code：PASS
+- Round 4 code：PASS
+- Round 1 test：PASS（2 minor 已修）
+- Round 2 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 类型契约谎言清理 10 项：删 detail_time_display_mode 'absolute'、locale 单一来源、network store ws_frame 查询按 type 路由、storage/ws payload 移 event.data、时间列读真实字段、event_kind 对齐、id 统一 crypto.randomUUID、MCP schemas strict/strip、get_relative_time clamp。

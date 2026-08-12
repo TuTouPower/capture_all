@@ -9,6 +9,8 @@ import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import { send_ui_message, type UiAction } from '../../shared/message_contract';
 import { t, type I18nStrings } from '../shared/i18n';
+import { category_for_event_type } from '../../shared/event_category';
+import { generate_unique_suffix } from '../../shared/id';
 import { I } from './icons';
 
 export const logger = new Logger('dashboard', get_app_log_transport());
@@ -143,18 +145,18 @@ export const KIND: Record<string, { icon: string; color: string }> = {
     error: { icon: 'err', color: 'var(--src-error)' },
 };
 export function event_kind(e: CaptureEvent): string {
-    switch (e.type) {
-        case 'mouse_event': case 'keyboard_event': case 'scroll_event': case 'input_event': return 'user';
-        case 'page_navigation': case 'route_change': case 'page_load': case 'tab_switch':
-        case 'tab_created': case 'tab_url_change': case 'dom_ready': return 'nav';
-        case 'network_request': return 'network';
-        case 'console_event': return 'console';
-        case 'runtime_exception': case 'unhandled_rejection': case 'resource_error':
-        case 'network_failed': case 'capture_error': return 'error';
-        case 'storage_change': return 'storage';
-        case 'cookie_change': return 'cookie';
-        case 'dom_mutation': return 'dom';
-        default: return 'capture';
+    // t152 AC-006: 与 category_for_event_type 对齐——ws/clipboard/form/visibility 等不再错标「生命周期」
+    const cat = category_for_event_type(e.type);
+    switch (cat) {
+        case 'user_action': return 'user';
+        case 'navigation': return 'nav';
+        case 'network': return 'network';
+        case 'console': return 'console';
+        case 'error': return 'error';
+        case 'storage': return 'storage';
+        case 'cookie': return 'cookie';
+        case 'dom_data': return 'dom';
+        case 'capture_lifecycle': return 'capture';
     }
 }
 const KIND_KEY: Record<string, keyof I18nStrings> = {
@@ -251,7 +253,7 @@ export function merge_detail_events(
             data: (n as { data?: unknown }).data ?? n,
         }) as unknown as CaptureEvent),
         ...snapshot.console_events.map((c) => ({
-            event_id: c.event_id ?? `con_${Math.random().toString(36).slice(2, 10)}`,
+            event_id: c.event_id ?? `con_${generate_unique_suffix(10)}`,
             capture_id: id,
             category: 'console' as const,
             type: 'console_event' as const,

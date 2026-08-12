@@ -398,8 +398,8 @@ function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
         ['mouse_precision', ['clicks', 'clicks_scroll_drag', 'full_trajectory']],
         ['keyboard_capture_mode', ['none', 'shortcuts', 'all']],
         ['theme', ['light', 'dark', 'follow-system']],
-        ['locale', ['en', 'zh_CN']],
-        ['detail_time_display_mode', ['system', 'relative', 'absolute']],
+        ['locale', ['en', 'zh']],
+        ['detail_time_display_mode', ['system', 'relative']],
         ['log_level', ['debug', 'info', 'warn', 'error', 'silent']],
     ];
     for (const [key, allowed] of enum_rules) {

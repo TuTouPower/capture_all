@@ -1,0 +1,18 @@
+{
+  "tid": "t149",
+  "attempt": 1,
+  "execution_id": "408b80ef9bba42edb0716f7ac623a8f3",
+  "status": "done",
+  "branch": "t149_dead_code_cleanup",
+  "base_sha": "bd869b3f46b854cb99e3b1ebad51a6652531f781",
+  "tests": "npm test：1448 passed（删除 2 孤儿测试）",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS（1 minor 已修）→ Round 2 general PASS",
+  "ac_evidence": {
+    "AC-001": ["8 项死代码删除/收敛：network_context.ts、devtools_panel.ts/html、prune_stale、FLUSH_BATCH_SIZE、go 映射、设置死分支、SW 双入口、resolve_target._write；rg 无残留 + tsc + 全量测试"],
+    "AC-002": ["删除项对应测试按实际处理：删 loading_failed_events 孤儿块、integration_page go 断言更新为 set_page"],
+    "AC-003": ["FLUSH_BATCH_SIZE 属规范偏差（实现为立即 flush 无批次），删常量 + domain.md 行对齐"]
+  },
+  "pending": [],
+  "findings": []
+}

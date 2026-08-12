@@ -1,12 +1,12 @@
 ---
-tid: t149
-slug: dead_code_cleanup
+tid: "t149"
+slug: "dead_code_cleanup"
 title: "chore: 死代码与孤儿面清理"
-status: backlog
-branch: ""
+status: "done"
+branch: "t149_dead_code_cleanup"
 worktree: ""
-review_level: single
-diff_anchor: ""
+review_level: "single"
+diff_anchor: "bd869b3f46b854cb99e3b1ebad51a6652531f781"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 聚合：B2-M7 network_context 死代码、B1-L1 prune_stale、B5-M2 devtools_panel 孤儿、B2-M17 FLUSH_BATCH_SIZE 死常量、B4-L5 go 死映射、B4-L6 死分支、B2-L2 双入口、B1-L2 resolve_target._write"
@@ -44,14 +44,11 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 23:05 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t149_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t149_test_f002|minor|遗留|一句话|pNNN|
+|t149_gen_f001|minor|已修|integration_page 测试注释更新（go 映射已删，go('integrations') 直接 set_page）+ 补 set_page 断言|integration_page.test.ts AC-3|
 
 ## 收尾报告
 
@@ -60,24 +57,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 8 项死代码删除/收敛 + rg 无残留、AC-002 测试按实际处理、AC-003 FLUSH_BATCH_SIZE 规范对齐；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
-`full`：
-
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：PASS（1 minor 已修）
+- Round 2 general：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 8 处死代码/孤儿面清理：删 network_context.ts、devtools_panel.ts/html、prune_stale no-op、FLUSH_BATCH_SIZE 死常量（+domain.md 对齐）、go 死映射、设置死分支；SW 双入口收敛、resolve_target._write 删参。

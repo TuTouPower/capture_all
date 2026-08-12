@@ -196,7 +196,6 @@ function wire_settings(): void {
             if (name === 'locale') { set_locale(v as Locale); await persist({ locale: v as Locale }); }
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'browser_label') await persist_bridge();
-            else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes, 1024 * 1048576) } as Partial<UserConfig>);
             else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes, 1024 * 1024) } as Partial<UserConfig>);

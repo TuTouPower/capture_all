@@ -76,7 +76,6 @@ src/
 │   │   ├── storage.ts            # IndexedDB CRUD 封装（store 路由 + flush）
 │   │   ├── network_capture.ts    # webRequest / CDP 网络采集
 │   │   ├── network_webrequest.ts # webRequest 纯工具函数
-│   │   ├── network_context.ts    # 网络上下文
 │   │   ├── network_correlator.ts # webRequest-CDP 请求关联（非活跃 tab）
 │   │   ├── cdp_handler.ts        # CDP 事件处理（复合键 sessionId:requestId）
 │   │   ├── console_capture.ts    # CDP console 采集
@@ -111,7 +110,7 @@ src/
 │   │   ├── sidebar_resize.ts / icons.ts
 │   │   └── *.css                 # Shell / pages / detail / views 样式
 │   ├── devtools/                 # DevTools 面板（轻量入口）
-│   │   └── devtools.html / devtools.ts / devtools_panel.html / devtools_panel.ts
+│   │   └── devtools.html / devtools.ts
 │   └── shared/                   # 仅扩展专用（依赖 background/content 或扩展 UI）
 │       ├── capture_data_reader.ts # 直连 IndexedDB 读取采集快照（依赖 background/storage）
 │       ├── i18n.ts / theme.ts    # 国际化 / 主题（扩展 UI 专用）

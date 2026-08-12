@@ -47,12 +47,6 @@ const INLINE_RESULT_MAX_BYTES = 1 * 1024 * 1024;
 const INSTANCE_HEADER = 'x-capture-all-instance-id';
 
 const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture.get_all_data']);
-const WRITE_COMMANDS = new Set<AgentCommandType>([
-    'capture.start',
-    'capture.stop',
-    'capture.export',
-    'capture.get_all_data',
-]);
 
 export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
     const instances = new Map<string, ExtensionInstance>();
@@ -73,21 +67,11 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         return queue;
     }
 
-    function prune_stale(now = Date.now()): void {
-        for (const [id, inst] of instances) {
-            if (now - inst.seen_at > EXTENSION_TTL_MS) {
-                // keep last metadata but mark offline via is_online check; do not delete so status can show offline if needed
-                void id;
-            }
-        }
-    }
-
     function list_online(now = Date.now()): ExtensionInstance[] {
-        prune_stale(now);
         return [...instances.values()].filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
     }
 
-    function resolve_target(payload: Record<string, unknown>, _write: boolean): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'TARGET_AMBIGUOUS' | 'EXTENSION_OFFLINE'; message: string } } {
+    function resolve_target(payload: Record<string, unknown>): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'TARGET_AMBIGUOUS' | 'EXTENSION_OFFLINE'; message: string } } {
         const online = list_online();
         if (online.length === 0) {
             return { error: { code: 'EXTENSION_OFFLINE', message: 'Extension is offline' } };
@@ -505,8 +489,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 if (typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0) {
                     await safe_output_path(body.payload.output_path, default_export_dir());
                 }
-                const is_write = WRITE_COMMANDS.has(body.type);
-                const target = resolve_target(body.payload, is_write);
+                const target = resolve_target(body.payload);
                 if ('error' in target) {
                     const status = target.error.code === 'EXTENSION_OFFLINE' ? 503 : 400;
                     return send_json(response, status, {

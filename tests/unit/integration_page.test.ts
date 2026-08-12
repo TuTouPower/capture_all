@@ -83,17 +83,14 @@ describe('T0003: dashboard.ts NAV 数组 (AC-1)', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// AC-3: go("integrations") 降级行为 —— 实际函数调用验证
-// spec 可测性契约: 调用 go('integrations') 后验证无异常、内容区降级到 captures 页面
+// AC-3: go("integrations") 行为 —— 实际函数调用验证
+// t149 删除 go 的 integrations→captures 死映射后，go('integrations') 直接 set_page('integrations')；
+// render_content 无该 case 时 else 兜底渲染 captures 页面。
 // ────────────────────────────────────────────────────────────────────────
-describe('T0003: AC-3 go("integrations") 降级行为', () => {
-    it('调用 go("integrations") 不抛异常', () => {
+describe('T0003: AC-3 go("integrations") 行为', () => {
+    it('调用 go("integrations") 不抛异常且 page 置为 integrations', () => {
         expect(() => router.go('integrations')).not.toThrow();
-    });
-
-    it('go("integrations") 后 get_page() 返回 captures (spec AC-3)', () => {
-        router.go('integrations');
-        expect(get_page()).toBe('captures');
+        expect(get_page()).toBe('integrations');
     });
 
     it('go("captures") 行为不变', () => {

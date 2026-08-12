@@ -25,7 +25,6 @@ export const INLINE_TEXT_MAX_BYTES = 32 * 1024; // 32KB
 export const MAX_CONSOLE_ARG_BYTES = 1024; // 1KB
 export const MAX_LOG_ENTRY_BYTES = 64 * 1024; // 64KB，单条日志 details/message 字符串上限
 export const MAX_TARGET_TEXT_CHARS = 100;
-export const FLUSH_BATCH_SIZE = 100;
 export const FLUSH_INTERVAL_MS = 1000;
 
 export const DEFAULT_CONFIG: CaptureConfig = {

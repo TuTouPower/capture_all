@@ -71,7 +71,7 @@ function render_shell(): void {
     render_content();
 }
 
-function go(p: string): void { if (p === 'integrations') p = 'captures'; set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
+function go(p: string): void { set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
 
 // t144: detail 快照签名——事件数、最新相对时间、network/console 数组长度与 stats，判断轮询是否有实质变化
 function detail_snapshot_signature(capture_id: string): string {

@@ -116,7 +116,6 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | 单条 console arg | 1 KB | `MAX_CONSOLE_ARG_BYTES` |
 | 单条日志上限 | 64 KB | `MAX_LOG_ENTRY_BYTES` |
 | target_text 预览 | 100 字符 | `MAX_TARGET_TEXT_CHARS` |
-| flush 批次 | 100 条 | `FLUSH_BATCH_SIZE`（周期 flush 兜底用） |
 | flush 间隔 | 1000 ms | `FLUSH_INTERVAL_MS`（周期 flush 兜底用） |
 | 导出分页 | 5000 条/页 | `PAGE_SIZE`（循环至耗尽） |
 | CDP events 单次轮询 | 100 条 | `MAX_EVENTS_PER_POLL` |

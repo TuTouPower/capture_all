@@ -106,10 +106,6 @@ chrome.runtime.onInstalled.addListener(async () => {
     // T053: 设置自身 origin 排除集合为配置的 Bridge origin（精确端口）
     set_self_origin_excludes([config.agent_bridge_url].filter((u): u is string => Boolean(u && u.trim())));
     logger.info('Extension installed');
-    if (config.agent_bridge_enabled) {
-        start_agent_bridge();
-        logger.info('Agent bridge started');
-    }
 });
 
 async function initialize_agent_bridge(): Promise<void> {

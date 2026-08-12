@@ -773,6 +773,20 @@ export function _render_dt_list_for_test(): string {
     return render_dt_list();
 }
 
+// 测试钩子（t151）：直连其余事件渲染函数，供参数化 XSS 转义断言（真实输入 → 渲染输出）。
+export function _render_net_inspector_for_test(selected_net_idx?: number): string {
+    return render_net_inspector(selected_net_idx);
+}
+export function _render_con_table_for_test(): string {
+    return render_con_table();
+}
+export function _render_simple_events_for_test(types: string[], headers: string[]): string {
+    return render_simple_events(types, headers);
+}
+export function _render_dt_inspector_for_test(): string {
+    return render_dt_inspector();
+}
+
 async function open_detail(id: string): Promise<void> {
     set_page('detail'); set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all'); set_dt_sel(-1); set_dt_insp_open(false);
     await load_detail(id);

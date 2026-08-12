@@ -4,6 +4,11 @@ import { dispatch_agent_command, type AgentRuntimeHandlers } from '../../src/ext
 import type { AgentCommand } from '../../src/shared/protocol';
 import { DEFAULT_CONFIG } from '../../src/shared/constants';
 import type { CaptureConfig } from '../../src/shared/types';
+import {
+    get_entry_from_capture_data,
+    list_entries_from_capture_data,
+} from '../../src/extension/background/agent_data_queries';
+import { export_json } from '../../src/extension/background/exporter';
 
 vi.mock('../../src/extension/background/exporter', () => ({
     export_json: vi.fn(async () => '{}'),
@@ -248,5 +253,73 @@ describe('agent command dispatcher', () => {
         expect(err?.message).toBe('Unexpected error executing command');
         expect(err?.message).not.toContain('/usr/lib/somewhere');
         expect(err?.message).not.toContain('leaked');
+    });
+
+    // ── t151 AC-005: 结构化错误码映射补充 ─────────────────────────
+    test('maps SOURCE_NOT_FOUND from data.list', async () => {
+        vi.mocked(list_entries_from_capture_data).mockImplementationOnce(() => {
+            throw new Error('SOURCE_NOT_FOUND');
+        });
+        const result = await dispatch_agent_command(command('data.list', {
+            capture_id: 's1',
+            source: 'user_action_events',
+            offset: 0,
+            limit: 10,
+        }), handlers);
+        expect(result).toMatchObject({ ok: false, error: { code: 'SOURCE_NOT_FOUND' } });
+    });
+
+    test('maps RECORD_NOT_FOUND from data.get', async () => {
+        vi.mocked(get_entry_from_capture_data).mockImplementationOnce(() => {
+            throw new Error('RECORD_NOT_FOUND');
+        });
+        const result = await dispatch_agent_command(command('data.get', {
+            capture_id: 's1',
+            source: 'user_action_events',
+            record_id: 'user_action_events:10:1010',
+        }), handlers);
+        expect(result).toMatchObject({ ok: false, error: { code: 'RECORD_NOT_FOUND' } });
+    });
+
+    test('maps EXPORT_FAILED from exporter', async () => {
+        vi.mocked(export_json).mockRejectedValueOnce(new Error('EXPORT_FAILED'));
+        const result = await dispatch_agent_command(command('capture.export', {
+            capture_id: 's1',
+            format: 'json',
+        }), handlers);
+        expect(result).toMatchObject({ ok: false, error: { code: 'EXPORT_FAILED' } });
+    });
+
+    test('rejects capture config with invalid values', async () => {
+        const start_capture = vi.fn(async () => ({ success: true }));
+        const result = await dispatch_agent_command(command('capture.start', {
+            config: { sample_rate_ms: 'fast', capture_console: false },
+        }), {
+            ...handlers,
+            start_capture,
+        });
+        expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_QUERY' } });
+        expect(start_capture).not.toHaveBeenCalled();
+    });
+
+    test('rejects negative data.list limit (分页边界)', async () => {
+        const result = await dispatch_agent_command(command('data.list', {
+            capture_id: 's1',
+            source: 'user_action_events',
+            limit: -1,
+        }), handlers);
+        expect(result).toMatchObject({
+            ok: false,
+            error: { code: 'INVALID_QUERY', message: expect.stringContaining('limit') },
+        });
+    });
+
+    test('rejects data.list limit exceeding max', async () => {
+        const result = await dispatch_agent_command(command('data.list', {
+            capture_id: 's1',
+            source: 'user_action_events',
+            limit: 200000,
+        }), handlers);
+        expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_QUERY' } });
     });
 });

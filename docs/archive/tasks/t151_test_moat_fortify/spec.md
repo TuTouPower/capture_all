@@ -32,7 +32,7 @@ intensive-review P7 核查：XSS 转义无参数化测试、detail_render_consis
 - [ ] AC-002: detail_render_consistency 改造为真实渲染断言（七标签出现与计数一致），删除自证自用例
 - [ ] AC-003: detail_layout_source/settings_ui 源码字符串断言改行为断言或标注「结构契约」
 - [ ] AC-004: popup 关键路径（start/stop→saved、onChanged 同步、导出失败）新增行为级测试（真实 import + mock DOM 触发）
-- [ ] AC-005: agent_command_dispatcher/agent_data_queries 补直接单测（结构化错误码、分页、64MiB 预算路径）
+- [ ] AC-005: agent_command_dispatcher/agent_data_queries 补直接单测（结构化错误码、分页；64MiB 预算路径由 t140 agent_bridge_client PAYLOAD_TOO_LARGE 测试覆盖，非本 task 范围）
 - [ ] AC-006: 改造后全量单测通过，无测试依赖被删代码之外的实现细节
 
 ### 可测试性声明

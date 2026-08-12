@@ -1,5 +1,9 @@
 // tests/unit/network_hook_config_gate.test.ts
-// 验证 content_script 依据 capture_network 配置门控 network_hook / websocket_capture
+// 「结构契约」标注（t151 AC-003 处置 B3 表层断言）：
+// 本文件为源码结构锚点——断言 content_script.start_capture 的接线形态
+// （capture_network 条件门控、start_network_hook 参数传递、单次调用），
+// 源码重命名即脆断，不验证运行行为。行为级语义（hook 未 start 不转发 /
+// start 后转发 / body 采集开关 / URL 脱敏）由 network_hook_gate_behavior.test.ts 覆盖。
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

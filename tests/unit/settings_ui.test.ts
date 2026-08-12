@@ -1,25 +1,23 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { DEFAULT_USER_CONFIG } from '../../src/shared/constants'
 import { set_user_config } from '../../src/extension/dashboard/dashboard_shared'
 import {
     clamp_body_size_bytes,
     render_settings,
+    wire_settings,
 } from '../../src/extension/dashboard/dashboard_settings'
 import { set_locale } from '../../src/extension/shared/i18n'
 
-// set_locale 会写 chrome.storage.local，提供最小 mock
+// set_locale 会写 chrome.storage.local；wire_settings 会走 runtime.sendMessage（get_app_log_size），提供最小 mock
+const runtime_send_message = vi.fn(async () => ({ success: true, data: { size_bytes: 0 } }))
 vi.stubGlobal('chrome', {
+    runtime: { id: 'test-ext', sendMessage: runtime_send_message },
     storage: { local: { set: vi.fn(), get: vi.fn(async () => ({})) } },
 })
 
 // 默认 en；需要断言中文渲染的用例内切到 zh
 beforeEach(() => { set_locale('en') })
-
-const project_root = resolve(__dirname, '..', '..')
-const src = readFileSync(resolve(project_root, 'src/extension/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('隐私风险提示', () => {
     it('在设置页渲染默认敏感采集项和脱敏边界', () => {
@@ -104,18 +102,31 @@ describe('BUG-007: 日志级别不与最大日志大小重叠', () => {
 })
 
 describe('BUG-008: 当前日志大小用 input 而非 span', () => {
-    it('logSize 是 readonly input 元素', () => {
-        // 渲染 HTML 中 logSize 是 input[readonly]，不是 span
-        const input_match = src.match(/<input\s+id="logSize"[^>]*readonly/)
-        expect(input_match).toBeTruthy()
+    it('logSize 渲染为 readonly input 元素', () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        const container = document.createElement('div')
+        container.innerHTML = render_settings()
+        const log_size = container.querySelector('#logSize')
+        expect(log_size).not.toBeNull()
+        expect(log_size?.tagName).toBe('INPUT')
+        expect(log_size?.hasAttribute('readonly')).toBe(true)
     })
 
-    it('wire_diagnostics_settings 对 logSize 赋 .value（非 .textContent）', () => {
-        // 函数体内 logSize 用 .value = 赋值
-        const fn_match = src.match(/function wire_diagnostics_settings[\s\S]*?^\}/m)
-        expect(fn_match).toBeTruthy()
-        expect(fn_match![0]).toMatch(/logSize[\s\S]*?\.value\s*=/)
-        expect(fn_match![0]).not.toMatch(/logSize[\s\S]*?\.textContent\s*=/)
+    it('wire 后 logSize 通过 .value 更新（非 .textContent）', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockResolvedValue({ success: true, data: { size_bytes: 5 * 1024 * 1024 } })
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+        const log_size = document.getElementById('logSize') as HTMLInputElement
+        expect(log_size).not.toBeNull()
+        expect(log_size.value).toBe('5.0 MB')
+        expect(log_size.textContent).not.toContain('5.0')
+        document.body.innerHTML = ''
     })
 })
 

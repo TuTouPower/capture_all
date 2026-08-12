@@ -1,41 +1,109 @@
-import { describe, expect, it } from 'vitest';
-import { VISIBLE_CAPTURE_STAT_KEYS } from '../../src/extension/shared/capture_stats';
-import { category_for_event_type } from '../../src/shared/event_category';
-import type { CaptureStats, EventType } from '../../src/shared/types';
+// @vitest-environment jsdom
+// tests/unit/detail_render_consistency.test.ts
+// t151 AC-002: 改造为真实渲染断言——调用 render_detail / render_dt_list，
+// 断言七类标签出现且计数与 stats 一致（替代原自证自的 tab_expectations 数组对齐）。
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { set_detail_capture, set_detail_events, set_user_config } from '../../src/extension/dashboard/dashboard_shared';
+import { render_detail, _render_dt_list_for_test } from '../../src/extension/dashboard/dashboard_detail';
+import { set_locale } from '../../src/extension/shared/i18n';
+import { DEFAULT_USER_CONFIG } from '../../src/shared/constants';
+import type { CaptureRecord, CaptureEvent } from '../../src/shared/types';
 
-const tab_expectations: Array<{
-    tab: string;
-    stat_key: keyof CaptureStats;
-    event_type: EventType;
-    category: string;
-}> = [
-    { tab: '用户行为', stat_key: 'user_action_count', event_type: 'input_event', category: 'user_action' },
-    { tab: '页面导航', stat_key: 'nav_count', event_type: 'page_navigation', category: 'navigation' },
-    { tab: '网络请求', stat_key: 'request_count', event_type: 'network_request', category: 'network' },
-    { tab: '控制台', stat_key: 'log_count', event_type: 'console_event', category: 'console' },
-    { tab: '错误异常', stat_key: 'error_count', event_type: 'runtime_exception', category: 'error' },
-    { tab: 'Storage', stat_key: 'storage_change_count', event_type: 'storage_change', category: 'storage' },
-    { tab: 'Cookie', stat_key: 'cookie_change_count', event_type: 'cookie_change', category: 'cookie' },
-];
+// set_locale 会写 chrome.storage.local，提供最小 mock
+vi.stubGlobal('chrome', {
+    storage: { local: { set: vi.fn(), get: vi.fn(async () => ({})) } },
+});
 
-describe('detail_render_consistency', () => {
-    it('keeps the seven visible tabs aligned with visible stats keys', () => {
-        expect(tab_expectations.map(item => item.stat_key)).toEqual(VISIBLE_CAPTURE_STAT_KEYS);
+// zh locale 下七个可见类别标签，与可见 stats 键一一对应
+const SEVEN_TAB_LABELS = ['用户行为', '页面导航', '网络请求', '控制台', '错误异常', 'Storage', 'Cookie'];
+
+function make_capture(stats: Record<string, number>): CaptureRecord {
+    return {
+        capture_id: 'c1',
+        name: 'Capture',
+        status: 'completed',
+        started_at: '2026-01-01T00:00:00Z',
+        ended_at: '2026-01-01T00:01:00Z',
+        duration_ms: 60000,
+        start_url: 'https://example.com',
+        end_url: null,
+        tab_id: 1,
+        window_id: null,
+        config_snapshot: {},
+        stats: {
+            event_count: 0,
+            user_action_count: 0,
+            nav_count: 0,
+            request_count: 0,
+            log_count: 0,
+            error_count: 0,
+            storage_change_count: 0,
+            cookie_change_count: 0,
+            total_body_bytes: 0,
+            ...stats,
+        },
+        export_status: 'not_exported',
+        tags: [],
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:01:00Z',
+    } as CaptureRecord;
+}
+
+function ev(type: CaptureEvent['type'], relative_time_ms: number): CaptureEvent {
+    return { type, relative_time_ms, source: 's', data: {} } as CaptureEvent;
+}
+
+describe('detail render consistency (t151 AC-002)', () => {
+    beforeEach(() => {
+        set_locale('zh');
+        set_user_config(DEFAULT_USER_CONFIG);
     });
 
-    it('maps each visible tab event type to its render category', () => {
-        for (const item of tab_expectations) {
-            expect(category_for_event_type(item.event_type), item.tab).toBe(item.category);
+    it('render_detail 渲染七个类别指标（与可见 stats 键对齐）', () => {
+        set_detail_capture(make_capture({
+            user_action_count: 1, nav_count: 1, request_count: 1, log_count: 1,
+            error_count: 1, storage_change_count: 1, cookie_change_count: 1,
+        }));
+        const container = document.createElement('div');
+        container.innerHTML = render_detail();
+        const metrics = [...container.querySelectorAll<HTMLElement>('.dt-metric')];
+        expect(metrics.length).toBe(7);
+        for (const label of SEVEN_TAB_LABELS) {
+            const metric = metrics.find((m) => m.textContent?.includes(label));
+            expect(metric, `metric for ${label} should exist`).toBeTruthy();
+            expect(metric!.textContent).toContain('1');
         }
     });
 
-    it('requires a rendered row when the tab stat is non-zero', () => {
-        const stats = Object.fromEntries(
-            tab_expectations.map(item => [item.stat_key, 1])
-        ) as Pick<CaptureStats, typeof tab_expectations[number]['stat_key']>;
+    it('非零 stat 计数与对应指标一致渲染', () => {
+        set_detail_capture(make_capture({ user_action_count: 7, nav_count: 3, log_count: 12 }));
+        const container = document.createElement('div');
+        container.innerHTML = render_detail();
+        const metrics = [...container.querySelectorAll<HTMLElement>('.dt-metric')];
+        const by_label = (lbl: string) => metrics.find((m) => m.textContent?.includes(lbl))!;
+        expect(by_label('用户行为').textContent).toContain('7');
+        expect(by_label('页面导航').textContent).toContain('3');
+        expect(by_label('控制台').textContent).toContain('12');
+        // 未设置计数的类别显示 0
+        expect(by_label('错误异常').textContent).toContain('0');
+    });
 
-        for (const item of tab_expectations) {
-            expect(stats[item.stat_key], item.tab).toBeGreaterThan(0);
+    it('render_dt_list 按事件类别渲染对应行（七类标签覆盖）', () => {
+        set_detail_events([
+            ev('input_event', 10),
+            ev('page_navigation', 20),
+            ev('network_request', 30),
+            ev('console_event', 40),
+            ev('runtime_exception', 50),
+            ev('storage_change', 60),
+            ev('cookie_change', 70),
+        ]);
+        const container = document.createElement('div');
+        container.innerHTML = _render_dt_list_for_test();
+        const row_kinds = [...container.querySelectorAll<HTMLElement>('.ev-type')]
+            .map((el) => el.textContent ?? '');
+        for (const label of SEVEN_TAB_LABELS) {
+            expect(row_kinds.some((k) => k.includes(label)), `row kind ${label} should be rendered`).toBe(true);
         }
     });
 });

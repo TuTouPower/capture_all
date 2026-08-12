@@ -121,8 +121,14 @@ function start_capture(config: CaptureConfig): void {
     // T098: network_hook / websocket_capture 仅当 capture_network 开启时注入；
     // 关闭时显式停用，防先前注入的 hook 继续转发事件。
     if (config.capture_network) {
-        start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id, config.capture_response_body);
-        start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id);
+        start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id, config.capture_response_body, {
+            redact_data: config.redact_data,
+            redact_url_query: config.redact_url_query,
+        });
+        start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id, {
+            redact_data: config.redact_data,
+            redact_url_query: config.redact_url_query,
+        });
     } else {
         stop_network_hook();
         stop_websocket_capture();

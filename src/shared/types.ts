@@ -239,6 +239,7 @@ export interface PrintEventData {
 
 export interface WsMessageData {
     ws_url: string;
+    url_status: 'captured' | 'redacted';
     direction: 'sent' | 'received';
     data_preview: string | null;
     data_bytes: number;

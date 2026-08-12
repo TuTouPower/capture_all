@@ -4,6 +4,7 @@ import { create_content_event, get_relative_time, create_capture_state } from '.
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
 import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
+import { redact_url } from '../../shared/redaction';
 
 const state = create_capture_state<WsMessageData>();
 let current_nonce = '';
@@ -20,6 +21,10 @@ export function _set_secret_for_test(secret: string | null): void {
 }
 
 let message_listener: ((e: MessageEvent) => void) | null = null;
+
+// H3: content 侧 ws_url/消息预览按配置脱敏（与 background CDP ws 路径一致）
+let redact_data = false;
+let redact_url_query = false;
 
 const SIGNAL = '__capture_all_ws__';
 
@@ -158,12 +163,16 @@ export function start_websocket_capture(
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
+    cfg?: { redact_data: boolean; redact_url_query: boolean },
 ): void {
     if (!state.begin(sender, {
         capture_id: new_capture_id,
         capture_start_epoch_ms: new_capture_start_epoch_ms,
         tab_id: new_tab_id,
     })) return;
+    // H3: 记录脱敏配置供接收侧处理
+    redact_data = cfg?.redact_data ?? false;
+    redact_url_query = cfg?.redact_url_query ?? false;
     // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
     // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
     current_nonce = _nonce_override ?? generate_nonce();
@@ -182,10 +191,15 @@ export function start_websocket_capture(
         // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
         if (!verify_payload(current_secret, d)) return;
 
+        // H3: ws_url 按配置脱敏；data_preview 在 redact_data 开启时置 '[REDACTED]'（消息长度/方向等元数据保留）
+        const redacted_url = redact_url(d.ws_url ?? '', redact_data && redact_url_query);
+        // H3: 仅当有原始文本预览时脱敏；binary/too_large 原本 data_preview=null 保持 null，不混淆「无文本」与「已脱敏」
+        const raw_preview = d.data_preview ?? null;
         const data: WsMessageData = {
-            ws_url: d.ws_url ?? '',
+            ws_url: redacted_url.url,
+            url_status: redacted_url.url_status,
             direction: d.direction === 'sent' ? 'sent' : 'received',
-            data_preview: d.data_preview ?? null,
+            data_preview: redact_data && raw_preview !== null ? '[REDACTED]' : raw_preview,
             data_bytes: typeof d.data_bytes === 'number' ? d.data_bytes : 0,
             data_status: d.data_status ?? 'captured',
         };

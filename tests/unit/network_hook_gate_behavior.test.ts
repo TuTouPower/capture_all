@@ -73,4 +73,58 @@ describe('network_hook 配置门控行为 (T098)', () => {
         expect(script).toContain('CAPTURE_BODY = true');
         expect(script).toContain('clone.text()');
     });
+
+    // H3: fallback 路径 URL 按配置脱敏，url_status 不再恒 captured
+    it('H3: redact_data=true 时 fallback URL query 脱敏且 url_status=redacted', () => {
+        start_network_hook(sender, 'cap', Date.now(), 1, true, { redact_data: true, redact_url_query: true });
+        dispatch_message(sign_message({
+            source: '__capture_all_network_hook__',
+            nonce: 'nonce-1',
+            method: 'GET',
+            url: 'https://example.com/data?token=SECRET&id=1',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        }));
+        expect(sender).toHaveBeenCalledTimes(1);
+        const event = sender.mock.calls[0][1];
+        expect(event.url_status).toBe('redacted');
+        expect(event.url).not.toContain('SECRET');
+        expect(event.url).toContain('%5BREDACTED%5D');
+        expect(event.url).toContain('id=1');
+    });
+
+    it('H3: redact_data=true 但 redact_url_query=false 时 URL 不脱敏', () => {
+        start_network_hook(sender, 'cap', Date.now(), 1, true, { redact_data: true, redact_url_query: false });
+        dispatch_message(sign_message({
+            source: '__capture_all_network_hook__',
+            nonce: 'nonce-1',
+            method: 'GET',
+            url: 'https://example.com/data?token=SECRET',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        }));
+        expect(sender).toHaveBeenCalledTimes(1);
+        const event = sender.mock.calls[0][1];
+        expect(event.url_status).toBe('captured');
+        expect(event.url).toBe('https://example.com/data?token=SECRET');
+    });
+
+    it('H3: redact_data=false 时行为与修前一致（不脱敏）', () => {
+        start_network_hook(sender, 'cap', Date.now(), 1, true, { redact_data: false, redact_url_query: true });
+        dispatch_message(sign_message({
+            source: '__capture_all_network_hook__',
+            nonce: 'nonce-1',
+            method: 'GET',
+            url: 'https://example.com/data?token=SECRET',
+            status: 200,
+            response_body: 'x',
+            response_body_status: 'captured',
+        }));
+        expect(sender).toHaveBeenCalledTimes(1);
+        const event = sender.mock.calls[0][1];
+        expect(event.url_status).toBe('captured');
+        expect(event.url).toBe('https://example.com/data?token=SECRET');
+    });
 });

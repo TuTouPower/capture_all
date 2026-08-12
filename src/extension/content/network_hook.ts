@@ -11,6 +11,7 @@ import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
 import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
+import { redact_url } from '../../shared/redaction';
 
 const state = create_capture_state<NetworkRequestData>();
 const SIGNAL = '__capture_all_network_hook__';
@@ -275,6 +276,9 @@ export function build_page_script(capture_response_body: boolean, secret: string
 
 let current_nonce = '';
 let capture_response_body = true;
+// H3: fallback 路径 URL 按配置脱敏（与 background CDP/web_request 路径一致）
+let redact_data = false;
+let redact_url_query = false;
 // T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
 let _nonce_override: string | null = null;
 export function _set_nonce_for_test(nonce: string | null): void {
@@ -318,6 +322,7 @@ export function start_network_hook(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
     new_capture_response_body = true,
+    cfg?: { redact_data: boolean; redact_url_query: boolean },
 ): void {
     if (!state.begin(sender, {
         capture_id: new_capture_id,
@@ -330,6 +335,9 @@ export function start_network_hook(
     // T121: secret 每次 start 旋转（内联进注入脚本闭包，不写 window）。
     current_secret = _secret_override ?? generate_secret();
     capture_response_body = new_capture_response_body;
+    // H3: 记录脱敏配置供接收侧处理
+    redact_data = cfg?.redact_data ?? false;
+    redact_url_query = cfg?.redact_url_query ?? false;
     update_page_nonce(current_nonce);
     inject_page_script();
 
@@ -343,11 +351,13 @@ export function start_network_hook(
         // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
         if (!verify_payload(current_secret, d)) return;
 
+        // H3: fallback 路径 URL 按配置脱敏，url_status 反映结果（不再恒 captured）
+        const redacted_url = redact_url(d.url || '', redact_data && redact_url_query);
         const data = build_network_data({
             request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             method: d.method || 'GET',
-            url: d.url || '',
-            url_status: 'captured',
+            url: redacted_url.url,
+            url_status: redacted_url.url_status,
             status_code: typeof d.status === 'number' ? d.status : 0,
             resource_type: 'fetch',
             duration_ms: typeof d.duration_ms === 'number' ? Math.round(d.duration_ms * 100) / 100 : 0,

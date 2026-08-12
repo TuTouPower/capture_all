@@ -2,11 +2,11 @@
 tid: "t131"
 slug: "redact_url_keep_shape"
 title: "fix: 脱敏体系一致性（redact_url 形态 + content 侧 + logger credential）"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t131_redact_url_keep_shape"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "2b599e343b1ad6952cf4d4ca3c74070a75ab1150"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 合并：H-3 redact_url 无条件规范化 + H-5 content ws/fallback 未脱敏 + H-19 logger credential 明文"
@@ -44,14 +44,13 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 13:55 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t131_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t131_test_f002|minor|遗留|一句话|pNNN|
+|t131_code_f001|minor|已修|ws data_preview 仅当有原始文本时脱敏，binary/too_large 保持 null 不混淆语义|src/extension/content/websocket_capture.ts:200-202|
+|t131_test_f001|minor|已修|补 cookie/set-cookie/secret 字段断言|tests/unit/logger.test.ts:170-179|
+|t131_test_f002|minor|已修|补敏感字段值为对象形态整体置 [REDACTED] 用例|tests/unit/logger.test.ts:181-187|
 
 ## 收尾报告
 
@@ -60,24 +59,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：11 条 AC 均测试覆盖（redact_url 保形、content ws/fallback 脱敏、logger credential 脱敏）；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：PASS
+- Round 1 test：PASS
+- Round 2 code：PASS
+- Round 2 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 脱敏体系三处一致：redact_url 无敏感参数保形；content ws/fallback 路径按 redact 配置脱敏 URL/预览；logger credential 字段整体脱敏。domain.md 补统一规则。

@@ -1,0 +1,26 @@
+{
+  "tid": "t131",
+  "attempt": 1,
+  "execution_id": "2abb2f8dacb34278b4f8e309e6e35d6c",
+  "status": "done",
+  "branch": "t131_redact_url_keep_shape",
+  "base_sha": "2b599e343b1ad6952cf4d4ca3c74070a75ab1150",
+  "tests": "npm test：1401 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS/test PASS（3 minor 已修）→ Round 2 code PASS/test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/redaction.test.ts:117-120 redact_url('http://example.com', true) 返回原串且 url_status='captured'"],
+    "AC-002": ["tests/unit/redaction.test.ts:129-135 含敏感参数时脱敏为 %5BREDACTED%5D 且 name 保留、url_status='redacted'"],
+    "AC-003": ["既有 redaction 相对 URL 测试保持通过"],
+    "AC-004": ["既有 t114 嵌套 query 递归脱敏测试保持通过"],
+    "AC-005": ["tests/unit/websocket_capture_page.test.ts:114-128 redact_data&&redact_url_query=true 时 ws_url 脱敏、url_status='redacted'"],
+    "AC-006": ["tests/unit/websocket_capture_page.test.ts:114-128 data_preview 置 '[REDACTED]'；:149-158 binary 消息保持 null"],
+    "AC-007": ["tests/unit/network_hook_gate_behavior.test.ts:78-95 fallback URL query 脱敏、url_status='redacted'、id 保留"],
+    "AC-008": ["tests/unit/websocket_capture_page.test.ts:141-150 + network_hook_gate_behavior.test.ts:114-129 redact_data=false 不脱敏"],
+    "AC-009": ["tests/unit/logger.test.ts:131-187 authorization/cookie/set-cookie/x-api-key/token/secret/password 字段整体置 '[REDACTED]'（含对象形态值）"],
+    "AC-010": ["tests/unit/logger.test.ts 正常字段（Content-Type/X-Custom/other）不被脱敏"],
+    "AC-011": ["既有 redaction/logger/network_hook/websocket 测试保持通过"]
+  },
+  "pending": [],
+  "findings": []
+}

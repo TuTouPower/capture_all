@@ -40,6 +40,13 @@ function sanitize_string(s: string): string {
     return truncate_bytes_safe(result, MAX_LOG_ENTRY_BYTES);
 }
 
+// H3: credential 形字段名一律脱敏，防止请求/响应头直接入日志时 token 落库。
+const SENSITIVE_LOG_FIELDS = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'token', 'secret', 'password'];
+
+function is_sensitive_log_field(key: string): boolean {
+    return SENSITIVE_LOG_FIELDS.some((f) => key.toLowerCase().includes(f));
+}
+
 function sanitize_value(value: unknown, seen: WeakSet<object>): unknown {
     if (typeof value === 'string') {
         return sanitize_string(value);
@@ -71,7 +78,8 @@ function sanitize_value(value: unknown, seen: WeakSet<object>): unknown {
         }
         const result: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            result[k] = sanitize_value(v, seen);
+            // H3: 敏感字段名直接脱敏值，阻止 credential 明文进入 app_logs
+            result[k] = is_sensitive_log_field(k) ? '[REDACTED]' : sanitize_value(v, seen);
         }
         return result;
     } finally {

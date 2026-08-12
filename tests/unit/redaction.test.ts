@@ -113,6 +113,27 @@ describe('redact_url', () => {
         expect(matches.length).toBe(3);
     });
 
+    // H3: 无敏感参数时保留原始 URL 形态（不因 new URL 规范化追加尾斜杠/降 host/重排参数）
+    it('preserves absolute URL shape when no sensitive params (H3)', () => {
+        expect(redact_url('http://example.com', true).url).toBe('http://example.com');
+        expect(redact_url('http://example.com', true).url_status).toBe('captured');
+    });
+
+    it('preserves host case and port when no sensitive params (H3)', () => {
+        const url = 'http://Example.COM:8080/path?name=test';
+        const result = redact_url(url, true);
+        expect(result.url).toBe(url);
+        expect(result.url_status).toBe('captured');
+    });
+
+    it('still normalizes when redaction happens, keeping non-sensitive params (H3)', () => {
+        const url = 'http://example.com/path?token=SECRET&name=test';
+        const result = redact_url(url, true);
+        expect(result.url_status).toBe('redacted');
+        expect(result.url).toContain('token=%5BREDACTED%5D');
+        expect(result.url).toContain('name=test');
+    });
+
     it('does not redact non-sensitive params containing no sensitive pattern', () => {
         const url = 'https://example.com?category=books&page=2&sort=asc';
         const result = redact_url(url, true);

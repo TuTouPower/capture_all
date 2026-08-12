@@ -127,6 +127,55 @@ describe('Logger redaction & size cap', () => {
         expect(arr[1]).toBe('keep');
     });
 
+    // H3: credential 形字段名整体脱敏，阻止明文入 app_logs
+    it('redacts credential fields in object details (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { headers: { authorization: 'Bearer xyz', 'x-api-key': 'KEY123', 'Content-Type': 'application/json' } });
+
+        const details = transport.last_entry?.details as { headers: Record<string, unknown> };
+        expect(details.headers.authorization).toBe('[REDACTED]');
+        expect(details.headers['x-api-key']).toBe('[REDACTED]');
+        expect(details.headers['Content-Type']).toBe('application/json');
+    });
+
+    it('redacts token/secret/password named fields nested deep (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { session: { access_token: 'AT', refreshToken: 'RT' }, config: { password: 'pw', other: 'keep' } });
+
+        const details = transport.last_entry?.details as { session: Record<string, unknown>; config: Record<string, unknown> };
+        expect(details.session.access_token).toBe('[REDACTED]');
+        expect(details.session.refreshToken).toBe('[REDACTED]');
+        expect(details.config.password).toBe('[REDACTED]');
+        expect(details.config.other).toBe('keep');
+    });
+
+    it('redacts cookie/set-cookie/secret fields (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { headers: { cookie: 'session=abc', 'set-cookie': 'id=1', secret: 's3cr3t', 'X-Custom': 'keep' } });
+
+        const details = transport.last_entry?.details as { headers: Record<string, unknown> };
+        expect(details.headers.cookie).toBe('[REDACTED]');
+        expect(details.headers['set-cookie']).toBe('[REDACTED]');
+        expect(details.headers.secret).toBe('[REDACTED]');
+        expect(details.headers['X-Custom']).toBe('keep');
+    });
+
+    it('redacts sensitive field whose value is an object (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { token: { client_id: 'x', secret_key: 'y' } });
+
+        const details = transport.last_entry?.details as { token: unknown };
+        expect(details.token).toBe('[REDACTED]');
+    });
+
     it('truncates oversized string to MAX_LOG_ENTRY_BYTES + marker', () => {
         const transport = new CaptureTransport();
         const logger = new Logger('test', transport);

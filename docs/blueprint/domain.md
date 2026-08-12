@@ -96,6 +96,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 - **HTML 导出必须转义动态内容**（`</script>` → `<\/script>`，`<`/`>`/`&` 全转义）。
 - **type=password input 永远不被采集**（`value_status: 'not_captured'`）。
 - **脱敏与截断分离**：`redact_data` 控制脱敏；payload size limit（`max_body_capture_bytes` / `inline_text_max_bytes` / console args 1KB / target_text 100 字符）永远生效，不受脱敏开关影响。
+- **脱敏行为跨采集通道一致**：background CDP/web_request 与 content ws/fallback 网络路径均对 URL 套 `redact_url`（按 `redact_data && redact_url_query`）、对文本预览置 `[REDACTED]`；logger 对 credential 形字段名（authorization/cookie/token/secret/password 等）整体脱敏。
 - **所有事件 store 用 `event_id`（`crypto.randomUUID()`）作 keyPath**，`capture_id` 作索引，避免复合主键碰撞。
 - **IndexedDB Console 和 Error 分两个独立 store**（`console.error()` ≠ 运行时异常）。
 - **write_events / write_network_requests / write_console_events 每次调用立即 await flush_store**（不依赖批量 buffer），保证 MV3 SW 回收不丢数据。

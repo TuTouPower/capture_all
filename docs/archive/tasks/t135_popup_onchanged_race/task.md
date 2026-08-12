@@ -1,12 +1,12 @@
 ---
-tid: t135
-slug: popup_onchanged_race
+tid: "t135"
+slug: "popup_onchanged_race"
 title: "fix: popup stop 完成态不被 storage.onChanged 竞态覆盖"
-status: backlog
-branch: ""
+status: "done"
+branch: "t135_popup_onchanged_race"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "10d59918eeb5b1031d8ed0a4e06e7c2bf42f2e6e"
 depends_on: ""
 conflicts_with: ""
 note: "review H-12 (B5-H1, 2aaeec9 新增): onChanged 监听无法区分自写/外部写入，stop 完成态时序性被 ready 覆盖"
@@ -44,14 +44,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 14:43 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t135_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t135_test_f002|minor|遗留|一句话|pNNN|
+|t135_code_f001|important|已修|setTimeout(0) 复位与 onChanged 派发时序解耦，改为 storage 键 SELF_WRITE_KEY 确定性识别自写，监听消费后跳过|src/extension/popup/popup.ts:34,382,413,489-500|
+|t135_test_f001|important|已修|结构测试更新为 token 方案断言（SELF_WRITE_KEY 写入 + 监听消费跳过 + 外部路径保留）|tests/unit/popup_onchanged_race.test.ts|
+|t135_test_f002|minor|已修|消除固定字符窗口切片与死代码，改为定位 '});' 截取完整监听块|tests/unit/popup_onchanged_race.test.ts:34-63|
+|t135_test_f003|minor|已修|AC-003 补监听变更键筛选断言（area + is_capturing/current_capture）|tests/unit/popup_onchanged_race.test.ts:52-63|
+
+### Round 4 (2026-08-12 15:08 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t135_test_f005|minor|已修|AC-002 补 state 转 capturing 断言（外部变更后 load_state 置 capturing）|tests/unit/popup_onchanged_race.test.ts:141-160|
+|t135_test_f006|minor|已修|测试触发 start_timer 的 setInterval 在 afterEach 清理，防定时器泄漏|tests/unit/popup_onchanged_race.test.ts:afterEach|
+|t135_test_f007|minor|已修|AC-001 补最终态 saved 断言（stop 后 render 完成态）|tests/unit/popup_onchanged_race.test.ts:AC-001|
 
 ## 收尾报告
 
@@ -60,24 +68,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 真实 stop 链路终态 saved、AC-002 外部同步保留、AC-003 无关键不触发；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（setTimeout 时序不可靠，已改 token 方案）
+- Round 2 code：PASS
+- Round 1 test：FAIL（结构断言不可证）
+- Round 2 test：FAIL（token 方案未闭环）
+- Round 3 test：FAIL（手动注入 key 绕过生产接线）
+- Round 4 test：PASS（真实 stop 链路 + 消费验证）
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- popup 自写 storage 带 SELF_WRITE_KEY 标记，onChanged 监听确定性识别自写并消费跳过，消除 stop 完成态被竞态覆盖；外部 MCP/SW 变更仍同步。行为测试走真实 stop 链路。

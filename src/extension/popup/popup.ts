@@ -27,6 +27,11 @@ let current_capture: CaptureRecord | null = null;
 let finished_capture: CaptureRecord | null = null;
 let live_counts: CaptureStats | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+// t135: popup 自身写入 storage 的标记键。onChanged 监听检测该键即识别为自写、
+// 消费后跳过刷新，避免与 popup 本地状态（stop 后 state='saved'）竞争。
+// 采用 storage 键而非定时器复位——onChanged 派发与 set 返回时序解耦，
+// setTimeout(0) 会在自写 onChanged 到达前复位，无法可靠覆盖。
+const SELF_WRITE_KEY = '_popup_self_write';
 
 // Data label toggles — all ON by default, clickable only in 'ready' state
 const toggles: Record<string, boolean> = {
@@ -374,7 +379,7 @@ async function start_capture(): Promise<void> {
             updated_at: new Date().toISOString(),
         };
         live_counts = null;
-        chrome.storage.local.set({ is_capturing: true, current_capture, capture_toggles: toggles });
+        chrome.storage.local.set({ is_capturing: true, current_capture, capture_toggles: toggles, [SELF_WRITE_KEY]: Date.now() });
         state = 'capturing';
         render();
         start_timer();
@@ -405,7 +410,7 @@ async function stop_capture(): Promise<void> {
         }
         current_capture = null;
         live_counts = null;
-        chrome.storage.local.set({ is_capturing: false, current_capture: null });
+        chrome.storage.local.set({ is_capturing: false, current_capture: null, [SELF_WRITE_KEY]: Date.now() });
         await load_history();
         state = 'saved';
         render();
@@ -483,6 +488,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // MCP 通过 Bridge 触发 start/stop 时，service_worker 写 storage 让 popup 实时反映状态变化。
     chrome.storage.onChanged.addListener((changes, area) => {
         if (area !== 'local') return;
+        // t135: popup 自身写入带 SELF_WRITE_KEY 标记——确定性识别自写，消费后跳过刷新，
+        // 避免与本地状态（saved/ready）竞争。外部（SW/MCP）写入无此键，仍同步刷新。
+        if (SELF_WRITE_KEY in changes) {
+            void chrome.storage.local.remove(SELF_WRITE_KEY);
+            return;
+        }
         if (!('is_capturing' in changes) && !('current_capture' in changes)) return;
         const was_capturing = state === 'capturing';
         void load_state().then(() => {

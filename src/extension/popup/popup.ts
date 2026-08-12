@@ -5,7 +5,7 @@ import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { escape_html } from '../../shared/escape';
 import { load_user_config } from '../../shared/user_config';
-import { DEFAULT_USER_CONFIG } from '../../shared/constants';
+import { DEFAULT_USER_CONFIG, DEFAULT_CONFIG } from '../../shared/constants';
 import { format_system_time } from '../../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
@@ -340,11 +340,13 @@ function get_capture_config(): CaptureConfig {
         capture_response_body: user_config.capture_response_body,
         max_body_capture_bytes: user_config.max_body_capture_bytes,
         inline_text_max_bytes: user_config.inline_text_max_bytes,
-        redact_data: toggles.mask !== false,
-        // Redaction settings
-        redact_sensitive_headers: true,
-        redact_url_query: true,
-        sample_rate_ms: 50,
+        // t154 AC-012: redact_data 以 user_config 为底叠加 popup mask toggle——
+        // 设置页关闭脱敏时 popup 不能越过该底重新开启
+        redact_data: user_config.redact_data && toggles.mask !== false,
+        // t154 AC-012: 硬编码缺省改引 DEFAULT_CONFIG（user_config 无这些字段）
+        redact_sensitive_headers: DEFAULT_CONFIG.redact_sensitive_headers,
+        redact_url_query: DEFAULT_CONFIG.redact_url_query,
+        sample_rate_ms: DEFAULT_CONFIG.sample_rate_ms,
         // Toggle flags for config display (carried as extra keys)
         event_count_enabled: toggles.event_count !== false,
         nav_count_enabled: toggles.nav_count !== false,
@@ -395,10 +397,12 @@ async function stop_capture(): Promise<void> {
     try {
         const response = await send_ui_message('stop', {});
         if (!response?.success) {
-            logger.warn('stop returned success=false, forcing state transition');
-        } else {
-            logger.info('Capture stopped successfully');
+            // t154 AC-013: 失败不静默转完成态——提示具体原因，保持采集中（timer 继续跑）
+            logger.error('stop failed', response?.error);
+            alert(`${t('error')}: ${response?.error ?? 'Stop failed'}`);
+            return;
         }
+        logger.info('Capture stopped successfully');
         stop_timer();
         if (current_capture) {
             finished_capture = {
@@ -436,6 +440,25 @@ function stop_timer(): void {
     if (timer) { clearInterval(timer); timer = null; }
 }
 
+/** t154 AC-010: SW 已自动结束（bridge/MCP 触发 stop）时把本地状态降级为完成态。 */
+async function finish_capture_locally(): Promise<void> {
+    if (current_capture) {
+        finished_capture = {
+            ...current_capture,
+            status: 'completed',
+            ended_at: new Date().toISOString(),
+            duration_ms: Date.now() - new Date(current_capture.started_at).getTime(),
+            stats: live_counts ?? current_capture.stats,
+        };
+    }
+    current_capture = null;
+    live_counts = null;
+    stop_timer();
+    await load_history();
+    state = 'saved';
+    render();
+}
+
 async function refresh_counts(): Promise<void> {
     if (!is_extension || state !== 'capturing') return;
     // t153 AC-006: 单飞——上一轮 get_status 未完成则跳过，避免重叠轮询
@@ -443,6 +466,12 @@ async function refresh_counts(): Promise<void> {
     poll_in_flight = true;
     try {
         const status = await send_ui_message('get_status', {});
+        // t154 AC-010: SW 已自动结束但 storage 仍 is_capturing:true 时，以 status.is_capturing
+        // 校正本地状态（此前忽略该字段，popup 永久停在采集中且 live 计数恒 0）
+        if (status?.data && status.data.is_capturing === false) {
+            await finish_capture_locally();
+            return;
+        }
         const stats: CaptureStats | undefined = status?.data?.current_capture?.stats;
         if (stats) {
             live_counts = stats;
@@ -472,7 +501,11 @@ async function load_history(): Promise<void> {
 }
 
 async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
+    const result = await chrome.storage.local.get(['is_capturing', 'current_capture', 'capture_toggles']);
+    // t154 AC-011: 重开 popup 读回 capture_toggles 恢复开关（此前写后无人消费，toggles 恒复位全开）
+    if (result.capture_toggles && typeof result.capture_toggles === 'object') {
+        Object.assign(toggles, result.capture_toggles);
+    }
     if (result.is_capturing && result.current_capture) {
         current_capture = result.current_capture;
         state = 'capturing';

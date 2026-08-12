@@ -1,5 +1,6 @@
 // dashboard/dashboard_shared.ts — 共享工具函数和常量
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig } from '../../shared/types';
+import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { escape_html as esc } from '../../shared/escape';
 import { format_system_time } from '../../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
@@ -23,7 +24,9 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
 export const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
 // ── 共享状态（由 dashboard.ts 声明，模块通过 get/set 访问） ──────────────
-let _user_config: UserConfig;
+// t154 AC-006: 缺省初始化为 DEFAULT_USER_CONFIG——非扩展上下文（脱离 chrome 直接打开）下
+// init 不会调 set_user_config，此前 get_user_config() 返回 undefined 使 format_system_time 抛 TypeError。
+let _user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let _captures: CaptureRecord[] = [];
 let _page = 'captures';
 let _selected = new Set<string>();
@@ -95,6 +98,16 @@ export const set_cap_status_filter = (v: 'all' | 'capturing' | 'completed') => {
 export const get_dt_net_insp_closed = () => _dt_net_insp_closed;
 export const set_dt_net_insp_closed = (v: boolean) => { _dt_net_insp_closed = v; };
 
+// t154 AC-003: open_detail 按 capture_id 记忆上次 tab/view/quick 筛选。
+// 会话内存级（dashboard 重载后重置），由 open_detail 保存当前采集、打开新采集时恢复。
+interface DtMemory { tab: string; view: 'list' | 'trace'; quick: string; }
+const _dt_memory = new Map<string, DtMemory>();
+export const save_dt_memory = (id: string | null | undefined): void => {
+    if (!id) return;
+    _dt_memory.set(id, { tab: get_dt_tab(), view: get_dt_view(), quick: get_dt_quick() });
+};
+export const get_dt_memory = (id: string): DtMemory | undefined => _dt_memory.get(id);
+
 // ── helpers ─────────────────────────────────────────────────────────────
 export function num(n: number): string { return (n ?? 0).toLocaleString('en-US'); }
 export function strip_proto(u: string): string { return (u || '').replace(/^https?:\/\//, ''); }
@@ -107,7 +120,9 @@ export function dur_ms(ms: number): string {
 }
 export function capture_dur(s: CaptureRecord): string {
     if (!s.ended_at) return '—';
-    return dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
+    // t154 AC-008: ended_at < started_at 时差值可为负，clamp 0 避免渲染负时长
+    const ms = Math.max(0, new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
+    return dur_ms(ms);
 }
 export function capture_name(s: CaptureRecord): string {
     return s.name || `${format_system_time(s.started_at, get_user_config())}${t('captureNameSuffix')}`;
@@ -213,7 +228,8 @@ export async function load_captures(): Promise<void> {
     if (!is_extension) return;
     try {
         const resp = await send_ui_message('list_captures', {});
-        set_captures(resp?.data ?? []);
+        // t154 AC-005: 非数组响应防御——响应形状异常时降级为空列表，避免下游 .filter/.map 崩溃
+        set_captures(Array.isArray(resp?.data) ? resp.data : []);
     }
     catch { set_captures([]); }
     logger.debug('Captures loaded', { count: get_captures().length });

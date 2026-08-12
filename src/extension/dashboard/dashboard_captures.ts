@@ -45,6 +45,9 @@ function render_captures(): string {
     ];
     const rows = captures.map((s) => {
         const id = esc(s.capture_id);
+        // t154 AC-002: 活跃采集 SW 拒绝删除——行内删除按钮禁用并给提示（SW 侧 T110 guard）
+        const is_active = s.status === 'capturing';
+        const del_btn = `<button class="ibtn" title="${is_active ? t('activeCaptureNoDelete') : t('delete')}" data-del="${id}" ${is_active ? 'disabled' : ''}>${I.trash}</button>`;
         return `<tr data-open="${id}" data-sel="${selected.has(s.capture_id) ? 1 : 0}">
             <td class="col-chk" data-stop="1"><input type="checkbox" class="ck" data-chk="${id}" ${selected.has(s.capture_id) ? 'checked' : ''}></td>
             <td><span class="cap-name">${s.status === 'capturing' ? `<span class="recdot" title="${t('capturing')}"></span>` : ''}<b>${esc(capture_name(s))}</b></span></td>
@@ -60,12 +63,12 @@ function render_captures(): string {
             <td class="col-num mono">${fmt_size(est_bytes(s))}</td>
             <td class="col-act" data-stop="1"><span class="rowact">
                 <button class="ibtn" title="${t('exportLabel')}" data-export="${id}">${I.download}</button>
-                <button class="ibtn" title="${t('delete')}" data-del="${id}">${I.trash}</button>
+                ${del_btn}
             </span></td>
         </tr>`;
     }).join('');
     const empty = `<tr><td colspan="13" style="text-align:center;color:var(--ink-4);padding:40px">${t('noCaptureRecords')}</td></tr>`;
-    const cur_search = get_cap_search().replace(/"/g, '&quot;');
+    const cur_search = get_cap_search();
     const cur_sf = get_cap_status_filter();
     const sf_label = cur_sf === 'all' ? t('allFilter') : (cur_sf === 'capturing' ? t('capturing') : t('completed'));
     return `<div class="page">
@@ -171,14 +174,27 @@ function wire_captures(): void {
     c.querySelector('#batchExport')?.addEventListener('click', () => selected.forEach((id) => export_capture(id)));
     c.querySelector('#batchDel')?.addEventListener('click', async () => {
         if (!selected.size || !confirm(t('deleteSelectedConfirm'))) return;
-        for (const id of selected) await send_ui_message('delete_capture', { capture_id: id });
+        // t154 AC-002: 逐条检查 SW 响应——活跃采集被拒时提示并保留剩余选中，不全清
+        for (const id of selected) {
+            const resp = await send_ui_message('delete_capture', { capture_id: id });
+            if (!resp?.success) {
+                alert(`${t('error')}: ${resp?.error ?? t('deleteFailed')}`);
+                await load_captures(); router.render_content();
+                return;
+            }
+        }
         selected.clear(); await load_captures(); router.render_content();
     });
 }
 
 async function del_capture(id: string): Promise<void> {
     if (!is_extension || !confirm(t('deleteCaptureConfirm'))) return;
-    await send_ui_message('delete_capture', { capture_id: id });
+    // t154 AC-002: 检查 SW 响应——活跃采集被拒时提示具体原因，不从选中集移除
+    const resp = await send_ui_message('delete_capture', { capture_id: id });
+    if (!resp?.success) {
+        alert(`${t('error')}: ${resp?.error ?? t('deleteFailed')}`);
+        return;
+    }
     get_selected().delete(id);
     await load_captures(); router.render_content();
 }

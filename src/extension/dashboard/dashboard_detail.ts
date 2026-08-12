@@ -12,6 +12,7 @@ import {
     get_dt_quick, set_dt_quick, get_dt_sel, set_dt_sel,
     get_dt_insp_open, set_dt_insp_open, get_dt_play, set_dt_play,
     get_dt_net_sel, set_dt_net_sel, get_dt_net_insp_closed, set_dt_net_insp_closed,
+    save_dt_memory, get_dt_memory,
     set_page,
     load_detail, export_capture,
     router,
@@ -167,8 +168,9 @@ function render_dt_list(): string {
         const isErr = event_kind(e) === 'error' || (e.type === 'console_event' && (e.data as Record<string, unknown>)?.level === 'error');
         const d = (e.data || {}) as Record<string, unknown>;
         const status = e.type === 'network_request' ? (d.status_code as number | undefined) : undefined;
+        // t154 AC-009: status 为事件数据，数值校验 + esc() 转义（纵深缺口，M6）
         const detailCell = status != null
-            ? `<span><span class="status-pill" data-ok="${status < 400 ? 1 : 0}">${status}</span><span class="ev-ms">${d.duration_ms != null ? Math.round(d.duration_ms as number) + 'ms' : ''}</span></span>`
+            ? `<span><span class="status-pill" data-ok="${Number(status) < 400 ? 1 : 0}">${esc(String(status))}</span><span class="ev-ms">${d.duration_ms != null ? Math.round(d.duration_ms as number) + 'ms' : ''}</span></span>`
             : `<span class="ev-detail" title="${esc(event_detail(e))}">${esc(event_detail(e))}</span>`;
         const idx = idx_map.get(e) ?? -1;
         return `<tr data-ev="${idx}" data-sel="${dt_sel === idx ? 1 : 0}">
@@ -367,7 +369,7 @@ function render_net_inspector(selected_net_idx = get_dt_net_sel()): string {
                 <div class="dti-field"><span class="k">${t('duration')}</span><span class="v mono">${req.duration_ms != null ? Math.round(req.duration_ms) + ' ms' : '—'}</span></div>
                 <div class="dti-field"><span class="k">${t('protocol')}</span><span class="v mono">${esc(req.protocol || '—')}</span></div>
                 <div class="dti-field"><span class="k">MIME</span><span class="v mono">${esc(req.mime_type || '—')}</span></div>
-                <div class="dti-field"><span class="k">${t('cache')}</span><span class="v mono">${req.from_cache ? 'from ' + (req.cache_status || 'cache') : 'no cache'}</span></div>
+                <div class="dti-field"><span class="k">${t('cache')}</span><span class="v mono">${req.from_cache ? 'from ' + esc(req.cache_status || 'cache') : 'no cache'}</span></div>
                 <div class="dti-field"><span class="k">${t('captureMethod')}</span><span class="v mono">${esc(req.capture_method || '—')}</span></div>
             </div>
             <div class="dti-field span2" style="margin-top:4px"><span class="k">${t('url')}</span><span class="v mono" style="word-break:break-all">${esc(req.url)}</span></div>
@@ -496,7 +498,11 @@ function wire_detail(): void {
         const fmt = (c.querySelector('#dtExportFmt') as HTMLSelectElement)?.value || 'json';
         detail_capture && export_capture(detail_capture.capture_id, fmt);
     });
-    c.querySelector('[data-open-url]')?.addEventListener('click', () => { const u = detail_capture?.start_url; if (u) chrome.tabs.create({ url: u }); });
+    c.querySelector('[data-open-url]')?.addEventListener('click', () => {
+        const u = detail_capture?.start_url;
+        // t154 AC-004: start_url 来自采集数据，仅 http/https 可打开，其余拒绝
+        if (u && /^https?:\/\//i.test(u)) chrome.tabs.create({ url: u });
+    });
     c.querySelector('[data-nav-settings]')?.addEventListener('click', () => router.go('settings'));
     c.querySelectorAll('[data-netidx]').forEach((row) => row.addEventListener('click', () => {
         set_dt_net_sel(Number((row as HTMLElement).dataset.netidx));
@@ -549,9 +555,15 @@ function wire_rail_resize(c: HTMLElement): void {
             localStorage.setItem(STORAGE_KEY, String(Math.round(rail.getBoundingClientRect().width)));
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            document.removeEventListener('mouseleave', onUp);
         };
+        // t154 AC-007: pointercancel/mouseleave 也触发清理——鼠标移出窗口释放时 mouseup 可能不派发，
+        // 不清理会导致拖拽状态残留
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        document.addEventListener('mouseleave', onUp);
     });
 }
 
@@ -590,9 +602,15 @@ function wire_network_resize(c: HTMLElement): void {
             localStorage.setItem(STORAGE_KEY, String(Math.round(insp.getBoundingClientRect().width)));
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            document.removeEventListener('mouseleave', onUp);
         };
+        // t154 AC-007: pointercancel/mouseleave 也触发清理——鼠标移出窗口释放时 mouseup 可能不派发，
+        // 不清理会导致拖拽状态残留
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        document.addEventListener('mouseleave', onUp);
     });
 }
 
@@ -799,7 +817,12 @@ export function _render_dt_inspector_for_test(): string {
 }
 
 async function open_detail(id: string): Promise<void> {
+    // t154 AC-003: 先保存当前采集（若已打开详情）的 tab/view/quick，供下次打开恢复
+    save_dt_memory(get_detail_capture()?.capture_id);
     set_page('detail'); set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all'); set_dt_sel(-1); set_dt_insp_open(false);
     await load_detail(id);
+    // 按 capture_id 恢复上次 tab/view/quick（若有记忆）
+    const mem = get_dt_memory(id);
+    if (mem) { set_dt_tab(mem.tab); set_dt_view(mem.view); set_dt_quick(mem.quick); }
     router.render_shell();
 }

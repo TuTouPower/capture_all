@@ -1,12 +1,12 @@
 ---
-tid: t154
-slug: dashboard_misc_fixes
+tid: "t154"
+slug: "dashboard_misc_fixes"
 title: "fix: dashboard/popup 小修复集"
-status: backlog
-branch: ""
+status: "done"
+branch: "t154_dashboard_misc_fixes"
 worktree: ""
-review_level: single
-diff_anchor: ""
+review_level: "single"
+diff_anchor: "37cd9f11dd9cbcfcb786d07c3f5fab3693fb6391"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 聚合：B4-M4 双转义、B4-M7 删除响应、B4-M14 视图记忆、B4-L2/L3/L4/L7/L9、B4-M6/L1 esc、B5-L1/L4/L5/L7"
@@ -22,7 +22,11 @@ note: "intensive-review 聚合：B4-M4 双转义、B4-M7 删除响应、B4-M14 �
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- 13 项 AC 全部按 review finding 落位实施（intensive-review B4-M4/M7/M14/L2/L3/L4/L7/L9/M6/L1 + B5-L1/L4/L5）。
+- AC-006 选在 dashboard_shared 层 `_user_config` 缺省初始化为 DEFAULT_USER_CONFIG（get_user_config() 永不 undefined），比改 init() 分支更根本且可单测。
+- AC-012 redact_data 语义取「user_config.redact_data && mask toggle」：设置页关闭脱敏时 popup 不能越过该底重开（消除「toggle 覆盖 user_config」的 finding 根因）。
+- AC-010 仅校正 refresh_counts；popup onChanged 竞态（B5-H1）不在本 task 范围，未动。
+- 新增 i18n 键 deleteFailed / activeCaptureNoDelete（en/zh）。
 
 ## Review 处置
 
@@ -44,14 +48,13 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-13 03:13 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t154_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t154_test_f002|minor|遗留|一句话|pNNN|
+|t154_gen_f001|minor|已修|AC-003 用例名不副实，改名为实际行为（无当前 detail 时 save no-op）|t154_dashboard_misc.test.ts|
+|t154_gen_f002|minor|遗留|dashboard_detail wire_rail_resize/wire_network_resize 清理无测试（代码复核正确），登记 p041|p041|
+|t154_gen_f003|minor|遗留|batchDel 中途失败选中残留，登记 p040|p040|
 
 ## 收尾报告
 
@@ -60,24 +63,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001-013 dashboard/popup 小修复；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
-`full`：
-
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：PASS（3 minor：f001 已修 + f002/f003 遗留登记）
+- Round 2 general：PASS
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+遗留不在此列出——见 `docs/pending/todo/`（p040/p041），本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- dashboard/popup 13 项小修复：搜索双引号、删除响应检查、open_detail 记忆、start_url scheme 校验、load_captures 防御、非扩展上下文、resize 清理、capture_dur clamp、status 徽章 esc、popup 状态校正/capture_toggles 恢复/配置缺省/stop 失败提示。

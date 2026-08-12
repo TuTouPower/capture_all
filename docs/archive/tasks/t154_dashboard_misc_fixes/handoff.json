@@ -1,0 +1,67 @@
+{
+  "tid": "t154",
+  "attempt": 1,
+  "execution_id": "ec527b9afb0b43c8a967310c954f17e9",
+  "status": "done",
+  "branch": "t154_dashboard_misc_fixes",
+  "base_sha": "37cd9f11dd9cbcfcb786d07c3f5fab3693fb6391",
+  "tests": "vitest run: 154 files / 1565 tests passed",
+  "blackbox": "npx tsc --noEmit exit 0",
+  "review": "Round 1 general PENDING（single 级 review 于执行 commit 后运行，待 reviewer 更新本字段与 task.md 处置表）",
+  "ac_evidence": {
+    "AC-001": [
+      "src/extension/dashboard/dashboard_captures.ts render_captures 删除 get_cap_search().replace(/\\\"/g,'&quot;')，仅 esc() 单转义",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-001」：搜索含双引号渲染 value=\"a&quot;b\" 且不含 &amp;quot;"
+    ],
+    "AC-002": [
+      "dashboard_captures.ts del_capture/batchDel 检查 send_ui_message('delete_capture') 响应 success，失败 alert 具体错误且不移除选中；活跃(capturing)行删除按钮 disabled + title 提示",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-002」三用例：活跃行 disabled / success=false alert+保留选中 / 成功移除选中"
+    ],
+    "AC-003": [
+      "dashboard_shared.ts 新增 save_dt_memory/get_dt_memory（按 capture_id 记忆 tab/view/quick，会话内存级）；dashboard_detail.ts open_detail 打开前保存当前采集、加载后恢复上次状态",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-003」三用例：默认 timeline/list / 记忆恢复 network+trace+error / 打开新采集不污染"
+    ],
+    "AC-004": [
+      "dashboard_detail.ts open-url 按钮 start_url 仅 /^https?:\\/\\// 才 chrome.tabs.create，其余拒绝",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-004」：https 打开、javascript: 不调用 tabs.create"
+    ],
+    "AC-005": [
+      "dashboard_shared.ts load_captures 用 Array.isArray(resp?.data) 校验，非数组降级为空列表",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-005」两用例：非数组响应 get_captures()===[] / 数组透传"
+    ],
+    "AC-006": [
+      "dashboard_shared.ts _user_config 缺省初始化为 DEFAULT_USER_CONFIG——非扩展上下文 init 不调 set_user_config 时 format_system_time 不再抛 TypeError",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-006」：未调 set_user_config 渲染采集列表不抛 TypeError"
+    ],
+    "AC-007": [
+      "sidebar_resize.ts + dashboard_detail.ts wire_rail_resize/wire_network_resize 补 pointercancel/mouseleave 清理（移除监听 + 复位 dragging）",
+      "tests/unit/sidebar_resize.test.ts「pointercancel/mouseleave 触发清理」两用例：取消后 dragging 复位、后续 mousemove 不更新"
+    ],
+    "AC-008": [
+      "dashboard_shared.ts capture_dur 差值 Math.max(0, …) clamp，ended_at<started_at 渲染 00:00:00",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-008」两用例：负时长 clamp / 正常正时长"
+    ],
+    "AC-009": [
+      "dashboard_detail.ts render_dt_list status 徽章 esc(String(status)) + Number 校验；render_net_inspector cache_status esc()",
+      "tests/unit/t154_dashboard_misc.test.ts「AC-009」两用例：status 向量被转义、cache_status 向量被转义"
+    ],
+    "AC-010": [
+      "popup.ts refresh_counts 检查 status.data.is_capturing===false 时经 finish_capture_locally 降级为完成态（此前忽略该字段，SW 已自动结束但 popup 停在采集中且计数恒 0）",
+      "tests/unit/t154_popup_state_fixes.test.ts「AC-010」两用例：is_capturing:false 降级 saved / is_capturing:true 保持采集中"
+    ],
+    "AC-011": [
+      "popup.ts load_state 读回 capture_toggles 并 Object.assign 恢复 toggles（此前写后无消费，重开复位全开）",
+      "tests/unit/t154_popup_state_fixes.test.ts「AC-011」：storage 恢复后 mask/event_count 卡片 off 且 start 配置反映"
+    ],
+    "AC-012": [
+      "popup.ts get_capture_config redact_sensitive_headers/redact_url_query/sample_rate_ms 改引 DEFAULT_CONFIG；redact_data 以 user_config.redact_data 为底叠加 mask toggle",
+      "tests/unit/t154_popup_state_fixes.test.ts「AC-012」三用例：user_config 关脱敏时 popup 不能重开 / mask 关时关闭 / 缺省值等于 DEFAULT_CONFIG"
+    ],
+    "AC-013": [
+      "popup.ts stop_capture 失败（success=false）alert 具体错误并 return，不静默转完成态（timer 继续跑）",
+      "tests/unit/t154_popup_state_fixes.test.ts「AC-013」两用例：失败 alert+保持采集中+不写 is_capturing:false / 成功仍转完成态"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

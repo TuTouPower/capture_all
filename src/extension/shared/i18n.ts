@@ -157,6 +157,8 @@ export interface I18nStrings {
     clearSelection: string;
     deleteSelectedConfirm: string;
     deleteCaptureConfirm: string;
+    deleteFailed: string;
+    activeCaptureNoDelete: string;
 
     // Dashboard — detail
     overview: string;
@@ -411,6 +413,8 @@ const en: I18nStrings = {
     clearSelection: 'Clear selection',
     deleteSelectedConfirm: 'Delete selected capture records?',
     deleteCaptureConfirm: 'Delete this capture record?',
+    deleteFailed: 'Delete failed',
+    activeCaptureNoDelete: 'Active capture cannot be deleted',
 
     // Dashboard — detail
     overview: 'Overview',
@@ -666,6 +670,8 @@ const zh: I18nStrings = {
     clearSelection: '清除选择',
     deleteSelectedConfirm: '确定删除选中的采集记录？',
     deleteCaptureConfirm: '确定删除此采集记录？',
+    deleteFailed: '删除失败',
+    activeCaptureNoDelete: '采集进行中不可删除',
 
     // Dashboard — detail
     overview: '概览',

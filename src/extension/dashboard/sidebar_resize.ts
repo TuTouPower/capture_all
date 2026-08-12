@@ -48,13 +48,19 @@ export function wire_sidebar_resize(opts: SidebarResizeOpts): void {
             document.body.style.userSelect = '';
             window.removeEventListener('mousemove', on_move);
             window.removeEventListener('mouseup', on_up);
+            window.removeEventListener('pointercancel', on_up);
+            document.removeEventListener('mouseleave', on_up);
             // Persist
             const current = parseFloat(root.style.getPropertyValue(css_var)) || default_px;
             localStorage.setItem(storage_key, String(Math.round(current)));
         };
 
+        // t154 AC-007: pointercancel/mouseleave 也触发清理——鼠标移出窗口释放时 mouseup 可能不派发，
+        // 不清理会让 dragging 状态卡死
         window.addEventListener('mousemove', on_move);
         window.addEventListener('mouseup', on_up);
+        window.addEventListener('pointercancel', on_up);
+        document.addEventListener('mouseleave', on_up);
     });
 
     // Double-click to reset

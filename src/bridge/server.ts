@@ -1,8 +1,8 @@
 import http from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
@@ -29,6 +29,7 @@ interface ExtensionInstance {
     browser_label: string | null;
     token_hash: string | null;
     seen_at: number;
+    origin_extension_id: string | null;
 }
 
 interface CommandRequest {
@@ -286,6 +287,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 // T091: label 为空时按现有在线实例自动分配中文默认编号（一/二/三…）。
                 // Replace any existing binding with the same non-empty label (extension restart path);
                 // 自定义 label 顶替旧实例；自动编号 label 不会冲突（next_default_label 已避开占用）。
+                // t137: Origin 扩展 ID 提取（label 顶替与 instance_id 顶替校验共用）
+                const ext_id = has_ext_origin ? extension_id_from_origin(origin!) : null;
                 const provided_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
                 const new_label = provided_label ?? next_default_label(
                     [...instances.values()]
@@ -295,6 +298,11 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 if (provided_label) {
                     for (const [id, inst] of [...instances.entries()]) {
                         if (id !== instance_id && inst.browser_label === new_label) {
+                            // t137: label 顶替删除旧实例前校验 origin 绑定——伪造 origin 不得踢下线已绑定扩展的真实实例
+                            if (inst.origin_extension_id !== null && ext_id !== null
+                                && inst.origin_extension_id !== ext_id) {
+                                continue;
+                            }
                             instances.delete(id);
                             const old_queue = queues.get(id);
                             if (old_queue) {
@@ -311,6 +319,26 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     }
                 }
 
+                // t137: 已有 instance_id 时校验 Origin 扩展 ID 绑定（s003 spike 结论）——
+                // 同扩展重启重 enroll 用同 Origin 扩展 ID 放行；伪造 origin 顶替因扩展 ID 不匹配被拒。
+                const existing = instances.get(instance_id);
+                if (existing) {
+                    if (ext_id === null) {
+                        // 无扩展 origin（mcp token 路径）无法验证扩展绑定，不允许顶替既有实例
+                        return send_json(response, 403, {
+                            ok: false,
+                            error: { code: 'TOKEN_INVALID', message: 'Re-enroll requires matching chrome-extension origin' },
+                        });
+                    }
+                    if (existing.origin_extension_id !== null && existing.origin_extension_id !== ext_id) {
+                        // 扩展 ID 与首次登记不一致 → 攻击顶替
+                        return send_json(response, 403, {
+                            ok: false,
+                            error: { code: 'TOKEN_INVALID', message: 'Origin extension id mismatch: re-enroll rejected' },
+                        });
+                    }
+                }
+
                 instances.set(instance_id, {
                     instance_id,
                     extension_version: body.extension_version,
@@ -318,6 +346,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     browser_label: new_label,
                     token_hash,
                     seen_at: Date.now(),
+                    origin_extension_id: ext_id,
                 });
                 get_or_create_queue(instance_id);
 
@@ -382,8 +411,15 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 );
                 // 检测 label 变化：若新 label 与其他实例冲突则顶替（与 enroll 一致）
                 if (new_label) {
+                    // t137: heartbeat 顶替校验 origin 绑定——用被认证实例自身绑定的扩展 ID（而非请求 Origin，
+                    // 因无 Origin 客户端可绕过）。伪造 origin 不得经 label 顶替删真实实例。
+                    const hb_ext_id = prev?.origin_extension_id ?? null;
                     for (const [id, inst] of [...instances.entries()]) {
                         if (id !== body.instance_id && inst.browser_label === new_label) {
+                            if (inst.origin_extension_id !== null && hb_ext_id !== null
+                                && inst.origin_extension_id !== hb_ext_id) {
+                                continue;
+                            }
                             instances.delete(id);
                             const old_queue = queues.get(id);
                             if (old_queue) {
@@ -403,6 +439,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     browser_label: new_label,
                     token_hash: prev?.token_hash ?? null,
                     seen_at: Date.now(),
+                    origin_extension_id: prev?.origin_extension_id ?? null,
                 });
                 get_or_create_queue(body.instance_id);
                 return send_json(response, 200, { ok: true });
@@ -464,6 +501,10 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
             if (request.method === 'POST' && request.url === '/mcp/command') {
                 const body = validate_command_request(await read_json(request));
+                // t137: explicit output_path 尽早校验（resolve_target 之前），防穿越路径进入导出写盘
+                if (typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0) {
+                    await safe_output_path(body.payload.output_path, default_export_dir());
+                }
                 const is_write = WRITE_COMMANDS.has(body.type);
                 const target = resolve_target(body.payload, is_write);
                 if ('error' in target) {
@@ -491,7 +532,10 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     const size_bytes = Buffer.byteLength(content, 'utf-8');
 
                     if (explicit_path || size_bytes > INLINE_RESULT_MAX_BYTES) {
-                        const output_path = explicit_path || await resolve_auto_output_path(body.payload);
+                        // t137: explicit 路径约束到导出目录内（含符号链接收敛），防路径穿越任意写
+                        const output_path = explicit_path
+                            ? await safe_output_path(explicit_path, default_export_dir())
+                            : await resolve_auto_output_path(body.payload);
                         const written = await write_result_to_file(result, output_path, content);
                         return send_json(response, 200, written);
                     }
@@ -552,6 +596,12 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
 function is_allowed_extension_origin(origin: string): boolean {
     return /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+}
+
+// 从 chrome-extension://<id> 提取扩展 ID（已校验形状）。
+function extension_id_from_origin(origin: string): string | null {
+    const m = origin.match(/^chrome-extension:\/\/([a-p]{32})$/);
+    return m ? m[1] : null;
 }
 
 function set_cors_headers(
@@ -776,6 +826,41 @@ async function resolve_auto_output_path(payload: Record<string, unknown>): Promi
     const safe_id = capture_id.replace(/[^a-zA-Z0-9._-]/g, '_');
     return join(dir, `${safe_id}.${format}`);
 }
+
+// t137: explicit output_path 约束到导出目录内，防路径穿越与符号链接任意写。
+// realpath 解析符号链接后校验真实路径在 base 内（path.resolve 纯词法不解析链接）。
+async function safe_output_path(raw: string, base: string): Promise<string> {
+    const resolved = resolve(base, raw);
+    if (resolved !== base && !resolved.startsWith(base + sep)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path must be inside export dir');
+    }
+    // 父目录 realpath 收敛（目标文件可能不存在）：解析已存在的最深父目录真实路径。
+    // base 本身须先 realpath——base 含符号链接组件（如 macOS /tmp→/private/tmp）时词法与真实路径不一致。
+    const base_real = await realpath(base);
+    let real_parent = base_real;
+    let remaining = raw;
+    let guard = 0;
+    while (remaining.length > 0 && guard < 64) {
+        const next = resolve(real_parent, remaining.split(sep)[0]);
+        try {
+            const rp = await realpath(next);
+            real_parent = rp;
+            const parts = remaining.split(sep);
+            parts.shift();
+            remaining = parts.join(sep);
+        } catch {
+            break; // 该段不存在，停止收敛
+        }
+        guard += 1;
+    }
+    const resolved_real = resolve(real_parent, remaining);
+    if (resolved_real !== base_real && !resolved_real.startsWith(base_real + sep)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path resolves outside export dir');
+    }
+    return resolved;
+}
+
+export const _safe_output_path_for_test = safe_output_path;
 
 async function write_result_to_file(
     result: AgentCommandResult,

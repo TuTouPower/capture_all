@@ -74,7 +74,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- UNVERIFIED-SPIKE: 合法重启重 enroll 与攻击顶替的可区分信号（Origin 扩展 ID 绑定 vs 旧 token 出示）——task-work Step 1 实验/设计后定
+- 结论（s003 spike 核实，2026-08-12）：扩展 instance_id 为 chrome.storage 会话持久化 uuid，重启不换；重 enroll 以「首次登记该 instance_id 的 Origin 扩展 ID」为绑定信号——同扩展重启用同 Origin 扩展 ID 放行，伪造 origin 顶替因扩展 ID 不匹配被拒。验证方式：单测（伪造 Origin 不同扩展 ID → 拒绝；同扩展 ID → 允许）。
 
 ### 风险与回退
 

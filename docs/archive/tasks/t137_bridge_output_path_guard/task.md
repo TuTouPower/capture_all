@@ -2,11 +2,11 @@
 tid: "t137"
 slug: "bridge_output_path_guard"
 title: "security: bridge 本地攻击面收敛（output_path + enroll 顶替）"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t137_bridge_output_path_guard"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "336d88dd4ea11dcd24d15ab2b62150362d99b673"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 合并：H-1 output_path 任意写 + H-2 伪造 origin 顶替实例"
@@ -44,14 +44,26 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 17:38 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t137_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t137_test_f002|minor|遗留|一句话|pNNN|
+|t137_code_f001|important|已修|heartbeat label 顶替补 origin 绑定防护（与 enroll 对齐，伪造 origin 不删真实实例）|src/bridge/server.ts:412-435|
+|t137_code_f002|important|已修|safe_output_path 改 realpath 收敛解析符号链接，穿越校验真实路径|src/bridge/server.ts:832-870|
+|t137_code_f003|minor|已修|capture_id 三目超长行格式化回退|src/bridge/server.ts:811|
+|t137_test_f001|important|已修|AC-008 改 token heartbeat 判别（原 enroll 重入判别假绿）|tests/unit/t137_bridge_security.test.ts:AC-008|
+|t137_test_f002|important|已修|补符号链接穿越测试（realpath 收敛拒绝）|tests/unit/t137_bridge_security.test.ts:AC-002b|
+|t137_test_f003|minor|已修|AC-002 改 safe_output_path 函数级验证（相对路径通过）|tests/unit/t137_bridge_security.test.ts:AC-002|
+|t137_test_f004|minor|已修|补 AC-004 无 Origin 重 enroll 403 用例|tests/unit/t137_bridge_security.test.ts:AC-004|
+
+### Round 3 (2026-08-12 17:55 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t137_test_f005|important|已修|补 AC-008b heartbeat 伪造 origin label 顶替判别用例|tests/unit/t137_bridge_security.test.ts:AC-008b|
+|t137_code_f004|important|已修|heartbeat 顶替校验改用被认证实例自身 origin_extension_id（无 Origin 不可绕过）|src/bridge/server.ts:416|
+|t137_code_f005|important|已修|safe_output_path base 先 realpath（macOS /tmp symlink 不误拒）|src/bridge/server.ts:838-839|
+|t137_code_f006|minor|已修|safe_output_path 函数首行折叠格式化|src/bridge/server.ts:832|
 
 ## 收尾报告
 
@@ -60,24 +72,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001-008 覆盖 output_path 路径穿越防护（含符号链接）与 enroll/heartbeat 伪造 origin 顶替防护（token 判别）；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（heartbeat 未防护 + 符号链接绕过）
+- Round 2 code：FAIL（无 Origin heartbeat 绕过 + base realpath 不对称）
+- Round 3 code：PASS
+- Round 1 test：FAIL（AC-008 假绿）
+- Round 2 test：FAIL（heartbeat 顶替无判别用例）
+- Round 3 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- bridge 本地攻击面收敛：output_path 经 realpath 收敛防路径穿越/符号链接任意写；enroll 与 heartbeat 的 instance_id/label 顶替均校验 Origin 扩展 ID 绑定（s003 spike 结论 d004），伪造 origin 无法顶替真实实例。

@@ -1,0 +1,23 @@
+{
+  "tid": "t137",
+  "attempt": 1,
+  "execution_id": "d4a9640000044a64b42111ca0a023e65",
+  "status": "done",
+  "branch": "t137_bridge_output_path_guard",
+  "base_sha": "336d88dd4ea11dcd24d15ab2b62150362d99b673",
+  "tests": "npm test：全量 passed + bridge 专项 95 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code FAIL/test FAIL → Round 2 code FAIL/test FAIL → Round 3 code PASS/test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t137_bridge_security.test.ts AC-001/001b：绝对路径/../ 穿越被 400 拒绝"],
+    "AC-002": ["tests/unit/t137_bridge_security.test.ts AC-002/002b：相对路径通过、符号链接穿越被 realpath 拒绝"],
+    "AC-003": ["既有导出流程测试（agent_bridge_server）保持通过，自动路径行为不变"],
+    "AC-004": ["tests/unit/t137_bridge_security.test.ts AC-004：无 Origin 重 enroll 既有绑定实例 403"],
+    "AC-005": ["tests/unit/t137_bridge_security.test.ts AC-005：不同 Origin 扩展 ID 重顶替被拒"],
+    "AC-006": ["tests/unit/t137_bridge_security.test.ts AC-006：首次 enroll 零配置保留"],
+    "AC-007": ["tests/unit/t137_bridge_security.test.ts AC-007：同 Origin 扩展 ID 重 enroll 放行"],
+    "AC-008": ["tests/unit/t137_bridge_security.test.ts AC-008/008b：伪造 origin 经 label 顶替（enroll 与 heartbeat）不删真实实例（token 判别）"]
+  },
+  "pending": [],
+  "findings": ["d004"]
+}

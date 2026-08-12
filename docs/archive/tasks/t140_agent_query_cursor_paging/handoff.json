@@ -1,0 +1,26 @@
+{
+  "tid": "t140",
+  "attempt": 1,
+  "execution_id": "e1f5ec99e8d343328f3d118130676ddc",
+  "status": "done",
+  "branch": "t140_agent_query_cursor_paging",
+  "base_sha": "7daf059d0b98bd82ca5ff1dfe0a43a18d512303f",
+  "tests": "npm test：1426 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code FAIL/test FAIL → Round 2 code PASS/test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t140_resource_budget.test.ts AC-004：query_by_store 用 index.openCursor 无 index.getAll( 调用"],
+    "AC-002": ["tests/unit/t140_resource_budget.test.ts AC-002：fake-indexeddb 12 条跨页 5/5/2 不丢不重"],
+    "AC-003": ["既有 agent_data_queries 测试保持通过，查询结果一致"],
+    "AC-004": ["tests/unit/t140_resource_budget.test.ts AC-004：无 getAll 全量（源码断言 + 行为查询）"],
+    "AC-005": ["tests/unit/t140_resource_budget.test.ts AC-005：64MiB 行为测试（fetch spy 断言 POST body 为 PAYLOAD_TOO_LARGE）"],
+    "AC-006": ["既有导出文件回退路径测试保持通过（≤64MiB 结果正常）"],
+    "AC-007": ["既有 agent_bridge_client 测试保持通过（正常结果投递）"],
+    "AC-008": ["既有 agent 查询/投递测试保持通过"],
+    "AC-009": ["tests/unit/t140_resource_budget.test.ts AC-009：enforce_body_budget 超预算丢最旧"],
+    "AC-010": ["tests/unit/t140_resource_budget.test.ts AC-010：预算内全部保留"],
+    "AC-011": ["既有 cdp_handler 测试保持通过"]
+  },
+  "pending": ["p034"],
+  "findings": []
+}

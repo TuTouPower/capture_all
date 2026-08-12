@@ -20,6 +20,7 @@ export const STORE_NAMES = {
 export const MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 export const MAX_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const MAX_BODY_CAPTURE_BYTES = 100 * 1024 * 1024; // 100MB
+export const MAX_EXTENSION_RESULT_BODY_BYTES = 64 * 1024 * 1024; // 64MiB，扩展结果回传上限（与 bridge server 一致）
 export const INLINE_TEXT_MAX_BYTES = 32 * 1024; // 32KB
 export const MAX_CONSOLE_ARG_BYTES = 1024; // 1KB
 export const MAX_LOG_ENTRY_BYTES = 64 * 1024; // 64KB，单条日志 details/message 字符串上限

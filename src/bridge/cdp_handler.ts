@@ -15,6 +15,7 @@ interface CdpSession {
     events: CdpStoredEvent[];
     created_at: number;
     max_body_bytes: number;
+    body_bytes: number;
     redact_sensitive_headers: boolean;
     redact_url_query: boolean;
     connect_error: string | null; // T062: ws onerror/onclose 时记录
@@ -46,6 +47,12 @@ const MAX_EVENTS_PER_POLL = 100;
 // T101: idle TTL（活动刷新，非固定墙钟）；events 上限防无界增长
 const CDP_SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
 const MAX_SESSION_EVENTS = 5000;
+// t140: 会话级 body 总字节预算——单条 body 可到 100MB，事件数有界但总内存无聚合上限（最坏 500GB）。
+const MAX_SESSION_BODY_BYTES = 200 * 1024 * 1024; // 200MB 会话聚合
+let _max_session_body_bytes = MAX_SESSION_BODY_BYTES;
+export function _set_max_session_body_bytes_for_test(cap: number): void {
+    _max_session_body_bytes = cap;
+}
 // T101 测试钩子：jsdom 下需小 cap 触发淘汰分支
 let _max_session_events = MAX_SESSION_EVENTS;
 export function _set_max_session_events_for_test(cap: number): void {
@@ -58,7 +65,23 @@ export const _eviction_count = { value: 0 };
 function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
     session.events.push(event);
     if (session.events.length > _max_session_events) {
-        session.events.splice(0, session.events.length - _max_session_events);
+        const removed = session.events.shift();
+        if (removed && typeof removed.response_body === 'string') {
+            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+        }
+        _eviction_count.value += 1;
+    }
+}
+
+// t140: body 总字节预算——单条 body 100MB × 5000 条最坏 500GB，聚合字节超限丢最旧带 body 事件。
+// 在 getResponseBody 回写后调用（body 此时才实际入事件）。
+export const _enforce_body_budget_for_test = enforce_body_budget;
+function enforce_body_budget(session: CdpSession): void {
+    while (session.body_bytes > _max_session_body_bytes && session.events.length > 1) {
+        const removed = session.events.shift();
+        if (removed && typeof removed.response_body === 'string') {
+            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+        }
         _eviction_count.value += 1;
     }
 }
@@ -187,6 +210,7 @@ export async function handle_cdp_start(
             events: [],
             created_at: Date.now(),
             max_body_bytes,
+            body_bytes: 0,
             redact_sensitive_headers,
             redact_url_query,
             connect_error: null,
@@ -357,6 +381,10 @@ export async function handle_cdp_start(
                                         waiting_event.response_body = body;
                                         waiting_event.response_body_status = 'captured';
                                     }
+                                    // t140: body 回写后更新会话聚合字节并触发预算淘汰（超限丢最旧带 body 事件）。
+                                    // 记账用实际存储长度（截断后），与淘汰减量口径一致。
+                                    session.body_bytes += Math.min(bytes.length, session.max_body_bytes);
+                                    enforce_body_budget(session);
                                 }
                             } else {
                                 waiting_event.response_body_status = 'cdp_failed';

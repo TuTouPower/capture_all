@@ -448,12 +448,25 @@ async function query_by_store<T>(
     const tx = database.transaction(store_name, 'readonly');
     const store = tx.objectStore(store_name);
     const index = store.index('capture_id');
-    const all = await new Promise<T[]>((resolve, reject) => {
-        const request = index.getAll(IDBKeyRange.only(capture_id));
-        request.onsuccess = () => resolve(request.result as T[]);
+    // t140: 用 cursor 直接分页，避免 index.getAll 全量取后再 slice（每页 O(n)，分页即 O(n²)）
+    const out: T[] = [];
+    let skipped = 0;
+    await new Promise<void>((resolve, reject) => {
+        const request = index.openCursor(IDBKeyRange.only(capture_id));
+        request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor || out.length >= limit) { resolve(); return; }
+            if (skipped < offset) {
+                skipped += 1;
+                cursor.continue();
+                return;
+            }
+            out.push(cursor.value as T);
+            cursor.continue();
+        };
         request.onerror = () => reject(request.error);
     });
-    return all.slice(offset, offset + limit);
+    return out;
 }
 
 // ============================================================

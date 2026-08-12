@@ -2,11 +2,11 @@
 tid: "t140"
 slug: "agent_query_cursor_paging"
 title: "perf: 大数据量路径资源预算与分页（agent 查询 + CDP body + 64MiB 结果）"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t140_agent_query_cursor_paging"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "7daf059d0b98bd82ca5ff1dfe0a43a18d512303f"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 合并：H-6 查询整载 O(n²) + H-7 64MiB 上限扩展侧缺失 + H-20 CDP body 总量无上限"
@@ -44,14 +44,23 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 18:46 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t140_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t140_test_f002|minor|遗留|一句话|pNNN|
+|t140_code_f001|critical|已修|Buffer.byteLength 在 MV3 SW 未定义，改 TextEncoder 估算|src/extension/background/agent_bridge_client.ts:327|
+|t140_code_f002|critical|已修|body 字节预算 no-op（push_bounded 调用处 body 恒 null），改在 getResponseBody 回写处更新 body_bytes 并 enforce_body_budget 淘汰|src/bridge/cdp_handler.ts:79-90,369-380|
+|t140_code_f003|minor|已修|send_result 超限分支与正常路径 fetch 重复，重构统一 payload|src/extension/background/agent_bridge_client.ts:321-351|
+
+### Round 2 (2026-08-12 19:01 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t140_code_f004|minor|已修|too_large body 记账口径统一（增量用存储后长度 min(bytes, max_body_bytes)）|src/bridge/cdp_handler.ts:386-387|
+|t140_code_f005|minor|已修|删死导出 _push_bounded_for_test（测试改用 enforce）|src/bridge/cdp_handler.ts:65|
+|t140_test_f001|critical|已修|64MiB 测试改行为级（fetch spy 断言 POST body 为 PAYLOAD_TOO_LARGE）|tests/unit/t140_resource_budget.test.ts:AC-005|
+|t140_test_f002|important|已修|补 cursor 分页行为测试（fake-indexeddb 跨页不丢不重 + 无 getAll）|tests/unit/t140_resource_budget.test.ts:AC-002/004|
+|t140_test_f003|minor|遗留|body 预算生产记账链路集成测试未补（enforce 单测已覆盖核心淘汰）；登记 p034|p034|
 
 ## 收尾报告
 
@@ -60,24 +69,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001-004 cursor 分页（行为+无 getAll）、AC-005 64MiB 行为测试、AC-009/010 body 预算；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（Buffer MV3 + body 预算 no-op + 重复 fetch）
+- Round 2 code：PASS
+- Round 1 test：FAIL（64MiB 假绿 + cursor 零覆盖 + body 记账）
+- Round 2 test：PASS（f003 minor 遗留 p034）
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- agent 查询改 IDB cursor 直接分页（消除每页 O(n) 整载）；扩展侧 64MiB 结果预算（超限改写 PAYLOAD_TOO_LARGE）；bridge CDP body 总字节预算（getResponseBody 回写记账 + 超限淘汰）。f003 body 记账集成测试遗留 p034。

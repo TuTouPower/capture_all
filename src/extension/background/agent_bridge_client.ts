@@ -1,5 +1,6 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
 import type { AgentCommandType } from '../../shared/protocol';
+import { MAX_EXTENSION_RESULT_BODY_BYTES } from '../../shared/constants';
 import {
     normalize_agent_bridge_config,
     type AgentBridgeUserConfig,
@@ -318,6 +319,22 @@ async function send_result_with_retry(url: string, token: string, result: unknow
 }
 
 async function send_result(url: string, token: string, result: unknown): Promise<void> {
+    // t140: 投递前预检结果体积（超 64MiB 会被 bridge 413 拒收，且 4xx 直接放弃不重试）。
+    // 超限时改写为 PAYLOAD_TOO_LARGE 错误结果仍投递——命令副作用（start/stop）不可回滚，
+    // 至少让调用方收到明确错误而非超时。
+    // MV3 SW 无 Buffer，用 TextEncoder 估算 UTF-8 字节长度。
+    let payload: unknown = result;
+    const json = JSON.stringify(result);
+    if (new TextEncoder().encode(json).length > MAX_EXTENSION_RESULT_BODY_BYTES) {
+        const narrowed = result as { command_id?: string };
+        payload = {
+            command_id: narrowed.command_id ?? '',
+            ok: false,
+            error: { code: 'PAYLOAD_TOO_LARGE', message: 'Result exceeds 64 MiB extension result body limit' },
+            data: null,
+        };
+    }
+
     const response = await fetch(`${url}/extension/result`, {
         method: 'POST',
         headers: {
@@ -325,7 +342,7 @@ async function send_result(url: string, token: string, result: unknown): Promise
             'Content-Type': 'application/json',
             [INSTANCE_HEADER]: runtime_instance_id,
         },
-        body: JSON.stringify(result)
+        body: JSON.stringify(payload),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);

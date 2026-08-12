@@ -154,7 +154,7 @@ export function get_timeline_item_from_capture_data(data: AgentCaptureData, item
 }
 
 function get_record_sort_key(record: AgentRecord): number {
-    if ('relative_time_ms' in record) return record.relative_time_ms;
+    if ('relative_time_ms' in record && typeof record.relative_time_ms === 'number') return record.relative_time_ms;
     if ('relative_time' in record && typeof record.relative_time === 'number') return record.relative_time;
     if ('start_time_ms' in record && typeof record.start_time_ms === 'number') return record.start_time_ms;
     return 0;

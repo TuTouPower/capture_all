@@ -389,6 +389,8 @@ export interface WsFrameData {
 export interface ConsoleEventData {
     capture_id?: string;
     event_id?: string;
+    // t144: 落库时复制 event.relative_time_ms，供 dashboard timeline 定位（ConsoleEventData 原无时间字段）
+    relative_time_ms?: number;
     level: 'log' | 'warn' | 'info' | 'debug' | 'error';
     args_preview: string[];
     args_status: 'captured' | 'redacted';

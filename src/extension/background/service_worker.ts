@@ -951,6 +951,8 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
     try {
         data.capture_id = current_capture_id;
         data.event_id = event.event_id;
+        // t144: 复制相对时间到 data，供 dashboard timeline 定位（原只写 data 丢时间）
+        data.relative_time_ms = event.relative_time_ms;
         await write_console_events([data]);
         current_capture.stats.log_count++;
         await persist_stats();

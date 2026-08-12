@@ -8,7 +8,7 @@ import {
     logger, is_extension, I,
     set_user_config, get_captures,
     get_page, set_page,
-    get_detail_capture,
+    get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     load_captures, load_detail,
     router,
 } from './dashboard_shared';
@@ -73,6 +73,14 @@ function render_shell(): void {
 
 function go(p: string): void { if (p === 'integrations') p = 'captures'; set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
 
+// t144: detail 快照签名——事件数、最新相对时间、network/console 数组长度与 stats，判断轮询是否有实质变化
+function detail_snapshot_signature(capture_id: string): string {
+    const events = get_detail_events();
+    const cap = get_detail_capture();
+    const latest = events.length > 0 ? events[events.length - 1].relative_time_ms : 0;
+    return `${capture_id}:${events.length}:${latest}:${get_detail_network().length}:${get_detail_console().length}:${cap?.stats?.event_count ?? 0}:${cap?.stats?.request_count ?? 0}:${cap?.stats?.log_count ?? 0}`;
+}
+
 function render_content(): void {
     const page = get_page();
     const c = document.getElementById('content')!;
@@ -125,9 +133,16 @@ async function init(): Promise<void> {
                     render_content();
                 }
             }
-            if (get_page() === 'detail' && get_detail_capture()?.status === 'capturing') {
-                await load_detail(get_detail_capture()!.capture_id);
-                render_content();
+            // t144: detail 轮询仅在有变化时更新（事件数或 stats 变化），无变化不整页重渲染；
+            // timeline 拖拽期间跳过，防重渲染替换 DOM 打断 pointermove。
+            if (get_page() === 'detail' && get_detail_capture()?.status === 'capturing' && !router.is_tl_dragging()) {
+                const cap = get_detail_capture()!;
+                const prev_sig = detail_snapshot_signature(cap.capture_id);
+                await load_detail(cap.capture_id);
+                const cur_sig = detail_snapshot_signature(cap.capture_id);
+                if (prev_sig !== cur_sig) {
+                    render_content();
+                }
             }
         } catch (err) {
             logger.error('polling error', err);

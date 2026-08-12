@@ -385,6 +385,8 @@ export function start_network_hook(
             capture_method: 'fallback_hook',
             body_capture_mode: 'fallback_hook',
             derive_body: false,
+            // t144: fallback 路径 data 带相对时间，供 dashboard timeline 定位
+            relative_time: get_relative_time(state.capture_start_epoch_ms),
         });
 
         state.sender?.(

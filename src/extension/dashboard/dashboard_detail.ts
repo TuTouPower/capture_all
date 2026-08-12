@@ -17,6 +17,10 @@ import {
     router,
 } from './dashboard_shared';
 
+// t144: timeline 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断 pointermove。
+let _tl_dragging = false;
+router.is_tl_dragging = () => _tl_dragging;
+
 const DT_TABS: [string, keyof I18nStrings][] = [
     ['overview', 'overview'], ['timeline', 'timeline'], ['user_action', 'capUser'],
     ['navigation', 'capNav'], ['network', 'capNet'], ['console', 'capConsole'],
@@ -657,10 +661,13 @@ function wire_lane_pointerdown(
             marker_start_x = pe.clientX;
             marker_start_y = pe.clientY;
             marker_el = m;
+            // t144: 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断
+            _tl_dragging = true;
             const mv = (ev: PointerEvent) => seek(ev.clientX);
             const up = (ev: PointerEvent) => {
                 window.removeEventListener('pointermove', mv);
                 window.removeEventListener('pointerup', up);
+                _tl_dragging = false;
                 const dx = ev.clientX - marker_start_x;
                 const dy = ev.clientY - marker_start_y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -717,6 +724,8 @@ function wire_minimap_drag(
         event.stopPropagation();
         const pointer_id = pointer_event.pointerId;
         active_pointer_id = pointer_id;
+        // t144: minimap 拖拽同样置标记，轮询 render 不打断
+        _tl_dragging = true;
         const start_client_x = pointer_event.clientX;
         const start_left_pct = parseFloat(mm_window.style.left || '0');
         let is_active = true;
@@ -725,6 +734,7 @@ function wire_minimap_drag(
             if (!is_active) return;
             is_active = false;
             active_pointer_id = null;
+            _tl_dragging = false;
             mm_window.removeEventListener('pointermove', move);
             mm_window.removeEventListener('pointerup', finish);
             mm_window.removeEventListener('pointercancel', finish);

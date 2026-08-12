@@ -281,6 +281,8 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         duration_ms: null,
         start_time_ms: conn.created_ts,
         end_time_ms: ws_status === 'closed' ? Date.now() : null,
+        // t144: ws 网络记录补相对时间（created_ts 是绝对 epoch，转相对基准，供 timeline 定位）
+        relative_time: Math.max(0, conn.created_ts - start_time),
         request_headers: req_hdr_result.headers,
         response_headers: resp_hdr_result.headers,
         headers_status: headers_redacted ? 'redacted' : 'captured',
@@ -973,6 +975,8 @@ function build_network_event(
         mime_type: pending.mime_type,
         capture_method: 'web_request',
         body_capture_mode: config.capture_response_body ? 'extension_cdp' : 'none',
+        // t144: 落库带相对时间，供 dashboard timeline 定位
+        relative_time: relative_time_ms,
         extra: {
             // 旧语义：web_request 路径不派发 body 字节/编码（body 可能为 CDP base64）
             response_body_encoding: null,
@@ -1032,6 +1036,8 @@ function build_cdp_primary_network_event(
         mime_type: meta.mime_type,
         capture_method: 'cdp_primary',
         body_capture_mode: 'extension_cdp',
+        // t144: 落库带相对时间，供 dashboard timeline 定位
+        relative_time: relative_time_ms,
         extra: {
             response_body_encoding: body_result.encoding ?? null,
             response_body_bytes: body_result.byte_size ?? null,

@@ -4,7 +4,7 @@ import { escape_html as esc } from '../../shared/escape';
 import { format_system_time } from '../../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
-import { read_capture_snapshot } from '../shared/capture_data_reader';
+import { read_capture_snapshot, type CaptureSnapshot } from '../shared/capture_data_reader';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
 import { t, type I18nStrings } from '../shared/i18n';
@@ -213,6 +213,56 @@ export async function load_captures(): Promise<void> {
     logger.debug('Captures loaded', { count: get_captures().length });
 }
 
+// t144: 把 network/console 事件并入 detail_events（CaptureEvent 形态），参与 timeline 轨道与 rail 快速筛选。
+// network/console 记录为 CaptureEvent 形态（含 relative_time_ms），get_console_events 类型标注仅暴露
+// data 字段，运行时字段齐全；用 as CaptureEvent 断言补足必填字段。
+export function merge_detail_events(
+    id: string,
+    snapshot: Pick<CaptureSnapshot, 'user_events' | 'nav_events' | 'error_events' | 'storage_changes' | 'cookie_changes' | 'network_requests' | 'console_events'>,
+): CaptureEvent[] {
+    return [
+        ...snapshot.user_events,
+        ...snapshot.nav_events,
+        ...snapshot.error_events,
+        ...snapshot.storage_changes,
+        ...snapshot.cookie_changes,
+        ...snapshot.network_requests.map((n) => ({
+            event_id: (n as { event_id?: string }).event_id ?? `net_${n.request_id}`,
+            capture_id: id,
+            category: 'network' as const,
+            type: 'network_request' as const,
+            // t144: 兼容两种落库形状——background NetworkRequestData（data.relative_time）
+            // 与 content hook CaptureEvent（顶层 relative_time_ms，见 f009）
+            relative_time_ms: (n as { relative_time_ms?: number }).relative_time_ms
+                ?? n.relative_time
+                ?? 0,
+            absolute_time: n.start_time_ms ? new Date(n.start_time_ms).toISOString() : '',
+            tab_id: 0,
+            url: n.url,
+            source: 'background' as const,
+            severity: 'info' as const,
+            created_at: n.start_time_ms ?? Date.now(),
+            // f010: content hook 形状下 n 是 CaptureEvent（data 内嵌 NetworkRequestData），
+            // 归一化使 timeline 列表/inspector 读 e.data.url/method 正确
+            data: (n as { data?: unknown }).data ?? n,
+        }) as unknown as CaptureEvent),
+        ...snapshot.console_events.map((c) => ({
+            event_id: c.event_id ?? `con_${Math.random().toString(36).slice(2, 10)}`,
+            capture_id: id,
+            category: 'console' as const,
+            type: 'console_event' as const,
+            relative_time_ms: c.relative_time_ms ?? 0,
+            absolute_time: '',
+            tab_id: 0,
+            url: '',
+            source: 'background' as const,
+            severity: (c as { severity?: string }).severity ?? 'info',
+            created_at: Date.now(),
+            data: c,
+        }) as unknown as CaptureEvent),
+    ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
+}
+
 export async function load_detail(id: string): Promise<void> {
     set_detail_capture(null); set_detail_events([]); set_detail_network([]); set_detail_console([]);
     if (!is_extension) return;
@@ -222,13 +272,7 @@ export async function load_detail(id: string): Promise<void> {
         set_detail_capture(r.capture);
 
         const snapshot = await read_capture_snapshot(id);
-        const events = [
-            ...snapshot.user_events,
-            ...snapshot.nav_events,
-            ...snapshot.error_events,
-            ...snapshot.storage_changes,
-            ...snapshot.cookie_changes,
-        ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
+        const events = merge_detail_events(id, snapshot);
         set_detail_events(events);
         set_detail_network(snapshot.network_requests);
         set_detail_console(snapshot.console_events);
@@ -302,6 +346,8 @@ export const router = {
     render_content: () => {},
     render_shell: () => {},
     open_detail: (_id: string) => {},
+    // t144: timeline 拖拽标记，dashboard 轮询检查避免拖拽期间整页重渲染
+    is_tl_dragging: () => false,
 };
 
 // re-exports used by multiple modules

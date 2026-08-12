@@ -1,12 +1,12 @@
 ---
-tid: t136
-slug: ws_frame_relative_time
+tid: "t136"
+slug: "ws_frame_relative_time"
 title: "fix: ws_frame 相对时间改用真实时间基准"
-status: backlog
-branch: ""
+status: "done"
+branch: "t136_ws_frame_relative_time"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "730b003a26736c230e597554054dff582ba13eb2"
 depends_on: ""
 conflicts_with: ""
 note: "review H-11 (B2-H6): CDP MonotonicTime 秒×1000 减 epoch 起点产出 -1.7e12 负数"
@@ -44,14 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 15:53 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t136_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t136_test_f002|minor|遗留|一句话|pNNN|
+|t136_code_f001|important|已修|_ws_frame_relative_time_for_test 改真实符号复用（生产 send_ws_frame 调用 ws_frame_relative_time helper），非平行副本|src/extension/background/network_capture.ts:296-306,348|
+|t136_test_f001|important|已修|同上——测试钩子现复用真实函数|tests/unit/t136_ws_frame_relative_time.test.ts|
+|t136_test_f002|important|已修|补 AC-003 timeline 负值查询测试（不崩溃、排序正常）|tests/unit/t136_ws_frame_relative_time.test.ts:AC-003|
+|t136_test_f003|minor|已修|AC-002 断言补 ws_frame_relative_time 调用（拦 params.timestamp 拼接回归）|tests/unit/t136_ws_frame_relative_time.test.ts:AC-002|
 
 ## 收尾报告
 
@@ -60,24 +60,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002 相对时间 now-start 语义 + 生产 helper 调用、AC-003 timeline 负值不崩溃；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：FAIL（测试钩子平行副本，已改真实复用）
+- Round 2 code：PASS
+- Round 1 test：FAIL（同 + AC-003 缺测）
+- Round 2 test：PASS（f003 残留顺手修）
+- Round 3 test：PASS（指纹同步 + f004 正则加固）
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- ws_frame 相对时间从 CDP MonotonicTime 秒×1000 减 epoch 起点（巨型负数）改为统一 Date.now() - start_time 基准；真实函数复用 + timeline 负值容错测试。

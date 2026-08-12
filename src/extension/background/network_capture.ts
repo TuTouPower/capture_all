@@ -292,6 +292,13 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
     send_to_background({ event, data });
 }
 
+// H6: CDP webSocketFrame* 的 params.timestamp 是 MonotonicTime（任意起点秒数），
+// 减 epoch 起点 start_time 得巨型负数。统一用 Date.now() - start_time（与其它事件同基准）。
+function ws_frame_relative_time(now: number, start: number): number {
+    return now - start;
+}
+export const _ws_frame_relative_time_for_test = ws_frame_relative_time;
+
 function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'received', params: any): void {
     const resp = params?.response || {};
     // 仅拦截 undefined（CDP 控制帧不携带 payloadData），保留空字符串（合法 payload）
@@ -333,11 +340,12 @@ function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'rec
         url: frame_url,
         tab_id: dbg_tab_id ?? undefined,
     };
+    // H6: 见 ws_frame_relative_time——统一 now-start 基准，避免 CDP monotonic 巨型负数
     const event = create_base_event({
         capture_id,
         category: 'network',
         type: 'ws_frame',
-        relative_time_ms: (params?.timestamp ? params.timestamp * 1000 : Date.now()) - start_time,
+        relative_time_ms: ws_frame_relative_time(Date.now(), start_time),
         tab_id: dbg_tab_id ?? current_tab_id,
         url: frame_data.url,
         source: 'background',

@@ -1,0 +1,18 @@
+{
+  "tid": "t136",
+  "attempt": 1,
+  "execution_id": "073117eed14b43cb8c295467f8c7c951",
+  "status": "done",
+  "branch": "t136_ws_frame_relative_time",
+  "base_sha": "730b003a26736c230e597554054dff582ba13eb2",
+  "tests": "npm test：1404 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code FAIL/test FAIL → Round 2 code PASS/test PASS（f003 顺手修 + f004 正则加固）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t136_ws_frame_relative_time.test.ts AC-001/001b：_ws_frame_relative_time_for_test 复用真实 ws_frame_relative_time 函数，断言 now-start 语义与非负"],
+    "AC-002": ["tests/unit/t136_ws_frame_relative_time.test.ts AC-002：生产 send_ws_frame 调用 ws_frame_relative_time(Date.now(), start_time)，且无 params.timestamp（可选链/直接访问两拼写）引用"],
+    "AC-003": ["tests/unit/t136_ws_frame_relative_time.test.ts AC-003：get_timeline_from_capture_data 对负 relative_time_ms 记录不崩溃（total=2、负值排序在前）"]
+  },
+  "pending": [],
+  "findings": []
+}

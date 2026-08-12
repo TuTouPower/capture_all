@@ -148,12 +148,19 @@ export function stop_network_capture(): void {
             chrome.dbg.sendCommand(
                 { tabId: tab, sessionId: session_id },
                 'Runtime.runIfWaitingForDebugger'
-            ).catch(() => { /* best-effort */ });
+            ).catch((err: unknown) => {
+                // B2-M14: 空 catch 补 warn，CDP 释放失败可诊断
+                logger.warn('Stop release sub-target failed', { sessionId: session_id, error: String(err) });
+            });
         }
         chrome.dbg.onEvent.removeListener(handle_cdp_event);
-        chrome.dbg.sendCommand({ tabId: tab }, 'Network.disable').catch(() => { /* best-effort */ });
+        chrome.dbg.sendCommand({ tabId: tab }, 'Network.disable').catch((err: unknown) => {
+            logger.warn('Stop CDP Network.disable failed', { tab_id: tab, error: String(err) });
+        });
         if (!dbg_attached_externally) {
-            chrome.dbg.detach({ tabId: tab }).catch(() => { /* best-effort */ });
+            chrome.dbg.detach({ tabId: tab }).catch((err: unknown) => {
+                logger.warn('Stop CDP detach failed', { tab_id: tab, error: String(err) });
+            });
         }
         dbg_tab_id = null;
         dbg_attached_externally = false;
@@ -185,7 +192,10 @@ export async function enable_response_body_capture(
         try {
             chrome.dbg.onEvent.removeListener(handle_cdp_event);
             await chrome.dbg.detach({ tabId: dbg_tab_id });
-        } catch { /* ignore if already detached */ }
+        } catch (err) {
+            // B2-M14: 空 catch 补 warn（换 tab 前 detach 旧 tab 失败可诊断）
+            logger.warn('CDP detach previous tab failed', { tab_id: dbg_tab_id, error: String(err) });
+        }
         dbg_tab_id = null;
     }
 
@@ -380,7 +390,10 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             chrome.dbg.sendCommand(
                 child_target,
                 'Runtime.runIfWaitingForDebugger'
-            ).catch(() => { /* best-effort */ });
+            ).catch((err: unknown) => {
+                // B2-M14: 空 catch 补 warn（子目标恢复失败可诊断）
+                logger.warn('Sub-target runIfWaitingForDebugger failed', { sessionId: child_session, error: String(err) });
+            });
             logger.debug('sub_target_attached', { sessionId: child_session });
         }
         return;
@@ -514,7 +527,8 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                     }
                     logger.debug('stream_started', { req_key, mime });
                 }).catch((err: any) => {
-                    logger.debug('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
+                    // B2-M14: CDP 流式采集失败升级 warn（真实功能失败，非静默）
+                    logger.warn('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
                     const meta = cdp_request_meta.get(req_key);
                     if (meta) {
                         meta.response_body_status = 'partial';
@@ -662,7 +676,13 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 ? 'not_enabled' : 'cdp_failed';
             const fail_result: CdpBodyResult = { body: null, status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
             cdp_body_results.set(req_key, fail_result);
-            logger.debug('get_body_error', { req_key, error: err_msg.slice(0, 100), status });
+            // B2-M14: 真实 CDP 失败（非 OPTIONS/HEAD/资源已释放）升级 warn，预期路径保持 debug
+            const detail = { req_key, error: err_msg.slice(0, 100), status };
+            if (status === 'cdp_failed') {
+                logger.warn('get_body_error', detail);
+            } else {
+                logger.debug('get_body_error', detail);
+            }
 
             // CDP-first: emit even on failure (status will be cdp_failed)
             const meta = cdp_request_meta.get(req_key);

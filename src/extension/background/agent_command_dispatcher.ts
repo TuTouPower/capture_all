@@ -13,6 +13,10 @@ import {
 import { DEFAULT_CONFIG } from '../../shared/constants';
 import { generate_capture_id } from '../../shared/id';
 import type { CaptureConfig } from '../../shared/types';
+import { Logger } from '../../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/agent_dispatch', get_app_log_transport());
 
 export interface AgentRuntimeHandlers {
     start_capture: (capture_id: string, config: CaptureConfig) => Promise<{ success: boolean; error?: string }>;
@@ -294,9 +298,15 @@ function to_agent_error(error: unknown): AgentError {
         return { code: error.message, message: error.message };
     }
 
+    // B2-M15: 未知错误不回传内部路径/库错误串；结构化错误码 + 通用脱敏 message，
+    // 原始细节仅入本地 app_logs 供诊断。
+    logger.error('Agent command failed with unexpected error', {
+        name: error instanceof Error ? error.name : typeof error,
+        detail: error instanceof Error ? error.message : String(error),
+    });
     return {
         code: 'STORAGE_READ_FAILED',
-        message: error instanceof Error ? error.message : String(error)
+        message: 'Unexpected error executing command'
     };
 }
 

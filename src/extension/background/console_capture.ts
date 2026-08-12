@@ -53,15 +53,17 @@ export async function start_console_capture(
         if (attached_by_us) {
             try {
                 await chrome.dbg.detach({ tabId: tab_id });
-            } catch {
-                // ignore detach errors during cleanup
+            } catch (detach_err) {
+                logger.warn('Console capture cleanup detach failed', { tab_id, error: String(detach_err) });
             }
             attached_by_us = false;
         }
         is_capturing = false;
+        // B2-M15: 不把内部 CDP 错误串回传用户/agent；原始细节仅入本地日志
+        logger.warn('Console capture CDP attach/enable failed', { tab_id, error: String(error) });
         return {
             success: false,
-            error: `Failed to attach debugger: ${error}. Please open F12 for DevTools mode.`
+            error: 'CDP_ATTACH_FAILED: Failed to attach debugger. Please open F12 for DevTools mode.'
         };
     }
 }

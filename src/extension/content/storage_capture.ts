@@ -3,7 +3,10 @@ import type { CaptureEvent, StorageChangeData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
-import { page_script_restore } from './content_page_script';
+import { inject_script_element, page_script_restore, report_injection_failure } from './content_page_script';
+import { Logger, MessageLogTransport } from '../../shared/logger';
+
+const logger = new Logger('content/storage', new MessageLogTransport());
 
 const state = create_capture_state<StorageChangeData>();
 let current_nonce = '';
@@ -102,20 +105,18 @@ function update_page_nonce(nonce: string): void {
         s.textContent = `window.__capture_all_storage_nonce__ = ${JSON.stringify(nonce)};`;
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
-    } catch {
-        // ignore
+    } catch (err) {
+        // t150-f003: nonce 更新失败静默降级（注入脚本用旧 nonce → 消息被拒），debug 级记录
+        logger.debug('update_page_nonce injection failed', { error: String(err) });
     }
 }
 
 function inject_page_script(): void {
-    try {
-        const s = document.createElement('script');
-        s.textContent = build_page_script(current_secret);
-        (document.documentElement || document.head || document.body).appendChild(s);
-        s.remove();
-    } catch {
-        // ignore
-    }
+    // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
+    inject_script_element(build_page_script(current_secret), (reason) => {
+        logger.warn('Storage page script injection failed', { reason });
+        report_injection_failure('storage', reason, state, state.sender);
+    });
 }
 
 // t142: stop 时还原 localStorage/sessionStorage hook——注入脚本在 MAIN world，content script 无法直接改。

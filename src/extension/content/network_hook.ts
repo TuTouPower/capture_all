@@ -9,9 +9,12 @@ import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload } from './content_hmac';
-import { page_script_reinstall_guard, page_script_preamble, page_script_restore } from './content_page_script';
+import { inject_script_element, page_script_reinstall_guard, page_script_preamble, page_script_restore, report_injection_failure } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
 import { redact_url } from '../../shared/redaction';
+import { Logger, MessageLogTransport } from '../../shared/logger';
+
+const logger = new Logger('content/network_hook', new MessageLogTransport());
 
 const state = create_capture_state<NetworkRequestData>();
 const SIGNAL = '__capture_all_network_hook__';
@@ -300,20 +303,18 @@ function update_page_nonce(nonce: string): void {
         s.textContent = `window.__capture_all_network_nonce__ = ${JSON.stringify(nonce)};`;
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
-    } catch {
-        // ignore
+    } catch (err) {
+        // t150-f003: nonce 更新失败静默降级（注入脚本用旧 nonce → 消息被拒），debug 级记录
+        logger.debug('update_page_nonce injection failed', { error: String(err) });
     }
 }
 
 function inject_page_script(): void {
-    try {
-        const s = document.createElement('script');
-        s.textContent = build_page_script(capture_response_body, current_secret);
-        (document.documentElement || document.head || document.body).appendChild(s);
-        s.remove();
-    } catch {
-        // ignore
-    }
+    // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
+    inject_script_element(build_page_script(capture_response_body, current_secret), (reason) => {
+        logger.warn('Network hook page script injection failed', { reason });
+        report_injection_failure('network_hook', reason, state, state.sender);
+    });
 }
 
 // t142: stop 时还原 window API——注入脚本在 MAIN world，content script 无法直接改 window。

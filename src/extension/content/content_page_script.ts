@@ -3,6 +3,8 @@
 // signal 是模块标识（如 'ws' / 'network_hook'），推导 installed/prev key 与 SIGNAL 常量，
 // 与各模块的 __capture_all_{signal}_installed__ / _prev__ / SIGNAL 命名一致。
 import { SYNC_HMAC_JS } from './content_hmac';
+import type { CaptureEvent, CaptureErrorData } from '../../shared/types';
+import { create_content_event, get_relative_time } from './content_event_utils';
 
 // 重注入还原守卫：先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
 // 原 guard 语义从「阻止重注入」改为「还原后重装」，hook 链不叠加。
@@ -35,4 +37,55 @@ ${restore_body}
     delete window.__capture_all_${signal}_installed__;
     delete window.__capture_all_${signal}_prev__;
 }`;
+}
+
+// B3-M3: 注入页面脚本并诊断失败，替代各模块空的 inject_page_script 的裸 try/catch。
+// - DOM 插入同步异常 → 立即 on_failure('dom_inject_exception')
+// - CSP 拦截 inline script → script 元素 error 事件（HTML spec：blocked-by-CSP 的 classic script
+//   触发 error）→ on_failure('csp_blocked_or_eval_error')；error 任务先于 setTimeout(0) 派发，
+//   故延时移除不吞诊断。
+// 返回 script 元素（测试可派发 error 事件验证诊断路径）；同步异常返回 null。
+export function inject_script_element(
+    script_text: string,
+    on_failure: (reason: string) => void,
+): HTMLElement | null {
+    const element = document.createElement('script');
+    element.textContent = script_text;
+    element.addEventListener('error', () => on_failure('csp_blocked_or_eval_error'), { once: true });
+    try {
+        (document.documentElement || document.head || document.body).appendChild(element);
+    } catch {
+        element.remove();
+        on_failure('dom_inject_exception');
+        return null;
+    }
+    setTimeout(() => element.remove(), 0);
+    return element;
+}
+
+// 注入失败上报：发 capture_error 事件（recoverable=false），SW 侧计入 error stats。
+export function report_injection_failure(
+    module: string,
+    reason: string,
+    state: { capture_id: string; capture_start_epoch_ms: number; tab_id: number },
+    sender: ((event: CaptureEvent) => void) | null,
+): void {
+    if (!sender) return;
+    const data: CaptureErrorData = {
+        module,
+        message: `Page script injection failed (${reason}); capture degraded`,
+        reason,
+        recoverable: false,
+        fallback_used: false,
+    };
+    const event = create_content_event({
+        capture_id: state.capture_id,
+        category: 'error',
+        type: 'capture_error',
+        relative_time_ms: get_relative_time(state.capture_start_epoch_ms),
+        tab_id: state.tab_id,
+        source: 'content_script',
+        severity: 'error',
+    });
+    sender({ ...event, data } as CaptureEvent & CaptureErrorData);
 }

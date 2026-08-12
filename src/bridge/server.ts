@@ -8,6 +8,7 @@ import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, t
 import { AgentCommandQueue } from './command_queue';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
 import { next_default_label } from './label';
+import { bridge_warn } from './logger';
 
 interface PairingState {
     open: boolean;
@@ -158,6 +159,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             const origin = request.headers.origin;
 
             if (origin && !is_allowed_extension_origin(origin)) {
+                // B1-M13: 认证/来源拒绝补结构化日志
+                bridge_warn('auth_failed', { path: request.url, reason: 'origin_not_allowed' });
                 return send_json(response, 403, {
                     ok: false,
                     error: {
@@ -201,6 +204,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
             if (request.method === 'POST' && request.url === '/pair/open') {
                 if (!is_authorized(request, config.token)) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'pair_open_invalid_token' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
@@ -225,6 +229,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
             if (request.method === 'POST' && request.url === '/pair/close') {
                 if (!is_authorized(request, config.token)) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'pair_close_invalid_token' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
@@ -242,6 +247,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 const has_mcp = is_authorized(request, config.token);
                 const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
                 if (!has_mcp && !has_ext_origin) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'enroll_no_credential' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'Enroll requires chrome-extension origin or mcp token' },
@@ -354,6 +360,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             if (is_extension_data_path) {
                 const resolved = resolve_extension_auth(request, config.token, instances);
                 if (!resolved.ok) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'extension_path_invalid_token' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
@@ -362,12 +369,14 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 auth_instance_id = resolved.instance_id;
             } else if (is_mcp_path) {
                 if (!is_authorized(request, config.token)) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'mcp_path_invalid_token' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
                     });
                 }
             } else if (!is_authorized(request, config.token)) {
+                bridge_warn('auth_failed', { path: request.url, reason: 'invalid_token' });
                 return send_json(response, 401, {
                     ok: false,
                     error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
@@ -377,6 +386,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             if (request.method === 'POST' && request.url === '/extension/heartbeat') {
                 const body = validate_heartbeat(await read_json(request));
                 if (auth_instance_id && auth_instance_id !== body.instance_id) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'heartbeat_instance_mismatch' });
                     return send_json(response, 401, {
                         ok: false,
                         error: { code: 'TOKEN_INVALID', message: 'instance_id does not match token' },
@@ -506,6 +516,14 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 command_owners.set(pending.command.command_id, target.instance_id);
                 const result = await pending.result;
                 command_owners.delete(pending.command.command_id);
+                if (result.ok === false && result.error?.code === 'COMMAND_TIMEOUT') {
+                    // B1-M13: 命令超时补结构化日志
+                    bridge_warn('command_timeout', {
+                        command_id: pending.command.command_id,
+                        type: body.type,
+                        timeout_ms: body.timeout_ms || default_timeout,
+                    });
+                }
 
                 if (result.ok && FULL_DATA_COMMANDS.has(body.type)) {
                     const explicit_path = typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0

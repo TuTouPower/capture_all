@@ -27,7 +27,11 @@ export class IndexedDBLogTransport implements LogTransport {
     private schedule_flush(): void {
         if (this.flush_timer) return;
         this.flush_timer = setTimeout(() => {
-            this.flush();
+            this.flush_timer = null;
+            // AC-007: fire-and-forget flush 补 .catch，DB 不可用等失败不产生未处理 rejection
+            this.flush().catch(() => {
+                // flush 内部已回填 buffer 供下次重试；此处仅防未处理 rejection
+            });
         }, 100);
     }
 

@@ -5,6 +5,7 @@
 import http from 'node:http';
 import { MAX_BODY_CAPTURE_BYTES } from '../shared/constants';
 import { redact_headers, redact_url } from '../shared/redaction';
+import { bridge_warn } from './logger';
 
 interface CdpSession {
     session_key: string;
@@ -60,7 +61,7 @@ export function _set_max_session_events_for_test(cap: number): void {
 }
 
 // T101: events 有界写入，超上限丢最旧（防无界增长 OOM）
-// 淘汰计数（可观测指标；桥无 logging 基础设施）
+// 淘汰计数（可观测指标；B1-M13 淘汰补结构化日志）
 export const _eviction_count = { value: 0 };
 function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
     session.events.push(event);
@@ -70,6 +71,7 @@ function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
             session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
         }
         _eviction_count.value += 1;
+        bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'event_count_cap', events: session.events.length });
     }
 }
 
@@ -83,6 +85,7 @@ function enforce_body_budget(session: CdpSession): void {
             session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
         }
         _eviction_count.value += 1;
+        bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'body_budget_cap', body_bytes: session.body_bytes });
     }
 }
 
@@ -253,6 +256,8 @@ export async function handle_cdp_start(
             const msg = ws_connect === 'timeout'
                 ? `CDP WebSocket connect timeout on port ${port}`
                 : `CDP WebSocket connect failed on port ${port} (${session.connect_error})`;
+            // B1-M13: CDP 连接失败补结构化日志
+            bridge_warn('cdp_connect_failed', { session_key, port, connect: ws_connect, reason: session.connect_error });
             return { status: 200, body: { ok: false, error: { code: 'cdp_start_failed', message: msg } } };
         }
 
@@ -395,8 +400,9 @@ export async function handle_cdp_start(
                         }
                     }
                 }
-            } catch {
-                // ignore malformed CDP messages
+            } catch (err) {
+                // B1-M13: 畸形/异常 CDP 消息补结构化日志（不再静默吞）
+                bridge_warn('cdp_message_parse_failed', { session_key: session.session_key, error: String(err) });
             }
         };
 

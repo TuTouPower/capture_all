@@ -233,4 +233,20 @@ describe('agent command dispatcher', () => {
         expect(result.ok).toBe(false);
         expect((result as { error?: { code?: string } }).error?.code).toBe('INVALID_QUERY');
     });
+
+    test('sanitizes unexpected internal errors (B2-M15)', async () => {
+        const result = await dispatch_agent_command(command('capture.start', { config }), {
+            ...handlers,
+            start_capture: vi.fn(async () => {
+                throw new Error('/usr/lib/somewhere/index.js:42: leaked internal detail');
+            }),
+        });
+
+        expect(result.ok).toBe(false);
+        const err = (result as { error?: { code?: string; message?: string } }).error;
+        expect(err?.code).toBe('STORAGE_READ_FAILED');
+        expect(err?.message).toBe('Unexpected error executing command');
+        expect(err?.message).not.toContain('/usr/lib/somewhere');
+        expect(err?.message).not.toContain('leaked');
+    });
 });

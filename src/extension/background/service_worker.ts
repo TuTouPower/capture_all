@@ -207,7 +207,8 @@ type IncomingMessage =
 chrome.runtime.onMessage.addListener((message: IncomingMessage, sender: { tab?: { id?: number } } | undefined, sendResponse: (response: UiResponse) => void) => {
     handle_message(message, sender).then(sendResponse).catch(error => {
         logger.error('Message handler error', serialize_error(error));
-        sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        // B2-M15: 不回传内部错误串，仅通用 message（原始细节入 app_logs）
+        sendResponse({ success: false, error: 'INTERNAL_ERROR: message handling failed' });
     });
     return true; // Keep channel open for async response
 });
@@ -362,7 +363,9 @@ async function handle_export_app_logs(payload?: { options?: unknown }): Promise<
     try {
         return await export_app_logs(payload?.options || {});
     } catch (e) {
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
+        // B2-M15: 不回传内部导出错误串，仅通用 message（原始细节入 app_logs）
+        logger.error('App log export failed', serialize_error(e));
+        return { success: false, error: 'EXPORT_FAILED: app log export failed' };
     }
 }
 
@@ -419,7 +422,8 @@ async function start_capture_inner(capture_id: string, config: CaptureConfig): P
         } catch (cleanup_err) {
             logger.error('rollback stop_capture_inner failed', serialize_error(cleanup_err));
         }
-        return { success: false, error: `Start failed: ${err}` };
+        // B2-M15: 不回传内部错误串，仅结构化错误码 + 通用 message
+        return { success: false, error: 'START_FAILED: capture start aborted due to an internal error' };
     }
 }
 
@@ -475,7 +479,9 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     try {
         await create_capture(capture);
     } catch (err) {
-        return { success: false, error: `Failed to create capture: ${err}` };
+        // B2-M15: 不回传内部 DB 错误串，仅结构化错误码 + 通用 message
+        logger.error('Failed to create capture record', serialize_error(err));
+        return { success: false, error: 'CREATE_CAPTURE_FAILED: failed to persist capture record' };
     }
 
     current_capture = capture;
@@ -871,7 +877,10 @@ function handle_cdp_body_event(cdp_event: CdpBodyEvent): void {
         current_capture.capture_id,
         start_time
     );
-    handle_network_request(request);
+    // B2-M3: fire-and-forget async 补 .catch，防未处理 rejection
+    handle_network_request(request).catch((err) => {
+        logger.error('handle_cdp_body_event failed', serialize_error(err));
+    });
 }
 
 // Fallback network body hook events from content script
@@ -1014,7 +1023,14 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
     // Write tab_switch event with from/to tracking
     const prev = last_active_tab.get(activeInfo.windowId);
-    const tab = await chrome.tabs.get(activeInfo.tabId);
+    // B2-M4: tab 激活与 get 之间被关则 rejection 未处理，需 try/catch 兜底
+    let tab: { url?: string } | null = null;
+    try {
+        tab = await chrome.tabs.get(activeInfo.tabId);
+    } catch (err) {
+        logger.warn('Tab get failed on activate (tab likely closed)', { tabId: activeInfo.tabId, error: String(err) });
+        return;
+    }
     if (!capture_state.is_active_generation(gen)) return; // await 后采集已切换
     const tab_url = tab.url || '';
 

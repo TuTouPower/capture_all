@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
@@ -2007,5 +2007,27 @@ describe('auto export path 净化 (T096)', () => {
             if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
             else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
         }
+    });
+});
+
+describe('bridge structured logs (B1-M13)', () => {
+    it('logs a structured auth_failed JSON line on invalid token', async () => {
+        const warn_spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const server = await start_test_server();
+
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: 'Bearer wrong-token' },
+        });
+        expect(response.status).toBe(401);
+
+        expect(warn_spy).toHaveBeenCalled();
+        const line = warn_spy.mock.calls[0][0];
+        expect(typeof line).toBe('string');
+        const parsed = JSON.parse(line as string);
+        expect(parsed.event).toBe('auth_failed');
+        expect(parsed.level).toBe('warn');
+        expect(parsed.path).toContain('/mcp/status');
+
+        warn_spy.mockRestore();
     });
 });

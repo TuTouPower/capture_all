@@ -2,6 +2,10 @@
 // Client for external CDP bridge — fetches CDP body events from the bridge server.
 
 import type { BodyCaptureStatus } from '../../shared/types';
+import { Logger } from '../../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/external_cdp', get_app_log_transport());
 
 export interface ExternalCdpBridgeConfig {
     bridge_url: string;
@@ -75,6 +79,8 @@ export interface BridgeDetectResult {
 
 const DEFAULT_CDP_PORTS = [9222, 9223, 9224, 9225, 9333];
 const DETECT_TIMEOUT_MS = 3000;
+// t150-f002: 轮询失败 warn 节流（500ms 轮询 → 每 10s 一条，防刷屏）
+let last_poll_fail_warn_ts = 0;
 
 export async function detect_external_cdp(
     config: ExternalCdpBridgeConfig
@@ -103,8 +109,9 @@ export async function detect_external_cdp(
                     targets: data.targets
                 };
             }
-        } catch {
-            // try next port
+        } catch (err) {
+            // B2-M14: 空 catch 补 warn（port 探测失败；多端口依次重试）
+            logger.warn('CDP detect failed on port', { port, error: String(err) });
         }
     }
 
@@ -169,7 +176,14 @@ export async function poll_external_cdp_events(
         if (!res.ok) return [];
         const data = await res.json();
         return data.events || [];
-    } catch {
+    } catch (err) {
+        // B2-M14: 空 catch 补 warn（轮询失败返回空，下次重试）。t150-f002: 500ms 轮询失败
+        // 会刷屏，节流到每 10s 一条。
+        const now = Date.now();
+        if (now - last_poll_fail_warn_ts > 10_000) {
+            logger.warn('External CDP poll fetch failed', { session_key, error: String(err) });
+            last_poll_fail_warn_ts = now;
+        }
         return [];
     }
 }
@@ -189,7 +203,8 @@ export async function stop_external_cdp(
             body: JSON.stringify({ session_key }),
             signal: AbortSignal.timeout(5000)
         });
-    } catch {
-        // best-effort
+    } catch (err) {
+        // B2-M14: 空 catch 补 warn（best-effort stop 失败仍可诊断）
+        logger.warn('External CDP stop failed', { session_key, error: String(err) });
     }
 }

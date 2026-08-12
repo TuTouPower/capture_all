@@ -24,6 +24,10 @@ import {
     type ExternalCdpBridgeConfig,
     type BridgeBodyEvent
 } from './external_cdp_bridge_client';
+import { Logger } from '../../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/body_capture', get_app_log_transport());
 
 export interface CoordinatorDeps {
     get_active_tab_url: () => Promise<string | null>;
@@ -134,9 +138,10 @@ async function handle_cdp_failure(
     if (error_msg.includes('not allowed')
         || error_msg.includes('does not have permission')
         || error_msg.includes('debugger is not')) {
+        // B2-M15: message 不含内部 CDP 错误串（error_msg 仅用于上方分类）
         return await escalate_to_bridge_or_fallback(capture_id, config, deps, {
             failure_reason: 'permission_denied',
-            message: `CDP permission denied: ${error_msg}, using fallback hook`,
+            message: 'CDP permission denied, using fallback hook',
         });
     }
 
@@ -147,7 +152,8 @@ async function handle_cdp_failure(
         mode: 'fallback_hook',
         status: 'partial',
         failure_reason: 'cdp_attach_failed',
-        message: `CDP attach failed: ${error_msg}, using fallback hook`,
+        // B2-M15: message 不含内部 CDP 错误串（error_msg 仅用于上方分类）
+        message: 'CDP attach failed, using fallback hook',
     };
 }
 
@@ -246,8 +252,9 @@ async function try_external_cdp_bridge(
                     const req = convert_bridge_event_to_request(evt, capture_id);
                     deps.on_network_request(req);
                 }
-            } catch {
-                // best-effort：单次失败不终止轮询，下次重试
+            } catch (err) {
+                // best-effort：单次失败不终止轮询，下次重试（B2-M14: 空 catch 补 warn）
+                logger.warn('External CDP poll failed', { session_key, error: String(err) });
             } finally {
                 poll_in_flight = false;
                 if (!poll_stopped) {
@@ -269,7 +276,9 @@ async function try_external_cdp_bridge(
                 clearTimeout(poll_timer);
             }
         };
-    } catch {
+    } catch (err) {
+        // B2-M14: bridge 探测/启动失败补 warn（静默降级有诊断依据）
+        logger.warn('External CDP bridge setup failed', { error: String(err) });
         return null;
     }
 }

@@ -229,4 +229,24 @@ describe('BUG-003: console capture must emit event on Runtime.consoleAPICalled',
         mock_chrome_debugger.sendCommand = original_send;
         detach_spy.mockRestore();
     });
+
+    it('返回脱敏错误，不含内部 CDP 错误串（B2-M15）', async () => {
+        const sender = vi.fn();
+        const original_send = mock_chrome_debugger.sendCommand.bind(mock_chrome_debugger);
+        mock_chrome_debugger.sendCommand = vi.fn(async (target: any, command: string) => {
+            if (command === 'Runtime.enable') {
+                throw new Error('/usr/lib/chrome/internal.js:42 leaked');
+            }
+            return original_send(target, command);
+        });
+
+        const result = await start_console_capture('cap_san', START_TIME, TAB_ID, false, sender, false);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBeDefined();
+        expect(result.error).toContain('CDP_ATTACH_FAILED');
+        expect(result.error).not.toContain('/usr/lib/chrome');
+        expect(result.error).not.toContain('leaked');
+        mock_chrome_debugger.sendCommand = original_send;
+    });
 });

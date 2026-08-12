@@ -1,0 +1,23 @@
+{
+  "tid": "t150",
+  "attempt": 1,
+  "execution_id": "c90887c2f3774a9e8df785eae81908a6",
+  "status": "done",
+  "branch": "t150_error_handling_observability",
+  "base_sha": "bdb141906330a49382009295f03497551bf379d2",
+  "tests": "npm test：1468+ passed（含 t150_ac007 等新增）",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code FAIL/test FAIL → Round 2 code PASS/test FAIL → Round 3 test FAIL → Round 4 code PASS/test PASS",
+  "ac_evidence": {
+    "AC-001": ["network_capture/coordinator/external bridge/content 注入空 catch 补 warn + capture_error；content_injection_diagnostics.test.ts"],
+    "AC-002": ["to_agent_error/console/exception 结构化错误码 + 脱敏 message；agent_command_dispatcher/console_capture/exception_capture.test.ts"],
+    "AC-003": ["mcp client fetch_with_timeout（get_status 10s / send_command timeout+5s / full_data 300s+5s）；agent_mcp_client.test.ts"],
+    "AC-004": ["logger sanitize getter 兜底 [Unserializable]；logger.test.ts"],
+    "AC-005": ["keepalive handler 执行 flush_all 真实工作；keepalive.test.ts"],
+    "AC-006": ["MessageLogTransport flush 轮次上限 5；logger.test.ts"],
+    "AC-007": ["t150_ac007.test.ts：app_log_storage schedule_flush + service_worker tabs.get 未处理 rejection；handle_cdp_body_event 位点登记 p038"],
+    "AC-008": ["bridge/logger.ts 结构化 JSON 行；agent_bridge_server.test.ts auth_failed"]
+  },
+  "pending": ["p036", "p037", "p038"],
+  "findings": []
+}

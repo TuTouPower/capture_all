@@ -162,7 +162,7 @@ src/shared ──✗── 任何产品目录
 
 扩展生命周期管理、消息路由、采集协调、数据持久化。
 
-**采集状态机**（`capture_state.ts`）：单例模块，5 阶段 `idle → starting → capturing → stopping → idle`（失败走 `rolling_back`）。`run_exclusive` 串行化 start/stop。generation token 防 listener 跨采集写入。持久化活跃采集状态到 `chrome.storage.local`，SW 重启时 cleanup 恢复/终止旧采集。
+**采集状态机**（`capture_state.ts`）：单例模块，5 阶段 `idle → starting → capturing → stopping → idle`（失败走 `rolling_back`）。`run_exclusive` 串行化 start/stop。generation token 防 listener 跨采集写入。持久化活跃采集状态到 `chrome.storage.local`，SW 重启时 cleanup 恢复/终止旧采集。**SW 重启语义为「终止而非恢复」**（t148/s004）：`cleanup_stale_capture_state` 先 flush_all 保证已落库数据不丢，再终态化旧采集并清持久化键；不重连生产者（MV3 SW 销毁后 webRequest/debugger listener 需重注册，恢复成本高）。
 
 消息协议（`chrome.runtime.sendMessage`）：
 

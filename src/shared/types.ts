@@ -27,6 +27,9 @@ export interface CaptureRecord {
     body_capture_status?: BodyCaptureRuntimeStatus;
     body_capture_failure_reason?: BodyCaptureFailureReason;
     body_capture_message?: string;
+
+    /** t148: 已落库写入字节数（JSON 序列化口径），SW 重启后限额检查据此重建基数。 */
+    storage_bytes_written?: number;
 }
 
 export interface CaptureStats {

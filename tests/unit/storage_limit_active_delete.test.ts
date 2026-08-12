@@ -109,8 +109,22 @@ describe('存储限额 + 禁删活跃 (T110)', () => {
 
     it('AC-002b: 非活跃 capture 可删除', async () => {
         await import('../../src/extension/background/service_worker');
+        const storage = await import('../../src/extension/background/storage');
+        // 预置一条非活跃 capture，保证删除断言有判别力（t148 f004：cap_old 原从未 create 致恒真）
+        await storage.create_capture({
+            capture_id: 'cap_old',
+            name: 'old', status: 'completed',
+            started_at: new Date(Date.now() - 60000).toISOString(), ended_at: new Date().toISOString(),
+            duration_ms: 60000, start_url: 'https://x', end_url: null, tab_id: 1, window_id: 1,
+            config_snapshot: {}, stats: { event_count: 0, user_action_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0, total_body_bytes: 0 },
+            tags: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+        expect(await storage.get_capture('cap_old')).not.toBeNull();
+
         const del = await send_message('delete_capture', { capture_id: 'cap_old' });
         expect(del.success).toBe(true);
+        // 删除后数据实际消失（回归：delete_capture no-op 时 get_capture 仍返回记录）
+        expect(await storage.get_capture('cap_old')).toBeNull();
     });
 
     it('AC-003: cleanup_stale 终态化陈旧 active capture（status 非 active 且 ended_at 非空）', async () => {

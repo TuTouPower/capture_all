@@ -5,7 +5,7 @@ import {
     delete_capture as storage_delete_capture,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
-    check_storage_limit,
+    check_storage_limit, ensure_size_base, get_capture_size,
     start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
@@ -143,6 +143,13 @@ export async function cleanup_stale_capture_state(): Promise<void> {
         const legacy_active = result.is_capturing || stale_capture_id;
         if (legacy_active) {
             logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
+            // t148: 终态化前 flush 剩余缓冲事件，保证已落库数据不丢
+            // （t038 每次写入已立即落库，此处防御性兜底；flush 失败不阻断清键，storage 损坏时至少清键不卡死）
+            try {
+                await flush_all();
+            } catch (flush_err) {
+                logger.warn('Stale cleanup flush failed, continuing finalize', { error: String(flush_err).slice(0, 80) });
+            }
             const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
             if (stale_capture?.capture_id) {
                 await update_capture({
@@ -768,6 +775,10 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
             current_capture!.duration_ms = duration_ms;
             current_capture!.end_url = tabs[0]?.url || null;
             current_capture!.updated_at = new Date().toISOString();
+            // t148: 终态刷新持久化字节基数（drain 后最终写入量），避免终态记录字节数陈旧
+            if (current_capture_id) {
+                current_capture!.storage_bytes_written = get_capture_size(current_capture_id);
+            }
             await update_capture(current_capture!);
         });
         await run_stop_step('flush_stopped_event', () => flush_all());
@@ -799,7 +810,10 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
 async function persist_stats(): Promise<void> {
     if (!current_capture) return;
     try {
+        // t148: 限额基数随 CaptureRecord 落盘（基数 + 内存增量），SW 重启后据此重建限额检查
+        await ensure_size_base(current_capture_id!);
         current_capture.updated_at = new Date().toISOString();
+        current_capture.storage_bytes_written = get_capture_size(current_capture_id!);
         await update_capture(current_capture);
     } catch (err) {
         logger.error('Failed to persist capture stats', err);

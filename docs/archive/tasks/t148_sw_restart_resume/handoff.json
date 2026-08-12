@@ -1,0 +1,22 @@
+{
+  "tid": "t148",
+  "attempt": 1,
+  "execution_id": "d90d56801f3c47d284fa10b6ee4514e1",
+  "status": "done",
+  "branch": "t148_sw_restart_resume",
+  "base_sha": "733792b34a05811ce701885828cf5daebb06491e",
+  "tests": "npm test：全量 passed（1449+）",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS/test PASS → Round 2 code FAIL/test FAIL → Round 3 code PASS/test FAIL → Round 4 code PASS/test PASS",
+  "ac_evidence": {
+    "AC-001": ["service_worker_stale_cleanup.test.ts：flush_all 先于终态化（invocationCallOrder），数据不丢"],
+    "AC-002": ["spec 对齐「重启即终止」：无恢复分支，generation token 防串写为既有机制"],
+    "AC-003": ["service_worker_stale_cleanup.test.ts：flush 失败仍清键，storage 损坏回退不卡死"],
+    "AC-004": ["service_worker_stale_cleanup.test.ts 既有终态化测试保持通过"],
+    "AC-005": ["storage_limit_restart.test.ts：重载模块后 get_capture_size 从 CaptureRecord 重建基数 123456；写入侧 get_capture_size 累计；persist_stats 落盘受 fake-indexeddb 并发事务限制，spec 可测试性声明如实披露 trust_prior"],
+    "AC-006": ["storage_limit_restart.test.ts：持久化基数 + 内存增量跨过限额 → check_limit_and_stop 停止 + capture_stopped(storage_limit) 事件"],
+    "AC-007": ["既有 stop_capture/storage 测试保持通过"]
+  },
+  "pending": [],
+  "findings": ["d005"]
+}

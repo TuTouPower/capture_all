@@ -109,7 +109,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 
 | 限制 | 值 | 来源 |
 |---|---|---|
-| 单采集大小 | 500 MB | `MAX_SESSION_SIZE_BYTES` |
+| 单采集大小 | 500 MB | `MAX_SESSION_SIZE_BYTES`；字节数持久化到 `CaptureRecord.storage_bytes_written`（持久化基数 + 内存增量，SW 重启后从 IndexedDB 重建基数，t148） |
 | 单采集时长 | 24 小时 | `MAX_SESSION_DURATION_MS` |
 | 单条 body 截断 | 100 MB | `MAX_BODY_CAPTURE_BYTES` |
 | 单条 inline_text | 32 KB | `INLINE_TEXT_MAX_BYTES` |

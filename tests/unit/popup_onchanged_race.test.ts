@@ -99,7 +99,7 @@ describe('popup onChanged 竞态 (t135)', () => {
         storage_backing = {};
         // 默认：list_captures 返回数组（load_history），其余返回 success
         send_message_mock.mockImplementation(async ({ action }: { action: string }) => {
-            if (action === 'list_captures') return [];
+            if (action === 'list_captures') return { success: true, data: [] };
             return { success: true };
         });
     });
@@ -129,7 +129,7 @@ describe('popup onChanged 竞态 (t135)', () => {
         await await_ticks(6);
 
         // stop_capture 已执行：sendMessage stop + storage 自写 is_capturing:false 带 SELF_WRITE_KEY
-        expect(send_message_mock).toHaveBeenCalledWith({ action: 'stop' });
+        expect(send_message_mock).toHaveBeenCalledWith({ action: 'stop', payload: {} });
         expect(storage_set_mock).toHaveBeenCalledWith(expect.objectContaining({ is_capturing: false, _popup_self_write: expect.any(Number) }));
         // onChanged 异步派发后监听消费自写标记 → remove 被调（非 load_state 覆盖本地态）
         expect(storage_remove_mock).toHaveBeenCalledWith('_popup_self_write');

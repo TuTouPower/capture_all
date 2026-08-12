@@ -64,7 +64,9 @@
 ### 消息通信
 
 - Popup / Dashboard 与 Service Worker 通过 `chrome.runtime.sendMessage` 通信。
-- 请求统一形如 `{ action: string, payload?: {...} }`，响应统一 `{ success: boolean, data?: {...}, error?: string }`。
+- 请求统一 `{ action, payload? }`，响应统一 `{ success: boolean, data?, error?: string }`；UI 侧一律经 `send_ui_message(action, payload)` 类型化收发（共享类型与 action 清单见 `src/shared/message_contract.ts`），禁止裸调 `chrome.runtime.sendMessage` 依赖 any 返回。
+- action 语义：`start` / `stop` 的 `data` 为操作结果；`get_status` 的 `data` 为状态对象（`tab_id` 以请求方 `sender.tab.id` 权威回填）；`list_captures` 的 `data` 为数组；`get_capture_data` 的 `data` 为 capture 记录（仅元数据，不含全量事件）。
+- 内容脚本内部消息（`event` / `app_log_batch`）保持扁平（非 `{ action, payload }`），不套 payload；content→SW 的 `get_status` 请求响应同样为 `{ success, data }`，由 content_script 解包 `data`。
 - Content Script 收到 start 消息才激活采集，不主动启动。
 - `postMessage` 必须指定 `targetOrigin`，接收方必须校验 `event.origin`。
 

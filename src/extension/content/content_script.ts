@@ -66,7 +66,8 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
 const stop_status_poll = start_status_poll({
     get_status: (): Promise<CaptureStatusResponse | null> =>
         chrome.runtime.sendMessage({ action: 'get_status' })
-            .then((r: CaptureStatusResponse | null) => r)
+            .then((r: { success?: boolean; data?: CaptureStatusResponse | null } | null) =>
+                r?.success ? (r.data ?? null) : null)
             .catch(() => null),
     on_active: (resp: CaptureStatusResponse): void => {
         if (is_capturing) return;

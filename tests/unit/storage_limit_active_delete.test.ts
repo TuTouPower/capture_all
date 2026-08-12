@@ -67,7 +67,7 @@ function install_chrome_mock(): void {
 }
 
 function send_message(action: string, extra: Record<string, unknown> = {}): Promise<any> {
-    return new Promise((resolve) => on_message_cb!({ action, ...extra }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action, payload: extra }, {}, resolve));
 }
 
 const BASE_CONFIG = { capture_network: false, capture_console: false };
@@ -147,12 +147,13 @@ describe('handle_event 限额停止 (T110 AC-001b)', () => {
 
         // 超限
         set_capture_size_for_test('cap_limit', 500 * 1024 * 1024);
-        const evt_res = await send_message('event', { event: { type: 'mouse_click', data: {} } });
+        // content→SW 的 event 为扁平内部消息（非 { action, payload }）
+        const evt_res = await new Promise((resolve) => on_message_cb!({ action: 'event', event: { type: 'mouse_click', data: {} } }, {}, resolve));
         expect(evt_res.success).toBe(false);
 
         // capture 已停止：get_status 显示未采集
         const status = await send_message('get_status');
-        expect(status.is_capturing).toBe(false);
+        expect(status.data.is_capturing).toBe(false);
 
         // p024 分句：限额停止写入 capture_stopped 事件且 reason === 'storage_limit'
         const { get_events_by_category } = await import('../../src/extension/background/storage');
@@ -197,6 +198,6 @@ describe('导航写路径限额停止 (T110 AC-001c)', () => {
         expect(nav_events.length).toBe(0);
 
         const status = await send_message('get_status');
-        expect(status.is_capturing).toBe(false);
+        expect(status.data.is_capturing).toBe(false);
     });
 });

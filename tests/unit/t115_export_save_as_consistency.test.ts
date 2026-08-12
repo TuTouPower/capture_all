@@ -134,7 +134,7 @@ describe('t115 Dashboard capture AC-004 接线锚定', () => {
         const fn = src.match(/export async function export_capture\([\s\S]*?\n}/);
         expect(fn).not.toBeNull();
         const body = fn![0];
-        const flush_idx = body.indexOf(`await chrome.runtime.sendMessage({ action: 'flush' })`);
+        const flush_idx = body.indexOf(`await send_ui_message('flush', {})`);
         const read_idx = body.indexOf('const snapshot = await read_capture_snapshot(id)');
         expect(flush_idx).toBeGreaterThanOrEqual(0);
         expect(read_idx).toBeGreaterThan(flush_idx);
@@ -156,9 +156,9 @@ describe('t115 Dashboard capture AC-004 接线锚定', () => {
         const fn = src.match(/export async function export_capture\([\s\S]*?\n}/);
         expect(fn).not.toBeNull();
         const body = fn![0];
-        expect(body).toMatch(/const r = await chrome\.runtime\.sendMessage\(\{ action, capture_id: id \}\)/);
+        expect(body).toMatch(/const r = await send_ui_message\(action, \{ capture_id: id \}\)/);
         const success_check = body.indexOf(`if (!r?.success) { alert(t('exportFailed')); return; }`);
-        const export_action = body.indexOf(`const r = await chrome.runtime.sendMessage({ action, capture_id: id })`);
+        const export_action = body.indexOf(`const r = await send_ui_message(action, { capture_id: id })`);
         expect(success_check).toBeGreaterThan(export_action);
     });
 });

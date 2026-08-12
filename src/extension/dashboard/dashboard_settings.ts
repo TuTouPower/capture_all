@@ -7,6 +7,7 @@ import { save_user_config } from '../../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
 import { Logger } from '../../shared/logger';
+import { send_ui_message } from '../../shared/message_contract';
 import {
     esc, I, is_extension, get_user_config, set_user_config,
     logger,
@@ -176,7 +177,7 @@ function wire_settings(): void {
             else if (name === 'log_level') {
                 Logger.set_level(val as 'debug' | 'info' | 'warn' | 'error' | 'silent');
                 await persist({ log_level: val as 'debug' | 'info' | 'warn' | 'error' | 'silent' });
-                chrome.runtime.sendMessage({ action: 'set_log_level', level: val }).catch(() => {});
+                send_ui_message('set_log_level', { level: val }).catch(() => {});
             }
             else await persist({ [name]: val } as Partial<UserConfig>);
         }));
@@ -220,9 +221,9 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
         const el = c.querySelector('#logSize') as HTMLInputElement | null;
         if (!el) return;
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'get_app_log_size' });
-            if (r?.size_bytes != null) {
-                const mb = (r.size_bytes / (1024 * 1024)).toFixed(1);
+            const r = await send_ui_message('get_app_log_size', {});
+            if (r?.data?.size_bytes != null) {
+                const mb = (r.data.size_bytes / (1024 * 1024)).toFixed(1);
                 el.value = `${mb} MB`;
             } else {
                 el.value = '—';
@@ -235,9 +236,9 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
 
     c.querySelector('#exportLog')?.addEventListener('click', async () => {
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
+            const r = await send_ui_message('export_app_logs', { options: { format: 'log' } });
             if (!r?.success) { alert(t('exportFailed')); return; }
-            const blob = new Blob([r.data], { type: 'text/x-log' });
+            const blob = new Blob([r.data as BlobPart], { type: 'text/x-log' });
             const log_filename = build_log_filename({
                 export_log_directory: get_user_config().export_log_directory,
                 system_time_timezone: get_user_config().system_time_timezone,
@@ -249,7 +250,7 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
     c.querySelector('#clearLogs')?.addEventListener('click', async () => {
         if (!confirm(t('clearLogsConfirm'))) return;
         try {
-            await chrome.runtime.sendMessage({ action: 'clear_app_logs' });
+            await send_ui_message('clear_app_logs', {});
             update_size();
         } catch (e) { logger.error('Clear logs error', e); }
     });

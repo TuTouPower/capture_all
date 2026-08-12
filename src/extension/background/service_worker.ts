@@ -29,12 +29,13 @@ import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
 import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
 import type {
-    UserConfig, CaptureConfig, CaptureEvent, CaptureRecord,
+    UserConfig, CaptureConfig, CaptureEvent, CaptureRecord, AppLogEntry,
     NetworkRequestData, ConsoleEventData, WsFrameData,
     TabSwitchData, TabCreatedData, TabUrlChangeData,
     CaptureStartedData, CaptureStoppedData,
     BodyCaptureStartResult,
 } from '../../shared/types';
+import { type UiAction, type UiResponse } from '../../shared/message_contract';
 import { DEFAULT_CONFIG, DEFAULT_USER_CONFIG } from '../../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
@@ -193,7 +194,14 @@ setTimeout(() => {
 setup_keepalive_listener();
 
 // Message handler
-chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (response: any) => void) => {
+// 三端消息契约：请求 { action, payload? }，响应 { success, data?, error? }（shared/message_contract.ts）。
+// UI 请求统一从 payload 取参；content→SW 的内部消息（event / app_log_batch）保持扁平兼容。
+type IncomingMessage =
+    | { action: UiAction; payload?: Record<string, unknown> }
+    | { action: 'event'; event: CaptureEvent }
+    | { action: 'app_log_batch'; entries: AppLogEntry[] };
+
+chrome.runtime.onMessage.addListener((message: IncomingMessage, sender: { tab?: { id?: number } } | undefined, sendResponse: (response: UiResponse) => void) => {
     handle_message(message, sender).then(sendResponse).catch(error => {
         logger.error('Message handler error', serialize_error(error));
         sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
@@ -201,18 +209,36 @@ chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (
     return true; // Keep channel open for async response
 });
 
-async function handle_message(message: any, sender?: any): Promise<any> {
+/** 操作型结果归一化：成功把结果放 data；失败（success:false）上抛为顶层 { success:false, error }。 */
+function wrap_result<T>(result: T): UiResponse<T> {
+    if (typeof result === 'object' && result !== null && 'success' in result) {
+        const op = result as { success: boolean; error?: string };
+        if (op.success === false) {
+            return { success: false, error: op.error ?? 'Request failed' };
+        }
+        return { success: true, data: result };
+    }
+    return { success: true, data: result };
+}
+
+async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: number } }): Promise<UiResponse> {
+    // UI 请求成员恒带 payload；event/app_log_batch 为扁平内部消息，不读 payload。
+    const payload = (message as { action: UiAction; payload?: Record<string, unknown> }).payload;
+    const incoming_action = message.action;
     switch (message.action) {
         case 'start':
-            return start_capture(message.capture_id, message.config || DEFAULT_CONFIG);
+            return wrap_result(await start_capture(
+                payload?.capture_id as string,
+                (payload?.config as CaptureConfig | undefined) || DEFAULT_CONFIG,
+            ));
         case 'stop':
-            return stop_capture();
+            return wrap_result(await stop_capture());
         case 'event':
-            return handle_event(message.event);
+            return wrap_result(await handle_event((message as { action: 'event'; event: CaptureEvent }).event));
         case 'get_status':
             // T105: tab_id 以请求方 sender.tab.id 权威，避免多 tab 串台
             // （get_status 常由 content 脚本轮询，SW 侧 current_capture.tab_id 是启动时 active tab）。
-            return {
+            return wrap_result({
                 is_capturing,
                 capture_id: current_capture_id,
                 current_capture,
@@ -220,52 +246,52 @@ async function handle_message(message: any, sender?: any): Promise<any> {
                 start_time,
                 tab_id: sender?.tab?.id ?? current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
-            };
+            });
         case 'get_capture_data':
-            return get_capture_data(message.capture_id);
+            return wrap_result(await get_capture_data(payload?.capture_id as string));
         case 'list_captures':
-            return storage_list_captures();
+            return wrap_result(await storage_list_captures());
         case 'delete_capture':
-            return handle_delete_capture(message.capture_id);
+            return wrap_result(await handle_delete_capture(payload?.capture_id as string));
         case 'export_json':
-            return handle_export('json', message.capture_id);
+            return wrap_result(await handle_export('json', payload?.capture_id as string));
         case 'export_jsonl':
-            return handle_export('jsonl', message.capture_id);
+            return wrap_result(await handle_export('jsonl', payload?.capture_id as string));
         case 'export_html':
-            return handle_export('html', message.capture_id);
+            return wrap_result(await handle_export('html', payload?.capture_id as string));
         case 'export_har':
-            return handle_export('har', message.capture_id);
+            return wrap_result(await handle_export('har', payload?.capture_id as string));
         case 'flush':
             await flush_all();
-            return { success: true };
+            return wrap_result({ success: true });
         case 'restart_bridge':
-            return handle_restart_bridge();
+            return wrap_result(await handle_restart_bridge());
         case 'test_bridge_fetch':
-            return handle_test_bridge_fetch();
+            return wrap_result(await handle_test_bridge_fetch());
         case 'app_log_batch':
-            return handle_app_log_batch(message);
+            return wrap_result(await handle_app_log_batch(message as { action: 'app_log_batch'; entries: AppLogEntry[] }));
         case 'export_app_logs':
-            return handle_export_app_logs(message);
+            return wrap_result(await handle_export_app_logs(payload as { options?: unknown } | undefined));
         case 'clear_app_logs':
             await get_app_log_transport().clear();
-            return { success: true };
+            return wrap_result({ success: true });
         case 'get_app_log_size': {
             const size_bytes = await get_app_log_transport().get_total_size_bytes();
-            return { success: true, size_bytes };
+            return wrap_result({ size_bytes });
         }
         case 'set_log_level': {
-            if (message.level) {
-                Logger.set_level(message.level);
-                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: message.level } });
+            if (payload?.level) {
+                Logger.set_level(payload.level as Parameters<typeof Logger.set_level>[0]);
+                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: payload.level } });
             }
-            return { success: true };
+            return wrap_result({ success: true });
         }
         case 'flush_app_logs': {
             await get_app_log_transport().flush();
-            return { success: true };
+            return wrap_result({ success: true });
         }
         default:
-            logger.warn('Unknown message action', { action: message.action });
+            logger.warn('Unknown message action', { action: incoming_action });
             return { success: false, error: 'Unknown action' };
     }
 }
@@ -280,11 +306,11 @@ async function handle_delete_capture(capture_id: string): Promise<{ success: boo
     return { success: true };
 }
 
-/** export 系列：导出前落盘缓冲事件。 */
+/** export 系列：导出前落盘缓冲事件，返回导出内容（响应 data）。 */
 async function handle_export(
     format: 'json' | 'jsonl' | 'html' | 'har',
     capture_id: string,
-): Promise<{ success: boolean; [k: string]: unknown }> {
+): Promise<string> {
     await flush_all(); // T107: 导出前落盘缓冲事件
     const export_map = {
         json: export_json,
@@ -292,7 +318,7 @@ async function handle_export(
         html: export_html,
         har: export_har,
     };
-    return { success: true, [format]: await export_map[format](capture_id) };
+    return export_map[format](capture_id);
 }
 
 /** 重启 Bridge 客户端并读最新配置。 */
@@ -318,8 +344,8 @@ async function handle_test_bridge_fetch(): Promise<{ success: boolean; bridge_ur
     }
 }
 
-/** app_log 批量写入。 */
-async function handle_app_log_batch(message: any): Promise<{ success: boolean }> {
+/** app_log 批量写入（content→SW 内部扁平消息）。 */
+async function handle_app_log_batch(message: { action: 'app_log_batch'; entries: AppLogEntry[] }): Promise<{ success: boolean }> {
     const transport = get_app_log_transport();
     for (const entry of (message.entries || [])) {
         if (!entry.id) continue;
@@ -328,17 +354,16 @@ async function handle_app_log_batch(message: any): Promise<{ success: boolean }>
     return { success: true };
 }
 
-/** app_log 导出。 */
-async function handle_export_app_logs(message: any): Promise<{ success: boolean; data?: string; error?: string }> {
+/** app_log 导出：成功返回内容字符串（响应 data），失败返回错误结果。 */
+async function handle_export_app_logs(payload?: { options?: unknown }): Promise<string | { success: false; error: string }> {
     try {
-        const content = await export_app_logs(message.options || {});
-        return { success: true, data: content };
+        return await export_app_logs(payload?.options || {});
     } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) };
     }
 }
 
-async function get_capture_data(capture_id: string): Promise<any> {
+async function get_capture_data(capture_id: string): Promise<CaptureRecord | { success: false; error: string }> {
     const capture = await get_capture(capture_id);
     if (!capture) return { success: false, error: 'Capture not found' };
 
@@ -347,10 +372,7 @@ async function get_capture_data(capture_id: string): Promise<any> {
     // every FLUSH_INTERVAL_MS) are consistent for the caller.
     await flush_all();
 
-    return {
-        success: true,
-        capture,
-    };
+    return capture;
 }
 
 async function start_capture(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {

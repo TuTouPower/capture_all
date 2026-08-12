@@ -1,5 +1,6 @@
 // dashboard/dashboard_captures.ts — 采集列表页
 import { t } from '../shared/i18n';
+import { send_ui_message } from '../../shared/message_contract';
 import {
     is_extension, esc, I, num, fmt_size, est_bytes, pct,
     capture_name, capture_dur, format_system_time,
@@ -170,14 +171,14 @@ function wire_captures(): void {
     c.querySelector('#batchExport')?.addEventListener('click', () => selected.forEach((id) => export_capture(id)));
     c.querySelector('#batchDel')?.addEventListener('click', async () => {
         if (!selected.size || !confirm(t('deleteSelectedConfirm'))) return;
-        for (const id of selected) await chrome.runtime.sendMessage({ action: 'delete_capture', capture_id: id });
+        for (const id of selected) await send_ui_message('delete_capture', { capture_id: id });
         selected.clear(); await load_captures(); router.render_content();
     });
 }
 
 async function del_capture(id: string): Promise<void> {
     if (!is_extension || !confirm(t('deleteCaptureConfirm'))) return;
-    await chrome.runtime.sendMessage({ action: 'delete_capture', capture_id: id });
+    await send_ui_message('delete_capture', { capture_id: id });
     get_selected().delete(id);
     await load_captures(); router.render_content();
 }

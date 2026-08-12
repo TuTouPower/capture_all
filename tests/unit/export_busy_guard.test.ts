@@ -43,7 +43,13 @@ beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     install_chrome_mock();
-    send_message_impl = vi.fn(async () => ({ success: true }));
+    send_message_impl = vi.fn(async (msg: any) => {
+        // t146: 新契约响应 { success, data }（导出内容在 data）；archive 走 read_capture_snapshot + build_archive
+        if (msg.action === 'export_json' || msg.action === 'export_har') {
+            return { success: true, data: JSON.stringify({ exported: msg.action }) };
+        }
+        return { success: true };
+    });
     read_capture_snapshot.mockResolvedValue({
         capture: { capture_id: 'cap_busy' },
         user_events: [], nav_events: [], error_events: [], storage_changes: [], cookie_changes: [],
@@ -155,13 +161,16 @@ describe('export_capture 防重入 (p027)', () => {
         const second = export_capture('cap_json', 'json');
         await second;
 
-        resolve_msg({ success: true, json: '{"ok":1}' });
+        // t146: 新契约响应 { success, data }（SW handle_export 返回内容在 data）
+        resolve_msg({ success: true, data: '{"ok":1}' });
         await first;
 
-        // 单次 export action + 单次下载
+        // 单次 export action + 单次下载 + 下载内容来自 data（导出解包路径有行为覆盖）
         const json_calls = (globalThis as any).chrome.runtime.sendMessage.mock.calls.filter((c: any) => c[0].action === 'export_json');
         expect(json_calls).toHaveLength(1);
         expect(download_blob).toHaveBeenCalledTimes(1);
+        const blob_arg = (download_blob as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(await blob_arg.text()).toBe('{"ok":1}');
     });
 
     it('har 格式导出串行两次均执行（格式无关 guard 释放，p030）', async () => {
@@ -180,5 +189,8 @@ describe('export_capture 防重入 (p027)', () => {
         expect(download_blob).toHaveBeenCalledTimes(2);
         const har_calls = (globalThis as any).chrome.runtime.sendMessage.mock.calls.filter((c: any) => c[0].action === 'export_har');
         expect(har_calls).toHaveLength(2);
+        // 下载内容来自 data（导出解包路径）
+        const blob_arg = (download_blob as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(await blob_arg.text()).toBe(JSON.stringify({ exported: 'export_har' }));
     });
 });

@@ -50,13 +50,18 @@ describe('popup immediate refresh on open (BUG-012)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         send_message_mock.mockResolvedValue({
-            stats: { event_count: 5, user_action_count: 2, request_count: 10 },
+            success: true,
+            data: {
+                current_capture: {
+                    stats: { event_count: 5, user_action_count: 2, request_count: 10 },
+                },
+            },
         });
     });
 
     it('打开采集中 popup 后立即调用 get_status 获取统计，不等 1 秒', async () => {
         // 模拟 popup 初始化：load_state 检测到 is_capturing=true → start_timer → refresh_counts
-        // refresh_counts 调用 chrome.runtime.sendMessage({ action: 'get_status' })
+        // refresh_counts 调用 send_ui_message('get_status', {}) → sendMessage({ action: 'get_status', payload: {} })
 
         // 直接模拟 start_timer 的核心行为
         // start_timer 应该在 setInterval 之前立即调用 refresh_counts
@@ -66,12 +71,12 @@ describe('popup immediate refresh on open (BUG-012)', () => {
         // 模拟 start_timer 内部逻辑
         function simulate_start_timer() {
             // 立即刷新（这是修复的核心）
-            send_message_mock({ action: 'get_status' }).then((status: any) => {
+            send_message_mock({ action: 'get_status', payload: {} }).then((status: any) => {
                 calls_before.push('immediate');
             });
             // 1 秒后再次刷新
             setTimeout(() => {
-                send_message_mock({ action: 'get_status' }).then((status: any) => {
+                send_message_mock({ action: 'get_status', payload: {} }).then((status: any) => {
                     calls_before.push('interval');
                 });
             }, 1000);
@@ -80,7 +85,7 @@ describe('popup immediate refresh on open (BUG-012)', () => {
         simulate_start_timer();
 
         // 立即断言：get_status 已被调用
-        expect(send_message_mock).toHaveBeenCalledWith({ action: 'get_status' });
+        expect(send_message_mock).toHaveBeenCalledWith({ action: 'get_status', payload: {} });
         expect(send_message_mock).toHaveBeenCalledTimes(1);
     });
 
@@ -114,9 +119,9 @@ describe('popup immediate refresh on open (BUG-012)', () => {
     });
 
     it('get_status 返回的 stats 正确更新 live_counts', async () => {
-        const status = await send_message_mock({ action: 'get_status' });
-        expect(status.stats.event_count).toBe(5);
-        expect(status.stats.user_action_count).toBe(2);
-        expect(status.stats.request_count).toBe(10);
+        const status = await send_message_mock({ action: 'get_status', payload: {} });
+        expect(status.data.current_capture.stats.event_count).toBe(5);
+        expect(status.data.current_capture.stats.user_action_count).toBe(2);
+        expect(status.data.current_capture.stats.request_count).toBe(10);
     });
 });

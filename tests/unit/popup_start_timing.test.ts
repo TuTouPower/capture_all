@@ -142,8 +142,8 @@ describe('start_capture storage timing (BUG-015)', () => {
         }
         const body = src.slice(fn_start, fn_end + 1);
 
-        // sendMessage('start') 应出现在 storage.local.set({ is_capturing }) 之前
-        const send_msg_pos = body.indexOf("sendMessage({ action: 'start'");
+        // send_ui_message('start') 应出现在 storage.local.set({ is_capturing }) 之前
+        const send_msg_pos = body.indexOf("send_ui_message('start'");
         const storage_is_capturing_pos = body.indexOf('is_capturing: true');
 
         expect(send_msg_pos).toBeGreaterThan(-1);

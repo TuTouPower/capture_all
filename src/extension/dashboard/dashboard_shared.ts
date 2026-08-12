@@ -7,6 +7,7 @@ import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot, type CaptureSnapshot } from '../shared/capture_data_reader';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
+import { send_ui_message, type UiAction } from '../../shared/message_contract';
 import { t, type I18nStrings } from '../shared/i18n';
 import { I } from './icons';
 
@@ -208,7 +209,10 @@ export function event_title(e: CaptureEvent): string {
 // ── data loading ────────────────────────────────────────────────────────
 export async function load_captures(): Promise<void> {
     if (!is_extension) return;
-    try { set_captures((await chrome.runtime.sendMessage({ action: 'list_captures' })) || []); }
+    try {
+        const resp = await send_ui_message('list_captures', {});
+        set_captures(resp?.data ?? []);
+    }
     catch { set_captures([]); }
     logger.debug('Captures loaded', { count: get_captures().length });
 }
@@ -267,9 +271,9 @@ export async function load_detail(id: string): Promise<void> {
     set_detail_capture(null); set_detail_events([]); set_detail_network([]); set_detail_console([]);
     if (!is_extension) return;
     try {
-        const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
+        const r = await send_ui_message('get_capture_data', { capture_id: id });
         if (!r?.success) return;
-        set_detail_capture(r.capture);
+        set_detail_capture(r.data ?? null);
 
         const snapshot = await read_capture_snapshot(id);
         const events = merge_detail_events(id, snapshot);
@@ -293,7 +297,7 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
     try {
         if (format === 'archive') {
             // T107: 导出前 flush 缓冲事件，避免丢最近数据；flush 失败则中止（不静默旧快照）
-            const flush_res = await chrome.runtime.sendMessage({ action: 'flush' });
+            const flush_res = await send_ui_message('flush', {});
             if (!flush_res?.success) { alert(t('exportFailedFlush')); return; }
             const snapshot = await read_capture_snapshot(id);
             if (!snapshot.capture) { alert(t('exportFailed')); return; }
@@ -321,12 +325,12 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
             await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
             return;
         }
-        const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
-        const r = await chrome.runtime.sendMessage({ action, capture_id: id });
+        const action: UiAction = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
+        const r = await send_ui_message(action, { capture_id: id });
         if (!r?.success) { alert(t('exportFailed')); return; }
         const ext = format === 'html' ? 'html' as const : format === 'har' ? 'har' as const : format === 'jsonl' ? 'jsonl' as const : 'json' as const;
         const mime = format === 'html' ? 'text/html' : 'application/json';
-        const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
+        const content = r.data ?? '';
         const blob = new Blob([content], { type: mime });
         const capture_filename = build_capture_filename({
             export_capture_directory: get_user_config().export_capture_directory,

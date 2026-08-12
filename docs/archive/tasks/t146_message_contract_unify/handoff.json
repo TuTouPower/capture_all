@@ -1,0 +1,30 @@
+{
+  "tid": "t146",
+  "attempt": 1,
+  "execution_id": "ec03a9860a2b485faaf37e06a52f8c8b",
+  "status": "done",
+  "branch": "t146_message_contract_unify",
+  "base_sha": "17cde0df6d476d46f988cfc87dca80fcfc7b96c1",
+  "tests": "vitest run: 138 files / 1444 tests passed（含基线既有 1 个 unhandled error：popup_onchanged_race 在 jsdom 环境无 indexedDB 的 app_log flush，基线同态）",
+  "blackbox": "npx tsc --noEmit exit 0",
+  "review": "Round 1 code PASS / test FAIL（export_busy_guard mock 陈旧）→ Round 2 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": [
+      "service_worker.ts handle_message 请求解构 {action,payload}（content→SW 的 event/app_log_batch 保持扁平）、响应经 wrap_result 统一 {success,data?,error?}",
+      "src/shared/message_contract.ts UiRequest/UiResponse 定义生效；popup/dashboard 全部改 send_ui_message(action,payload)，响应取 res.data",
+      "tests/unit/sw_action_contract.test.ts AC-001 行为断言 get_capture_data 响应 {success:true,data:capture}"
+    ],
+    "AC-002": [
+      "src/shared/message_contract.ts 定义 UI_ACTIONS/UiRequest/UiResponse/UiPayloadMap/UiDataMap 与 send_ui_message<T>；UI 侧已无裸 chrome.runtime.sendMessage 调用（grep 验证仅剩 content 内部消息与 SW handler 自身）",
+      "npx tsc --noEmit exit 0（类型化 sendMessage 无 any 返回依赖）"
+    ],
+    "AC-003": [
+      "npm test 138 files/1444 tests passed：popup_start_timing/popup_onchanged_race/dashboard_export_flush_saveas/export_busy_guard/t115/status_poll_sender_tab/storage_limit_active_delete 等 start/stop/状态轮询/列表/导出行为测试全绿"
+    ],
+    "AC-004": [
+      "docs/blueprint/conventions.md「消息通信」节改为 {action,payload?}/{success,data?,error?} 生效版，引用 message_contract.ts 与 send_ui_message，注明 start/stop data 为结果、get_status data 为状态对象、list_captures data 为数组、get_capture_data data 为 capture，及 content 内部消息扁平"
+    ]
+  },
+  "pending": [],
+  "findings": []
+}

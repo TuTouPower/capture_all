@@ -13,6 +13,7 @@ import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { generate_capture_id } from '../../shared/id';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
+import { send_ui_message } from '../../shared/message_contract';
 import type { CaptureConfig } from '../../shared/types';
 
 const logger = new Logger('popup', get_app_log_transport());
@@ -259,10 +260,7 @@ function wire_view(): void {
     view.querySelector('#exportBtn')?.addEventListener('click', async () => {
         if (!finished_capture) return;
         try {
-            const resp = await chrome.runtime.sendMessage({
-                action: 'get_capture_data',
-                capture_id: finished_capture.capture_id,
-            });
+            const resp = await send_ui_message('get_capture_data', { capture_id: finished_capture.capture_id });
             if (!resp?.success) {
                 logger.error('Export failed', resp?.error);
                 alert(`${t('error')}: ${resp?.error ?? 'Export failed'}`);
@@ -359,7 +357,7 @@ async function start_capture(): Promise<void> {
     const capture_id = generate_capture_id();
     logger.info('Starting capture', { capture_id });
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'start', capture_id: capture_id, config });
+        const response = await send_ui_message('start', { capture_id, config });
         if (!response?.success) {
             logger.error('Start capture failed', response?.error);
             alert(`${t('error')}: ${response?.error}`); return;
@@ -392,7 +390,7 @@ async function stop_capture(): Promise<void> {
     if (!is_extension) { state = 'saved'; render(); return; }
     logger.info('Stopping capture');
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'stop' });
+        const response = await send_ui_message('stop', {});
         if (!response?.success) {
             logger.warn('stop returned success=false, forcing state transition');
         } else {
@@ -438,8 +436,8 @@ function stop_timer(): void {
 async function refresh_counts(): Promise<void> {
     if (!is_extension || state !== 'capturing') return;
     try {
-        const status = await chrome.runtime.sendMessage({ action: 'get_status' });
-        const stats: CaptureStats | undefined = status?.stats ?? status?.current_capture?.stats;
+        const status = await send_ui_message('get_status', {});
+        const stats: CaptureStats | undefined = status?.data?.current_capture?.stats;
         if (stats) {
             live_counts = stats;
             CAPTURE.forEach((src, i) => {
@@ -457,7 +455,8 @@ async function refresh_counts(): Promise<void> {
 async function load_history(): Promise<void> {
     if (!is_extension) return;
     try {
-        recent_captures = await chrome.runtime.sendMessage({ action: 'list_captures' }) || [];
+        const resp = await send_ui_message('list_captures', {});
+        recent_captures = resp?.data ?? [];
     } catch {
         recent_captures = [];
     }

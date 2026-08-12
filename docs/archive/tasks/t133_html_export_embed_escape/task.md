@@ -1,15 +1,15 @@
 ---
-tid: t133
-slug: html_export_embed_escape
+tid: "t133"
+slug: "html_export_embed_escape"
 title: "fix: HTML 导出 JSON 嵌入转义含撇号/控制符并补回灌测试"
-status: backlog
-branch: ""
+status: "done"
+branch: "t133_html_export_embed_escape"
 worktree: ""
-review_level: full
-diff_anchor: ""
+review_level: "full"
+diff_anchor: "d5421189251ad6a703c4d478d84d0e9a2618428b"
 depends_on: ""
 conflicts_with: ""
-note: "review C1 (B2-C1): escape_for_html_embed 漏 ' 与 \n，JSON.parse 嵌入被击穿；exporter.test 只断言 toContain 不回灌"
+note: "review C1 (B2-C1): escape_for_html_embed 漏 ' 与 n，JSON.parse 嵌入被击穿；exporter.test 只断言 toContain 不回灌"
 ---
 
 # Task 过程总账
@@ -44,14 +44,12 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 14:20 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t133_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t133_test_f002|minor|遗留|一句话|pNNN|
+|t133_code_f001|minor|已修|删除对 JSON.stringify 输入恒 no-op 的控制符替换，注释改为准确归因（反斜杠翻倍 + 单引号 + U+2028/29）|src/shared/escape.ts:3-20|
+|t133_test_f001|important|已修|extract_embedded_json 改用 new Function 走真实 JS 字面量解码，pre-fix 缺陷（' / \n 未转义）抛 SyntaxError 捕获回归|tests/unit/exporter.test.ts:185-191|
 
 ## 收尾报告
 
@@ -60,24 +58,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/003 回灌验证（单引号/换行/</script> 注入均可 parse），AC-004 用 new Function 真实字面量解码；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
+- Round 1 code：PASS
+- Round 1 test：FAIL（f001 回灌解码假绿，已修）
+- Round 2 code：PASS
+- Round 2 test：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- escape_for_html_embed 补反斜杠/单引号/U+2028-29 转义，HTML 导出内嵌 JSON 不再被撇号/换行击穿；回灌测试改走真实 JS 字面量解码消除假绿。

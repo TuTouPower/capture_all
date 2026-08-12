@@ -1,9 +1,10 @@
 // dashboard/dashboard_detail.ts — 采集详情页 + 网络检查器
 import type { CaptureEvent } from '../../shared/types';
+import { t, type I18nStrings } from '../shared/i18n';
 import {
     debounce, esc, I, num,
     capture_name, capture_dur, format_system_time,
-    KIND, KIND_LABEL, rel_time, event_kind, event_detail, event_title,
+    KIND, kind_label, rel_time, event_kind, event_detail, event_title,
     get_user_config,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     get_dt_tab, set_dt_tab, get_dt_view, set_dt_view, get_dt_zoom, set_dt_zoom,
@@ -16,23 +17,23 @@ import {
     router,
 } from './dashboard_shared';
 
-const DT_TABS: [string, string][] = [
-    ['overview', '概览'], ['timeline', '时间线'], ['user_action', '用户行为'],
-    ['navigation', '页面导航'], ['network', '网络请求'], ['console', '控制台'],
-    ['error', '错误异常'], ['storage', 'Storage'], ['cookie', 'Cookie'],
-    ['config', '本次配置'],
+const DT_TABS: [string, keyof I18nStrings][] = [
+    ['overview', 'overview'], ['timeline', 'timeline'], ['user_action', 'capUser'],
+    ['navigation', 'capNav'], ['network', 'capNet'], ['console', 'capConsole'],
+    ['error', 'capError'], ['storage', 'capStorage'], ['cookie', 'capCookie'],
+    ['config', 'configLabel'],
 ];
 
 function detail_metrics(): { icon: string; lbl: string; val: string; color: string; danger?: boolean; filter?: string }[] {
     const st = get_detail_capture()?.stats;
     return [
-        { icon: 'ui', lbl: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', filter: 'user' },
-        { icon: 'nav', lbl: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav' },
-        { icon: 'net', lbl: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network' },
-        { icon: 'console', lbl: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console' },
-        { icon: 'err', lbl: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'error' },
-        { icon: 'storage', lbl: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage' },
-        { icon: 'cookie', lbl: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', filter: 'cookie' },
+        { icon: 'ui', lbl: t('capUser'), val: num(st?.user_action_count || 0), color: 'var(--src-user)', filter: 'user' },
+        { icon: 'nav', lbl: t('capNav'), val: num(st?.nav_count || 0), color: 'var(--src-nav)', filter: 'nav' },
+        { icon: 'net', lbl: t('capNet'), val: num(st?.request_count || 0), color: 'var(--src-network)', filter: 'network' },
+        { icon: 'console', lbl: t('capConsole'), val: num(st?.log_count || 0), color: 'var(--src-console)', filter: 'console' },
+        { icon: 'err', lbl: t('capError'), val: num(st?.error_count || 0), color: 'var(--src-error)', danger: true, filter: 'error' },
+        { icon: 'storage', lbl: t('capStorage'), val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', filter: 'storage' },
+        { icon: 'cookie', lbl: t('capCookie'), val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', filter: 'cookie' },
     ];
 }
 
@@ -42,12 +43,12 @@ function render_detail(): string {
     const dt_tab = get_dt_tab();
     const dt_sel = get_dt_sel();
     const dt_insp_open = get_dt_insp_open();
-    const name = s ? capture_name(s) : '采集详情';
+    const name = s ? capture_name(s) : t('captureDetail');
     const showInsp = dt_tab === 'timeline' && dt_insp_open && dt_sel >= 0;
     return `<div class="page">
         <div class="dt-bc">
             <button class="back" data-back="1">${I.chevL} Capture All</button>
-            <span class="sep">/</span><span class="crumb" data-back="1">采集记录</span>
+            <span class="sep">/</span><span class="crumb" data-back="1">${t('captureRecords')}</span>
             <span class="sep">/</span><span class="cur">${esc(name)}</span>
         </div>
         <div class="dt-head">
@@ -55,19 +56,19 @@ function render_detail(): string {
                 <div class="dt-title-row">
                     <h1>${esc(name)}</h1>
                     ${s ? `<span class="dt-id">${esc(s.capture_id)}</span>` : ''}
-                    <span class="dt-state"><span class="dot"></span>${s?.status === 'capturing' ? '采集中' : '已结束'}</span>
+                    <span class="dt-state"><span class="dot"></span>${s?.status === 'capturing' ? t('capturing') : t('ended')}</span>
                 </div>
                 <div class="dt-meta">
                     ${I.cal}<span class="mono">${esc(s ? format_system_time(s.started_at, user_config) : '')}</span>
-                    <span class="mdot">·</span><span>时长 <span class="mono">${s ? capture_dur(s) : '—'}</span></span>
+                    <span class="mdot">·</span><span>${t('duration')} <span class="mono">${s ? capture_dur(s) : '—'}</span></span>
                 </div>
             </div>
             <div class="dt-head-r">
                 <select id="dtExportFmt" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);margin-right:6px">
-                    <option value="archive">ZIP 完整包</option><option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
+                    <option value="archive">${t('exportZip')}</option><option value="json">JSON</option><option value="jsonl">JSONL</option><option value="html">HTML</option><option value="har">HAR</option>
                 </select>
-                <button class="btn" data-dexport="1"><span>${I.export}</span>导出</button>
-                <button class="btn" data-open-url="1"><span>${I.ext}</span>打开原页面</button>
+                <button class="btn" data-dexport="1"><span>${I.export}</span>${t('exportLabel')}</button>
+                <button class="btn" data-open-url="1"><span>${I.ext}</span>${t('openOriginalPage')}</button>
             </div>
         </div>
         <div class="dt-metrics">
@@ -77,7 +78,7 @@ function render_detail(): string {
             </button>`).join('')}
         </div>
         <nav class="dt-tabs">
-            ${DT_TABS.map(([k, l]) => `<button data-tab="${k}" data-on="${dt_tab === k ? 1 : 0}">${l}</button>`).join('')}
+            ${DT_TABS.map(([k, l]) => `<button data-tab="${k}" data-on="${dt_tab === k ? 1 : 0}">${t(l)}</button>`).join('')}
         </nav>
         ${render_detail_tab(showInsp)}
     </div>`;
@@ -96,11 +97,11 @@ function render_detail_tab(showInsp: boolean): string {
         return `<div class="dt-body dt-network-body" data-insp="${show_net_insp ? 1 : 0}"><div class="dt-list">${render_net_table(selected_net_idx)}</div>${show_net_insp ? `<div class="dt-insp-handle"></div>${render_net_inspector(selected_net_idx)}` : ''}</div>`;
     }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
-    if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], ['时间', '类型', '事件', '详情', '来源'])}</div>`;
-    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], ['时间', '类型', '事件', 'URL / 来源 / 详情', '来源'])}</div>`;
-    if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'unhandled_rejection', 'resource_error', 'network_failed', 'capture_error'], ['时间', '类型', '错误消息', '堆栈', '来源'])}</div>`;
-    if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change'], ['时间', '类型', 'Key', '详情', '来源'])}</div>`;
-    if (dt_tab === 'cookie') return `<div class="simple-pad scroll">${render_simple_events(['cookie_change'], ['时间', '类型', '名称', '详情', '来源'])}</div>`;
+    if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], [t('time'), t('type'), t('eventLabel'), t('detail'), t('source')])}</div>`;
+    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], [t('time'), t('type'), t('eventLabel'), t('urlSourceDetail'), t('source')])}</div>`;
+    if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'unhandled_rejection', 'resource_error', 'network_failed', 'capture_error'], [t('time'), t('type'), t('errorMessage'), t('stack'), t('source')])}</div>`;
+    if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change'], [t('time'), t('type'), t('keyLabel'), t('detail'), t('source')])}</div>`;
+    if (dt_tab === 'cookie') return `<div class="simple-pad scroll">${render_simple_events(['cookie_change'], [t('time'), t('type'), t('nameLabel'), t('detail'), t('source')])}</div>`;
     // timeline
     return `<div class="dt-body" data-insp="${showInsp ? 1 : 0}">
         ${render_dt_rail()}
@@ -115,20 +116,20 @@ export function render_dt_rail(): string {
     const counts: Record<string, number> = { all: detail_events.length };
     for (const e of detail_events) { const k = event_kind(e); counts[k] = (counts[k] || 0) + 1; }
     const quick: [string, string, string, string][] = [
-        ['all', 'navCaptures', '全部', 'var(--ink-2)'],
-        ['error', 'err', '错误异常', 'var(--src-error)'],
-        ['user', 'ui', '用户行为', 'var(--src-user)'],
-        ['network', 'net', '网络请求', 'var(--src-network)'],
-        ['console', 'console', '控制台', 'var(--src-console)'],
-        ['nav', 'nav', '页面导航', 'var(--src-nav)'],
-        ['storage', 'storage', 'Storage', 'var(--src-storage)'],
-        ['cookie', 'cookie', 'Cookie', 'var(--src-cookie)'],
-        ['dom', 'dom', 'DOM', 'var(--src-dom)'],
+        ['all', 'navCaptures', t('allFilter'), 'var(--ink-2)'],
+        ['error', 'err', t('capError'), 'var(--src-error)'],
+        ['user', 'ui', t('capUser'), 'var(--src-user)'],
+        ['network', 'net', t('capNet'), 'var(--src-network)'],
+        ['console', 'console', t('capConsole'), 'var(--src-console)'],
+        ['nav', 'nav', t('capNav'), 'var(--src-nav)'],
+        ['storage', 'storage', t('capStorage'), 'var(--src-storage)'],
+        ['cookie', 'cookie', t('capCookie'), 'var(--src-cookie)'],
+        ['dom', 'dom', t('kindDom'), 'var(--src-dom)'],
     ];
     return `<aside class="dt-rail scroll">
-        <div class="dt-rail-search">${I.search}<input placeholder="搜索事件、URL、Storage key…" id="dtSearch" value="${esc((document.getElementById('dtSearch') as HTMLInputElement | null)?.value ?? '')}"><kbd>⌘K</kbd></div>
+        <div class="dt-rail-search">${I.search}<input placeholder="${t('searchRailPlaceholder')}" id="dtSearch" value="${esc((document.getElementById('dtSearch') as HTMLInputElement | null)?.value ?? '')}"><kbd>⌘K</kbd></div>
         <div class="dt-rail-sec">
-            <div class="dt-rail-hd">快速筛选</div>
+            <div class="dt-rail-hd">${t('quickFilter')}</div>
             ${quick.map(([k, ic, lbl, color]) => `<button class="qfilter" data-quick="${k}" data-on="${dt_quick === k ? 1 : 0}">
                 <span class="qf-ic" style="color:${color}">${I[ic]}</span><span class="qf-lbl">${lbl}</span>
                 <span class="qf-n">${num(counts[k === 'all' ? 'all' : k] || 0)}</span>
@@ -163,25 +164,25 @@ function render_dt_list(): string {
             : `<span class="ev-detail" title="${esc(event_detail(e))}">${esc(event_detail(e))}</span>`;
         return `<tr data-ev="${detail_events.indexOf(e)}" data-sel="${dt_sel === detail_events.indexOf(e) ? 1 : 0}">
             <td><span class="ev-t">${rel_time(e.relative_time_ms)}</span></td>
-            <td><span class="ev-type" style="color:${k.color}">${I[k.icon]} ${KIND_LABEL[event_kind(e)]}</span></td>
+            <td><span class="ev-type" style="color:${k.color}">${I[k.icon]} ${kind_label(event_kind(e))}</span></td>
             <td><span class="ev-name${isErr ? ' err' : ''}">${esc(event_title(e))}</span></td>
             <td>${detailCell}</td>
             <td><span class="ev-src">${esc((e.data as Record<string, unknown>)?.source || e.source || '—')}</span></td>
         </tr>`;
     }).join('');
-    const empty = `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:36px">暂无事件</td></tr>`;
+    const empty = `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:36px">${t('noEvents')}</td></tr>`;
     return `<div class="dt-list">
         <div class="dt-list-bar">
-            <h2>时间线 <span class="cnt mono">（${num(list.length)} 个事件）</span></h2>
+            <h2>${t('timeline')} <span class="cnt mono">(${num(list.length)} ${t('eventsCountSuffix')})</span></h2>
             <div class="spacer"></div>
             <div class="viewtog">
-                <button data-view="list" data-on="${dt_view === 'list' ? 1 : 0}">${I.list} 列表视图</button>
-                <button data-view="trace" data-on="${dt_view === 'trace' ? 1 : 0}">${I.trace} 轨道视图</button>
+                <button data-view="list" data-on="${dt_view === 'list' ? 1 : 0}">${I.list} ${t('listView')}</button>
+                <button data-view="trace" data-on="${dt_view === 'trace' ? 1 : 0}">${I.trace} ${t('trackView')}</button>
             </div>
         </div>
         ${dt_view === 'trace'
             ? `<div class="dt-events">${render_trace()}</div>`
-            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>时间</th><th>类型</th><th>事件</th><th>详情</th><th>来源</th></tr></thead><tbody>${rows || empty}</tbody></table></div>`}
+            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>${t('time')}</th><th>${t('type')}</th><th>${t('eventLabel')}</th><th>${t('detail')}</th><th>${t('source')}</th></tr></thead><tbody>${rows || empty}</tbody></table></div>`}
     </div>`;
 }
 
@@ -231,10 +232,10 @@ function render_trace(): string {
     const dt_play = get_dt_play();
     const dt_zoom = get_dt_zoom();
     const lanes: [string, string, string][] = [
-        ['network', 'net', 'Network / 网络'], ['user', 'ui', 'UI Events / 界面事件'],
-        ['console', 'console', 'Console / 控制台'], ['dom', 'dom', 'DOM 变更'],
-        ['storage', 'storage', 'Storage / 存储'], ['nav', 'nav', 'Navigation / 导航'],
-        ['error', 'err', 'Errors / 错误'],
+        ['network', 'net', t('laneNetwork')], ['user', 'ui', t('laneUi')],
+        ['console', 'console', t('laneConsole')], ['dom', 'dom', t('laneDom')],
+        ['storage', 'storage', t('laneStorage')], ['nav', 'nav', t('laneNav')],
+        ['error', 'err', t('laneError')],
     ];
     const maxT = detail_events.reduce((a, e) => Math.max(a, e.relative_time_ms), 1);
     const TICKN = 8;
@@ -260,7 +261,7 @@ function render_trace(): string {
     }).join('');
     return `<div class="tl">
         <div class="tl-toolbar">
-            <div class="tl-zoom"><span>缩放</span><input type="range" min="0" max="100" value="${dt_zoom}" id="tlZoom"></div>
+            <div class="tl-zoom"><span>${t('zoom')}</span><input type="range" min="0" max="100" value="${dt_zoom}" id="tlZoom"></div>
             <span class="tl-playtime mono" id="tlPlaytime">${fmt_axis(playMs)}</span>
         </div>
         <div class="tl-grid">
@@ -290,15 +291,15 @@ function render_dt_inspector(): string {
     const d = (e.data || {}) as Record<string, unknown>;
     const k = event_kind(e);
     const fields: [string, string][] = [
-        ['类型', KIND_LABEL[k] + ' · ' + e.type],
-        ['时间', rel_time(e.relative_time_ms)],
-        ['绝对时间', format_system_time(e.absolute_time, user_config)],
-        ['来源', String(d.source || e.source || '—')],
+        [t('type'), kind_label(k) + ' · ' + e.type],
+        [t('time'), rel_time(e.relative_time_ms)],
+        [t('absoluteTime'), format_system_time(e.absolute_time, user_config)],
+        [t('source'), String(d.source || e.source || '—')],
     ];
     if (e.type === 'network_request') {
-        fields.push(['方法', String(d.method || '')], ['状态', String(d.status_code || '')], ['URL', String(d.url || '')], ['耗时', d.duration_ms != null ? Math.round(d.duration_ms as number) + ' ms' : '—']);
+        fields.push([t('method'), String(d.method || '')], [t('status'), String(d.status_code || '')], [t('url'), String(d.url || '')], [t('duration'), d.duration_ms != null ? Math.round(d.duration_ms as number) + ' ms' : '—']);
     } else {
-        fields.push(['详情', event_detail(e)]);
+        fields.push([t('detail'), event_detail(e)]);
     }
     return `<aside class="dt-insp scroll">
         <div class="dti-hd">
@@ -313,10 +314,10 @@ function render_dt_inspector(): string {
 
 function render_net_table(selected_net_idx = get_dt_net_sel()): string {
     const detail_network = get_detail_network();
-    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">暂无网络请求</div>`;
+    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">${t('noNetworkRequests')}</div>`;
     return `<div class="dt-events"><div class="net"><div class="net-table scroll">
         <div class="net-row net-head mono" style="grid-template-columns:130px 64px minmax(220px,1fr) 60px 90px 84px">
-            <span>时间</span><span>方法</span><span>URL</span><span>状态</span><span>类型</span><span>耗时</span>
+            <span>${t('time')}</span><span>${t('method')}</span><span>${t('url')}</span><span>${t('status')}</span><span>${t('type')}</span><span>${t('duration')}</span>
         </div>
         ${detail_network.length ? detail_network.map((r, idx) => {
         const err = (r.status_code || 0) >= 400;
@@ -346,26 +347,26 @@ function render_net_inspector(selected_net_idx = get_dt_net_sel()): string {
             <div class="dti-nav"><button class="ibtn" data-net-insp-close="1">${I.close}</button></div>
         </div>
         <div class="dti-body">
-            <div class="ov-panel-hd">基本信息</div>
+            <div class="ov-panel-hd">${t('basicInfo')}</div>
             <div class="dti-grid c2" style="margin-top:4px">
-                <div class="dti-field"><span class="k">方法</span><span class="v mono">${esc(req.method)}</span></div>
-                <div class="dti-field"><span class="k">状态码</span><span class="v mono" style="color:${err ? 'var(--red-ink)' : 'var(--green-ink)'}">${esc(req.status_code)} ${esc(req.status_text || '')}</span></div>
-                <div class="dti-field"><span class="k">资源类型</span><span class="v mono">${esc(req.resource_type)}</span></div>
-                <div class="dti-field"><span class="k">耗时</span><span class="v mono">${req.duration_ms != null ? Math.round(req.duration_ms) + ' ms' : '—'}</span></div>
-                <div class="dti-field"><span class="k">协议</span><span class="v mono">${esc(req.protocol || '—')}</span></div>
+                <div class="dti-field"><span class="k">${t('method')}</span><span class="v mono">${esc(req.method)}</span></div>
+                <div class="dti-field"><span class="k">${t('statusCode')}</span><span class="v mono" style="color:${err ? 'var(--red-ink)' : 'var(--green-ink)'}">${esc(req.status_code)} ${esc(req.status_text || '')}</span></div>
+                <div class="dti-field"><span class="k">${t('resourceType')}</span><span class="v mono">${esc(req.resource_type)}</span></div>
+                <div class="dti-field"><span class="k">${t('duration')}</span><span class="v mono">${req.duration_ms != null ? Math.round(req.duration_ms) + ' ms' : '—'}</span></div>
+                <div class="dti-field"><span class="k">${t('protocol')}</span><span class="v mono">${esc(req.protocol || '—')}</span></div>
                 <div class="dti-field"><span class="k">MIME</span><span class="v mono">${esc(req.mime_type || '—')}</span></div>
-                <div class="dti-field"><span class="k">缓存</span><span class="v mono">${req.from_cache ? 'from ' + (req.cache_status || 'cache') : 'no cache'}</span></div>
-                <div class="dti-field"><span class="k">采集方式</span><span class="v mono">${esc(req.capture_method || '—')}</span></div>
+                <div class="dti-field"><span class="k">${t('cache')}</span><span class="v mono">${req.from_cache ? 'from ' + (req.cache_status || 'cache') : 'no cache'}</span></div>
+                <div class="dti-field"><span class="k">${t('captureMethod')}</span><span class="v mono">${esc(req.capture_method || '—')}</span></div>
             </div>
-            <div class="dti-field span2" style="margin-top:4px"><span class="k">URL</span><span class="v mono" style="word-break:break-all">${esc(req.url)}</span></div>
-            ${req.error_text ? `<div class="dti-field span2"><span class="k">错误</span><span class="v mono" style="color:var(--red-ink)">${esc(req.error_text)}</span></div>` : ''}
-            <div class="ov-panel-hd" style="margin-top:12px">请求头</div>
+            <div class="dti-field span2" style="margin-top:4px"><span class="k">${t('url')}</span><span class="v mono" style="word-break:break-all">${esc(req.url)}</span></div>
+            ${req.error_text ? `<div class="dti-field span2"><span class="k">${t('error')}</span><span class="v mono" style="color:var(--red-ink)">${esc(req.error_text)}</span></div>` : ''}
+            <div class="ov-panel-hd" style="margin-top:12px">${t('requestHeaders')}</div>
             <div class="dti-related" style="margin-top:4px">${req_hdrs}</div>
-            <div class="ov-panel-hd" style="margin-top:12px">响应头</div>
+            <div class="ov-panel-hd" style="margin-top:12px">${t('responseHeaders')}</div>
             <div class="dti-related" style="margin-top:4px">${res_hdrs}</div>
-            <div class="ov-panel-hd" style="margin-top:12px">请求体</div>
+            <div class="ov-panel-hd" style="margin-top:12px">${t('requestBody')}</div>
             <div style="margin-top:4px">${req_body}</div>
-            <div class="ov-panel-hd" style="margin-top:12px">响应体 <span style="font-weight:400;font-size:11px;color:var(--ink-3)">${req.response_body_status || ''}</span></div>
+            <div class="ov-panel-hd" style="margin-top:12px">${t('responseBody')} <span style="font-weight:400;font-size:11px;color:var(--ink-3)">${req.response_body_status || ''}</span></div>
             <div style="margin-top:4px">${res_body}</div>
         </div>
     </aside>`;
@@ -373,9 +374,9 @@ function render_net_inspector(selected_net_idx = get_dt_net_sel()): string {
 
 function render_con_table(): string {
     const detail_console = get_detail_console();
-    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">暂无控制台日志</div>`;
+    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">${t('noConsoleLogs')}</div>`;
     return `<div class="dt-events"><div class="con"><div class="con-table scroll">
-        <div class="con-row con-head mono"><span>时间</span><span>级别</span><span>消息</span><span>来源</span><span>行</span></div>
+        <div class="con-row con-head mono"><span>${t('time')}</span><span>${t('levelLabel')}</span><span>${t('messageLabel')}</span><span>${t('source')}</span><span>${t('lineLabel')}</span></div>
         ${detail_console.length ? detail_console.map((l) => `<div class="con-row${l.level === 'error' ? ' err' : ''}">
             <span class="mono dim">${esc((l as unknown as Record<string, unknown>).timestamp || '')}</span>
             <span><span class="lvl-tag" data-lvl="${esc(l.level)}">${esc(l.level)}</span></span>
@@ -390,12 +391,12 @@ function render_simple_events(types: string[], headers: string[]): string {
     const detail_events = get_detail_events();
     const list = detail_events.filter((e) => types.includes(e.type));
     const tpl = '110px 110px 1fr 1fr 90px';
-    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">暂无数据</div>`;
+    const empty = `<div style="text-align:center;color:var(--ink-4);padding:36px">${t('noData')}</div>`;
     return `<div class="net" style="padding:0"><div class="net-table scroll" style="border-top:0">
         <div class="con-row con-head mono" style="grid-template-columns:${tpl}">${headers.map((h) => `<span>${h}</span>`).join('')}</div>
         ${list.length ? list.map((e) => `<div class="con-row" style="grid-template-columns:${tpl}">
             <span class="mono">${rel_time(e.relative_time_ms)}</span>
-            <span class="mono dim">${KIND_LABEL[event_kind(e)]}</span>
+            <span class="mono dim">${kind_label(event_kind(e))}</span>
             <span class="mono dim">${esc(event_title(e))}</span>
             <span class="mono dim">${esc(event_detail(e))}</span>
             <span class="mono dim">${esc((e.data as Record<string, unknown>)?.source || e.source || '—')}</span>
@@ -410,29 +411,29 @@ function render_dt_overview(): string {
     return `<div class="simple-pad scroll">
         <div class="ov-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px">
             <div class="ov-panel">
-                <div class="ov-panel-hd">本次采集摘要</div>
+                <div class="ov-panel-hd">${t('captureSummary')}</div>
                 <div class="dti-grid c3" style="padding:6px 0 12px">
-                    <div class="dti-field"><span class="k">时长</span><span class="v mono">${detail_capture ? capture_dur(detail_capture) : '—'}</span></div>
-                    <div class="dti-field"><span class="k">事件总数</span><span class="v mono">${num(st?.event_count || detail_events.length)}</span></div>
-                    <div class="dti-field"><span class="k">错误总数</span><span class="v red mono">${num(st?.error_count || 0)}</span></div>
+                    <div class="dti-field"><span class="k">${t('duration')}</span><span class="v mono">${detail_capture ? capture_dur(detail_capture) : '—'}</span></div>
+                    <div class="dti-field"><span class="k">${t('totalEvents')}</span><span class="v mono">${num(st?.event_count || detail_events.length)}</span></div>
+                    <div class="dti-field"><span class="k">${t('totalErrors')}</span><span class="v red mono">${num(st?.error_count || 0)}</span></div>
                 </div>
-                <div class="ov-panel-hd" style="margin-top:6px">七标签概览</div>
+                <div class="ov-panel-hd" style="margin-top:6px">${t('categoryOverview')}</div>
                 <div class="dti-related" style="margin-top:4px">
                     ${[
-                        { label: '用户行为', val: num(st?.user_action_count || 0), color: 'var(--src-user)', icon: 'ui' },
-                        { label: '页面导航', val: num(st?.nav_count || 0), color: 'var(--src-nav)', icon: 'nav' },
-                        { label: '网络请求', val: num(st?.request_count || 0), color: 'var(--src-network)', icon: 'net' },
-                        { label: '控制台', val: num(st?.log_count || 0), color: 'var(--src-console)', icon: 'console' },
-                        { label: '错误异常', val: num(st?.error_count || 0), color: 'var(--src-error)', icon: 'err' },
-                        { label: 'Storage', val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', icon: 'storage' },
-                        { label: 'Cookie', val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', icon: 'cookie' },
+                        { label: t('capUser'), val: num(st?.user_action_count || 0), color: 'var(--src-user)', icon: 'ui' },
+                        { label: t('capNav'), val: num(st?.nav_count || 0), color: 'var(--src-nav)', icon: 'nav' },
+                        { label: t('capNet'), val: num(st?.request_count || 0), color: 'var(--src-network)', icon: 'net' },
+                        { label: t('capConsole'), val: num(st?.log_count || 0), color: 'var(--src-console)', icon: 'console' },
+                        { label: t('capError'), val: num(st?.error_count || 0), color: 'var(--src-error)', icon: 'err' },
+                        { label: t('capStorage'), val: num(st?.storage_change_count || 0), color: 'var(--src-storage)', icon: 'storage' },
+                        { label: t('capCookie'), val: num(st?.cookie_change_count || 0), color: 'var(--src-cookie)', icon: 'cookie' },
                     ].map((m) => `<div class="rel-row" style="cursor:default"><span class="rel-t mono">${m.val}</span><span class="rel-ic" style="color:${m.color}">${I[m.icon]}</span><span class="rel-ev">${m.label}</span></div>`).join('')}
                 </div>
             </div>
             <div class="ov-panel">
-                <div class="ov-panel-hd">关键时间线</div>
+                <div class="ov-panel-hd">${t('keyTimeline')}</div>
                 <div class="dti-related" style="margin-top:4px">
-                    ${detail_events.slice(0, 8).map((e) => { const k = KIND[event_kind(e)]; return `<div class="rel-row" style="cursor:default"><span class="rel-t">${rel_time(e.relative_time_ms)}</span><span class="rel-ic" style="color:${k.color}">${I[k.icon]}</span><span class="rel-ev">${esc(event_title(e))}</span></div>`; }).join('') || '<span style="color:var(--ink-4);font-size:12px">暂无事件</span>'}
+                    ${detail_events.slice(0, 8).map((e) => { const k = KIND[event_kind(e)]; return `<div class="rel-row" style="cursor:default"><span class="rel-t">${rel_time(e.relative_time_ms)}</span><span class="rel-ic" style="color:${k.color}">${I[k.icon]}</span><span class="rel-ev">${esc(event_title(e))}</span></div>`; }).join('') || `<span style="color:var(--ink-4);font-size:12px">${t('noEvents')}</span>`}
                 </div>
             </div>
         </div>
@@ -444,26 +445,26 @@ function render_dt_config(): string {
     const cfg = (detail_capture?.config_snapshot || {}) as Record<string, unknown>;
     const item = (l: string, on: boolean) => `<div class="dt-toggle" style="padding:8px 0"><span class="tg-lbl">${l}</span><span class="switch" data-on="${on ? 1 : 0}"><span class="knob"></span></span></div>`;
     return `<div class="simple-pad scroll" style="max-width:620px">
-        <p style="font-size:12.5px;color:var(--ink-3);margin:14px 0 0">本次采集使用的配置（只读快照）。如需修改默认值，请前往 <span class="lnk" data-nav-settings="1">设置 → 采集默认值</span>。</p>
+        <p style="font-size:12.5px;color:var(--ink-3);margin:14px 0 0">${t('configIntro')} <span class="lnk" data-nav-settings="1">${t('settingsDefaultsLink')}</span></p>
         <div class="ov-panel" style="margin-top:14px">
-            <div class="ov-panel-hd">采集模块</div>
-            ${item('用户行为', cfg.event_count_enabled !== false)}
-            ${item('页面导航', cfg.nav_count_enabled !== false)}
-            ${item('网络请求', cfg.capture_network !== false)}
-            ${item('控制台', cfg.capture_console !== false)}
-            ${item('错误异常', cfg.error_count_enabled !== false)}
-            ${item('Storage', cfg.storage_change_count_enabled !== false)}
-            ${item('Cookie', cfg.cookie_change_count_enabled !== false)}
+            <div class="ov-panel-hd">${t('captureModules')}</div>
+            ${item(t('capUser'), cfg.event_count_enabled !== false)}
+            ${item(t('capNav'), cfg.nav_count_enabled !== false)}
+            ${item(t('capNet'), cfg.capture_network !== false)}
+            ${item(t('capConsole'), cfg.capture_console !== false)}
+            ${item(t('capError'), cfg.error_count_enabled !== false)}
+            ${item(t('capStorage'), cfg.storage_change_count_enabled !== false)}
+            ${item(t('capCookie'), cfg.cookie_change_count_enabled !== false)}
         </div>
         <div class="ov-panel" style="margin-top:14px">
-            <div class="ov-panel-hd">采集选项</div>
-            ${item('请求体采集', !!cfg.capture_request_body)}
-            ${item('响应体采集', !!cfg.capture_response_body)}
-            ${item('输入值', !!cfg.capture_input_values)}
+            <div class="ov-panel-hd">${t('captureOptions')}</div>
+            ${item(t('captureRequestBody'), !!cfg.capture_request_body)}
+            ${item(t('captureResponseBody'), !!cfg.capture_response_body)}
+            ${item(t('captureInputValues'), !!cfg.capture_input_values)}
         </div>
         <div class="ov-panel" style="margin-top:14px">
-            <div class="ov-panel-hd">隐私与脱敏</div>
-            ${item('脱敏敏感数据', !!cfg.redact_data)}
+            <div class="ov-panel-hd">${t('privacyRedaction')}</div>
+            ${item(t('redactData'), !!cfg.redact_data)}
         </div>
     </div>`;
 }

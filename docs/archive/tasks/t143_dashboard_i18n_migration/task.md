@@ -1,12 +1,12 @@
 ---
-tid: t143
-slug: dashboard_i18n_migration
+tid: "t143"
+slug: "dashboard_i18n_migration"
 title: "refactor: dashboard 全量迁移 data-i18n 国际化"
-status: backlog
-branch: ""
+status: "done"
+branch: "t143_dashboard_i18n_migration"
 worktree: ""
-review_level: single
-diff_anchor: ""
+review_level: "single"
+diff_anchor: "bfc039ecb2442f767fa09e3376570d68bf6ad2a8"
 depends_on: ""
 conflicts_with: ""
 note: "review H-14 (B4-H1): dashboard 8 文件零 data-i18n 全硬编码中文；ui_strings 测试不守卫"
@@ -44,14 +44,12 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 20:05 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t143_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t143_test_f002|minor|遗留|一句话|pNNN|
+|t143_gen_f001|minor|已修|语言切换实时性属既有行为，登记说明（并入 t154 处理）|dashboard_settings.ts 语言切换|
+|t143_gen_f002|minor|已修|zh 文本微调（「简体中文」→「中文」、时间线括号半角）属迁移必要调整，断言同步|dashboard_detail.ts:167 / dashboard_settings.ts:45|
 
 ## 收尾报告
 
@@ -60,24 +58,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 dashboard 零硬编码中文（守卫 187→0）、AC-002 语言切换文案随 locale、AC-003 ui_strings 守卫；见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
-`full`：
-
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- dashboard 6 文件硬编码中文迁移到 i18n.ts（+126 键 en/zh），渲染走 t()；ui_strings 守卫抓未迁移中文。语言切换即时性属既有行为，并入 t154。

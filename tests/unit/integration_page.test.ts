@@ -168,7 +168,7 @@ describe('T0003: 设置页集成区保留 (AC-2)', () => {
     });
 
     it('dashboard_settings.ts 保留 MCP Bridge 配置开关', () => {
-        expect(settings_src).toContain('启用 MCP bridge');
+        expect(settings_src).toContain('agentBridgeEnabled');
         expect(settings_src).toContain('agent_bridge_enabled');
     });
 

@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 // tests/unit/detail_search_preserve_input.test.ts
 // 验证详情时间线搜索 debounce 重绘后输入框保留用户输入（P1-11）
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { set_detail_events } from '../../src/extension/dashboard/dashboard_shared';
+import { set_locale } from '../../src/extension/shared/i18n';
+
+// set_locale 会写 chrome.storage.local，提供最小 mock
+vi.stubGlobal('chrome', {
+    storage: { local: { set: vi.fn(), get: vi.fn(async () => ({})) } },
+});
 
 let render_dt_rail: () => string;
 let render_dt_list: () => string;
@@ -15,6 +21,7 @@ async function load_module() {
 
 beforeEach(async () => {
     document.body.innerHTML = '';
+    set_locale('zh');
     await load_module();
 });
 
@@ -65,7 +72,7 @@ describe('详情时间线搜索保留输入 (T108)', () => {
 
         expect(html).toContain('orders');
         expect(html).not.toContain('settings');
-        expect(html).toContain('（1 个事件）');
+        expect(html).toContain('(1 个事件)');
     });
 
     it('AC-002b: 空搜索词时列表含全部事件', () => {
@@ -80,6 +87,6 @@ describe('详情时间线搜索保留输入 (T108)', () => {
 
         expect(html).toContain('orders');
         expect(html).toContain('settings');
-        expect(html).toContain('（2 个事件）');
+        expect(html).toContain('(2 个事件)');
     });
 });

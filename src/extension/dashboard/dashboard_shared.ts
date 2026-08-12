@@ -7,6 +7,7 @@ import { build_archive } from '../shared/archive_builder';
 import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
+import { t, type I18nStrings } from '../shared/i18n';
 import { I } from './icons';
 
 export const logger = new Logger('dashboard', get_app_log_transport());
@@ -106,7 +107,7 @@ export function capture_dur(s: CaptureRecord): string {
     return dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
 }
 export function capture_name(s: CaptureRecord): string {
-    return s.name || `${format_system_time(s.started_at, get_user_config())} 的采集`;
+    return s.name || `${format_system_time(s.started_at, get_user_config())}${t('captureNameSuffix')}`;
 }
 
 export function est_bytes(s: CaptureRecord): number {
@@ -124,8 +125,8 @@ export function fmt_size(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 export function pct(part: number, whole: number): string {
-    if (!whole) return '占比 0%';
-    return `占比 ${((part / whole) * 100).toFixed(2)}%`;
+    if (!whole) return `${t('pctPrefix')}0%`;
+    return `${t('pctPrefix')}${((part / whole) * 100).toFixed(2)}%`;
 }
 
 // event kind → icon + color
@@ -155,10 +156,13 @@ export function event_kind(e: CaptureEvent): string {
         default: return 'capture';
     }
 }
-export const KIND_LABEL: Record<string, string> = {
-    user: '用户行为', nav: '页面导航', network: '网络请求', console: '控制台',
-    error: '错误异常', storage: 'Storage', cookie: 'Cookie', dom: 'DOM', capture: '生命周期',
+const KIND_KEY: Record<string, keyof I18nStrings> = {
+    user: 'capUser', nav: 'capNav', network: 'capNet', console: 'capConsole',
+    error: 'capError', storage: 'capStorage', cookie: 'capCookie', dom: 'kindDom', capture: 'kindLifecycle',
 };
+export function kind_label(k: string): string {
+    return t(KIND_KEY[k] ?? (k as keyof I18nStrings));
+}
 export function rel_time(ms: number): string {
     const s = Math.floor(ms / 1000), mss = Math.floor(ms % 1000);
     return `+${String(s).padStart(2, '0')}.${String(mss).padStart(3, '0')}s`;
@@ -172,7 +176,7 @@ export function event_detail(e: CaptureEvent): string {
         case 'input_event': return `${d.target_tag || ''} ${d.target_selector || ''}`;
         case 'dom_mutation': return `${d.action || ''} ${d.target_selector || d.target_tag || ''}`;
         case 'page_navigation': return `${d.from || ''} → ${d.to || ''}`;
-        case 'route_change': return String(d.to || 'SPA 路由变化');
+        case 'route_change': return String(d.to || t('spaRouteChange'));
         case 'page_load': return `loaded in ${d.load_time_ms}ms`;
         case 'network_request': return String(d.url || '');
         case 'console_event': return Array.isArray(d.args_preview) ? (d.args_preview as string[]).join(' ') : '';
@@ -184,19 +188,19 @@ export function event_detail(e: CaptureEvent): string {
 export function event_title(e: CaptureEvent): string {
     const d = (e.data || {}) as Record<string, unknown>;
     switch (e.type) {
-        case 'mouse_event': return `${d.action || '点击'} ${d.target_tag || ''}`;
-        case 'keyboard_event': return `按键 ${d.key || ''}`;
-        case 'scroll_event': return '滚动';
-        case 'input_event': return '输入';
-        case 'page_navigation': return `打开 ${d.to || ''}`;
-        case 'route_change': return `路由变化 ${d.to || ''}`;
+        case 'mouse_event': return `${d.action || t('mouseClick')} ${d.target_tag || ''}`;
+        case 'keyboard_event': return `${t('keyPress')} ${d.key || ''}`;
+        case 'scroll_event': return t('scroll');
+        case 'input_event': return t('inputLabel');
+        case 'page_navigation': return `${t('openPage')} ${d.to || ''}`;
+        case 'route_change': return `${t('routeChangeLabel')} ${d.to || ''}`;
         case 'network_request': return `${d.method || ''} ${strip_proto(String(d.url || ''))}`;
         case 'console_event': return String(d.level || 'log');
         case 'storage_change': return `${d.key || 'storage'} changed`;
         case 'cookie_change': return `${d.name || 'cookie'} changed`;
-        case 'dom_mutation': return 'DOM 变化';
-        case 'capture_started': return '开始采集';
-        case 'capture_stopped': return '停止采集';
+        case 'dom_mutation': return t('domChangeLabel');
+        case 'capture_started': return t('startCapture');
+        case 'capture_stopped': return t('stopCapture');
         default: return e.type;
     }
 }
@@ -246,9 +250,9 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
         if (format === 'archive') {
             // T107: 导出前 flush 缓冲事件，避免丢最近数据；flush 失败则中止（不静默旧快照）
             const flush_res = await chrome.runtime.sendMessage({ action: 'flush' });
-            if (!flush_res?.success) { alert('导出失败：无法落盘缓冲数据'); return; }
+            if (!flush_res?.success) { alert(t('exportFailedFlush')); return; }
             const snapshot = await read_capture_snapshot(id);
-            if (!snapshot.capture) { alert('导出失败'); return; }
+            if (!snapshot.capture) { alert(t('exportFailed')); return; }
             const archive = await build_archive({
                 capture: snapshot.capture,
                 events: [
@@ -275,7 +279,7 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
         }
         const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
         const r = await chrome.runtime.sendMessage({ action, capture_id: id });
-        if (!r?.success) { alert('导出失败'); return; }
+        if (!r?.success) { alert(t('exportFailed')); return; }
         const ext = format === 'html' ? 'html' as const : format === 'har' ? 'har' as const : format === 'jsonl' ? 'jsonl' as const : 'json' as const;
         const mime = format === 'html' ? 'text/html' : 'application/json';
         const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);

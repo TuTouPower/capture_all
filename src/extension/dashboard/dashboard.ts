@@ -1,6 +1,6 @@
 // dashboard/dashboard.ts — Capture All 主面板入口
 // 只做初始化、导入各模块、注册路由
-import { init_locale } from '../shared/i18n';
+import { init_locale, t, type I18nStrings } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { load_user_config } from '../../shared/user_config';
@@ -19,11 +19,11 @@ import { render_current, wire_simple_open, render_exports, wire_exports } from '
 
 // ── sidebar / shell ─────────────────────────────────────────────────────
 const NAV = [
-    { key: 'captures', icon: 'navCaptures', lbl: '采集记录' },
-    { key: 'current', icon: 'navCurrent', lbl: '当前采集' },
-    { key: 'exports', icon: 'navExport', lbl: '导出任务' },
-    { key: 'settings', icon: 'navSettings', lbl: '设置' },
-];
+    { key: 'captures', icon: 'navCaptures', lbl: 'captureRecords' },
+    { key: 'current', icon: 'navCurrent', lbl: 'currentCapture' },
+    { key: 'exports', icon: 'navExport', lbl: 'exportTask' },
+    { key: 'settings', icon: 'navSettings', lbl: 'settings' },
+] satisfies { key: string; icon: string; lbl: keyof I18nStrings }[];
 
 const root = document.getElementById('root')!;
 
@@ -35,21 +35,21 @@ function render_shell(): void {
     root.innerHTML = `<div class="app">
         <div class="titlebar">
             <span class="tl-lights"><i></i><i></i><i></i></span>
-            <span class="tl-title">Capture All — 主面板</span>
+            <span class="tl-title">Capture All — ${t('mainPanel')}</span>
         </div>
         <div class="app-body">
             <aside class="sidebar">
                 <div class="sb-brand"><span class="sb-logo"><span class="sb-logo-ring"></span></span><b>Capture All</b></div>
                 <nav class="sb-nav">
                     ${NAV.map((n) => `<button class="sb-item" data-nav="${n.key}" data-on="${active === n.key ? 1 : 0}">
-                        <span class="sb-ic">${I[n.icon]}</span><span class="sb-lbl">${n.lbl}</span>
+                        <span class="sb-ic">${I[n.icon]}</span><span class="sb-lbl">${t(n.lbl)}</span>
                         ${n.key === 'current' && live ? `<span class="sb-badge mono">${live}</span>` : ''}
                     </button>`).join('')}
                 </nav>
                 <div class="sb-spacer"></div>
                 <div class="sb-user">
                     <span class="sb-ava">A</span>
-                    <div class="sb-user-meta"><b>本地用户</b><span>Capture All</span></div>
+                    <div class="sb-user-meta"><b>${t('localUser')}</b><span>Capture All</span></div>
                 </div>
                 <div class="sb-resize-handle"></div>
             </aside>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_USER_CONFIG } from '../../src/shared/constants'
@@ -8,12 +8,22 @@ import {
     clamp_body_size_bytes,
     render_settings,
 } from '../../src/extension/dashboard/dashboard_settings'
+import { set_locale } from '../../src/extension/shared/i18n'
+
+// set_locale 会写 chrome.storage.local，提供最小 mock
+vi.stubGlobal('chrome', {
+    storage: { local: { set: vi.fn(), get: vi.fn(async () => ({})) } },
+})
+
+// 默认 en；需要断言中文渲染的用例内切到 zh
+beforeEach(() => { set_locale('en') })
 
 const project_root = resolve(__dirname, '..', '..')
 const src = readFileSync(resolve(project_root, 'src/extension/dashboard/dashboard_settings.ts'), 'utf8')
 
 describe('隐私风险提示', () => {
     it('在设置页渲染默认敏感采集项和脱敏边界', () => {
+        set_locale('zh')
         set_user_config(DEFAULT_USER_CONFIG)
         const container = document.createElement('div')
         container.innerHTML = render_settings()
@@ -83,8 +93,13 @@ describe('BUG-006: 采集上限 / 内联文本上限单位', () => {
 describe('BUG-007: 日志级别不与最大日志大小重叠', () => {
     it('日志级别 field 跨 2 列（span2）', () => {
         // render_settings 中日志级别 field 有 span2 class
-        const match = src.match(/日志级别[\s\S]{0,200}span2|span2[\s\S]{0,200}日志级别/)
-        expect(match).toBeTruthy()
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        const container = document.createElement('div')
+        container.innerHTML = render_settings()
+        const log_level_field = [...container.querySelectorAll<HTMLElement>('.field')]
+            .find((el) => el.textContent?.includes('日志级别'))
+        expect(log_level_field?.classList.contains('span2')).toBe(true)
     })
 })
 

@@ -1,0 +1,51 @@
+{
+  "tid": "t153",
+  "attempt": 1,
+  "execution_id": "6635a6f308d44452a16257e78a03b00c",
+  "status": "done",
+  "branch": "t153_perf_spot_fixes",
+  "base_sha": "325e93bdc6fbed3d310752246d7aa082e2da3ccd",
+  "tests": "vitest run: 152 files / 1539 tests passed",
+  "blackbox": "npx tsc --noEmit exit 0",
+  "review": "Round 1 general PASS",
+  "ac_evidence": {
+    "AC-001": [
+      "src/extension/shared/archive_builder.ts assemble_zip 由 fflate zipSync 改为异步 zip（Promise 包裹回调），build_archive 已 async 且调用方 await",
+      "tests/unit/archive_builder.test.ts：全量 build_archive 行为用例（含 unzipSync 校验）通过 + 新增锚点断言 import 不再含 zipSync"
+    ],
+    "AC-002": [
+      "src/shared/system_time.ts 新增 get_browser_formatter 模块级单例缓存（browser 分支复用 formatter，与 UTC 分支一致）",
+      "tests/unit/system_time.test.ts：browser 分支多次 format_system_time 仅 new 一次 Intl.DateTimeFormat，输出格式不变"
+    ],
+    "AC-003": [
+      "src/extension/background/app_log_storage.ts flush 成功落库后按条累计估算字节，仅越限才 get_total_size_bytes 全扫 + 删除（trim 语义不变：按 timestamp 最旧优先删至限额内）；clear/扫描后归零",
+      "tests/unit/app_log_trim_incremental.test.ts（4 项）：未越限不扫表 / 越限扫表 + trim 删最旧留最新 / clear 重置"
+    ],
+    "AC-004": [
+      "src/extension/dashboard/dashboard_detail.ts render_dt_list / render_trace 预建 Map<event, idx>（对象恒等，与原 indexOf 的 === 语义等价），消除 O(n²)",
+      "tests/unit/dashboard_detail_idx_map.test.ts（3 项）：过滤后 data-ev 仍为全量下标 / trace 各 lane data-event-idx 正确 / 源码无 indexOf"
+    ],
+    "AC-005": [
+      "src/extension/content/network_hook.ts 注入脚本流式读响应体，超 cap 短路 too_large + cancel reader，不全量缓冲；非流式回退 clone().text() 整读截断保留；max_body_capture_bytes 可注入并随 content_script config 透传",
+      "tests/unit/network_hook_body_cap.test.ts（3 项）：流式短路 cancel + read 次数 < 全量 / cap 内完整捕获 / 非流式回退截断"
+    ],
+    "AC-006": [
+      "src/extension/popup/popup.ts refresh_counts 加 poll_in_flight 单飞（finally 复位，与 dashboard 同款内联模式）",
+      "tests/unit/popup_behavior_paths.test.ts：fake timers 验证 in-flight 跳过、释放后恢复（get_status 调用序列 1→1→2）"
+    ],
+    "AC-007": [
+      "list_captures 支持可选 limit：src/shared/message_contract.ts payload 加 limit?、src/extension/background/storage.ts cursor 前 N 条截断、service_worker.ts 透传；popup load_history 传 limit:10",
+      "tests/unit/list_captures_limit.test.ts（3 项）：limit 截断 / 默认全量 / 超存量返全量；popup_behavior_paths.test.ts 断言 list_captures 带 limit"
+    ],
+    "AC-008": [
+      "npm test 152 files / 1539 tests passed（新增 4 测试文件：app_log_trim_incremental / dashboard_detail_idx_map / list_captures_limit / network_hook_body_cap + 改 3 既有文件）",
+      "npx tsc --noEmit exit 0；reviewer 独立复验 8/8 AC（review_general.md AC 复验方式，coverage 8/8）"
+    ]
+  },
+  "pending": [
+    "p039"
+  ],
+  "findings": [
+    "d006"
+  ]
+}

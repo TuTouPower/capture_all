@@ -1,5 +1,5 @@
 // shared/archive_builder.ts — 页面侧 ZIP 组装
-import { zipSync, strToU8 } from 'fflate';
+import { zip, strToU8 } from 'fflate';
 import { plan_body, safe_request_id } from '../../shared/body_routing';
 import { sha256_hex } from '../../shared/hash';
 import {
@@ -407,7 +407,7 @@ function build_manifest(
     };
 }
 
-/** 组装 ZIP 文件。 */
+/** 组装 ZIP 文件。t153 AC-001: 同步压缩阻塞 UI，改异步 zip（主线程分块，事件循环让出）。 */
 function assemble_zip(
     manifest: Record<string, unknown>,
     readme: string,
@@ -415,7 +415,7 @@ function assemble_zip(
     console_lines: string[],
     network_lines: string[],
     resolved_body_files: BodyFileEntry[],
-): Uint8Array {
+): Promise<Uint8Array> {
     // BUG-002: jsonl 文件每行必须以 \n 结尾（POSIX 文本规范）。
     // 仅 join('\n') 会让最后一行缺末尾换行符，导致 wc -l / grep -c 等
     // 标准工具计行数比实际少 1，与 manifest.counts 不一致。
@@ -447,5 +447,10 @@ function assemble_zip(
         files[file.path] = file.bytes;
     }
 
-    return zipSync(files);
+    return new Promise((resolve, reject) => {
+        zip(files, (err, data) => {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
 }

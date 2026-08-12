@@ -22,7 +22,12 @@ const SIGNAL = '__capture_all_network_hook__';
 
 // 注入脚本构造器（导出便于测试 eval 验证行为）
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
-export function build_page_script(capture_response_body: boolean, secret: string): string {
+// t153 AC-005: max_body_capture_bytes 可注入（默认 MAX_BODY_CAPTURE_BYTES），供超限短路测试用小值覆盖。
+export function build_page_script(
+    capture_response_body: boolean,
+    secret: string,
+    max_body_capture_bytes: number = MAX_BODY_CAPTURE_BYTES,
+): string {
     return `(function() {
     // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
     // 原 guard 语义从「阻止重注入」改为「还原后重装」，hook 链不叠加。
@@ -42,6 +47,71 @@ export function build_page_script(capture_response_body: boolean, secret: string
     function capture_text(response_clone) {
         try {
             return response_clone.text();
+        } catch (e) {
+            return Promise.reject(e);
+        }
+    }
+
+    // t153 AC-005: 流式读取响应体，累计越过 cap 即短路 too_large 并 cancel reader，
+    // 避免超大响应体全量 clone().text() 缓冲进内存。行为不变：cap 内完整解码，cap 外截断 + too_large。
+    function concat_bytes(chunks) {
+        if (chunks.length === 0) return new Uint8Array(0);
+        var total = 0, i;
+        for (i = 0; i < chunks.length; i++) total += chunks[i].byteLength;
+        var out = new Uint8Array(total);
+        var pos = 0;
+        for (i = 0; i < chunks.length; i++) { out.set(chunks[i], pos); pos += chunks[i].byteLength; }
+        return out;
+    }
+    function cap_bytes(chunks, cap) {
+        var out = new Uint8Array(cap);
+        var pos = 0, i;
+        for (i = 0; i < chunks.length; i++) {
+            var c = chunks[i];
+            if (pos + c.byteLength >= cap) { out.set(c.subarray(0, cap - pos), pos); break; }
+            out.set(c, pos);
+            pos += c.byteLength;
+        }
+        return out;
+    }
+    function read_body_capped(response, cap) {
+        try {
+            var stream = response.body;
+            if (!stream || typeof stream.getReader !== 'function') {
+                // 非流式响应：回退整读后截断，与原行为一致
+                return response.clone().text().then(function(text) {
+                    var bytes = new TextEncoder().encode(text);
+                    var status = 'captured';
+                    var body = text;
+                    if (bytes.length > cap) {
+                        body = new TextDecoder().decode(bytes.slice(0, cap)) + '...[TRUNCATED]';
+                        status = 'too_large';
+                    }
+                    return { body: body, status: status };
+                });
+            }
+            var reader = stream.getReader();
+            var chunks = [];
+            var total = 0;
+            var too_large = false;
+            function pump() {
+                return reader.read().then(function(res) {
+                    if (res.done) {
+                        var bytes = too_large ? cap_bytes(chunks, cap) : concat_bytes(chunks);
+                        return { body: new TextDecoder().decode(bytes) + (too_large ? '...[TRUNCATED]' : ''), status: too_large ? 'too_large' : 'captured' };
+                    }
+                    total += res.value.byteLength;
+                    if (total > cap) {
+                        chunks.push(res.value);
+                        too_large = true;
+                        try { reader.cancel(); } catch (e) {}
+                        return { body: new TextDecoder().decode(cap_bytes(chunks, cap)) + '...[TRUNCATED]', status: 'too_large' };
+                    }
+                    chunks.push(res.value);
+                    return pump();
+                });
+            }
+            return pump();
         } catch (e) {
             return Promise.reject(e);
         }
@@ -110,21 +180,14 @@ export function build_page_script(capture_response_body: boolean, secret: string
                 });
                 return;
             }
-            clone.text().then(function(text) {
-                var bytes = new TextEncoder().encode(text);
-                var truncated = text;
-                var body_status = 'captured';
-                if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
-                    truncated = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
-                    body_status = 'too_large';
-                }
+            read_body_capped(clone, ${max_body_capture_bytes}).then(function(result) {
                 post({
                     source: SIGNAL,
                     method: method,
                     url: url,
                     status: status,
-                    response_body: truncated,
-                    response_body_status: body_status,
+                    response_body: result.body,
+                    response_body_status: result.status,
                     duration_ms: duration,
                     resource_type: 'xhr',
                     request_body: null,
@@ -229,8 +292,8 @@ export function build_page_script(capture_response_body: boolean, secret: string
                     var text = self.responseText;
                     if (typeof text === 'string') {
                         var bytes = new TextEncoder().encode(text);
-                        if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
-                            body = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
+                        if (bytes.length > ${max_body_capture_bytes}) {
+                            body = new TextDecoder().decode(bytes.slice(0, ${max_body_capture_bytes})) + '...[TRUNCATED]';
                             body_status = 'too_large';
                         } else {
                             body = text;
@@ -280,6 +343,8 @@ export function build_page_script(capture_response_body: boolean, secret: string
 
 let current_nonce = '';
 let capture_response_body = true;
+// t153 AC-005: 响应体截断/短路上限，随 config 注入（默认 MAX_BODY_CAPTURE_BYTES）。
+let max_body_capture_bytes = MAX_BODY_CAPTURE_BYTES;
 // H3: fallback 路径 URL 按配置脱敏（与 background CDP/web_request 路径一致）
 let redact_data = false;
 let redact_url_query = false;
@@ -312,7 +377,7 @@ function update_page_nonce(nonce: string): void {
 
 function inject_page_script(): void {
     // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
-    inject_script_element(build_page_script(capture_response_body, current_secret), (reason) => {
+    inject_script_element(build_page_script(capture_response_body, current_secret, max_body_capture_bytes), (reason) => {
         logger.warn('Network hook page script injection failed', { reason });
         report_injection_failure('network_hook', reason, state, state.sender);
     });
@@ -337,7 +402,7 @@ export function start_network_hook(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
     new_capture_response_body = true,
-    cfg?: { redact_data: boolean; redact_url_query: boolean },
+    cfg?: { redact_data: boolean; redact_url_query: boolean; max_body_capture_bytes?: number },
 ): void {
     if (!state.begin(sender, {
         capture_id: new_capture_id,
@@ -350,6 +415,8 @@ export function start_network_hook(
     // T121: secret 每次 start 旋转（内联进注入脚本闭包，不写 window）。
     current_secret = _secret_override ?? generate_secret();
     capture_response_body = new_capture_response_body;
+    // t153 AC-005: 随 config 注入 body 上限（缺省回退 100MB，行为等价）
+    max_body_capture_bytes = cfg?.max_body_capture_bytes ?? MAX_BODY_CAPTURE_BYTES;
     // H3: 记录脱敏配置供接收侧处理
     redact_data = cfg?.redact_data ?? false;
     redact_url_query = cfg?.redact_url_query ?? false;

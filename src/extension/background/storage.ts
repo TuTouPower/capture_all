@@ -159,7 +159,7 @@ export async function get_capture(capture_id: string): Promise<CaptureRecord | n
     });
 }
 
-export async function list_captures(): Promise<CaptureRecord[]> {
+export async function list_captures(limit?: number): Promise<CaptureRecord[]> {
     const database = await init_db();
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readonly');
@@ -170,7 +170,8 @@ export async function list_captures(): Promise<CaptureRecord[]> {
 
         request.onsuccess = () => {
             const cursor = request.result;
-            if (cursor) {
+            // t153 AC-007: limit 截断（最旧优先倒序的前 N 条）；undefined = 全量
+            if (cursor && captures.length < (limit ?? Infinity)) {
                 captures.push(cursor.value);
                 cursor.continue();
             } else {

@@ -158,6 +158,10 @@ function render_dt_list(): string {
     const dt_sel = get_dt_sel();
     const detail_events = get_detail_events();
     const list = filtered_events();
+    // t153 AC-004: 预建 idx 映射（对象恒等，与原线性 index 查找的 === 语义严格等价），
+    // 消除 list.map 内每次对全量事件数组做线性 index 查找的 O(n²)。
+    const idx_map = new Map<CaptureEvent, number>();
+    for (let i = 0; i < detail_events.length; i++) idx_map.set(detail_events[i], i);
     const rows = list.map((e) => {
         const k = KIND[event_kind(e)];
         const isErr = event_kind(e) === 'error' || (e.type === 'console_event' && (e.data as Record<string, unknown>)?.level === 'error');
@@ -166,7 +170,8 @@ function render_dt_list(): string {
         const detailCell = status != null
             ? `<span><span class="status-pill" data-ok="${status < 400 ? 1 : 0}">${status}</span><span class="ev-ms">${d.duration_ms != null ? Math.round(d.duration_ms as number) + 'ms' : ''}</span></span>`
             : `<span class="ev-detail" title="${esc(event_detail(e))}">${esc(event_detail(e))}</span>`;
-        return `<tr data-ev="${detail_events.indexOf(e)}" data-sel="${dt_sel === detail_events.indexOf(e) ? 1 : 0}">
+        const idx = idx_map.get(e) ?? -1;
+        return `<tr data-ev="${idx}" data-sel="${dt_sel === idx ? 1 : 0}">
             <td><span class="ev-t">${rel_time(e.relative_time_ms)}</span></td>
             <td><span class="ev-type" style="color:${k.color}">${I[k.icon]} ${kind_label(event_kind(e))}</span></td>
             <td><span class="ev-name${isErr ? ' err' : ''}">${esc(event_title(e))}</span></td>
@@ -249,12 +254,15 @@ function render_trace(): string {
     const win_width_ms = maxT * window_pct / 100;
     const playhead_ms = (dt_play / 100) * maxT;
     const win_left = Math.max(0, Math.min(maxT - win_width_ms, playhead_ms - win_width_ms / 2));
+    // t153 AC-004: 预建 idx 映射（对象恒等），消除 lanes 内对全量事件数组线性 index 查找的 O(n²)
+    const idx_map = new Map<CaptureEvent, number>();
+    for (let i = 0; i < detail_events.length; i++) idx_map.set(detail_events[i], i);
     const lanesHtml = lanes.map(([k, ic, label]) => {
         const evs = detail_events.filter((e) => event_kind(e) === k);
         const color = KIND[k].color;
         const marks = evs.map((e) => {
             const left = (e.relative_time_ms / maxT) * 100;
-            const ev_idx = detail_events.indexOf(e);
+            const ev_idx = idx_map.get(e) ?? -1;
             const data_attr = ` data-event-idx="${ev_idx}"`;
             if (k === 'error') return `<span class="tl-diamond"${data_attr} style="left:${left}%"></span>`;
             if (k === 'console') return `<span class="tl-dot"${data_attr} style="left:${left}%;background:${color}"></span>`;

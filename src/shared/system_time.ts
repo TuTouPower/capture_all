@@ -44,7 +44,6 @@ let _cached_locale_formatter: Intl.DateTimeFormat | null = null;
 let _cached_locale_cfg_id = '';
 
 function get_locale_formatter(_user_offset_minutes: number | null, user_tz: string): Intl.DateTimeFormat {
-    // For browser path, use no timeZone option
     // For UTC, use 'UTC' which IS a valid IANA timeZone
     const id = user_tz;
     if (_cached_locale_formatter && _cached_locale_cfg_id === id) {
@@ -65,6 +64,27 @@ function get_locale_formatter(_user_offset_minutes: number | null, user_tz: stri
     return _cached_locale_formatter;
 }
 
+// t153 AC-002: browser 分支每次 format_system_time 都 new Intl.DateTimeFormat（system local time），
+// 复用单例 formatter 缓存，与 UTC 分支一致。browser formatter 不设 timeZone（取系统本地时区），
+// 与 UTC formatter 是两个不同实例，故单独缓存。
+let _cached_browser_formatter: Intl.DateTimeFormat | null = null;
+
+function get_browser_formatter(): Intl.DateTimeFormat {
+    if (!_cached_browser_formatter) {
+        const options: Intl.DateTimeFormatOptions = {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        };
+        _cached_browser_formatter = new Intl.DateTimeFormat('sv-SE', options);
+    }
+    return _cached_browser_formatter;
+}
+
 // ============================================================
 // format_system_time — format timestamp per user config
 // ============================================================
@@ -75,16 +95,7 @@ export function format_system_time(ts: string | number, config: SystemTimeConfig
 
     // browser path: keep using system local time
     if (tz === 'browser') {
-        const options: Intl.DateTimeFormatOptions = {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        };
-        return new Intl.DateTimeFormat('sv-SE', options).format(new Date(ms));
+        return get_browser_formatter().format(new Date(ms));
     }
 
     const offset_minutes = parse_utc_offset(tz);

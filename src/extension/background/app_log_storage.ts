@@ -17,6 +17,9 @@ function estimate_entry_bytes(entry: AppLogEntry): number {
 export class IndexedDBLogTransport implements LogTransport {
     private buffer: AppLogEntry[] = [];
     private flush_timer: ReturnType<typeof setTimeout> | null = null;
+    // t153 AC-003: 增量估算已写入字节（estimate_entry_bytes 之和）。仅当累计越过限额时
+    // 才触发全表扫描 + trim，避免每次 flush 都全扫。trim/clear 后重置，避免陈旧累计。
+    private _estimated_bytes = 0;
 
     write(entry: AppLogEntry): void {
         if (!entry.id) return;
@@ -62,6 +65,11 @@ export class IndexedDBLogTransport implements LogTransport {
             // T049: 失败时把 batch 按原顺序放回 buffer 供下次重试
             this.buffer.unshift(...batch);
             throw _err;
+        }
+
+        // t153 AC-003: 成功落库后累加估算字节（跳过无 id 条目，与写入循环一致）
+        for (const entry of batch) {
+            if (entry.id) this._estimated_bytes += estimate_entry_bytes(entry);
         }
 
         await this.trim_if_needed();
@@ -171,6 +179,8 @@ export class IndexedDBLogTransport implements LogTransport {
     }
 
     async clear(): Promise<void> {
+        // t153 AC-003: 清库后重置增量估算，避免陈旧累计误导下次 trim 触发
+        this._estimated_bytes = 0;
         const db = await get_db();
         return new Promise((resolve, reject) => {
             const tx = db.transaction([STORE_NAMES.APP_LOGS], 'readwrite');
@@ -209,7 +219,13 @@ export class IndexedDBLogTransport implements LogTransport {
         } catch {
             max_bytes = 100 * 1024 * 1024;
         }
+        // t153 AC-003: 增量估算未越限则跳过全表扫描；越限才走 get_total_size_bytes + 删除。
+        // trim 语义不变（仍按时间戳最旧优先删除至限额内）。
+        if (this._estimated_bytes <= max_bytes) return;
+
         const total_bytes = await this.get_total_size_bytes();
+        // 以实际总量判定；无论是否删除都重置估算（此后按新写入重新累计）
+        this._estimated_bytes = 0;
         if (total_bytes <= max_bytes) return;
 
         const db = await get_db();

@@ -28,6 +28,9 @@ let current_capture: CaptureRecord | null = null;
 let finished_capture: CaptureRecord | null = null;
 let live_counts: CaptureStats | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+// t153 AC-006: 轮询单飞保护——上一轮 get_status 未完成则跳过本轮（与 dashboard 一致），
+// 防慢响应下 refresh_counts 重叠堆积。
+let poll_in_flight = false;
 // t135: popup 自身写入 storage 的标记键。onChanged 监听检测该键即识别为自写、
 // 消费后跳过刷新，避免与 popup 本地状态（stop 后 state='saved'）竞争。
 // 采用 storage 键而非定时器复位——onChanged 派发与 set 返回时序解耦，
@@ -435,6 +438,9 @@ function stop_timer(): void {
 
 async function refresh_counts(): Promise<void> {
     if (!is_extension || state !== 'capturing') return;
+    // t153 AC-006: 单飞——上一轮 get_status 未完成则跳过，避免重叠轮询
+    if (poll_in_flight) return;
+    poll_in_flight = true;
     try {
         const status = await send_ui_message('get_status', {});
         const stats: CaptureStats | undefined = status?.data?.current_capture?.stats;
@@ -449,13 +455,16 @@ async function refresh_counts(): Promise<void> {
         }
     } catch {
         // best-effort live counts
+    } finally {
+        poll_in_flight = false;
     }
 }
 
 async function load_history(): Promise<void> {
     if (!is_extension) return;
     try {
-        const resp = await send_ui_message('list_captures', {});
+        // t153 AC-007: 只拉最近 N 条（recent_list 渲染前 3 条），避免 list_captures 全量回传
+        const resp = await send_ui_message('list_captures', { limit: 10 });
         recent_captures = resp?.data ?? [];
     } catch {
         recent_captures = [];

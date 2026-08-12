@@ -125,6 +125,8 @@ function start_capture(config: CaptureConfig): void {
         start_network_hook(sender, capture_id, capture_start_epoch_ms, tab_id, config.capture_response_body, {
             redact_data: config.redact_data,
             redact_url_query: config.redact_url_query,
+            // t153 AC-005: 把配置的 body 上限传入 fallback hook（默认 100MB，行为等价）
+            max_body_capture_bytes: config.max_body_capture_bytes,
         });
         start_websocket_capture(sender, capture_id, capture_start_epoch_ms, tab_id, {
             redact_data: config.redact_data,

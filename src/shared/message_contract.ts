@@ -37,7 +37,8 @@ export interface UiPayloadMap {
     stop: Record<string, never>;
     get_status: Record<string, never>;
     get_capture_data: { capture_id: string };
-    list_captures: Record<string, never>;
+    // t153 AC-007: limit 可选——popup 只拉最近 N 条，避免全量回传；默认 undefined = 全量（dashboard 等沿用）
+    list_captures: { limit?: number };
     delete_capture: { capture_id: string };
     export_json: { capture_id: string };
     export_jsonl: { capture_id: string };

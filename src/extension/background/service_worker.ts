@@ -255,7 +255,10 @@ async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: 
         case 'get_capture_data':
             return wrap_result(await get_capture_data(payload?.capture_id as string));
         case 'list_captures':
-            return wrap_result(await storage_list_captures());
+            // t153 AC-007: 透传可选 limit（popup 拉最近 N 条），undefined 保持全量
+            return wrap_result(await storage_list_captures(
+                typeof payload?.limit === 'number' ? payload.limit : undefined,
+            ));
         case 'delete_capture':
             return wrap_result(await handle_delete_capture(payload?.capture_id as string));
         case 'export_json':

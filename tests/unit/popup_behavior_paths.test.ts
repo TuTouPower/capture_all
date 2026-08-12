@@ -288,4 +288,57 @@ describe('popup 关键路径行为 (t151 AC-004)', () => {
         const first_card_count = document.querySelector('.mcard .mcard-n');
         expect(first_card_count?.textContent).toBe('9');
     });
+
+    it('轮询单飞：get_status 未完成时不重叠发送，完成后恢复轮询（t153 AC-006）', async () => {
+        storage_backing.is_capturing = true;
+        storage_backing.current_capture = make_capture('c1');
+        storage_backing.current_capture = make_capture('c1');
+        vi.useFakeTimers();
+        let resolve_status: ((v: unknown) => void) | undefined;
+        let status_calls = 0;
+        send_message_mock.mockImplementation(({ action }: { action: string }) => {
+            if (action === 'list_captures') return Promise.resolve({ success: true, data: [] });
+            if (action === 'get_status') {
+                status_calls++;
+                return new Promise((r) => { resolve_status = r; });
+            }
+            return Promise.resolve({ success: true });
+        });
+        try {
+            await import('../../src/extension/popup/popup.ts');
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+            // flush DOMContentLoaded 的异步链（load_state/load_history）→ start_timer → 首轮 get_status
+            await vi.advanceTimersByTimeAsync(0);
+            expect(status_calls).toBe(1);
+
+            // 第一个 interval 到达：上一轮 get_status 仍在 in-flight，单飞跳过
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(status_calls).toBe(1);
+
+            // 释放首轮 get_status → 解锁单飞
+            resolve_status!({ success: true, data: { current_capture: null } });
+            await vi.advanceTimersByTimeAsync(0);
+
+            // 再一个 interval：新一轮 get_status 正常发送
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(status_calls).toBe(2);
+        } finally {
+            vi.clearAllTimers();
+            vi.useRealTimers();
+        }
+    });
+
+    it('load_history 发送 list_captures 带 limit（t153 AC-007 不拉全量）', async () => {
+        await import('../../src/extension/popup/popup.ts');
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+        await await_ticks();
+        expect(send_message_mock).toHaveBeenCalledWith(
+            expect.objectContaining({ action: 'list_captures' }),
+        );
+        const call = send_message_mock.mock.calls.find(
+            (c: Array<{ action: string }>) => c[0]?.action === 'list_captures',
+        );
+        // 修前：list_captures 传空 payload（拉全量）；修后：带 limit
+        expect((call?.[0] as { payload: { limit?: number } }).payload?.limit).toBeTypeOf('number');
+    });
 });

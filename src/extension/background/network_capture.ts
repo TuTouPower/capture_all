@@ -864,6 +864,9 @@ function schedule_orphan_check(req_key: string, req_id: string): void {
             response_body: body_result.body,
             response_body_status: body_result.status,
             response_preview: body_result.preview,
+            // B1-L5: 透传实际编码/字节（CDP base64 场景不再被 build_network_data 误标 utf8）
+            response_body_encoding: body_result.encoding ?? null,
+            response_body_bytes: body_result.byte_size ?? null,
             request_headers: redact_hdrs ? redact_headers(meta?.request_headers || {}, true).headers : (meta?.request_headers || {}),
             response_headers: redact_hdrs ? redact_headers(meta?.response_headers || {}, true).headers : (meta?.response_headers || {})
         };

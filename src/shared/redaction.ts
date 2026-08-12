@@ -116,6 +116,12 @@ export function redact_url(url: string, redact_query: boolean, _depth = 0, _allo
     try {
         const parsed = new URL(url);
         let redacted = false;
+        // B1-L4: URL userinfo（user:pass@）携带凭据，一律剥离并标记 redacted
+        if (parsed.username || parsed.password) {
+            parsed.username = '';
+            parsed.password = '';
+            redacted = true;
+        }
         const sensitive_keys: string[] = [];
         for (const key of parsed.searchParams.keys()) {
             const lower_key = key.toLowerCase();

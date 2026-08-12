@@ -86,7 +86,9 @@ export class AgentCommandQueue {
         }
     }
 
+    // B1-L15: 语义为「全部待处理」（排队未取走 + 已取走在途），非仅「未取走」。
+    // pending map 持有所有未 resolve 命令（含已 take_next 的在途命令），commands 数组只含未取走。
     pending_count(): number {
-        return this.commands.length;
+        return this.pending.size;
     }
 }

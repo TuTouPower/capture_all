@@ -28,7 +28,7 @@ import { Logger } from '../../shared/logger';
 import { build_network_data } from '../../shared/network_builder';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
-import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
+import { normalize_agent_bridge_config, is_allowed_local_bridge_url } from '../../shared/agent_bridge_config';
 import type {
     UserConfig, CaptureConfig, CaptureEvent, CaptureRecord, AppLogEntry,
     NetworkRequestData, ConsoleEventData, WsFrameData,
@@ -344,7 +344,15 @@ async function handle_test_bridge_fetch(): Promise<{ success: boolean; bridge_ur
     try {
         const cfg = await get_user_config_for_bridge();
         const bridge_url = cfg.agent_bridge_url || '';
-        const res = await fetch(`${bridge_url}/health`);
+        if (!bridge_url) {
+            return { success: false, error: 'Bridge URL is not set' };
+        }
+        // B2-M5: 发起请求前走 loopback 白名单校验，防手工 storage 写入恶意 URL 时从 SW 直 fetch
+        const check = is_allowed_local_bridge_url(bridge_url);
+        if (!check.ok) {
+            return { success: false, error: `Bridge URL rejected: ${check.reason}` };
+        }
+        const res = await fetch(`${bridge_url}/health`, { signal: AbortSignal.timeout(5000) });
         const data = await res.json();
         return { success: true, bridge_url, health: data };
     } catch (e: unknown) {
@@ -642,20 +650,20 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     const all_tabs = await chrome.tabs.query({});
     const capturable_tabs = all_tabs.filter(t => /^https?:\/\//.test(t.url || ''));
     logger.info(`Notifying ${capturable_tabs.length} tabs to start (of ${all_tabs.length} total)`);
-    for (const tab of capturable_tabs) {
-        if (tab.id) {
-            const ok = await tabs_send_message_retry(tab.id, {
-                action: 'start',
-                config,
-                capture_id: capture_id,
-                capture_start_epoch_ms: start_time,
-                tab_id: tab.id,
-            }, { label: 'start' });
-            if (ok) {
-                logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
-            }
+    // B2-M6: 多 tab 并行通知，避免串行重试阻塞 start（最坏 N×(200+400+600)ms 卡在 run_exclusive 内）
+    await Promise.all(capturable_tabs.map(async (tab) => {
+        if (!tab.id) return;
+        const ok = await tabs_send_message_retry(tab.id, {
+            action: 'start',
+            config,
+            capture_id: capture_id,
+            capture_start_epoch_ms: start_time,
+            tab_id: tab.id,
+        }, { label: 'start' });
+        if (ok) {
+            logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
         }
-    }
+    }));
 
     // Track initial active tab
     if (active_tab?.id) {
@@ -828,6 +836,8 @@ async function persist_stats(): Promise<void> {
 
 async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean; error?: string }> {
     if (!is_capturing || !current_capture_id || !current_capture) return { success: true };
+    // B2-M12: 捕获 generation，await 后校验，防 stop+start 跨采集把 stats 写到新采集
+    const gen = capture_state.current_generation();
 
     // Route fallback body hook events separately
     if (event.type === 'network_body_hook') {
@@ -857,6 +867,7 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
 
     try {
         await write_events([event]);
+        if (!capture_state.is_active_generation(gen)) return { success: true };
         current_capture.stats = increment_capture_event_stats(current_capture.stats, event.category);
         await persist_stats();
     } catch (err) {
@@ -945,6 +956,8 @@ async function check_limit_and_stop(): Promise<boolean> {
 export { handle_network_request as _handle_network_request_for_test };
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    // B2-M12: generation 守卫——await 后 current_capture 可能已切换，防跨采集串写 stats
+    const gen = capture_state.current_generation();
     if (await check_limit_and_stop()) return;
 
     const event = 'event' in payload ? (payload as { event: CaptureEvent; data: NetworkRequestData | WsFrameData }).event : null;
@@ -956,6 +969,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
         event.data = frame;
         try {
             await write_events([event]);
+            if (!capture_state.is_active_generation(gen)) return;
             current_capture.stats.event_count = (current_capture.stats.event_count || 0) + 1;
             await persist_stats();
         } catch (err) {
@@ -976,6 +990,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
     normalize_network_request(request);
     try {
         await write_network_requests([request]);
+        if (!capture_state.is_active_generation(gen)) return;
         current_capture.stats.request_count++;
         current_capture.stats.total_body_bytes += (request.response_body_bytes || 0) + (request.request_body_bytes || 0);
         await persist_stats();
@@ -1129,6 +1144,8 @@ chrome.tabs.onRemoved.addListener((_tabId: number) => {
 // Tab created listener
 chrome.tabs.onCreated.addListener(async (tab) => {
     if (!is_capturing) return;
+    // B2-M12: generation 守卫——await 后采集可能已切换，防旧监听以新采集身份写事件
+    const gen = capture_state.current_generation();
     logger.debug(`Tab created: ${tab.id}`, { url: tab.url || tab.pendingUrl });
 
     const data: TabCreatedData = {
@@ -1148,6 +1165,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         source: 'background',
     });
     if (await check_limit_and_stop()) return; // T110: 限额停止
+    if (!capture_state.is_active_generation(gen)) return;
     await write_events([{ ...event, data }]);
 });
 
@@ -1155,6 +1173,8 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 const last_tab_urls = new Map<number, string>();
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (!is_capturing) return;
+    // B2-M12: generation 守卫——本监听含 await，stop+start 后不得用新采集身份继续旧流程
+    const gen = capture_state.current_generation();
     if (changeInfo.status !== 'loading') return;
     const new_url = changeInfo.url || tab.url || '';
     if (!new_url) return;
@@ -1181,6 +1201,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
             source: 'background',
         });
         if (await check_limit_and_stop()) return; // T110: 限额停止
+        if (!capture_state.is_active_generation(gen)) return;
         await write_events([{ ...event, data }]);
     }
 
@@ -1188,6 +1209,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');
     const is_normal = new_url.startsWith('http://') || new_url.startsWith('https://');
     if (is_restricted && is_normal) {
+        // 采集已切换（stop+start 跨 await）则放弃本次 CDP 重试，避免以新采集身份启动
+        if (!capture_state.is_active_generation(gen)) return;
         if (current_config.capture_console && !is_console_active()) {
             const result = await start_console_capture(
                 current_capture_id!, start_time, tabId,

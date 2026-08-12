@@ -1,5 +1,13 @@
 // shared/dom_utils.ts
 
+// B3-L4: XPath 无转义符，字符串字面量含单引号会损坏谓词语法。
+// 用 concat 分段技巧生成合法字面量：it's → concat('it',"'",'s')。
+function xpath_string_literal(value: string): string {
+    if (!value.includes("'")) return `'${value}'`;
+    const segments = value.split("'").map((part) => `'${part}'`);
+    return `concat(${segments.join(',"\'",')})`;
+}
+
 /**
  * Build XPath for an element. Walks up to document body.
  * If element has id → tagName[@id='xxx'] and stops.
@@ -12,7 +20,7 @@ export function build_xpath(element: Element): string {
 
     while (current && current.nodeType === 1) {
         if (current.id) {
-            segments.unshift(`${current.tagName.toLowerCase()}[@id='${current.id}']`);
+            segments.unshift(`${current.tagName.toLowerCase()}[@id=${xpath_string_literal(current.id)}]`);
             break;
         }
 

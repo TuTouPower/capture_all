@@ -4,6 +4,7 @@
 import type { BodyCaptureStatus } from '../../shared/types';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from './app_log_storage';
+import { is_allowed_local_bridge_url } from '../../shared/agent_bridge_config';
 
 const logger = new Logger('background/external_cdp', get_app_log_transport());
 
@@ -13,33 +14,10 @@ export interface ExternalCdpBridgeConfig {
     cdp_ports: number[];
 }
 
-// T052: 仅允许 http(s)://127.0.0.1 或 http(s)://localhost 的 Bridge URL
-// 防止配置错误/篡改时 token、tab URL、CDP 控制请求泄漏到远端
+// T052: 仅允许 loopback（127.0.0.1 / localhost / [::1]）的 Bridge URL。
+// B2-M19: 口径与 agent_bridge_config 统一——委托共享 is_allowed_local_bridge_url（host/凭据/path 校验唯一实现）。
 export function is_allowed_bridge_url(raw_url: string): { ok: boolean; reason?: string } {
-    let parsed: URL;
-    try {
-        parsed = new URL(raw_url);
-    } catch {
-        return { ok: false, reason: 'invalid URL' };
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        return { ok: false, reason: 'scheme must be http/https' };
-    }
-    const host = parsed.hostname;
-    // 仅允许 127.0.0.1、localhost、[::1]
-    if (host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') {
-        return { ok: false, reason: 'host must be 127.0.0.1 / localhost / [::1]' };
-    }
-    if (parsed.username || parsed.password) {
-        return { ok: false, reason: 'credentials in URL not allowed' };
-    }
-    if (parsed.hash) {
-        return { ok: false, reason: 'fragment not allowed' };
-    }
-    if (parsed.pathname !== '/' && parsed.pathname !== '') {
-        return { ok: false, reason: 'path not allowed (use root)' };
-    }
-    return { ok: true };
+    return is_allowed_local_bridge_url(raw_url);
 }
 
 // 验证 Bridge URL，无效时抛错；返回规范化的 base URL（去 query/hash/cred）

@@ -104,4 +104,15 @@ describe('clipboard_capture', () => {
         const copy_calls = mock_document.addEventListener.mock.calls.filter(c => c[0] === 'copy');
         expect(copy_calls).toHaveLength(1);
     });
+
+    // B3-L7: 双路径（copy 事件 + navigator.clipboard.writeText）对同一操作窗口期去重
+    it('copy 事件后紧接 writeText 不双报（B3-L7 去重）', async () => {
+        start_clipboard_capture(sender, 'cap1', Date.now(), 1);
+        emit_doc('copy');
+        await navigator.clipboard.writeText('hello');
+        expect(sender).toHaveBeenCalledTimes(1);
+        const [evt, data] = sender.mock.calls[0];
+        expect(data.method).toBe('execCommand');
+        expect(evt.type).toBe('clipboard_write');
+    });
 });

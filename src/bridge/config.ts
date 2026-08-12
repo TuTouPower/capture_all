@@ -157,9 +157,14 @@ export async function resolve_bridge_token(
     return { token: generated, source: 'generated', file_path };
 }
 
+// B1-L7: 健康检查带超时，bridge 挂起时不无限阻塞
+const BRIDGE_HEALTH_TIMEOUT_MS = 3000;
+
 export async function is_bridge_healthy(bridge_url: string): Promise<boolean> {
     try {
-        const response = await fetch(`${bridge_url}/health`);
+        const response = await fetch(`${bridge_url}/health`, {
+            signal: AbortSignal.timeout(BRIDGE_HEALTH_TIMEOUT_MS),
+        });
         return response.ok;
     } catch {
         return false;

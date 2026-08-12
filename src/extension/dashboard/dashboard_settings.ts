@@ -173,7 +173,12 @@ function wire_settings(): void {
             const val = (btn as HTMLElement).dataset.val!;
             s.querySelectorAll('button').forEach((x) => (x as HTMLElement).dataset.on = '0');
             (btn as HTMLElement).dataset.on = '1';
-            if (name === 'theme') { await set_theme(val as ThemeMode); await persist({ theme: val as ThemeMode }); }
+            if (name === 'theme') {
+                // B1-L6: theme 由 set_theme 单一持久化（save_user_config）；此处仅同步本地渲染缓存，
+                // 不再走 persist 重复落盘 user_config。
+                await set_theme(val as ThemeMode);
+                set_user_config({ ...get_user_config(), theme: val as ThemeMode });
+            }
             else if (name === 'log_level') {
                 Logger.set_level(val as 'debug' | 'info' | 'warn' | 'error' | 'silent');
                 await persist({ log_level: val as 'debug' | 'info' | 'warn' | 'error' | 'silent' });

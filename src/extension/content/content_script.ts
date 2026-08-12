@@ -53,6 +53,10 @@ chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: 
         sendResponse({ success: true });
     } else if (message.action === 'ping') {
         sendResponse({ is_capturing, frame_id });
+    } else {
+        // B3-M8: 未知 action 显式回错误响应，避免 return true 后通道永不 resolve 挂起发送端
+        logger.warn('Content received unknown action', { action: message?.action });
+        sendResponse({ success: false, error: 'unknown_action' });
     }
     return true;
 });
@@ -90,11 +94,15 @@ function start_capture(config: CaptureConfig): void {
 
     // Send page load event（T106: 导航类别开关关闭时不发导航事件）
     if (config.nav_count_enabled !== false) {
+        // B3-L6: loadEventEnd 未触发时为 0，减 navigationStart 得负值；`|| null` 只拦 0 拦不住负值。
+        // 显式 >0 判断：未触发 → null，不落负值。
+        const load_ms = performance.timing.loadEventEnd - performance.timing.navigationStart;
+        const dom_ms = performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart;
         const page_load_data: PageLoadData = {
             url: window.location.href,
             title: document.title,
-            load_event_time_ms: performance.timing.loadEventEnd - performance.timing.navigationStart || null,
-            dom_content_loaded_time_ms: performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart || null,
+            load_event_time_ms: load_ms > 0 ? load_ms : null,
+            dom_content_loaded_time_ms: dom_ms > 0 ? dom_ms : null,
             navigation_start_time: performance.timeOrigin ? new Date(performance.timeOrigin).toISOString() : null,
         };
         send_capture_event('navigation', 'page_load', page_load_data);

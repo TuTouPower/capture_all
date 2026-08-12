@@ -231,6 +231,10 @@ function get_optional_sources(payload: Record<string, unknown>): AgentDataSource
     return payload.sources as AgentDataSource[];
 }
 
+// B2-M11: sample_rate_ms 合理区间上限——鼠标 mousemove 节流间隔（默认 50ms），
+// 10s 已远超任何实际用途；超大值会让采集形同虚设，clamp 而非放行。
+const MAX_SAMPLE_RATE_MS = 10000;
+
 const capture_config_keys = new Set<keyof CaptureConfig>([
     'mouse_precision',
     'capture_console',
@@ -264,6 +268,8 @@ function get_capture_config(value: unknown): CaptureConfig {
     if (!has_valid_capture_config_values(merged)) {
         throw new AgentCommandError('INVALID_QUERY', 'config contains invalid values');
     }
+    // B2-M11: sample_rate_ms clamp 到合理区间（合法但过大的取值会禁用 mouse 采样）
+    merged.sample_rate_ms = Math.min(MAX_SAMPLE_RATE_MS, merged.sample_rate_ms);
     return merged as CaptureConfig;
 }
 

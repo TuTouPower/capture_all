@@ -581,6 +581,37 @@ describe('bridge server', () => {
         });
     });
 
+    // B1-L3: resolve 未知 command_id 是客户端错误 → 400，非 500
+    it('returns 400 for unknown command_id on extension result (B1-L3)', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
+        });
+
+        const response = await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+            },
+            body: JSON.stringify({ command_id: 'cmd_does_not_exist', ok: true, data: {} }),
+        });
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body).toEqual({
+            ok: false,
+            error: {
+                code: 'INVALID_QUERY',
+                message: 'Unknown command_id: cmd_does_not_exist',
+            },
+        });
+    });
+
     it('returns 400 for unknown command type', async () => {
         const server = await start_test_server();
 

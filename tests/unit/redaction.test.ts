@@ -143,6 +143,23 @@ describe('redact_url', () => {
         expect(result.url).toContain('page=2');
         expect(result.url).toContain('sort=asc');
     });
+
+    // B1-L4: userinfo（user:pass@）携带凭据，一律剥离并标记 redacted
+    it('strips userinfo and marks redacted (B1-L4)', () => {
+        const result = redact_url('http://user:secret@example.com/path', true);
+        expect(result.url_status).toBe('redacted');
+        expect(result.url).not.toContain('user');
+        expect(result.url).not.toContain('secret');
+        expect(result.url).not.toContain('@');
+        expect(result.url).toContain('example.com/path');
+    });
+
+    it('strips userinfo even without sensitive query (B1-L4)', () => {
+        const result = redact_url('http://user:secret@example.com/path?name=test', true);
+        expect(result.url_status).toBe('redacted');
+        expect(result.url).not.toContain('@');
+        expect(result.url).toContain('name=test');
+    });
 });
 
 describe('truncate', () => {

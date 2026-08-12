@@ -26,6 +26,14 @@ let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__capture_all_storage__';
 
+// B3-L5: 敏感 key 名是隐私外延——token/secret/password 匹配的 key 名置 [REDACTED]。
+const SENSITIVE_KEY_RE = /token|secret|password|passwd|credential|api[-_]?key|jwt/i;
+
+function redact_storage_key(key: string | null): string | null {
+    if (key === null) return null;
+    return SENSITIVE_KEY_RE.test(key) ? '[REDACTED]' : key;
+}
+
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
 // 导出便于测试 eval 验证注入脚本级重注入（与 websocket_capture 一致）。
 export function build_page_script(secret: string): string {
@@ -172,7 +180,7 @@ export function start_storage_capture(
         const data: StorageChangeData = {
             storage_type: d.storage_type,
             action,
-            key: d.key ?? null,
+            key: redact_storage_key(d.key ?? null),
             old_value_length: null,
             new_value_length: action === 'set' ? value_length : 0,
             value_status: 'not_captured',

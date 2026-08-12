@@ -259,7 +259,10 @@ const CATEGORY_STORE_MAP: Record<CategoryKey, string> = {
     storage: STORE_NAMES.STORAGE_CHANGES,
     cookie: STORE_NAMES.COOKIE_CHANGES,
     capture_lifecycle: STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
-    dom_data: STORE_NAMES.USER_ACTION_EVENTS, // fallback — dom_data events stored alongside user_action
+    // B2-L7: dom_data 类别无专属 store，且 dom_mutation 目前无生产者（dormant 类别）。
+    // 显式映射到 USER_ACTION_EVENTS 作为 fallback——有 dom_mutation 事件时按 user_action 存储，
+    // 读取经 user_action_events source 返回；新增 dom_mutation 生产者时再评估独立 store。
+    dom_data: STORE_NAMES.USER_ACTION_EVENTS,
 };
 
 // ============================================================

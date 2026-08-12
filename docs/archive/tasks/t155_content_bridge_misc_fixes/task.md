@@ -1,12 +1,12 @@
 ---
-tid: t155
-slug: content_bridge_misc_fixes
+tid: "t155"
+slug: "content_bridge_misc_fixes"
 title: "fix: content/bridge 小修复集与文档同步"
-status: backlog
-branch: ""
+status: "done"
+branch: "t155_content_bridge_misc_fixes"
 worktree: ""
-review_level: single
-diff_anchor: ""
+review_level: "single"
+diff_anchor: "d8496814a41aa2735fa31542aaa5122450e17b88"
 depends_on: ""
 conflicts_with: ""
 note: "intensive-review 聚合：B3-M6 focus 双采、M7 resource_type、M8 未知 action、L1-L8、B1-L3/L4/L5/L6/L7/L14/L15、B2-L1/L5/L7、M5/M6/M11/M12/M19、文档过时"
@@ -44,14 +44,15 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+### Round 1 (2026-08-13 04:02 UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t155_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t155_test_f002|minor|遗留|一句话|pNNN|
+|t155_gen_f001|minor|遗留|顶层 chrome 监听客观约束，源码扫描作守卫；后续抽可 import 单元做行为级单测|p042|
+|t155_gen_f002|minor|遗留|clipboard 50ms 纯时间窗去重可能吞真实连续操作，需叠加内容匹配|p043|
+|t155_gen_f003|minor|遗留|AC-018 三项实现缺直接断言（total_size_kb/相对时间/dom_data 映射）|p044|
 
 ## 收尾报告
 
@@ -60,8 +61,8 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；19 条 AC 全部实现，AC-019 既有测试语义不回退
 
 ### Reviewer verdict
 
@@ -74,7 +75,7 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 

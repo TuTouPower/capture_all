@@ -58,7 +58,7 @@ export function get_body_capture_result(): BodyCaptureStartResult | null {
 
 export async function start_body_capture(
     capture_id: string,
-    _start_time: number,
+    start_time: number,
     config: CaptureConfig,
     active_tab_id: number | null,
     deps: CoordinatorDeps,
@@ -92,12 +92,12 @@ export async function start_body_capture(
         }
 
         // CDP 附加失败：handle_cdp_failure 恒返回终态（bridge 或 fallback）
-        coordinator_state = await handle_cdp_failure(cdp_result.error || '', capture_id, config, deps);
+        coordinator_state = await handle_cdp_failure(cdp_result.error || '', capture_id, config, deps, start_time);
         return build_result();
     }
 
     // No active tab — try bridge then fallback
-    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps, start_time);
     if (bridge_result) {
         coordinator_state = bridge_result;
         return build_result();
@@ -118,12 +118,13 @@ async function handle_cdp_failure(
     capture_id: string,
     config: CaptureConfig,
     deps: CoordinatorDeps,
+    start_time: number,
 ): Promise<BodyCaptureStartResult> {
     if (error_msg.includes('Another debugger is already attached')) {
         return await escalate_to_bridge_or_fallback(capture_id, config, deps, {
             failure_reason: 'bridge_unavailable',
             message: 'Extension CDP blocked (another debugger), bridge unavailable, using fallback hook',
-        });
+        }, start_time);
     }
 
     if (error_msg.includes('Cannot attach to this target')) {
@@ -142,11 +143,11 @@ async function handle_cdp_failure(
         return await escalate_to_bridge_or_fallback(capture_id, config, deps, {
             failure_reason: 'permission_denied',
             message: 'CDP permission denied, using fallback hook',
-        });
+        }, start_time);
     }
 
     // 其它 CDP 失败
-    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps, start_time);
     if (bridge_result) return bridge_result;
     return {
         mode: 'fallback_hook',
@@ -163,8 +164,9 @@ async function escalate_to_bridge_or_fallback(
     config: CaptureConfig,
     deps: CoordinatorDeps,
     fallback: { failure_reason: BodyCaptureFailureReason; message: string },
+    start_time: number,
 ): Promise<BodyCaptureStartResult> {
-    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps);
+    const bridge_result = await try_external_cdp_bridge(capture_id, config, deps, start_time);
     if (bridge_result) return bridge_result;
     return {
         mode: 'fallback_hook',
@@ -206,7 +208,8 @@ export async function stop_body_capture_with_cleanup(
 async function try_external_cdp_bridge(
     capture_id: string,
     config: CaptureConfig,
-    deps: CoordinatorDeps
+    deps: CoordinatorDeps,
+    start_time: number,
 ): Promise<typeof coordinator_state> {
     try {
         const bridge_config = await deps.get_bridge_config();
@@ -249,7 +252,7 @@ async function try_external_cdp_bridge(
                 // T095: stop 后 in-flight poll 返回不得再写网络事件
                 if (poll_stopped) return;
                 for (const evt of events) {
-                    const req = convert_bridge_event_to_request(evt, capture_id);
+                    const req = convert_bridge_event_to_request(evt, capture_id, start_time);
                     deps.on_network_request(req);
                 }
             } catch (err) {
@@ -285,7 +288,8 @@ async function try_external_cdp_bridge(
 
 function convert_bridge_event_to_request(
     evt: BridgeBodyEvent,
-    capture_id: string
+    capture_id: string,
+    start_time: number,
 ): NetworkRequestData {
     return build_network_data({
         capture_id,
@@ -296,7 +300,9 @@ function convert_bridge_event_to_request(
         status_code: evt.status_code || 0,
         resource_type: (evt.resource_type || 'other') as NetworkRequestData['resource_type'],
         duration_ms: 0,
-        relative_time: evt.timestamp,
+        // B2-L5: evt.timestamp 是绝对 epoch；relative 应为相对采集起点，absolute 保留绝对时间。
+        // 修前两者同值（epoch），与其它路径 relative 语义不一致，污染 timeline 排序。
+        relative_time: Math.max(0, evt.timestamp - start_time),
         absolute_time: evt.timestamp,
         tab_id: evt.tab_id || 0,
         request_headers: evt.request_headers || {},

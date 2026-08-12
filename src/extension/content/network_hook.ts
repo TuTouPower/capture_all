@@ -117,7 +117,8 @@ export function build_page_script(
         }
     }
 
-    function process_response(response, method, url, start) {
+    // B3-M7: resource_type 由调用方传入（fetch→'fetch'，XHR 直接 post 'xhr'），不再恒 'xhr'。
+    function process_response(response, method, url, start, res_type) {
         var duration = performance.now() - start;
         var status = response.status;
         var clone = null;
@@ -133,7 +134,7 @@ export function build_page_script(
                 response_body: null,
                 response_body_status: 'failed',
                 duration_ms: duration,
-                resource_type: 'xhr',
+                resource_type: res_type,
                 request_body: null,
                 request_body_status: 'not_enabled',
                 timestamp: Date.now()
@@ -142,6 +143,24 @@ export function build_page_script(
         }
 
         try {
+            // B3-L8: CAPTURE_BODY=false 时一律 not_enabled（先于 content-type 判断，
+            // 避免二进制响应在 body 采集关闭时报 'unsupported' 的误导语义）。
+            if (!CAPTURE_BODY) {
+                post({
+                    source: SIGNAL,
+                    method: method,
+                    url: url,
+                    status: status,
+                    response_body: null,
+                    response_body_status: 'not_enabled',
+                    duration_ms: duration,
+                    resource_type: res_type,
+                    request_body: null,
+                    request_body_status: 'not_enabled',
+                    timestamp: Date.now()
+                });
+                return;
+            }
             var content_type = response.headers.get('content-type') || '';
             if (content_type.includes('application/octet-stream') ||
                 content_type.includes('image/') ||
@@ -156,7 +175,7 @@ export function build_page_script(
                     response_body: null,
                     response_body_status: 'unsupported',
                     duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -164,22 +183,6 @@ export function build_page_script(
                 return;
             }
 
-            if (!CAPTURE_BODY) {
-                post({
-                    source: SIGNAL,
-                    method: method,
-                    url: url,
-                    status: status,
-                    response_body: null,
-                    response_body_status: 'not_enabled',
-                    duration_ms: duration,
-                    resource_type: 'xhr',
-                    request_body: null,
-                    request_body_status: 'not_enabled',
-                    timestamp: Date.now()
-                });
-                return;
-            }
             read_body_capped(clone, ${max_body_capture_bytes}).then(function(result) {
                 post({
                     source: SIGNAL,
@@ -189,7 +192,7 @@ export function build_page_script(
                     response_body: result.body,
                     response_body_status: result.status,
                     duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -203,7 +206,7 @@ export function build_page_script(
                     response_body: null,
                     response_body_status: 'failed',
                     duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -218,7 +221,7 @@ export function build_page_script(
                 response_body: null,
                 response_body_status: 'failed',
                 duration_ms: duration,
-                resource_type: 'xhr',
+                resource_type: res_type,
                 request_body: null,
                 request_body_status: 'not_enabled',
                 timestamp: Date.now()
@@ -241,7 +244,7 @@ export function build_page_script(
 
         try {
             return orig_fetch.apply(this, arguments).then(function(response) {
-                try { process_response(response, method, url, start); } catch (e) {}
+                try { process_response(response, method, url, start, 'fetch'); } catch (e) {}
                 return response;
             }).catch(function(err) {
                 try {
@@ -253,7 +256,7 @@ export function build_page_script(
                         response_body: null,
                         response_body_status: 'failed',
                         duration_ms: performance.now() - start,
-                        resource_type: 'xhr',
+                        resource_type: 'fetch',
                         request_body: null,
                         request_body_status: 'not_enabled',
                         timestamp: Date.now()
@@ -282,7 +285,13 @@ export function build_page_script(
         if (!meta) return orig_send.apply(this, arguments);
         meta.start = performance.now();
 
-        this.addEventListener('loadend', function() {
+        // B3-L3: XHR 对象可复用（同一实例多次 open+send），每次 send 都新增 loadend 监听会累积。
+        // 先移除上次监听再添加，同一实例始终只挂一个。
+        var handler = self.__capture_all_loadend;
+        if (handler) {
+            self.removeEventListener('loadend', handler);
+        }
+        handler = function() {
             try {
                 var body = null;
                 // T098: 默认 not_enabled，CAPTURE_BODY 采集路径内才标 captured/too_large/failed
@@ -317,7 +326,9 @@ export function build_page_script(
                     timestamp: Date.now()
                 });
             } catch (e) {}
-        });
+        };
+        self.__capture_all_loadend = handler;
+        this.addEventListener('loadend', handler);
 
         try {
             return orig_send.apply(this, arguments);
@@ -361,6 +372,13 @@ export function _set_secret_for_test(secret: string | null): void {
 }
 
 let message_listener: ((e: MessageEvent) => void) | null = null;
+// B3-L2: request_id 自增计数拼接，避免同毫秒 Date.now + 6 位随机的碰撞覆盖。
+let hook_request_seq = 0;
+
+function next_hook_request_id(): string {
+    hook_request_seq += 1;
+    return `hook_${Date.now()}_${hook_request_seq}_${generate_unique_suffix(4)}`;
+}
 
 function update_page_nonce(nonce: string): void {
     // 每次 start 注入无 guard 的小脚本，更新页面 MAIN world 的 nonce 变量供注入脚本 post() 读取。
@@ -436,12 +454,14 @@ export function start_network_hook(
         // H3: fallback 路径 URL 按配置脱敏，url_status 反映结果（不再恒 captured）
         const redacted_url = redact_url(d.url || '', redact_data && redact_url_query);
         const data = build_network_data({
-            request_id: `hook_${Date.now()}_${generate_unique_suffix(8)}`,
+            // B3-L2: 自增计数保证同毫秒内不碰撞（旧实现 hook_${Date.now()}_${6位随机} 可能同毫秒同 id）
+            request_id: next_hook_request_id(),
             method: d.method || 'GET',
             url: redacted_url.url,
             url_status: redacted_url.url_status,
             status_code: typeof d.status === 'number' ? d.status : 0,
-            resource_type: 'fetch',
+            // B3-M7: resource_type 从注入脚本透传（fetch→'fetch'、XHR→'xhr'），不再恒 'fetch'
+            resource_type: (d.resource_type || 'fetch') as NetworkRequestData['resource_type'],
             duration_ms: typeof d.duration_ms === 'number' ? Math.round(d.duration_ms * 100) / 100 : 0,
             request_headers: null,
             response_headers: null,

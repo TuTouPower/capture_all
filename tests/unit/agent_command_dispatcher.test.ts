@@ -302,6 +302,20 @@ describe('agent command dispatcher', () => {
         expect(start_capture).not.toHaveBeenCalled();
     });
 
+    // B2-M11: 合法但过大的 sample_rate_ms clamp 到合理区间，而非放行
+    test('clamps oversized sample_rate_ms (B2-M11)', async () => {
+        const start_capture = vi.fn(async () => ({ success: true }));
+        const result = await dispatch_agent_command(command('capture.start', {
+            config: { sample_rate_ms: 999999999 },
+        }), {
+            ...handlers,
+            start_capture,
+        });
+        expect(result.ok).toBe(true);
+        const passed = start_capture.mock.calls[0][1] as { sample_rate_ms: number };
+        expect(passed.sample_rate_ms).toBe(10000);
+    });
+
     test('rejects negative data.list limit (分页边界)', async () => {
         const result = await dispatch_agent_command(command('data.list', {
             capture_id: 's1',

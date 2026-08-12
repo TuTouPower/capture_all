@@ -484,7 +484,15 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                         error: { code: 'INVALID_QUERY', message: 'Unknown instance queue' },
                     });
                 }
-                queue.resolve(body);
+                // B1-L3: resolve 未知 command_id 是客户端错误，返回 400 而非抛给顶层变 500
+                try {
+                    queue.resolve(body);
+                } catch {
+                    return send_json(response, 400, {
+                        ok: false,
+                        error: { code: 'INVALID_QUERY', message: `Unknown command_id: ${body.command_id}` },
+                    });
+                }
                 command_owners.delete(body.command_id);
                 return send_json(response, 200, { ok: true });
             }

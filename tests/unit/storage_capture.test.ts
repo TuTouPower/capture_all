@@ -55,6 +55,21 @@ describe('storage_capture', () => {
         expect(event.key).toBeUndefined();
     });
 
+    // B3-L5: token/secret/password 匹配的 key 名脱敏为 [REDACTED]
+    it('redacts sensitive storage key names (B3-L5)', () => {
+        start_storage_capture(sender, 'cap1', Date.now(), 42);
+        post_message({ storage_type: 'local', action: 'set', key: 'auth_token', value_length: 5 });
+        post_message({ storage_type: 'local', action: 'set', key: 'password_hash', value_length: 5 });
+        post_message({ storage_type: 'local', action: 'set', key: 'api_key', value_length: 5 });
+        post_message({ storage_type: 'local', action: 'set', key: 'regular_key', value_length: 5 });
+        expect(sender).toHaveBeenCalledTimes(4);
+        const keys = sender.mock.calls.map(([, data]) => data.key);
+        expect(keys[0]).toBe('[REDACTED]');
+        expect(keys[1]).toBe('[REDACTED]');
+        expect(keys[2]).toBe('[REDACTED]');
+        expect(keys[3]).toBe('regular_key');
+    });
+
     it('未传 tab_id 默认 0（向后兼容性参考，新调用必须传值）', () => {
         // 即使未来签名要求 tab_id，仍验证默认行为合理
         start_storage_capture(sender, 'cap1', Date.now(), 0);

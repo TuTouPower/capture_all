@@ -84,7 +84,6 @@ src/
 │   │   ├── body_capture_coordinator.ts # Body 捕获协调器（单飞轮询）
 │   │   ├── cdp_event_router.ts   # CDP 事件路由分发（session 注册/注销）
 │   │   ├── stream_buffer.ts      # SSE / 流式响应增量缓冲（finish 删 entry）
-│   │   ├── webrequest_handler.ts # webRequest 事件处理
 │   │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端（URL allowlist）
 │   │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端（结果投递重试）
 │   │   ├── agent_command_dispatcher.ts # Agent 命令分发（结构化错误码）

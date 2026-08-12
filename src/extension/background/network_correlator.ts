@@ -18,6 +18,9 @@ export interface CdpBodyEvent {
     response_body: string | null;
     response_body_status: BodyCaptureStatus;
     response_preview: string | null;
+    // B1-L5: CDP getResponseBody 可能 base64 返回；携带实际编码/字节供 build_network_data 正确标注
+    response_body_encoding?: 'utf8' | 'base64' | null;
+    response_body_bytes?: number | null;
     request_headers: Record<string, string>;
     response_headers: Record<string, string>;
 }
@@ -122,6 +125,8 @@ export function build_cdp_only_request(
         response_body: cdp_event.response_body,
         response_preview: cdp_event.response_preview,
         response_body_status: cdp_event.response_body_status,
+        response_body_encoding: cdp_event.response_body_encoding ?? null,
+        response_body_bytes: cdp_event.response_body_bytes ?? null,
         mime_type: extract_mime_type(cdp_event.response_headers),
         capture_method: 'extension_cdp',
         body_capture_mode: 'extension_cdp',

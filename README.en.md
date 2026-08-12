@@ -215,7 +215,7 @@ Delete captures from the main panel. Removing the extension or clearing extensio
 ## Known limitations
 
 - The current capture model requires high-impact browser permissions.
-- Bridge JSON body limit is 1 MiB; extension result reply limit is 64 MiB.
+- Bridge JSON body limit is 1 MiB; extension result replies are capped by the bridge side at 64 MiB (enforced only on the bridge — prefer pagination or local export for very large results).
 - Large captures should use paginated `list_records` or local export, not rely on full-data MCP queries.
 - Redaction does not scan all potential secrets inside arbitrary response body text.
 - No Chrome Web Store package, npm release, compatibility guarantee, or support SLA yet.

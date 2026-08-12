@@ -9,6 +9,12 @@ let original_read_text: (() => Promise<string>) | null = null;
 let copy_listener: ((e: Event) => void) | null = null;
 let paste_listener: ((e: Event) => void) | null = null;
 
+// B3-L7: 双路径（document copy/paste 事件 + navigator.clipboard 补丁）可能对同一操作双报。
+// 例如页面 copy handler 内调 navigator.clipboard.writeText：copy 事件 + writeText 补丁各发一条。
+// 同一 action 窗口期去重（保留先到者）。
+const DEDUP_WINDOW_MS = 50;
+const last_emit_ts: Record<'write' | 'read', number> = { write: 0, read: 0 };
+
 export function start_clipboard_capture(
     sender: (event: CaptureEvent, data: ClipboardEventData) => void,
     new_capture_id: string,
@@ -20,6 +26,9 @@ export function start_clipboard_capture(
         capture_start_epoch_ms: new_capture_start_epoch_ms,
         tab_id: new_tab_id,
     })) return;
+    // B3-L7: 新采集会话重置去重时间戳，避免上次采集的 emit 时间压制本次首事件
+    last_emit_ts.write = 0;
+    last_emit_ts.read = 0;
 
     // monkey-patch navigator.clipboard
     if (navigator?.clipboard) {
@@ -72,6 +81,11 @@ function emit_clipboard(
     action: ClipboardEventData['action'],
 ): void {
     if (!state.is_capturing) return;
+
+    const now = Date.now();
+    // B3-L7: 同一 action 窗口期去重，防 execCommand 事件与 navigator.clipboard 补丁双报
+    if (now - last_emit_ts[action] < DEDUP_WINDOW_MS) return;
+    last_emit_ts[action] = now;
 
     const event = create_content_event({
         capture_id: state.capture_id,

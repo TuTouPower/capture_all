@@ -164,9 +164,9 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
     const request_count = session.stats.request_count || network_requests.length;
     const log_count = session.stats.log_count || console_logs.length;
 
-    const total_size_kb = Math.round(
-        (event_count + request_count + log_count) * 0.5
-    );
+    // B2-L1: total_size_kb 用实际序列化数据字节数（json_str 是导出内嵌的完整采集数据），
+    // 不再用 (event+req+log)×0.5 的虚构系数估算。
+    const total_size_kb = Math.round(new TextEncoder().encode(json_str).length / 1024);
 
     const body_capture_info = session.body_capture_mode
         ? `<div class="summary-item"><label>Body Capture</label><span>${escape_html(session.body_capture_mode)} · ${escape_html(session.body_capture_status || 'unknown')}</span></div>`

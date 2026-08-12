@@ -8,7 +8,8 @@ import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
 import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
-import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { generate_secret, verify_payload } from './content_hmac';
+import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
 
 const state = create_capture_state<NetworkRequestData>();
@@ -18,21 +19,11 @@ const SIGNAL = '__capture_all_network_hook__';
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
 export function build_page_script(capture_response_body: boolean, secret: string): string {
     return `(function() {
-    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
+    // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
     // 原 guard 语义从「阻止重注入」改为「还原后重装」，hook 链不叠加。
-    if (window.__capture_all_network_hook_installed__) {
-        var prev_hook = window.__capture_all_network_hook_prev__;
-        if (prev_hook) {
-            window.fetch = prev_hook.fetch;
-            XMLHttpRequest.prototype.open = prev_hook.open;
-            XMLHttpRequest.prototype.send = prev_hook.send;
-        }
-    }
-    window.__capture_all_network_hook_installed__ = true;
-    var SIGNAL = '${SIGNAL}';
+    ${page_script_reinstall_guard('network_hook', '            window.fetch = prev_hook.fetch;\n            XMLHttpRequest.prototype.open = prev_hook.open;\n            XMLHttpRequest.prototype.send = prev_hook.send;')}
+    ${page_script_preamble('network_hook', secret)}
     var CAPTURE_BODY = ${capture_response_body};
-    var SECRET = '${secret}';
-${SYNC_HMAC_JS}
     function post(data) {
         try {
             // T097: 每次发送从 window 动态读 nonce，content 每次 start 更新，解耦扩展重建/restart

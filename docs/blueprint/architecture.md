@@ -101,6 +101,7 @@ src/
 │   │   ├── form_submit_capture.ts / fullscreen_capture.ts / print_capture.ts
 │   │   ├── resize_capture.ts / visibility_capture.ts
 │   │   ├── storage_capture.ts / websocket_capture.ts / network_hook.ts
+│   │   ├── content_page_script.ts # 注入脚本共享模板（还原守卫 + 头部声明）
 │   ├── popup/                    # 弹出窗口（3 状态）
 │   │   └── popup.html / popup.ts / popup.css
 │   ├── dashboard/                # 主面板

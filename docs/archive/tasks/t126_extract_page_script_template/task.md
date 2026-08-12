@@ -2,11 +2,11 @@
 tid: "t126"
 slug: "extract_page_script_template"
 title: "refactor: extract shared page script template"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t126_extract_page_script_template"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "77c9d91bb1fbcbf8e31ce838343a35fa16f96db8"
 depends_on: ""
 conflicts_with: "t124"
 note: "审阅发现:network_hook 与 websocket_capture build_page_script 同构"
@@ -44,14 +44,12 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-12 13:20 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t126_code_f001|minor|已修|spec 过时：post 发送逻辑因 nonce/payload 非同构未整段抽取，共享收敛到 guard+preamble；spec 上下文区补决策记录|spec.md:测试策略|
+|t126_test_f001|minor|已修|AC-001 断言锚定 import 行，改为锚定 `page_script_reinstall_guard(` 调用形式|tests/unit/content_page_script.test.ts:59-60|
 
 ## 收尾报告
 
@@ -60,17 +58,15 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 结构断言测试、AC-002 既有行为测试 56 用例、AC-003 npm test 1383 全绿 + tsc 通过；详见 handoff.json ac_evidence
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 `single`：
 
@@ -80,4 +76,4 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- 抽取 network_hook 与 websocket_capture 注入脚本同构片段为 content_page_script.ts 共享模板（还原守卫 + 头部声明），行为不变全绿；storage_capture 第三处同构位点登记 p033。

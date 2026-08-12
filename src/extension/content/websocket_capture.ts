@@ -2,7 +2,8 @@
 import type { CaptureEvent, WsMessageData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
-import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { generate_secret, verify_payload } from './content_hmac';
+import { page_script_reinstall_guard, page_script_preamble } from './content_page_script';
 
 const state = create_capture_state<WsMessageData>();
 let current_nonce = '';
@@ -26,15 +27,9 @@ const SIGNAL = '__capture_all_ws__';
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
 export function build_page_script(secret: string): string {
     return `(function() {
-    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
-    if (window.__capture_all_ws_installed__) {
-        var prev_hook = window.__capture_all_ws_prev__;
-        if (prev_hook) window.WebSocket = prev_hook;
-    }
-    window.__capture_all_ws_installed__ = true;
-    var SIGNAL = '${SIGNAL}';
-    var SECRET = '${secret}';
-${SYNC_HMAC_JS}
+    // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
+    ${page_script_reinstall_guard('ws', '            window.WebSocket = prev_hook;')}
+    ${page_script_preamble('ws', secret)}
 
     // UTF-8 字节长度（兼容老浏览器，TextEncoder 不存在时用近似）
     function utf8_byte_len(s) {

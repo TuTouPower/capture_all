@@ -62,6 +62,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 <!-- /规范 -->
 
 - 现有 content 捕获测试（network_hook / websocket_capture / content_hmac_vectors）覆盖行为；若测试对生成脚本字符串做源码级断言，评估是否改为行为断言（字符串断言过度耦合模板拼接细节时调整）。
+- 共享粒度决策（reviewer code_f001，spec 过时修正）：两处 post 的 nonce 键名与 payload 构造非严格同构，post 发送逻辑未整段抽取；共享收敛到 `page_script_reinstall_guard`（还原守卫）+ `page_script_preamble`（SIGNAL/SECRET/SYNC_HMAC_JS），各自 post 保留模块特有 nonce 读取与载荷构造。第三处同构位点 `storage_capture.ts` 不在本 task 范围，见 pending。
 
 ### 未知契约清单
 

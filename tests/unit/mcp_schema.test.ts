@@ -57,14 +57,15 @@ describe('MCP tool schemas', () => {
         expect(result.capture_id).toBe('abc-123');
     });
 
-    it('start_recording: allows unknown config fields (passthrough)', () => {
+    it('start_recording: 未知 config 字段被 strip（t152 AC-008，不再 passthrough 静默放行）', () => {
         const result = pass('start_recording', {
             config: {
                 capture_network: true,
                 unexpected_field: true,
             },
         });
-        expect(result.config).toMatchObject({ capture_network: true, unexpected_field: true });
+        expect(result.config).toMatchObject({ capture_network: true });
+        expect((result.config as Record<string, unknown>).unexpected_field).toBeUndefined();
     });
 
     it('start_recording: rejects invalid partial config values', () => {
@@ -255,9 +256,10 @@ describe('MCP tool schemas', () => {
     });
 
     // --- target_instance_id / target_label passthrough ---
-    it('all tools accept optional target_instance_id', () => {
-        const tools_without_capture_id = ['get_status', 'stop_recording', 'list_browsers', 'list_captures', 'list_sessions', 'start_recording'];
+    it('声明 target 的工具接受 target_instance_id（strict 按声明字段放行）', () => {
+        const tools_without_capture_id = ['stop_recording', 'list_captures', 'list_sessions', 'start_recording'];
         for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
+            if (tool === 'get_status' || tool === 'list_browsers') continue; // 全局工具未声明 target
             const base_input = tools_without_capture_id.includes(tool)
                 ? {}
                 : tool === 'list_records'
@@ -274,7 +276,12 @@ describe('MCP tool schemas', () => {
         }
     });
 
-    it('all tools passthrough unknown fields', () => {
+    it('get_status/list_browsers 未声明 target，strict 拒绝 target_instance_id', () => {
+        expect(() => MCP_TOOL_SCHEMAS.get_status.parse({ target_instance_id: 'inst-1' })).toThrow();
+        expect(() => MCP_TOOL_SCHEMAS.list_browsers.parse({ target_instance_id: 'inst-1' })).toThrow();
+    });
+
+    it('all tools reject unknown top-level fields (t152 AC-008 strict)', () => {
         for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
             const base_input = tool === 'list_records'
                 ? { capture_id: 'cap-001', source: 'network' }
@@ -287,8 +294,7 @@ describe('MCP tool schemas', () => {
                             : tool === 'get_status' || tool === 'stop_recording' || tool === 'list_browsers' || tool === 'list_captures' || tool === 'list_sessions' || tool === 'start_recording'
                                 ? {}
                                 : { capture_id: 'cap-001' };
-            const result = MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, future_field: 42 });
-            expect(result.future_field).toBe(42);
+            expect(() => MCP_TOOL_SCHEMAS[tool].parse({ ...base_input, future_field: 42 }), `tool=${tool}`).toThrow();
         }
     });
 

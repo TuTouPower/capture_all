@@ -1,8 +1,8 @@
 // tests/logger.test.ts — fault injection: Error 对象必须保留 message/stack
 // P0.59: 修复前 Error 直接进 IndexedDB，structured clone 丢 enumerable props 之外的字段，
 // 日志中只能看到 `{}`，无法定位真凶。
-import { describe, it, expect } from 'vitest';
-import { Logger } from '../../src/shared/logger';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Logger, MessageLogTransport } from '../../src/shared/logger';
 import type { AppLogEntry } from '../../src/shared/types';
 import type { LogTransport } from '../../src/shared/logger';
 
@@ -127,6 +127,55 @@ describe('Logger redaction & size cap', () => {
         expect(arr[1]).toBe('keep');
     });
 
+    // H3: credential 形字段名整体脱敏，阻止明文入 app_logs
+    it('redacts credential fields in object details (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { headers: { authorization: 'Bearer xyz', 'x-api-key': 'KEY123', 'Content-Type': 'application/json' } });
+
+        const details = transport.last_entry?.details as { headers: Record<string, unknown> };
+        expect(details.headers.authorization).toBe('[REDACTED]');
+        expect(details.headers['x-api-key']).toBe('[REDACTED]');
+        expect(details.headers['Content-Type']).toBe('application/json');
+    });
+
+    it('redacts token/secret/password named fields nested deep (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { session: { access_token: 'AT', refreshToken: 'RT' }, config: { password: 'pw', other: 'keep' } });
+
+        const details = transport.last_entry?.details as { session: Record<string, unknown>; config: Record<string, unknown> };
+        expect(details.session.access_token).toBe('[REDACTED]');
+        expect(details.session.refreshToken).toBe('[REDACTED]');
+        expect(details.config.password).toBe('[REDACTED]');
+        expect(details.config.other).toBe('keep');
+    });
+
+    it('redacts cookie/set-cookie/secret fields (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { headers: { cookie: 'session=abc', 'set-cookie': 'id=1', secret: 's3cr3t', 'X-Custom': 'keep' } });
+
+        const details = transport.last_entry?.details as { headers: Record<string, unknown> };
+        expect(details.headers.cookie).toBe('[REDACTED]');
+        expect(details.headers['set-cookie']).toBe('[REDACTED]');
+        expect(details.headers.secret).toBe('[REDACTED]');
+        expect(details.headers['X-Custom']).toBe('keep');
+    });
+
+    it('redacts sensitive field whose value is an object (H3)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        logger.info('ctx', { token: { client_id: 'x', secret_key: 'y' } });
+
+        const details = transport.last_entry?.details as { token: unknown };
+        expect(details.token).toBe('[REDACTED]');
+    });
+
     it('truncates oversized string to MAX_LOG_ENTRY_BYTES + marker', () => {
         const transport = new CaptureTransport();
         const logger = new Logger('test', transport);
@@ -181,5 +230,96 @@ describe('Logger redaction & size cap', () => {
         logger.error('String detail', 'boom');
 
         expect(transport.last_entry?.details).toBe('boom');
+    });
+});
+
+// B1-M7: sanitize_value 对 getter 抛错的 Proxy/对象返回 '[Unserializable]'，日志点不成为崩溃源
+describe('Logger sanitize_value getter guard (B1-M7)', () => {
+    it('returns [Unserializable] when an object getter throws', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        const obj: Record<string, unknown> = {};
+        Object.defineProperty(obj, 'boom', {
+            get() { throw new Error('getter failed'); },
+            enumerable: true,
+        });
+
+        expect(() => logger.info('ctx', { obj })).not.toThrow();
+        const details = transport.last_entry?.details as { obj: unknown };
+        expect(details.obj).toBe('[Unserializable]');
+    });
+
+    it('returns [Unserializable] for a Proxy whose get trap throws', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        // target 需有 own key，Object.entries 才会经 [[Get]] 触发 get trap
+        const proxy = new Proxy({ a: 1 }, { get() { throw new Error('trap'); } });
+
+        expect(() => logger.info('proxy', proxy)).not.toThrow();
+        expect(transport.last_entry?.details).toBe('[Unserializable]');
+    });
+
+    it('still cleans the seen set after getter failure (no cross-call pollution)', () => {
+        const transport = new CaptureTransport();
+        const logger = new Logger('test', transport);
+
+        const obj: Record<string, unknown> = {};
+        Object.defineProperty(obj, 'boom', {
+            get() { throw new Error('getter failed'); },
+            enumerable: true,
+        });
+
+        expect(() => logger.info('first', obj)).not.toThrow();
+        expect(() => logger.info('second', { self: obj })).not.toThrow();
+        // 第二次日志时同一对象不应被 seen 残留误判为 [Circular]
+        const details = transport.last_entry?.details as { self: unknown };
+        expect(details.self).toBe('[Unserializable]');
+    });
+});
+
+// B2-M20: MessageLogTransport.flush 50ms 循环加轮次上限，写不停止时不无限自旋
+describe('MessageLogTransport flush round cap (B2-M20)', () => {
+    let original_chrome: unknown;
+    let send_mock: ReturnType<typeof vi.fn>;
+
+    afterEach(() => {
+        (globalThis as any).chrome = original_chrome;
+        vi.restoreAllMocks();
+    });
+
+    function make_entry(message: string): AppLogEntry {
+        return { id: `log_${Math.random()}`, timestamp: Date.now(), level: 'debug', module: 'm', message };
+    }
+
+    it('flush stops after at most 5 rounds even when writes keep arriving', async () => {
+        original_chrome = (globalThis as any).chrome;
+        send_mock = vi.fn().mockRejectedValue(new Error('SW dormant'));
+        (globalThis as any).chrome = { runtime: { sendMessage: send_mock } };
+
+        const transport = new MessageLogTransport();
+        transport.write(make_entry('prime'));
+        const writer = setInterval(() => transport.write(make_entry('x')), 5);
+
+        const started = Date.now();
+        await transport.flush();
+        clearInterval(writer);
+        const elapsed = Date.now() - started;
+
+        // 轮次上限 5：send_batch 至多调用 5 次，总耗时不超过 ~5×50ms + 余量
+        expect(send_mock.mock.calls.length).toBeLessThanOrEqual(5);
+        expect(send_mock.mock.calls.length).toBeGreaterThanOrEqual(1);
+        expect(elapsed).toBeLessThan(5 * 50 + 200);
+    });
+
+    it('flush does not send when buffer is empty', async () => {
+        original_chrome = (globalThis as any).chrome;
+        send_mock = vi.fn().mockRejectedValue(new Error('SW dormant'));
+        (globalThis as any).chrome = { runtime: { sendMessage: send_mock } };
+
+        const transport = new MessageLogTransport();
+        await transport.flush();
+        expect(send_mock).not.toHaveBeenCalled();
     });
 });

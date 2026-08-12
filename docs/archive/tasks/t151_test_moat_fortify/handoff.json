@@ -1,0 +1,21 @@
+{
+  "tid": "t151",
+  "attempt": 1,
+  "execution_id": "a8e876c50c6446feacb363ffed2b923a",
+  "status": "done",
+  "branch": "t151_test_moat_fortify",
+  "base_sha": "1d66fe3be865d424166a1975eb805f3c4feeac40",
+  "tests": "npm test：1487 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS（2 minor 已修）→ Round 2 general PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/dashboard_detail_xss_escape.test.ts：5 渲染函数 × 3 向量参数化，esc 参照 import 生产 escape_html"],
+    "AC-002": ["detail_render_consistency.test.ts：删 tab_expectations 自证自，改 jsdom 调 render_detail/_render_dt_list_for_test 断言 7 类指标/行标签"],
+    "AC-003": ["detail_layout_source/settings_ui 源码断言改行为（rail 手柄/布局/data-sel/检查器/logSize readonly+value）"],
+    "AC-004": ["popup_behavior_paths.test.ts：6 例真实 import + mock DOM（start/stop→saved/onChanged/导出失败/start 失败/即时轮询）"],
+    "AC-005": ["agent_command_dispatcher +6 结构化错误码/config 校验；agent_data_queries +4 分页/切片/续取；64MiB 由 t140 覆盖"],
+    "AC-006": ["npm test 1487 passed + tsc"]
+  },
+  "pending": [],
+  "findings": []
+}

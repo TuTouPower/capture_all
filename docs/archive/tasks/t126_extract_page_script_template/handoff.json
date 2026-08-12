@@ -1,0 +1,18 @@
+{
+  "tid": "t126",
+  "attempt": 1,
+  "execution_id": "1aa37cd87b34486e875b97266d08477c",
+  "status": "done",
+  "branch": "t126_extract_page_script_template",
+  "base_sha": "77c9d91bb1fbcbf8e31ce838343a35fa16f96db8",
+  "tests": "npm test：131 files / 1383 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS（各 1 minor 已修）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/content_page_script.test.ts::build_page_script 复用共享模板（结构断言）通过：两文件调用 page_script_reinstall_guard(/page_script_preamble( 且不再内联还原守卫/SIGNAL 声明/SYNC_HMAC_JS"],
+    "AC-002": ["既有注入脚本行为测试全绿：network_hook_gate_behavior / websocket_capture_injected_script / content_hmac_vectors / content_postmessage_nonce 共 56 用例通过，覆盖还原重装、per-message HMAC、nonce 动态读取"],
+    "AC-003": ["npm test 131 files / 1383 passed；npx tsc --noEmit exit 0"]
+  },
+  "pending": ["p033"],
+  "findings": []
+}

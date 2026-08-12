@@ -27,6 +27,9 @@ export interface CaptureRecord {
     body_capture_status?: BodyCaptureRuntimeStatus;
     body_capture_failure_reason?: BodyCaptureFailureReason;
     body_capture_message?: string;
+
+    /** t148: 已落库写入字节数（JSON 序列化口径），SW 重启后限额检查据此重建基数。 */
+    storage_bytes_written?: number;
 }
 
 export interface CaptureStats {
@@ -239,6 +242,7 @@ export interface PrintEventData {
 
 export interface WsMessageData {
     ws_url: string;
+    url_status: 'captured' | 'redacted';
     direction: 'sent' | 'received';
     data_preview: string | null;
     data_bytes: number;
@@ -388,6 +392,8 @@ export interface WsFrameData {
 export interface ConsoleEventData {
     capture_id?: string;
     event_id?: string;
+    // t144: 落库时复制 event.relative_time_ms，供 dashboard timeline 定位（ConsoleEventData 原无时间字段）
+    relative_time_ms?: number;
     level: 'log' | 'warn' | 'info' | 'debug' | 'error';
     args_preview: string[];
     args_status: 'captured' | 'redacted';
@@ -671,7 +677,8 @@ export interface UserConfig {
     inline_text_max_bytes: number;
     redact_data: boolean;
     theme: ThemeMode;
-    locale: string;
+    /** t152: 单一事实来源，与 i18n Locale（'en' | 'zh'）对齐。 */
+    locale: 'en' | 'zh';
     system_time_timezone: SystemTimeTimezone;
     detail_time_display_mode: DetailTimeDisplayMode;
     export_capture_directory: string;

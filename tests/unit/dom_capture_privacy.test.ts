@@ -68,4 +68,24 @@ describe('input value privacy', () => {
             value_length: null,
         });
     });
+
+    // B3-M6: focus 事件由 focus_capture 单一采集，dom_capture 不再监听 focusin/focusout
+    it('does not emit input_event on focusin/focusout (B3-M6)', () => {
+        const events: Array<{ event: CaptureEvent; data: InputEventData }> = [];
+        const input = document.createElement('input');
+        input.id = 'focus-test';
+        document.body.append(input);
+
+        start_dom_capture(
+            { ...DEFAULT_CONFIG },
+            'cap_focus',
+            Date.now(),
+            1,
+            (event: CaptureEvent, data: InputEventData) => events.push({ event, data }),
+        );
+        input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+        expect(events).toHaveLength(0);
+    });
 });

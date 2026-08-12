@@ -15,16 +15,16 @@ describe('P0.35/P0.40 export button wiring', () => {
         expect(export_block).not.toBeNull();
     });
 
-    it('exportBtn click handler awaits chrome.runtime.sendMessage', () => {
+    it('exportBtn click handler awaits send_ui_message', () => {
         const export_section = popup_src.match(
             /#exportBtn[\s\S]*?addEventListener[\s\S]*?\}\);/,
         );
         expect(export_section).not.toBeNull();
-        expect(export_section![0]).toMatch(/await\s+chrome\.runtime\.sendMessage/);
+        expect(export_section![0]).toMatch(/await\s+send_ui_message/);
     });
 
     it('exportBtn sends action "get_capture_data" with capture_id (ZIP archive export)', () => {
-        expect(popup_src).toMatch(/action:\s*'get_capture_data'/);
+        expect(popup_src).toMatch(/send_ui_message\(\s*'get_capture_data'/);
         expect(popup_src).toMatch(/capture_id:\s*finished_capture\.capture_id/);
     });
 

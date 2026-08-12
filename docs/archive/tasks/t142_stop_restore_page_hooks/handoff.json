@@ -1,0 +1,18 @@
+{
+  "tid": "t142",
+  "attempt": 1,
+  "execution_id": "3f8ba28e96b44283974f186adfc35bde",
+  "status": "done",
+  "branch": "t142_stop_restore_page_hooks",
+  "base_sha": "51e0843c0bff79665b8d2e166edc584b7da11f22",
+  "tests": "npm test：全量 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS/test FAIL → Round 2 code PASS/test FAIL → Round 3 test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t142_stop_restore_page_hooks.test.ts：eval 安装 hook 后 fetch/WebSocket 被替换、restore 还原恢复原样；stop_* 注入还原 script（createElement spy 断言）"],
+    "AC-002": ["tests/unit/t142_stop_restore_page_hooks.test.ts：build_page_script(true) 含 clone.text() body 采集，采集进行中 hook 行为不变"],
+    "AC-003": ["tests/unit/t142_stop_restore_page_hooks.test.ts：restore_page_script try/catch 包裹，注入失败静默降级"]
+  },
+  "pending": [],
+  "findings": []
+}

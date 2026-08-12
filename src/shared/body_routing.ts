@@ -63,7 +63,9 @@ export function is_text_body(
     mime: string | null,
 ): boolean {
     if (encoding === 'base64') return false;
-    if (!mime) return true; // 无 mime 且非 base64 → 当作文本
+    // B1-L14: 无 mime 且非 base64 时不再默认当作文本——未知 mime 保守按二进制处理
+    // （避免二进制响应无 Content-Type 时被当作文本内联破坏数据；有明确文本 mime 才走内联）。
+    if (!mime) return false;
     const lower = mime.toLowerCase().split(';')[0].trim();
     if (TEXT_PREFIXES.some((p) => lower.startsWith(p))) return true;
     if (TEXT_EXACT.includes(lower)) return true;

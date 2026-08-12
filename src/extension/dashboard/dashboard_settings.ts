@@ -1,12 +1,13 @@
 // dashboard/dashboard_settings.ts — 设置页
 import type { UserConfig, ThemeMode } from '../../shared/types';
-import { set_locale, type Locale, t } from '../shared/i18n';
+import { set_locale, t, type I18nStrings, type Locale } from '../shared/i18n';
 import { set_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { save_user_config } from '../../shared/user_config';
 import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
 import { Logger } from '../../shared/logger';
+import { send_ui_message } from '../../shared/message_contract';
 import {
     esc, I, is_extension, get_user_config, set_user_config,
     logger,
@@ -23,81 +24,81 @@ function sw(name: string, on: boolean, sm = false): string {
 
 function render_settings(): string {
     const cfg = get_user_config();
-    const SET_NAV: [string, string, string][] = [
-        ['general', '通用', 'navSettings'], ['defaults', '采集默认值', 'navCurrent'],
-        ['privacy', '隐私与脱敏', 'err'], ['export', '导出', 'navExport'],
-        ['diagnostics', '诊断日志', 'console'], ['integrations', '集成', 'navMcp'],
+    const SET_NAV: [string, keyof I18nStrings, string][] = [
+        ['general', 'general', 'navSettings'], ['defaults', 'captureDefaults', 'navCurrent'],
+        ['privacy', 'privacyRedaction', 'err'], ['export', 'exportLabel', 'navExport'],
+        ['diagnostics', 'diagnosticsLogs', 'console'], ['integrations', 'integrations', 'navMcp'],
     ];
     return `<div class="page">
         <div class="pg-head">
-            <div class="pg-title"><h1>设置</h1><p>管理 Capture All 的全局偏好、采集默认值、隐私策略、导出规则和集成能力。</p></div>
+            <div class="pg-title"><h1>${t('settings')}</h1><p>${t('settingsDesc')}</p></div>
         </div>
         <div class="set-body">
             <nav class="set-subnav scroll">
-                ${SET_NAV.map(([k, l, ic], i) => `<button class="set-navitem" data-setnav="set-${k}" data-on="${i === 0 ? 1 : 0}">${I[ic]}${l}</button>`).join('')}
+                ${SET_NAV.map(([k, l, ic], i) => `<button class="set-navitem" data-setnav="set-${k}" data-on="${i === 0 ? 1 : 0}">${I[ic]}${t(l)}</button>`).join('')}
             </nav>
             <div class="set-resize-handle"></div>
             <div class="set-scroll scroll">
                 <section class="set-section" id="set-general">
-                    <h2>通用</h2>
+                    <h2>${t('general')}</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field"><span class="field-lbl">语言</span>
-                            <select class="input" data-cfg="locale"><option value="zh" ${cfg.locale === 'zh' ? 'selected' : ''}>简体中文</option><option value="en" ${cfg.locale === 'en' ? 'selected' : ''}>English</option></select>
+                        <div class="field"><span class="field-lbl">${t('language')}</span>
+                            <select class="input" data-cfg="locale"><option value="zh" ${cfg.locale === 'zh' ? 'selected' : ''}>${t('chinese')}</option><option value="en" ${cfg.locale === 'en' ? 'selected' : ''}>${t('english')}</option></select>
                         </div>
-                        <div class="field"><span class="field-lbl">主题</span>${seg('theme', [['follow-system', '跟随系统'], ['light', '浅色'], ['dark', '深色']], cfg.theme)}</div>
-                        <div class="field"><span class="field-lbl">时间显示</span>${seg('detail_time_display_mode', [['relative', '相对时间'], ['system', '系统时间']], cfg.detail_time_display_mode)}</div>
-                        <div class="field"><span class="field-lbl">系统时区</span>
-                            <select class="input" data-cfg="system_time_timezone"><option value="browser" ${cfg.system_time_timezone === 'browser' ? 'selected' : ''}>跟随浏览器</option><option value="UTC" ${cfg.system_time_timezone === 'UTC' ? 'selected' : ''}>UTC</option><option value="UTC+1" ${cfg.system_time_timezone === 'UTC+1' ? 'selected' : ''}>UTC+1</option><option value="UTC+2" ${cfg.system_time_timezone === 'UTC+2' ? 'selected' : ''}>UTC+2</option><option value="UTC+3" ${cfg.system_time_timezone === 'UTC+3' ? 'selected' : ''}>UTC+3</option><option value="UTC+4" ${cfg.system_time_timezone === 'UTC+4' ? 'selected' : ''}>UTC+4</option><option value="UTC+5" ${cfg.system_time_timezone === 'UTC+5' ? 'selected' : ''}>UTC+5</option><option value="UTC+6" ${cfg.system_time_timezone === 'UTC+6' ? 'selected' : ''}>UTC+6</option><option value="UTC+7" ${cfg.system_time_timezone === 'UTC+7' ? 'selected' : ''}>UTC+7</option><option value="UTC+8" ${cfg.system_time_timezone === 'UTC+8' ? 'selected' : ''}>UTC+8</option><option value="UTC+9" ${cfg.system_time_timezone === 'UTC+9' ? 'selected' : ''}>UTC+9</option><option value="UTC+10" ${cfg.system_time_timezone === 'UTC+10' ? 'selected' : ''}>UTC+10</option><option value="UTC+11" ${cfg.system_time_timezone === 'UTC+11' ? 'selected' : ''}>UTC+11</option><option value="UTC+12" ${cfg.system_time_timezone === 'UTC+12' ? 'selected' : ''}>UTC+12</option><option value="UTC-1" ${cfg.system_time_timezone === 'UTC-1' ? 'selected' : ''}>UTC-1</option><option value="UTC-2" ${cfg.system_time_timezone === 'UTC-2' ? 'selected' : ''}>UTC-2</option><option value="UTC-3" ${cfg.system_time_timezone === 'UTC-3' ? 'selected' : ''}>UTC-3</option><option value="UTC-4" ${cfg.system_time_timezone === 'UTC-4' ? 'selected' : ''}>UTC-4</option><option value="UTC-5" ${cfg.system_time_timezone === 'UTC-5' ? 'selected' : ''}>UTC-5</option><option value="UTC-6" ${cfg.system_time_timezone === 'UTC-6' ? 'selected' : ''}>UTC-6</option><option value="UTC-7" ${cfg.system_time_timezone === 'UTC-7' ? 'selected' : ''}>UTC-7</option><option value="UTC-8" ${cfg.system_time_timezone === 'UTC-8' ? 'selected' : ''}>UTC-8</option><option value="UTC-9" ${cfg.system_time_timezone === 'UTC-9' ? 'selected' : ''}>UTC-9</option><option value="UTC-10" ${cfg.system_time_timezone === 'UTC-10' ? 'selected' : ''}>UTC-10</option><option value="UTC-11" ${cfg.system_time_timezone === 'UTC-11' ? 'selected' : ''}>UTC-11</option><option value="UTC-12" ${cfg.system_time_timezone === 'UTC-12' ? 'selected' : ''}>UTC-12</option></select>
+                        <div class="field"><span class="field-lbl">${t('theme')}</span>${seg('theme', [['follow-system', t('themeFollowSystem')], ['light', t('themeLight')], ['dark', t('themeDark')]], cfg.theme)}</div>
+                        <div class="field"><span class="field-lbl">${t('timeDisplay')}</span>${seg('detail_time_display_mode', [['relative', t('detailTimeRelative')], ['system', t('detailTimeSystem')]], cfg.detail_time_display_mode)}</div>
+                        <div class="field"><span class="field-lbl">${t('systemTimeTimezone')}</span>
+                            <select class="input" data-cfg="system_time_timezone"><option value="browser" ${cfg.system_time_timezone === 'browser' ? 'selected' : ''}>${t('timezoneFollowBrowser')}</option><option value="UTC" ${cfg.system_time_timezone === 'UTC' ? 'selected' : ''}>UTC</option><option value="UTC+1" ${cfg.system_time_timezone === 'UTC+1' ? 'selected' : ''}>UTC+1</option><option value="UTC+2" ${cfg.system_time_timezone === 'UTC+2' ? 'selected' : ''}>UTC+2</option><option value="UTC+3" ${cfg.system_time_timezone === 'UTC+3' ? 'selected' : ''}>UTC+3</option><option value="UTC+4" ${cfg.system_time_timezone === 'UTC+4' ? 'selected' : ''}>UTC+4</option><option value="UTC+5" ${cfg.system_time_timezone === 'UTC+5' ? 'selected' : ''}>UTC+5</option><option value="UTC+6" ${cfg.system_time_timezone === 'UTC+6' ? 'selected' : ''}>UTC+6</option><option value="UTC+7" ${cfg.system_time_timezone === 'UTC+7' ? 'selected' : ''}>UTC+7</option><option value="UTC+8" ${cfg.system_time_timezone === 'UTC+8' ? 'selected' : ''}>UTC+8</option><option value="UTC+9" ${cfg.system_time_timezone === 'UTC+9' ? 'selected' : ''}>UTC+9</option><option value="UTC+10" ${cfg.system_time_timezone === 'UTC+10' ? 'selected' : ''}>UTC+10</option><option value="UTC+11" ${cfg.system_time_timezone === 'UTC+11' ? 'selected' : ''}>UTC+11</option><option value="UTC+12" ${cfg.system_time_timezone === 'UTC+12' ? 'selected' : ''}>UTC+12</option><option value="UTC-1" ${cfg.system_time_timezone === 'UTC-1' ? 'selected' : ''}>UTC-1</option><option value="UTC-2" ${cfg.system_time_timezone === 'UTC-2' ? 'selected' : ''}>UTC-2</option><option value="UTC-3" ${cfg.system_time_timezone === 'UTC-3' ? 'selected' : ''}>UTC-3</option><option value="UTC-4" ${cfg.system_time_timezone === 'UTC-4' ? 'selected' : ''}>UTC-4</option><option value="UTC-5" ${cfg.system_time_timezone === 'UTC-5' ? 'selected' : ''}>UTC-5</option><option value="UTC-6" ${cfg.system_time_timezone === 'UTC-6' ? 'selected' : ''}>UTC-6</option><option value="UTC-7" ${cfg.system_time_timezone === 'UTC-7' ? 'selected' : ''}>UTC-7</option><option value="UTC-8" ${cfg.system_time_timezone === 'UTC-8' ? 'selected' : ''}>UTC-8</option><option value="UTC-9" ${cfg.system_time_timezone === 'UTC-9' ? 'selected' : ''}>UTC-9</option><option value="UTC-10" ${cfg.system_time_timezone === 'UTC-10' ? 'selected' : ''}>UTC-10</option><option value="UTC-11" ${cfg.system_time_timezone === 'UTC-11' ? 'selected' : ''}>UTC-11</option><option value="UTC-12" ${cfg.system_time_timezone === 'UTC-12' ? 'selected' : ''}>UTC-12</option></select>
                         </div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-defaults">
-                    <h2>采集默认值</h2>
+                    <h2>${t('captureDefaults')}</h2>
                     <div class="set-card">
                         <div class="set-grid c3">
-                            <div class="field"><span class="field-lbl">捕获请求体</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
-                            <div class="field"><span class="field-lbl">捕获响应体</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
-                            <div class="field"><span class="field-lbl">捕获输入值</span>${sw('capture_input_values', cfg.capture_input_values)}</div>
-                            <div class="field"><span class="field-lbl">采集上限 (MB)</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(Math.round(cfg.max_body_capture_bytes / 1048576)))}" min="1" max="1024" step="1"></div>
-                            <div class="field"><span class="field-lbl">内联文本上限 (KB)</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(Math.round(cfg.inline_text_max_bytes / 1024)))}" min="0" max="1024" step="1"></div>
+                            <div class="field"><span class="field-lbl">${t('captureRequestBody')}</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
+                            <div class="field"><span class="field-lbl">${t('captureResponseBody')}</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
+                            <div class="field"><span class="field-lbl">${t('captureInputValues')}</span>${sw('capture_input_values', cfg.capture_input_values)}</div>
+                            <div class="field"><span class="field-lbl">${t('captureLimitMb')}</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(Math.round(cfg.max_body_capture_bytes / 1048576)))}" min="1" max="1024" step="1"></div>
+                            <div class="field"><span class="field-lbl">${t('inlineTextLimitKb')}</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(Math.round(cfg.inline_text_max_bytes / 1024)))}" min="0" max="1024" step="1"></div>
                         </div>
                     </div>
                 </section>
                 <section class="set-section" id="set-privacy">
-                    <div class="set-subhead"><h2>隐私与脱敏</h2>${sw('redact_data', cfg.redact_data)}</div>
+                    <div class="set-subhead"><h2>${t('privacyRedaction')}</h2>${sw('redact_data', cfg.redact_data)}</div>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field span2"><span class="field-lbl">敏感采集提醒</span><span style="font-size:12px;color:var(--ink-3)">请求体、响应体和输入值采集默认开启，可能包含凭据、Token、私密消息或个人信息。不需要时请在首次采集前关闭。</span></div>
-                        <div class="field span2"><span class="field-lbl">脱敏边界</span><span style="font-size:12px;color:var(--ink-3)">密码输入始终不采集。Header、URL 查询和输入值按规则脱敏；请求体和响应体只限制大小，不扫描内容中的敏感信息。</span></div>
+                        <div class="field span2"><span class="field-lbl">${t('sensitiveCaptureNotice')}</span><span style="font-size:12px;color:var(--ink-3)">${t('sensitiveCaptureDesc')}</span></div>
+                        <div class="field span2"><span class="field-lbl">${t('redactionBoundary')}</span><span style="font-size:12px;color:var(--ink-3)">${t('redactionBoundaryDesc')}</span></div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-export">
-                    <h2>导出</h2>
+                    <h2>${t('exportLabel')}</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field span2"><span class="field-lbl">文件名模板</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
-                        <div class="field span2"><span class="field-lbl">采集导出目录</span><input class="input mono" data-cfg="export_capture_directory" value="${esc(cfg.export_capture_directory)}" placeholder="capture-all/exports"></div>
-                        <div class="field span2"><span class="field-lbl">日志导出目录</span><input class="input mono" data-cfg="export_log_directory" value="${esc(cfg.export_log_directory)}" placeholder="capture-all/logs"></div>
-                        <div class="field"><span class="field-lbl">每次询问保存位置</span>${sw('export_save_as', cfg.export_save_as)}</div>
+                        <div class="field span2"><span class="field-lbl">${t('filenameTemplate')}</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
+                        <div class="field span2"><span class="field-lbl">${t('exportCaptureDirectory')}</span><input class="input mono" data-cfg="export_capture_directory" value="${esc(cfg.export_capture_directory)}" placeholder="capture-all/exports"></div>
+                        <div class="field span2"><span class="field-lbl">${t('exportLogDirectory')}</span><input class="input mono" data-cfg="export_log_directory" value="${esc(cfg.export_log_directory)}" placeholder="capture-all/logs"></div>
+                        <div class="field"><span class="field-lbl">${t('exportSaveAs')}</span>${sw('export_save_as', cfg.export_save_as)}</div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-diagnostics">
-                    <h2>诊断日志</h2>
+                    <h2>${t('diagnosticsLogs')}</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field span2"><span class="field-lbl">日志级别</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
-                        <div class="field"><span class="field-lbl">最大日志大小 (MB)</span><input class="input mono" type="number" data-cfg="log_max_size_mb" value="${esc(String(cfg.log_max_size_mb))}" min="1" max="1024" step="1"></div>
-                        <div class="field"><span class="field-lbl">当前日志大小</span><input id="logSize" class="input mono" readonly value="—"></div>
+                        <div class="field span2"><span class="field-lbl">${t('logLevel')}</span>${seg('log_level', [['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'], ['silent', 'silent']], cfg.log_level)}</div>
+                        <div class="field"><span class="field-lbl">${t('maxLogSizeMb')}</span><input class="input mono" type="number" data-cfg="log_max_size_mb" value="${esc(String(cfg.log_max_size_mb))}" min="1" max="1024" step="1"></div>
+                        <div class="field"><span class="field-lbl">${t('currentLogSize')}</span><input id="logSize" class="input mono" readonly value="—"></div>
                         <div class="field span2" style="display:flex;gap:8px">
-                            <button class="btn sm" id="exportLog"><span>${I.export}</span>导出运行日志</button>
-                            <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>清除所有日志</button>
+                            <button class="btn sm" id="exportLog"><span>${I.export}</span>${t('exportLogs')}</button>
+                            <button class="btn sm danger" id="clearLogs"><span>${I.trash}</span>${t('clearLogs')}</button>
                         </div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-integrations" style="margin-bottom:8px">
-                    <h2>集成 · MCP Bridge</h2>
+                    <h2>${t('integrationsMcp')}</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field"><span class="field-lbl">启用 MCP bridge</span>${sw('agent_bridge_enabled', cfg.agent_bridge_enabled)}</div>
-                        <div class="field span2"><span class="field-lbl">Bridge URL</span><input class="input mono" data-cfg="agent_bridge_url" value="${esc(cfg.agent_bridge_url)}" placeholder="http://127.0.0.1:17831"></div>
+                        <div class="field"><span class="field-lbl">${t('agentBridgeEnabled')}</span>${sw('agent_bridge_enabled', cfg.agent_bridge_enabled)}</div>
+                        <div class="field span2"><span class="field-lbl">${t('agentBridgeUrl')}</span><input class="input mono" data-cfg="agent_bridge_url" value="${esc(cfg.agent_bridge_url)}" placeholder="http://127.0.0.1:17831"></div>
                         <div class="field"><span class="field-lbl">${t('agentBridgeBrowserLabel')}</span><input class="input mono" data-cfg="browser_label" value="${esc(cfg.browser_label || '')}" placeholder="${esc(t('agentBridgeBrowserLabelPlaceholder'))}"></div>
-                        <div class="field"><span class="field-lbl">轮询间隔 (ms)</span><input class="input mono" type="number" data-cfg="agent_bridge_poll_interval_ms" value="${esc(cfg.agent_bridge_poll_interval_ms)}"></div>
+                        <div class="field"><span class="field-lbl">${t('agentBridgePollInterval')}</span><input class="input mono" type="number" data-cfg="agent_bridge_poll_interval_ms" value="${esc(cfg.agent_bridge_poll_interval_ms)}"></div>
                         <div class="field span2" id="bridge-status-area"><span class="field-lbl">${t('agentBridgeStatus')}</span><span class="info mono" id="bridgeStatus">${t('agentBridgeNotConnected')}</span></div>
                         <div class="field span2 error-text" id="bridgeErr" style="display:none;color:var(--red-ink)"></div>
                         <div class="field span2" id="bridge-advanced">
@@ -112,7 +113,7 @@ function render_settings(): string {
                 </section>
             </div>
         </div>
-        <div class="set-footer"><span class="info">${I.agent} 更改即时保存 · build ${esc(typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev')}</span></div>
+        <div class="set-footer"><span class="info">${I.agent} ${t('changesSavedImmediately')} · build ${esc(typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev')}</span></div>
     </div>`;
 }
 
@@ -172,11 +173,16 @@ function wire_settings(): void {
             const val = (btn as HTMLElement).dataset.val!;
             s.querySelectorAll('button').forEach((x) => (x as HTMLElement).dataset.on = '0');
             (btn as HTMLElement).dataset.on = '1';
-            if (name === 'theme') { await set_theme(val as ThemeMode); await persist({ theme: val as ThemeMode }); }
+            if (name === 'theme') {
+                // B1-L6: theme 由 set_theme 单一持久化（save_user_config）；此处仅同步本地渲染缓存，
+                // 不再走 persist 重复落盘 user_config。
+                await set_theme(val as ThemeMode);
+                set_user_config({ ...get_user_config(), theme: val as ThemeMode });
+            }
             else if (name === 'log_level') {
                 Logger.set_level(val as 'debug' | 'info' | 'warn' | 'error' | 'silent');
                 await persist({ log_level: val as 'debug' | 'info' | 'warn' | 'error' | 'silent' });
-                chrome.runtime.sendMessage({ action: 'set_log_level', level: val }).catch(() => {});
+                send_ui_message('set_log_level', { level: val }).catch(() => {});
             }
             else await persist({ [name]: val } as Partial<UserConfig>);
         }));
@@ -195,7 +201,6 @@ function wire_settings(): void {
             if (name === 'locale') { set_locale(v as Locale); await persist({ locale: v as Locale }); }
             else if (name.startsWith('agent_bridge')) await persist_bridge();
             else if (name === 'browser_label') await persist_bridge();
-            else if (name === 'agent_bridge_poll_interval_ms') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'log_max_size_mb') await persist({ [name]: Number(v) } as Partial<UserConfig>);
             else if (name === 'max_body_capture_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1048576), DEFAULT_USER_CONFIG.max_body_capture_bytes, 1024 * 1048576) } as Partial<UserConfig>);
             else if (name === 'inline_text_max_bytes') await persist({ [name]: clamp_body_size_bytes(String(Number(v) * 1024), DEFAULT_USER_CONFIG.inline_text_max_bytes, 1024 * 1024) } as Partial<UserConfig>);
@@ -220,9 +225,9 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
         const el = c.querySelector('#logSize') as HTMLInputElement | null;
         if (!el) return;
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'get_app_log_size' });
-            if (r?.size_bytes != null) {
-                const mb = (r.size_bytes / (1024 * 1024)).toFixed(1);
+            const r = await send_ui_message('get_app_log_size', {});
+            if (r?.data?.size_bytes != null) {
+                const mb = (r.data.size_bytes / (1024 * 1024)).toFixed(1);
                 el.value = `${mb} MB`;
             } else {
                 el.value = '—';
@@ -235,9 +240,9 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
 
     c.querySelector('#exportLog')?.addEventListener('click', async () => {
         try {
-            const r = await chrome.runtime.sendMessage({ action: 'export_app_logs', options: { format: 'log' } });
-            if (!r?.success) { alert('导出失败'); return; }
-            const blob = new Blob([r.data], { type: 'text/x-log' });
+            const r = await send_ui_message('export_app_logs', { options: { format: 'log' } });
+            if (!r?.success) { alert(t('exportFailed')); return; }
+            const blob = new Blob([r.data as BlobPart], { type: 'text/x-log' });
             const log_filename = build_log_filename({
                 export_log_directory: get_user_config().export_log_directory,
                 system_time_timezone: get_user_config().system_time_timezone,
@@ -247,9 +252,9 @@ async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {
     });
 
     c.querySelector('#clearLogs')?.addEventListener('click', async () => {
-        if (!confirm('确定清空所有诊断日志？此操作不可撤销。')) return;
+        if (!confirm(t('clearLogsConfirm'))) return;
         try {
-            await chrome.runtime.sendMessage({ action: 'clear_app_logs' });
+            await send_ui_message('clear_app_logs', {});
             update_size();
         } catch (e) { logger.error('Clear logs error', e); }
     });

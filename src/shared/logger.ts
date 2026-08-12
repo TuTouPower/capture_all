@@ -40,6 +40,13 @@ function sanitize_string(s: string): string {
     return truncate_bytes_safe(result, MAX_LOG_ENTRY_BYTES);
 }
 
+// H3: credential 形字段名一律脱敏，防止请求/响应头直接入日志时 token 落库。
+const SENSITIVE_LOG_FIELDS = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'token', 'secret', 'password'];
+
+function is_sensitive_log_field(key: string): boolean {
+    return SENSITIVE_LOG_FIELDS.some((f) => key.toLowerCase().includes(f));
+}
+
 function sanitize_value(value: unknown, seen: WeakSet<object>): unknown {
     if (typeof value === 'string') {
         return sanitize_string(value);
@@ -71,9 +78,13 @@ function sanitize_value(value: unknown, seen: WeakSet<object>): unknown {
         }
         const result: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-            result[k] = sanitize_value(v, seen);
+            // H3: 敏感字段名直接脱敏值，阻止 credential 明文进入 app_logs
+            result[k] = is_sensitive_log_field(k) ? '[REDACTED]' : sanitize_value(v, seen);
         }
         return result;
+    } catch {
+        // B1-M7: getter/proxy 抛错时日志点不能成为崩溃源，返回占位符
+        return '[Unserializable]';
     } finally {
         seen.delete(value as object);
     }
@@ -149,6 +160,8 @@ export function generate_log_id(): string {
 export class MessageLogTransport implements LogTransport {
     private buffer: AppLogEntry[] = [];
     private readonly batch_size = 20;
+    // B2-M20: flush 50ms 循环加轮次上限，防 sendMessage 失败静默丢批时无限自旋
+    private readonly max_flush_rounds = 5;
 
     write(entry: AppLogEntry): void {
         this.buffer.push(entry);
@@ -168,8 +181,10 @@ export class MessageLogTransport implements LogTransport {
     }
 
     async flush(): Promise<void> {
-        while (this.buffer.length > 0) {
+        let rounds = 0;
+        while (this.buffer.length > 0 && rounds < this.max_flush_rounds) {
             this.send_batch();
+            rounds += 1;
             await new Promise(r => setTimeout(r, 50));
         }
     }

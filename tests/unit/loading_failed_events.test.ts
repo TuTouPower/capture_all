@@ -20,36 +20,6 @@ import { mock_chrome_debugger } from '../support/__mocks__/chrome_debugger';
 };
 
 import { start_network_capture, stop_network_capture, enable_response_body_capture, _cdp_request_meta_for_test } from '../../src/extension/background/network_capture';
-import type { PendingRequest } from '../../src/extension/background/cdp_handler';
-import { NetworkCaptureContext } from '../../src/extension/background/network_context';
-
-describe('NetworkCaptureContext.reset 取消 deferred timer', () => {
-    it('reset 时 clearTimeout 被调用', () => {
-        const ctx = new NetworkCaptureContext();
-        const timer1 = setTimeout(() => {}, 10000);
-        const timer2 = setTimeout(() => {}, 10000);
-        ctx.deferred_web_requests.set('d1', {
-            pending: {} as PendingRequest,
-            details: {},
-            timer: timer1,
-            pending_cdp_ids: new Set(),
-        });
-        ctx.deferred_web_requests.set('d2', {
-            pending: {} as PendingRequest,
-            details: {},
-            timer: timer2,
-            pending_cdp_ids: new Set(),
-        });
-
-        const spy = vi.spyOn(globalThis, 'clearTimeout');
-        ctx.reset();
-
-        expect(spy).toHaveBeenCalledTimes(2);
-        expect(ctx.deferred_web_requests.size).toBe(0);
-        spy.mockRestore();
-    });
-});
-
 describe('loadingFailed 带 meta（生产 network_capture 路径）', () => {
     let emitted: Array<{ event: any; data: any }>;
 

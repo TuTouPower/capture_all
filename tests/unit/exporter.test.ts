@@ -180,6 +180,52 @@ describe('exporter', () => {
             expect(result).toContain('test_capture');
             expect(result).toContain('const data = JSON.parse');
         });
+
+        // AC-004: 回灌验证——内嵌 JSON 经真实 JS 字符串字面量解码后必须可 parse 且数据完整。
+        // 用 new Function 走引擎真实字面量语义（而非手工 unescape），使 pre-fix 缺陷（' 与 \n 未转义）
+        // 在构造时抛 SyntaxError 捕获回归，避免「宽恕式手工解码」假绿。
+        function extract_embedded_json(html: string): unknown {
+            const m = html.match(/const data = JSON\.parse\('([\s\S]*?)'\);/);
+            if (!m) throw new Error('no embedded JSON found');
+            const decoded = new Function(`"use strict"; return '${m[1]}';`)();
+            return JSON.parse(decoded);
+        }
+
+        it('AC-001: 含单引号的数据导出 HTML 后 JSON.parse 可解析且数据完整', async () => {
+            (get_capture as any).mockResolvedValue({ ...mock_capture, capture_id: "it's" });
+            (get_events_by_category as any).mockResolvedValue([{ type: 'user_action', data: { text: "it's a test" } }]);
+            (get_network_requests as any).mockResolvedValue([]);
+            (get_console_events as any).mockResolvedValue([]);
+
+            const result = await export_html("it's");
+            const parsed = extract_embedded_json(result) as { capture: { capture_id: string } };
+            expect(parsed.capture.capture_id).toBe("it's");
+        });
+
+        it('AC-002: 含换行/制表的数据导出 HTML 后 JSON.parse 可解析', async () => {
+            (get_capture as any).mockResolvedValue({ ...mock_capture, capture_id: 'cap1' });
+            (get_events_by_category as any).mockResolvedValue([{ type: 'console', data: { text: 'line1\nline2\tend' } }]);
+            (get_network_requests as any).mockResolvedValue([]);
+            (get_console_events as any).mockResolvedValue([]);
+
+            const result = await export_html('cap1');
+            const parsed = extract_embedded_json(result) as { events: Array<{ data: { text: string } }> };
+            expect(parsed.events[0].data.text).toBe('line1\nline2\tend');
+        });
+
+        it('AC-003: 含 </script> 注入尝试保持被转义', async () => {
+            (get_capture as any).mockResolvedValue({ ...mock_capture, capture_id: 'cap1' });
+            (get_events_by_category as any).mockResolvedValue([{ type: 'user_action', data: { text: '</script><script>alert(1)</script>' } }]);
+            (get_network_requests as any).mockResolvedValue([]);
+            (get_console_events as any).mockResolvedValue([]);
+
+            const result = await export_html('cap1');
+            // 内嵌 JSON 中注入的 </script> 的 < 与 > 均转义为 \\u003c/\\u003e，不形成可闭合 script 标签的原文
+            expect(result).toContain('\\u003c\\/script\\u003e');
+            // 且回灌解析后数据完整（含注入文本）
+            const parsed = extract_embedded_json(result) as { events: Array<{ data: { text: string } }> };
+            expect(parsed.events[0].data.text).toBe('</script><script>alert(1)</script>');
+        });
     });
 
     describe('export_har', () => {

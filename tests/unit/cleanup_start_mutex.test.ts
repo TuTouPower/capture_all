@@ -83,7 +83,7 @@ async function load_service_worker(): Promise<void> {
 
 function send_start(capture_id = 'new_cap'): Promise<any> {
     if (!on_message_cb) return Promise.resolve({ success: false, error: 'no listener' });
-    return new Promise((resolve) => on_message_cb!({ action: 'start', capture_id, config: {} }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action: 'start', payload: { capture_id, config: {} } }, {}, resolve));
 }
 
 async function wait(ms: number): Promise<void> {

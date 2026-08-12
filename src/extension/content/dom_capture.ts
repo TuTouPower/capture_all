@@ -23,8 +23,8 @@ export function start_dom_capture(
 
     document.addEventListener('input', handle_input, true);
     document.addEventListener('change', handle_change, true);
-    document.addEventListener('focusin', handle_focus, true);
-    document.addEventListener('focusout', handle_blur, true);
+    // B3-M6: focus 事件由 focus_capture 单一采集（focus_event），此处不再监听 focusin/focusout，
+    // 避免同一元素获焦双报（dom_capture input_event 与 focus_capture focus_event 各发一条）。
 }
 
 export function stop_dom_capture(): void {
@@ -32,8 +32,6 @@ export function stop_dom_capture(): void {
 
     document.removeEventListener('input', handle_input, true);
     document.removeEventListener('change', handle_change, true);
-    document.removeEventListener('focusin', handle_focus, true);
-    document.removeEventListener('focusout', handle_blur, true);
 }
 
 const MAX_PATH_DEPTH = 5;
@@ -172,18 +170,4 @@ function handle_change(event: Event): void {
     const target = event.target as HTMLElement;
     if (!target) return;
     emit_input_event('change', target);
-}
-
-function handle_focus(event: FocusEvent): void {
-    if (!state.is_capturing) return;
-    const target = event.target as HTMLElement;
-    if (!target) return;
-    emit_input_event('focus', target);
-}
-
-function handle_blur(event: FocusEvent): void {
-    if (!state.is_capturing) return;
-    const target = event.target as HTMLElement;
-    if (!target) return;
-    emit_input_event('blur', target);
 }

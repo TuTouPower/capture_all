@@ -1,12 +1,17 @@
 // dashboard/dashboard_shared.ts — 共享工具函数和常量
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig } from '../../shared/types';
+import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { escape_html as esc } from '../../shared/escape';
 import { format_system_time } from '../../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
-import { read_capture_snapshot } from '../shared/capture_data_reader';
+import { read_capture_snapshot, type CaptureSnapshot } from '../shared/capture_data_reader';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
+import { send_ui_message, type UiAction } from '../../shared/message_contract';
+import { t, type I18nStrings } from '../shared/i18n';
+import { category_for_event_type } from '../../shared/event_category';
+import { generate_unique_suffix } from '../../shared/id';
 import { I } from './icons';
 
 export const logger = new Logger('dashboard', get_app_log_transport());
@@ -19,7 +24,9 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
 export const is_extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
 // ── 共享状态（由 dashboard.ts 声明，模块通过 get/set 访问） ──────────────
-let _user_config: UserConfig;
+// t154 AC-006: 缺省初始化为 DEFAULT_USER_CONFIG——非扩展上下文（脱离 chrome 直接打开）下
+// init 不会调 set_user_config，此前 get_user_config() 返回 undefined 使 format_system_time 抛 TypeError。
+let _user_config: UserConfig = { ...DEFAULT_USER_CONFIG } as UserConfig;
 let _captures: CaptureRecord[] = [];
 let _page = 'captures';
 let _selected = new Set<string>();
@@ -91,6 +98,16 @@ export const set_cap_status_filter = (v: 'all' | 'capturing' | 'completed') => {
 export const get_dt_net_insp_closed = () => _dt_net_insp_closed;
 export const set_dt_net_insp_closed = (v: boolean) => { _dt_net_insp_closed = v; };
 
+// t154 AC-003: open_detail 按 capture_id 记忆上次 tab/view/quick 筛选。
+// 会话内存级（dashboard 重载后重置），由 open_detail 保存当前采集、打开新采集时恢复。
+interface DtMemory { tab: string; view: 'list' | 'trace'; quick: string; }
+const _dt_memory = new Map<string, DtMemory>();
+export const save_dt_memory = (id: string | null | undefined): void => {
+    if (!id) return;
+    _dt_memory.set(id, { tab: get_dt_tab(), view: get_dt_view(), quick: get_dt_quick() });
+};
+export const get_dt_memory = (id: string): DtMemory | undefined => _dt_memory.get(id);
+
 // ── helpers ─────────────────────────────────────────────────────────────
 export function num(n: number): string { return (n ?? 0).toLocaleString('en-US'); }
 export function strip_proto(u: string): string { return (u || '').replace(/^https?:\/\//, ''); }
@@ -103,10 +120,12 @@ export function dur_ms(ms: number): string {
 }
 export function capture_dur(s: CaptureRecord): string {
     if (!s.ended_at) return '—';
-    return dur_ms(new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
+    // t154 AC-008: ended_at < started_at 时差值可为负，clamp 0 避免渲染负时长
+    const ms = Math.max(0, new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
+    return dur_ms(ms);
 }
 export function capture_name(s: CaptureRecord): string {
-    return s.name || `${format_system_time(s.started_at, get_user_config())} 的采集`;
+    return s.name || `${format_system_time(s.started_at, get_user_config())}${t('captureNameSuffix')}`;
 }
 
 export function est_bytes(s: CaptureRecord): number {
@@ -124,8 +143,8 @@ export function fmt_size(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 export function pct(part: number, whole: number): string {
-    if (!whole) return '占比 0%';
-    return `占比 ${((part / whole) * 100).toFixed(2)}%`;
+    if (!whole) return `${t('pctPrefix')}0%`;
+    return `${t('pctPrefix')}${((part / whole) * 100).toFixed(2)}%`;
 }
 
 // event kind → icon + color
@@ -141,24 +160,27 @@ export const KIND: Record<string, { icon: string; color: string }> = {
     error: { icon: 'err', color: 'var(--src-error)' },
 };
 export function event_kind(e: CaptureEvent): string {
-    switch (e.type) {
-        case 'mouse_event': case 'keyboard_event': case 'scroll_event': case 'input_event': return 'user';
-        case 'page_navigation': case 'route_change': case 'page_load': case 'tab_switch':
-        case 'tab_created': case 'tab_url_change': case 'dom_ready': return 'nav';
-        case 'network_request': return 'network';
-        case 'console_event': return 'console';
-        case 'runtime_exception': case 'unhandled_rejection': case 'resource_error':
-        case 'network_failed': case 'capture_error': return 'error';
-        case 'storage_change': return 'storage';
-        case 'cookie_change': return 'cookie';
-        case 'dom_mutation': return 'dom';
-        default: return 'capture';
+    // t152 AC-006: 与 category_for_event_type 对齐——ws/clipboard/form/visibility 等不再错标「生命周期」
+    const cat = category_for_event_type(e.type);
+    switch (cat) {
+        case 'user_action': return 'user';
+        case 'navigation': return 'nav';
+        case 'network': return 'network';
+        case 'console': return 'console';
+        case 'error': return 'error';
+        case 'storage': return 'storage';
+        case 'cookie': return 'cookie';
+        case 'dom_data': return 'dom';
+        case 'capture_lifecycle': return 'capture';
     }
 }
-export const KIND_LABEL: Record<string, string> = {
-    user: '用户行为', nav: '页面导航', network: '网络请求', console: '控制台',
-    error: '错误异常', storage: 'Storage', cookie: 'Cookie', dom: 'DOM', capture: '生命周期',
+const KIND_KEY: Record<string, keyof I18nStrings> = {
+    user: 'capUser', nav: 'capNav', network: 'capNet', console: 'capConsole',
+    error: 'capError', storage: 'capStorage', cookie: 'capCookie', dom: 'kindDom', capture: 'kindLifecycle',
 };
+export function kind_label(k: string): string {
+    return t(KIND_KEY[k] ?? (k as keyof I18nStrings));
+}
 export function rel_time(ms: number): string {
     const s = Math.floor(ms / 1000), mss = Math.floor(ms % 1000);
     return `+${String(s).padStart(2, '0')}.${String(mss).padStart(3, '0')}s`;
@@ -172,7 +194,7 @@ export function event_detail(e: CaptureEvent): string {
         case 'input_event': return `${d.target_tag || ''} ${d.target_selector || ''}`;
         case 'dom_mutation': return `${d.action || ''} ${d.target_selector || d.target_tag || ''}`;
         case 'page_navigation': return `${d.from || ''} → ${d.to || ''}`;
-        case 'route_change': return String(d.to || 'SPA 路由变化');
+        case 'route_change': return String(d.to || t('spaRouteChange'));
         case 'page_load': return `loaded in ${d.load_time_ms}ms`;
         case 'network_request': return String(d.url || '');
         case 'console_event': return Array.isArray(d.args_preview) ? (d.args_preview as string[]).join(' ') : '';
@@ -184,19 +206,19 @@ export function event_detail(e: CaptureEvent): string {
 export function event_title(e: CaptureEvent): string {
     const d = (e.data || {}) as Record<string, unknown>;
     switch (e.type) {
-        case 'mouse_event': return `${d.action || '点击'} ${d.target_tag || ''}`;
-        case 'keyboard_event': return `按键 ${d.key || ''}`;
-        case 'scroll_event': return '滚动';
-        case 'input_event': return '输入';
-        case 'page_navigation': return `打开 ${d.to || ''}`;
-        case 'route_change': return `路由变化 ${d.to || ''}`;
+        case 'mouse_event': return `${d.action || t('mouseClick')} ${d.target_tag || ''}`;
+        case 'keyboard_event': return `${t('keyPress')} ${d.key || ''}`;
+        case 'scroll_event': return t('scroll');
+        case 'input_event': return t('inputLabel');
+        case 'page_navigation': return `${t('openPage')} ${d.to || ''}`;
+        case 'route_change': return `${t('routeChangeLabel')} ${d.to || ''}`;
         case 'network_request': return `${d.method || ''} ${strip_proto(String(d.url || ''))}`;
         case 'console_event': return String(d.level || 'log');
         case 'storage_change': return `${d.key || 'storage'} changed`;
         case 'cookie_change': return `${d.name || 'cookie'} changed`;
-        case 'dom_mutation': return 'DOM 变化';
-        case 'capture_started': return '开始采集';
-        case 'capture_stopped': return '停止采集';
+        case 'dom_mutation': return t('domChangeLabel');
+        case 'capture_started': return t('startCapture');
+        case 'capture_stopped': return t('stopCapture');
         default: return e.type;
     }
 }
@@ -204,27 +226,75 @@ export function event_title(e: CaptureEvent): string {
 // ── data loading ────────────────────────────────────────────────────────
 export async function load_captures(): Promise<void> {
     if (!is_extension) return;
-    try { set_captures((await chrome.runtime.sendMessage({ action: 'list_captures' })) || []); }
+    try {
+        const resp = await send_ui_message('list_captures', {});
+        // t154 AC-005: 非数组响应防御——响应形状异常时降级为空列表，避免下游 .filter/.map 崩溃
+        set_captures(Array.isArray(resp?.data) ? resp.data : []);
+    }
     catch { set_captures([]); }
     logger.debug('Captures loaded', { count: get_captures().length });
+}
+
+// t144: 把 network/console 事件并入 detail_events（CaptureEvent 形态），参与 timeline 轨道与 rail 快速筛选。
+// network/console 记录为 CaptureEvent 形态（含 relative_time_ms），get_console_events 类型标注仅暴露
+// data 字段，运行时字段齐全；用 as CaptureEvent 断言补足必填字段。
+export function merge_detail_events(
+    id: string,
+    snapshot: Pick<CaptureSnapshot, 'user_events' | 'nav_events' | 'error_events' | 'storage_changes' | 'cookie_changes' | 'network_requests' | 'console_events'>,
+): CaptureEvent[] {
+    return [
+        ...snapshot.user_events,
+        ...snapshot.nav_events,
+        ...snapshot.error_events,
+        ...snapshot.storage_changes,
+        ...snapshot.cookie_changes,
+        ...snapshot.network_requests.map((n) => ({
+            event_id: (n as { event_id?: string }).event_id ?? `net_${n.request_id}`,
+            capture_id: id,
+            category: 'network' as const,
+            type: 'network_request' as const,
+            // t144: 兼容两种落库形状——background NetworkRequestData（data.relative_time）
+            // 与 content hook CaptureEvent（顶层 relative_time_ms，见 f009）
+            relative_time_ms: (n as { relative_time_ms?: number }).relative_time_ms
+                ?? n.relative_time
+                ?? 0,
+            absolute_time: n.start_time_ms ? new Date(n.start_time_ms).toISOString() : '',
+            tab_id: 0,
+            url: n.url,
+            source: 'background' as const,
+            severity: 'info' as const,
+            created_at: n.start_time_ms ?? Date.now(),
+            // f010: content hook 形状下 n 是 CaptureEvent（data 内嵌 NetworkRequestData），
+            // 归一化使 timeline 列表/inspector 读 e.data.url/method 正确
+            data: (n as { data?: unknown }).data ?? n,
+        }) as unknown as CaptureEvent),
+        ...snapshot.console_events.map((c) => ({
+            event_id: c.event_id ?? `con_${generate_unique_suffix(10)}`,
+            capture_id: id,
+            category: 'console' as const,
+            type: 'console_event' as const,
+            relative_time_ms: c.relative_time_ms ?? 0,
+            absolute_time: '',
+            tab_id: 0,
+            url: '',
+            source: 'background' as const,
+            severity: (c as { severity?: string }).severity ?? 'info',
+            created_at: Date.now(),
+            data: c,
+        }) as unknown as CaptureEvent),
+    ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
 }
 
 export async function load_detail(id: string): Promise<void> {
     set_detail_capture(null); set_detail_events([]); set_detail_network([]); set_detail_console([]);
     if (!is_extension) return;
     try {
-        const r = await chrome.runtime.sendMessage({ action: 'get_capture_data', capture_id: id });
+        const r = await send_ui_message('get_capture_data', { capture_id: id });
         if (!r?.success) return;
-        set_detail_capture(r.capture);
+        set_detail_capture(r.data ?? null);
 
         const snapshot = await read_capture_snapshot(id);
-        const events = [
-            ...snapshot.user_events,
-            ...snapshot.nav_events,
-            ...snapshot.error_events,
-            ...snapshot.storage_changes,
-            ...snapshot.cookie_changes,
-        ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
+        const events = merge_detail_events(id, snapshot);
         set_detail_events(events);
         set_detail_network(snapshot.network_requests);
         set_detail_console(snapshot.console_events);
@@ -245,10 +315,10 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
     try {
         if (format === 'archive') {
             // T107: 导出前 flush 缓冲事件，避免丢最近数据；flush 失败则中止（不静默旧快照）
-            const flush_res = await chrome.runtime.sendMessage({ action: 'flush' });
-            if (!flush_res?.success) { alert('导出失败：无法落盘缓冲数据'); return; }
+            const flush_res = await send_ui_message('flush', {});
+            if (!flush_res?.success) { alert(t('exportFailedFlush')); return; }
             const snapshot = await read_capture_snapshot(id);
-            if (!snapshot.capture) { alert('导出失败'); return; }
+            if (!snapshot.capture) { alert(t('exportFailed')); return; }
             const archive = await build_archive({
                 capture: snapshot.capture,
                 events: [
@@ -273,12 +343,12 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
             await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
             return;
         }
-        const action = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
-        const r = await chrome.runtime.sendMessage({ action, capture_id: id });
-        if (!r?.success) { alert('导出失败'); return; }
+        const action: UiAction = format === 'html' ? 'export_html' : format === 'har' ? 'export_har' : format === 'jsonl' ? 'export_jsonl' : 'export_json';
+        const r = await send_ui_message(action, { capture_id: id });
+        if (!r?.success) { alert(t('exportFailed')); return; }
         const ext = format === 'html' ? 'html' as const : format === 'har' ? 'har' as const : format === 'jsonl' ? 'jsonl' as const : 'json' as const;
         const mime = format === 'html' ? 'text/html' : 'application/json';
-        const content = r.json ?? r.jsonl ?? r.html ?? r.har ?? JSON.stringify(r);
+        const content = r.data ?? '';
         const blob = new Blob([content], { type: mime });
         const capture_filename = build_capture_filename({
             export_capture_directory: get_user_config().export_capture_directory,
@@ -298,6 +368,8 @@ export const router = {
     render_content: () => {},
     render_shell: () => {},
     open_detail: (_id: string) => {},
+    // t144: timeline 拖拽标记，dashboard 轮询检查避免拖拽期间整页重渲染
+    is_tl_dragging: () => false,
 };
 
 // re-exports used by multiple modules

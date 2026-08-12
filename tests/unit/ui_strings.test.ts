@@ -88,6 +88,59 @@ function scan_dir(dir_path: string, rel_root: string): Violation[] {
     return violations;
 }
 
+// ── dashboard 硬编码中文守卫（t143 AC-003）──────────────────────────────
+// 扫描 src/extension/dashboard/*.ts 的渲染代码（非注释/非日志），
+// 断言不含未国际化的硬编码中文 UI 文案。
+const CJK_RE = /[一-鿿]/;
+
+function scan_dashboard_hardcoded_cjk(rel_root: string): Violation[] {
+    const violations: Violation[] = [];
+    const dash_dir = path.resolve(SRC, 'extension', 'dashboard');
+    let files: string[];
+    try { files = fs.readdirSync(dash_dir).filter((f) => f.endsWith('.ts')); }
+    catch { return violations; }
+
+    for (const fname of files) {
+        const file_path = path.join(dash_dir, fname);
+        let content: string;
+        try { content = fs.readFileSync(file_path, 'utf-8'); } catch { continue; }
+
+        const lines = content.split('\n');
+        let in_block = false;
+        for (let i = 0; i < lines.length; i++) {
+            const raw = lines[i];
+            const trimmed = raw.trim();
+            // 块注释状态机
+            if (in_block) {
+                if (trimmed.includes('*/')) in_block = false;
+                continue;
+            }
+            if (trimmed.startsWith('/*')) {
+                if (!trimmed.includes('*/')) in_block = true;
+                continue;
+            }
+            // 整行注释（// 与 JSDoc 续行）
+            if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed === '*/') continue;
+            // 日志文案不属 UI，忽略 logger.* 调用
+            if (/\blogger\.(debug|info|warn|error)\b/.test(raw)) continue;
+            // 去掉行尾 // 注释（前面带空格的 // 视为注释起点，避免误伤 http://）
+            let code = raw;
+            const cm = code.search(/\s\/\//);
+            if (cm !== -1) code = code.slice(0, cm);
+            if (CJK_RE.test(code)) {
+                violations.push({
+                    file: path.relative(rel_root, file_path),
+                    line: i + 1,
+                    forbidden: '硬编码中文',
+                    desc: 'dashboard 渲染代码含未国际化硬编码中文 UI 文案',
+                    snippet: code.trim().substring(0, 100),
+                });
+            }
+        }
+    }
+    return violations;
+}
+
 // ============================================================
 // Tests
 // ============================================================
@@ -160,5 +213,18 @@ describe('UI 字符串审计', () => {
         for (const { pattern, desc } of FORBIDDEN) {
             expect(content, `manifest.json 含 "${pattern}" (${desc})`).not.toContain(pattern);
         }
+    });
+});
+
+describe('dashboard i18n 守卫 (t143)', () => {
+    const dash_cjk = scan_dashboard_hardcoded_cjk(ROOT);
+
+    it('AC-003: dashboard/*.ts 渲染代码不含硬编码中文 UI 文案', () => {
+        if (dash_cjk.length > 0) {
+            for (const v of dash_cjk) {
+                console.log(`[UI审计] ${v.file}:${v.line} [${v.desc}] ${v.snippet}`);
+            }
+        }
+        expect(dash_cjk).toEqual([]);
     });
 });

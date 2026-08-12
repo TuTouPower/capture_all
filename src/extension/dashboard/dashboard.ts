@@ -1,6 +1,6 @@
 // dashboard/dashboard.ts — Capture All 主面板入口
 // 只做初始化、导入各模块、注册路由
-import { init_locale } from '../shared/i18n';
+import { init_locale, t, type I18nStrings } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { wire_sidebar_resize } from './sidebar_resize';
 import { load_user_config } from '../../shared/user_config';
@@ -8,7 +8,7 @@ import {
     logger, is_extension, I,
     set_user_config, get_captures,
     get_page, set_page,
-    get_detail_capture,
+    get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     load_captures, load_detail,
     router,
 } from './dashboard_shared';
@@ -19,11 +19,11 @@ import { render_current, wire_simple_open, render_exports, wire_exports } from '
 
 // ── sidebar / shell ─────────────────────────────────────────────────────
 const NAV = [
-    { key: 'captures', icon: 'navCaptures', lbl: '采集记录' },
-    { key: 'current', icon: 'navCurrent', lbl: '当前采集' },
-    { key: 'exports', icon: 'navExport', lbl: '导出任务' },
-    { key: 'settings', icon: 'navSettings', lbl: '设置' },
-];
+    { key: 'captures', icon: 'navCaptures', lbl: 'captureRecords' },
+    { key: 'current', icon: 'navCurrent', lbl: 'currentCapture' },
+    { key: 'exports', icon: 'navExport', lbl: 'exportTask' },
+    { key: 'settings', icon: 'navSettings', lbl: 'settings' },
+] satisfies { key: string; icon: string; lbl: keyof I18nStrings }[];
 
 const root = document.getElementById('root')!;
 
@@ -35,21 +35,21 @@ function render_shell(): void {
     root.innerHTML = `<div class="app">
         <div class="titlebar">
             <span class="tl-lights"><i></i><i></i><i></i></span>
-            <span class="tl-title">Capture All — 主面板</span>
+            <span class="tl-title">Capture All — ${t('mainPanel')}</span>
         </div>
         <div class="app-body">
             <aside class="sidebar">
                 <div class="sb-brand"><span class="sb-logo"><span class="sb-logo-ring"></span></span><b>Capture All</b></div>
                 <nav class="sb-nav">
                     ${NAV.map((n) => `<button class="sb-item" data-nav="${n.key}" data-on="${active === n.key ? 1 : 0}">
-                        <span class="sb-ic">${I[n.icon]}</span><span class="sb-lbl">${n.lbl}</span>
+                        <span class="sb-ic">${I[n.icon]}</span><span class="sb-lbl">${t(n.lbl)}</span>
                         ${n.key === 'current' && live ? `<span class="sb-badge mono">${live}</span>` : ''}
                     </button>`).join('')}
                 </nav>
                 <div class="sb-spacer"></div>
                 <div class="sb-user">
                     <span class="sb-ava">A</span>
-                    <div class="sb-user-meta"><b>本地用户</b><span>Capture All</span></div>
+                    <div class="sb-user-meta"><b>${t('localUser')}</b><span>Capture All</span></div>
                 </div>
                 <div class="sb-resize-handle"></div>
             </aside>
@@ -71,7 +71,15 @@ function render_shell(): void {
     render_content();
 }
 
-function go(p: string): void { if (p === 'integrations') p = 'captures'; set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
+function go(p: string): void { set_page(p); logger.debug('Dashboard page', { page: p }); render_shell(); }
+
+// t144: detail 快照签名——事件数、最新相对时间、network/console 数组长度与 stats，判断轮询是否有实质变化
+function detail_snapshot_signature(capture_id: string): string {
+    const events = get_detail_events();
+    const cap = get_detail_capture();
+    const latest = events.length > 0 ? events[events.length - 1].relative_time_ms : 0;
+    return `${capture_id}:${events.length}:${latest}:${get_detail_network().length}:${get_detail_console().length}:${cap?.stats?.event_count ?? 0}:${cap?.stats?.request_count ?? 0}:${cap?.stats?.log_count ?? 0}`;
+}
 
 function render_content(): void {
     const page = get_page();
@@ -125,9 +133,16 @@ async function init(): Promise<void> {
                     render_content();
                 }
             }
-            if (get_page() === 'detail' && get_detail_capture()?.status === 'capturing') {
-                await load_detail(get_detail_capture()!.capture_id);
-                render_content();
+            // t144: detail 轮询仅在有变化时更新（事件数或 stats 变化），无变化不整页重渲染；
+            // timeline 拖拽期间跳过，防重渲染替换 DOM 打断 pointermove。
+            if (get_page() === 'detail' && get_detail_capture()?.status === 'capturing' && !router.is_tl_dragging()) {
+                const cap = get_detail_capture()!;
+                const prev_sig = detail_snapshot_signature(cap.capture_id);
+                await load_detail(cap.capture_id);
+                const cur_sig = detail_snapshot_signature(cap.capture_id);
+                if (prev_sig !== cur_sig) {
+                    render_content();
+                }
             }
         } catch (err) {
             logger.error('polling error', err);

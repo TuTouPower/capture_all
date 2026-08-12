@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
     build_network_jsonl_line,
     render_readme,
@@ -283,5 +285,18 @@ describe('build_archive', () => {
         const manifest = JSON.parse(strFromU8(unzipped['manifest.json']));
         expect(manifest.capture).toBeDefined();
         expect(manifest.capture.mode).toBeUndefined();
+    });
+});
+
+// t153 AC-001: 压缩不阻塞 UI。行为等价由本文件上方 build_archive 全量用例保证
+// （异步 zip 输出仍可 unzip 且内容一致）；此处为调用路径锚点——不再调用 zipSync 同步压缩。
+describe('t153 AC-001: 归档压缩异步（调用路径锚点）', () => {
+    it('archive_builder 不使用 fflate zipSync 同步压缩，改用异步 zip', () => {
+        const src = readFileSync(
+            resolve(__dirname, '../../src/extension/shared/archive_builder.ts'),
+            'utf8',
+        );
+        expect(src).not.toMatch(/zipSync/);
+        expect(src).toMatch(/\bzip\(/);
     });
 });

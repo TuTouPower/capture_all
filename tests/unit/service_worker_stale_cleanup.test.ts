@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const update_capture = vi.hoisted(() => vi.fn());
+const flush_all = vi.hoisted(() => vi.fn());
 const log_write = vi.hoisted(() => vi.fn());
 const storage_get = vi.hoisted(() => vi.fn());
 const storage_set = vi.hoisted(() => vi.fn());
@@ -8,6 +9,7 @@ const storage_set = vi.hoisted(() => vi.fn());
 vi.mock('../../src/extension/background/storage', async (import_original) => ({
     ...await import_original<typeof import('../../src/extension/background/storage')>(),
     update_capture,
+    flush_all,
 }));
 
 vi.mock('../../src/extension/background/app_log_storage', () => ({
@@ -171,5 +173,47 @@ describe('service worker stale capture cleanup', () => {
         expect(storage_set).toHaveBeenCalledWith(expect.objectContaining({
             active_capture_id: null,
         }));
+    });
+
+    test('AC-001: 终态化前先 flush 落盘缓冲数据（已落库数据不丢）', async () => {
+        storage_get.mockResolvedValue({
+            is_capturing: true,
+            current_capture: { capture_id: 'cap_flush', started_at: new Date(0).toISOString() },
+            active_capture_id: 'cap_flush',
+        });
+        update_capture.mockResolvedValue(undefined);
+        storage_set.mockResolvedValue(undefined);
+
+        await import_and_run_cleanup();
+
+        // flush_all 在 update_capture（终态化）之前调用
+        expect(flush_all).toHaveBeenCalled();
+        const flush_order = flush_all.mock.invocationCallOrder[0];
+        const update_order = update_capture.mock.invocationCallOrder[0];
+        expect(flush_order).toBeLessThan(update_order);
+        expect(get_cleanup_errors()).toHaveLength(0);
+    });
+
+    test('AC-003: flush 失败（storage 损坏）仍清键终态化，不卡死', async () => {
+        storage_get.mockResolvedValue({
+            is_capturing: true,
+            current_capture: { capture_id: 'cap_flush_fail', started_at: new Date(0).toISOString() },
+            active_capture_id: 'cap_flush_fail',
+        });
+        flush_all.mockRejectedValue(new Error('indexeddb corrupt'));
+        update_capture.mockResolvedValue(undefined);
+        storage_set.mockResolvedValue(undefined);
+
+        await import_and_run_cleanup();
+
+        // flush 失败仅告警，终态化 + 清键继续
+        expect(update_capture).toHaveBeenCalledWith(expect.objectContaining({
+            capture_id: 'cap_flush_fail',
+            status: 'completed',
+        }));
+        expect(storage_set).toHaveBeenCalledWith(expect.objectContaining({
+            active_capture_id: null,
+        }));
+        expect(get_cleanup_errors()).toHaveLength(0);
     });
 });

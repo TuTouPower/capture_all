@@ -1,0 +1,18 @@
+{
+  "tid": "t143",
+  "attempt": 1,
+  "execution_id": "ce247c27b4cb4e4cb39f1f82883116ec",
+  "status": "done",
+  "branch": "t143_dashboard_i18n_migration",
+  "base_sha": "bfc039ecb2442f767fa09e3376570d68bf6ad2a8",
+  "tests": "npm test：1435 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 general PASS（2 minor 已修）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/ui_strings.test.ts scan_dashboard_hardcoded_cjk 守卫：dashboard 6 文件渲染代码零硬编码中文（迁移前 187 违规 → 迁移后 0）"],
+    "AC-002": ["settings_ui.test.ts 设 set_locale('zh') 断言中文渲染 + detail_search_preserve_input zh 态；t() 读 current_locale"],
+    "AC-003": ["tests/unit/ui_strings.test.ts 新增 dashboard 硬编码中文守卫（9 用例全绿，非恒真）"]
+  },
+  "pending": [],
+  "findings": []
+}

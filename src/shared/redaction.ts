@@ -116,6 +116,12 @@ export function redact_url(url: string, redact_query: boolean, _depth = 0, _allo
     try {
         const parsed = new URL(url);
         let redacted = false;
+        // B1-L4: URL userinfo（user:pass@）携带凭据，一律剥离并标记 redacted
+        if (parsed.username || parsed.password) {
+            parsed.username = '';
+            parsed.password = '';
+            redacted = true;
+        }
         const sensitive_keys: string[] = [];
         for (const key of parsed.searchParams.keys()) {
             const lower_key = key.toLowerCase();
@@ -155,7 +161,9 @@ export function redact_url(url: string, redact_query: boolean, _depth = 0, _allo
                 redacted = true;
             }
         }
-        return { url: parsed.toString(), url_status: redacted ? 'redacted' : 'captured' };
+        // H3: 无敏感参数且无嵌套 query 改写时返回原串，不因 new URL 规范化破坏原始 URL 形态
+        // （追加尾斜杠/降 host/参数重排会破坏回放与精确匹配）。
+        return { url: redacted ? parsed.toString() : url, url_status: redacted ? 'redacted' : 'captured' };
     } catch {
         // 相对 URL 或无法 parse：拆分 path、query、fragment 手动脱敏
         const hash_marker = url.indexOf('#');

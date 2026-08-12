@@ -50,15 +50,17 @@ export async function start_exception_capture(
         if (attached_by_us) {
             try {
                 await chrome.dbg.detach({ tabId: tab_id });
-            } catch {
-                // ignore detach errors during cleanup
+            } catch (detach_err) {
+                logger.warn('Exception capture cleanup detach failed', { tab_id, error: String(detach_err) });
             }
             attached_by_us = false;
         }
         is_capturing = false;
+        // B2-M15: 不把内部 CDP 错误串回传用户/agent；原始细节仅入本地日志
+        logger.warn('Exception capture CDP attach/enable failed', { tab_id, error: String(error) });
         return {
             success: false,
-            error: `Failed to start exception capture: ${error}`
+            error: 'CDP_ATTACH_FAILED: Failed to start exception capture'
         };
     }
 }

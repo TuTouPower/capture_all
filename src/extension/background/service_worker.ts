@@ -5,7 +5,7 @@ import {
     delete_capture as storage_delete_capture,
     create_capture, update_capture,
     write_events, write_network_requests, write_console_events,
-    check_storage_limit,
+    check_storage_limit, ensure_size_base, get_capture_size,
     start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
@@ -21,20 +21,22 @@ import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_re
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../../shared/redaction';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
+import { generate_unique_suffix } from '../../shared/id';
 import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
 import { category_for_event_type } from '../../shared/event_category';
 import { Logger } from '../../shared/logger';
 import { build_network_data } from '../../shared/network_builder';
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
-import { normalize_agent_bridge_config } from '../../shared/agent_bridge_config';
+import { normalize_agent_bridge_config, is_allowed_local_bridge_url } from '../../shared/agent_bridge_config';
 import type {
-    UserConfig, CaptureConfig, CaptureEvent, CaptureRecord,
+    UserConfig, CaptureConfig, CaptureEvent, CaptureRecord, AppLogEntry,
     NetworkRequestData, ConsoleEventData, WsFrameData,
     TabSwitchData, TabCreatedData, TabUrlChangeData,
     CaptureStartedData, CaptureStoppedData,
     BodyCaptureStartResult,
 } from '../../shared/types';
+import { type UiAction, type UiResponse } from '../../shared/message_contract';
 import { DEFAULT_CONFIG, DEFAULT_USER_CONFIG } from '../../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
@@ -105,10 +107,6 @@ chrome.runtime.onInstalled.addListener(async () => {
     // T053: 设置自身 origin 排除集合为配置的 Bridge origin（精确端口）
     set_self_origin_excludes([config.agent_bridge_url].filter((u): u is string => Boolean(u && u.trim())));
     logger.info('Extension installed');
-    if (config.agent_bridge_enabled) {
-        start_agent_bridge();
-        logger.info('Agent bridge started');
-    }
 });
 
 async function initialize_agent_bridge(): Promise<void> {
@@ -142,6 +140,13 @@ export async function cleanup_stale_capture_state(): Promise<void> {
         const legacy_active = result.is_capturing || stale_capture_id;
         if (legacy_active) {
             logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
+            // t148: 终态化前 flush 剩余缓冲事件，保证已落库数据不丢
+            // （t038 每次写入已立即落库，此处防御性兜底；flush 失败不阻断清键，storage 损坏时至少清键不卡死）
+            try {
+                await flush_all();
+            } catch (flush_err) {
+                logger.warn('Stale cleanup flush failed, continuing finalize', { error: String(flush_err).slice(0, 80) });
+            }
             const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
             if (stale_capture?.capture_id) {
                 await update_capture({
@@ -193,26 +198,52 @@ setTimeout(() => {
 setup_keepalive_listener();
 
 // Message handler
-chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (response: any) => void) => {
+// 三端消息契约：请求 { action, payload? }，响应 { success, data?, error? }（shared/message_contract.ts）。
+// UI 请求统一从 payload 取参；content→SW 的内部消息（event / app_log_batch）保持扁平兼容。
+type IncomingMessage =
+    | { action: UiAction; payload?: Record<string, unknown> }
+    | { action: 'event'; event: CaptureEvent }
+    | { action: 'app_log_batch'; entries: AppLogEntry[] };
+
+chrome.runtime.onMessage.addListener((message: IncomingMessage, sender: { tab?: { id?: number } } | undefined, sendResponse: (response: UiResponse) => void) => {
     handle_message(message, sender).then(sendResponse).catch(error => {
         logger.error('Message handler error', serialize_error(error));
-        sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+        // B2-M15: 不回传内部错误串，仅通用 message（原始细节入 app_logs）
+        sendResponse({ success: false, error: 'INTERNAL_ERROR: message handling failed' });
     });
     return true; // Keep channel open for async response
 });
 
-async function handle_message(message: any, sender?: any): Promise<any> {
+/** 操作型结果归一化：成功把结果放 data；失败（success:false）上抛为顶层 { success:false, error }。 */
+function wrap_result<T>(result: T): UiResponse<T> {
+    if (typeof result === 'object' && result !== null && 'success' in result) {
+        const op = result as { success: boolean; error?: string };
+        if (op.success === false) {
+            return { success: false, error: op.error ?? 'Request failed' };
+        }
+        return { success: true, data: result };
+    }
+    return { success: true, data: result };
+}
+
+async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: number } }): Promise<UiResponse> {
+    // UI 请求成员恒带 payload；event/app_log_batch 为扁平内部消息，不读 payload。
+    const payload = (message as { action: UiAction; payload?: Record<string, unknown> }).payload;
+    const incoming_action = message.action;
     switch (message.action) {
         case 'start':
-            return start_capture(message.capture_id, message.config || DEFAULT_CONFIG);
+            return wrap_result(await start_capture(
+                payload?.capture_id as string,
+                (payload?.config as CaptureConfig | undefined) || DEFAULT_CONFIG,
+            ));
         case 'stop':
-            return stop_capture();
+            return wrap_result(await stop_capture());
         case 'event':
-            return handle_event(message.event);
+            return wrap_result(await handle_event((message as { action: 'event'; event: CaptureEvent }).event));
         case 'get_status':
             // T105: tab_id 以请求方 sender.tab.id 权威，避免多 tab 串台
             // （get_status 常由 content 脚本轮询，SW 侧 current_capture.tab_id 是启动时 active tab）。
-            return {
+            return wrap_result({
                 is_capturing,
                 capture_id: current_capture_id,
                 current_capture,
@@ -220,52 +251,55 @@ async function handle_message(message: any, sender?: any): Promise<any> {
                 start_time,
                 tab_id: sender?.tab?.id ?? current_capture?.tab_id ?? 0,
                 body_capture: get_body_capture_result()
-            };
+            });
         case 'get_capture_data':
-            return get_capture_data(message.capture_id);
+            return wrap_result(await get_capture_data(payload?.capture_id as string));
         case 'list_captures':
-            return storage_list_captures();
+            // t153 AC-007: 透传可选 limit（popup 拉最近 N 条），undefined 保持全量
+            return wrap_result(await storage_list_captures(
+                typeof payload?.limit === 'number' ? payload.limit : undefined,
+            ));
         case 'delete_capture':
-            return handle_delete_capture(message.capture_id);
+            return wrap_result(await handle_delete_capture(payload?.capture_id as string));
         case 'export_json':
-            return handle_export('json', message.capture_id);
+            return wrap_result(await handle_export('json', payload?.capture_id as string));
         case 'export_jsonl':
-            return handle_export('jsonl', message.capture_id);
+            return wrap_result(await handle_export('jsonl', payload?.capture_id as string));
         case 'export_html':
-            return handle_export('html', message.capture_id);
+            return wrap_result(await handle_export('html', payload?.capture_id as string));
         case 'export_har':
-            return handle_export('har', message.capture_id);
+            return wrap_result(await handle_export('har', payload?.capture_id as string));
         case 'flush':
             await flush_all();
-            return { success: true };
+            return wrap_result({ success: true });
         case 'restart_bridge':
-            return handle_restart_bridge();
+            return wrap_result(await handle_restart_bridge());
         case 'test_bridge_fetch':
-            return handle_test_bridge_fetch();
+            return wrap_result(await handle_test_bridge_fetch());
         case 'app_log_batch':
-            return handle_app_log_batch(message);
+            return wrap_result(await handle_app_log_batch(message as { action: 'app_log_batch'; entries: AppLogEntry[] }));
         case 'export_app_logs':
-            return handle_export_app_logs(message);
+            return wrap_result(await handle_export_app_logs(payload as { options?: unknown } | undefined));
         case 'clear_app_logs':
             await get_app_log_transport().clear();
-            return { success: true };
+            return wrap_result({ success: true });
         case 'get_app_log_size': {
             const size_bytes = await get_app_log_transport().get_total_size_bytes();
-            return { success: true, size_bytes };
+            return wrap_result({ size_bytes });
         }
         case 'set_log_level': {
-            if (message.level) {
-                Logger.set_level(message.level);
-                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: message.level } });
+            if (payload?.level) {
+                Logger.set_level(payload.level as Parameters<typeof Logger.set_level>[0]);
+                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: payload.level } });
             }
-            return { success: true };
+            return wrap_result({ success: true });
         }
         case 'flush_app_logs': {
             await get_app_log_transport().flush();
-            return { success: true };
+            return wrap_result({ success: true });
         }
         default:
-            logger.warn('Unknown message action', { action: message.action });
+            logger.warn('Unknown message action', { action: incoming_action });
             return { success: false, error: 'Unknown action' };
     }
 }
@@ -280,11 +314,11 @@ async function handle_delete_capture(capture_id: string): Promise<{ success: boo
     return { success: true };
 }
 
-/** export 系列：导出前落盘缓冲事件。 */
+/** export 系列：导出前落盘缓冲事件，返回导出内容（响应 data）。 */
 async function handle_export(
     format: 'json' | 'jsonl' | 'html' | 'har',
     capture_id: string,
-): Promise<{ success: boolean; [k: string]: unknown }> {
+): Promise<string> {
     await flush_all(); // T107: 导出前落盘缓冲事件
     const export_map = {
         json: export_json,
@@ -292,7 +326,7 @@ async function handle_export(
         html: export_html,
         har: export_har,
     };
-    return { success: true, [format]: await export_map[format](capture_id) };
+    return export_map[format](capture_id);
 }
 
 /** 重启 Bridge 客户端并读最新配置。 */
@@ -310,7 +344,15 @@ async function handle_test_bridge_fetch(): Promise<{ success: boolean; bridge_ur
     try {
         const cfg = await get_user_config_for_bridge();
         const bridge_url = cfg.agent_bridge_url || '';
-        const res = await fetch(`${bridge_url}/health`);
+        if (!bridge_url) {
+            return { success: false, error: 'Bridge URL is not set' };
+        }
+        // B2-M5: 发起请求前走 loopback 白名单校验，防手工 storage 写入恶意 URL 时从 SW 直 fetch
+        const check = is_allowed_local_bridge_url(bridge_url);
+        if (!check.ok) {
+            return { success: false, error: `Bridge URL rejected: ${check.reason}` };
+        }
+        const res = await fetch(`${bridge_url}/health`, { signal: AbortSignal.timeout(5000) });
         const data = await res.json();
         return { success: true, bridge_url, health: data };
     } catch (e: unknown) {
@@ -318,8 +360,8 @@ async function handle_test_bridge_fetch(): Promise<{ success: boolean; bridge_ur
     }
 }
 
-/** app_log 批量写入。 */
-async function handle_app_log_batch(message: any): Promise<{ success: boolean }> {
+/** app_log 批量写入（content→SW 内部扁平消息）。 */
+async function handle_app_log_batch(message: { action: 'app_log_batch'; entries: AppLogEntry[] }): Promise<{ success: boolean }> {
     const transport = get_app_log_transport();
     for (const entry of (message.entries || [])) {
         if (!entry.id) continue;
@@ -328,17 +370,18 @@ async function handle_app_log_batch(message: any): Promise<{ success: boolean }>
     return { success: true };
 }
 
-/** app_log 导出。 */
-async function handle_export_app_logs(message: any): Promise<{ success: boolean; data?: string; error?: string }> {
+/** app_log 导出：成功返回内容字符串（响应 data），失败返回错误结果。 */
+async function handle_export_app_logs(payload?: { options?: unknown }): Promise<string | { success: false; error: string }> {
     try {
-        const content = await export_app_logs(message.options || {});
-        return { success: true, data: content };
+        return await export_app_logs(payload?.options || {});
     } catch (e) {
-        return { success: false, error: e instanceof Error ? e.message : String(e) };
+        // B2-M15: 不回传内部导出错误串，仅通用 message（原始细节入 app_logs）
+        logger.error('App log export failed', serialize_error(e));
+        return { success: false, error: 'EXPORT_FAILED: app log export failed' };
     }
 }
 
-async function get_capture_data(capture_id: string): Promise<any> {
+async function get_capture_data(capture_id: string): Promise<CaptureRecord | { success: false; error: string }> {
     const capture = await get_capture(capture_id);
     if (!capture) return { success: false, error: 'Capture not found' };
 
@@ -347,10 +390,7 @@ async function get_capture_data(capture_id: string): Promise<any> {
     // every FLUSH_INTERVAL_MS) are consistent for the caller.
     await flush_all();
 
-    return {
-        success: true,
-        capture,
-    };
+    return capture;
 }
 
 async function start_capture(capture_id: string, config: CaptureConfig): Promise<{ success: boolean; error?: string }> {
@@ -394,7 +434,8 @@ async function start_capture_inner(capture_id: string, config: CaptureConfig): P
         } catch (cleanup_err) {
             logger.error('rollback stop_capture_inner failed', serialize_error(cleanup_err));
         }
-        return { success: false, error: `Start failed: ${err}` };
+        // B2-M15: 不回传内部错误串，仅结构化错误码 + 通用 message
+        return { success: false, error: 'START_FAILED: capture start aborted due to an internal error' };
     }
 }
 
@@ -450,7 +491,9 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     try {
         await create_capture(capture);
     } catch (err) {
-        return { success: false, error: `Failed to create capture: ${err}` };
+        // B2-M15: 不回传内部 DB 错误串，仅结构化错误码 + 通用 message
+        logger.error('Failed to create capture record', serialize_error(err));
+        return { success: false, error: 'CREATE_CAPTURE_FAILED: failed to persist capture record' };
     }
 
     current_capture = capture;
@@ -607,20 +650,20 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     const all_tabs = await chrome.tabs.query({});
     const capturable_tabs = all_tabs.filter(t => /^https?:\/\//.test(t.url || ''));
     logger.info(`Notifying ${capturable_tabs.length} tabs to start (of ${all_tabs.length} total)`);
-    for (const tab of capturable_tabs) {
-        if (tab.id) {
-            const ok = await tabs_send_message_retry(tab.id, {
-                action: 'start',
-                config,
-                capture_id: capture_id,
-                capture_start_epoch_ms: start_time,
-                tab_id: tab.id,
-            }, { label: 'start' });
-            if (ok) {
-                logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
-            }
+    // B2-M6: 多 tab 并行通知，避免串行重试阻塞 start（最坏 N×(200+400+600)ms 卡在 run_exclusive 内）
+    await Promise.all(capturable_tabs.map(async (tab) => {
+        if (!tab.id) return;
+        const ok = await tabs_send_message_retry(tab.id, {
+            action: 'start',
+            config,
+            capture_id: capture_id,
+            capture_start_epoch_ms: start_time,
+            tab_id: tab.id,
+        }, { label: 'start' });
+        if (ok) {
+            logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
         }
-    }
+    }));
 
     // Track initial active tab
     if (active_tab?.id) {
@@ -746,6 +789,10 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
             current_capture!.duration_ms = duration_ms;
             current_capture!.end_url = tabs[0]?.url || null;
             current_capture!.updated_at = new Date().toISOString();
+            // t148: 终态刷新持久化字节基数（drain 后最终写入量），避免终态记录字节数陈旧
+            if (current_capture_id) {
+                current_capture!.storage_bytes_written = get_capture_size(current_capture_id);
+            }
             await update_capture(current_capture!);
         });
         await run_stop_step('flush_stopped_event', () => flush_all());
@@ -777,7 +824,10 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
 async function persist_stats(): Promise<void> {
     if (!current_capture) return;
     try {
+        // t148: 限额基数随 CaptureRecord 落盘（基数 + 内存增量），SW 重启后据此重建限额检查
+        await ensure_size_base(current_capture_id!);
         current_capture.updated_at = new Date().toISOString();
+        current_capture.storage_bytes_written = get_capture_size(current_capture_id!);
         await update_capture(current_capture);
     } catch (err) {
         logger.error('Failed to persist capture stats', err);
@@ -786,6 +836,8 @@ async function persist_stats(): Promise<void> {
 
 async function handle_event(event: CaptureEvent | any): Promise<{ success: boolean; error?: string }> {
     if (!is_capturing || !current_capture_id || !current_capture) return { success: true };
+    // B2-M12: 捕获 generation，await 后校验，防 stop+start 跨采集把 stats 写到新采集
+    const gen = capture_state.current_generation();
 
     // Route fallback body hook events separately
     if (event.type === 'network_body_hook') {
@@ -815,6 +867,7 @@ async function handle_event(event: CaptureEvent | any): Promise<{ success: boole
 
     try {
         await write_events([event]);
+        if (!capture_state.is_active_generation(gen)) return { success: true };
         current_capture.stats = increment_capture_event_stats(current_capture.stats, event.category);
         await persist_stats();
     } catch (err) {
@@ -839,7 +892,10 @@ function handle_cdp_body_event(cdp_event: CdpBodyEvent): void {
         current_capture.capture_id,
         start_time
     );
-    handle_network_request(request);
+    // B2-M3: fire-and-forget async 补 .catch，防未处理 rejection
+    handle_network_request(request).catch((err) => {
+        logger.error('handle_cdp_body_event failed', serialize_error(err));
+    });
 }
 
 // Fallback network body hook events from content script
@@ -900,6 +956,8 @@ async function check_limit_and_stop(): Promise<boolean> {
 export { handle_network_request as _handle_network_request_for_test };
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
+    // B2-M12: generation 守卫——await 后 current_capture 可能已切换，防跨采集串写 stats
+    const gen = capture_state.current_generation();
     if (await check_limit_and_stop()) return;
 
     const event = 'event' in payload ? (payload as { event: CaptureEvent; data: NetworkRequestData | WsFrameData }).event : null;
@@ -911,6 +969,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
         event.data = frame;
         try {
             await write_events([event]);
+            if (!capture_state.is_active_generation(gen)) return;
             current_capture.stats.event_count = (current_capture.stats.event_count || 0) + 1;
             await persist_stats();
         } catch (err) {
@@ -921,7 +980,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
 
     const request = data as NetworkRequestData;
     if (!request.capture_id) request.capture_id = current_capture_id ?? undefined;
-    if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    if (!request.event_id) request.event_id = `net_${Date.now().toString(36)}_${generate_unique_suffix(6)}`;
     // T111: CDP primary / web_request 路径 time 字段恒 null，事件带相对偏移；
     // 落绝对开始时间供 HAR 等导出使用；start_time_ms>0（websocket 绝对 epoch）时保留
     if (request.absolute_time === undefined && !(request.start_time_ms && request.start_time_ms > 0)
@@ -931,6 +990,7 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
     normalize_network_request(request);
     try {
         await write_network_requests([request]);
+        if (!capture_state.is_active_generation(gen)) return;
         current_capture.stats.request_count++;
         current_capture.stats.total_body_bytes += (request.response_body_bytes || 0) + (request.request_body_bytes || 0);
         await persist_stats();
@@ -951,6 +1011,8 @@ async function handle_console_log(event: CaptureEvent): Promise<void> {
     try {
         data.capture_id = current_capture_id;
         data.event_id = event.event_id;
+        // t144: 复制相对时间到 data，供 dashboard timeline 定位（原只写 data 丢时间）
+        data.relative_time_ms = event.relative_time_ms;
         await write_console_events([data]);
         current_capture.stats.log_count++;
         await persist_stats();
@@ -980,7 +1042,14 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
     // Write tab_switch event with from/to tracking
     const prev = last_active_tab.get(activeInfo.windowId);
-    const tab = await chrome.tabs.get(activeInfo.tabId);
+    // B2-M4: tab 激活与 get 之间被关则 rejection 未处理，需 try/catch 兜底
+    let tab: { url?: string } | null = null;
+    try {
+        tab = await chrome.tabs.get(activeInfo.tabId);
+    } catch (err) {
+        logger.warn('Tab get failed on activate (tab likely closed)', { tabId: activeInfo.tabId, error: String(err) });
+        return;
+    }
     if (!capture_state.is_active_generation(gen)) return; // await 后采集已切换
     const tab_url = tab.url || '';
 
@@ -1075,6 +1144,8 @@ chrome.tabs.onRemoved.addListener((_tabId: number) => {
 // Tab created listener
 chrome.tabs.onCreated.addListener(async (tab) => {
     if (!is_capturing) return;
+    // B2-M12: generation 守卫——await 后采集可能已切换，防旧监听以新采集身份写事件
+    const gen = capture_state.current_generation();
     logger.debug(`Tab created: ${tab.id}`, { url: tab.url || tab.pendingUrl });
 
     const data: TabCreatedData = {
@@ -1094,6 +1165,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         source: 'background',
     });
     if (await check_limit_and_stop()) return; // T110: 限额停止
+    if (!capture_state.is_active_generation(gen)) return;
     await write_events([{ ...event, data }]);
 });
 
@@ -1101,6 +1173,8 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 const last_tab_urls = new Map<number, string>();
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (!is_capturing) return;
+    // B2-M12: generation 守卫——本监听含 await，stop+start 后不得用新采集身份继续旧流程
+    const gen = capture_state.current_generation();
     if (changeInfo.status !== 'loading') return;
     const new_url = changeInfo.url || tab.url || '';
     if (!new_url) return;
@@ -1127,6 +1201,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
             source: 'background',
         });
         if (await check_limit_and_stop()) return; // T110: 限额停止
+        if (!capture_state.is_active_generation(gen)) return;
         await write_events([{ ...event, data }]);
     }
 
@@ -1134,6 +1209,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const is_restricted = prev_url?.startsWith('chrome://') || prev_url?.startsWith('chrome-extension://') || prev_url?.startsWith('about:');
     const is_normal = new_url.startsWith('http://') || new_url.startsWith('https://');
     if (is_restricted && is_normal) {
+        // 采集已切换（stop+start 跨 await）则放弃本次 CDP 重试，避免以新采集身份启动
+        if (!capture_state.is_active_generation(gen)) return;
         if (current_config.capture_console && !is_console_active()) {
             const result = await start_console_capture(
                 current_capture_id!, start_time, tabId,

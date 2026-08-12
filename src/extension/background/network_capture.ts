@@ -148,12 +148,19 @@ export function stop_network_capture(): void {
             chrome.dbg.sendCommand(
                 { tabId: tab, sessionId: session_id },
                 'Runtime.runIfWaitingForDebugger'
-            ).catch(() => { /* best-effort */ });
+            ).catch((err: unknown) => {
+                // B2-M14: 空 catch 补 warn，CDP 释放失败可诊断
+                logger.warn('Stop release sub-target failed', { sessionId: session_id, error: String(err) });
+            });
         }
         chrome.dbg.onEvent.removeListener(handle_cdp_event);
-        chrome.dbg.sendCommand({ tabId: tab }, 'Network.disable').catch(() => { /* best-effort */ });
+        chrome.dbg.sendCommand({ tabId: tab }, 'Network.disable').catch((err: unknown) => {
+            logger.warn('Stop CDP Network.disable failed', { tab_id: tab, error: String(err) });
+        });
         if (!dbg_attached_externally) {
-            chrome.dbg.detach({ tabId: tab }).catch(() => { /* best-effort */ });
+            chrome.dbg.detach({ tabId: tab }).catch((err: unknown) => {
+                logger.warn('Stop CDP detach failed', { tab_id: tab, error: String(err) });
+            });
         }
         dbg_tab_id = null;
         dbg_attached_externally = false;
@@ -185,7 +192,10 @@ export async function enable_response_body_capture(
         try {
             chrome.dbg.onEvent.removeListener(handle_cdp_event);
             await chrome.dbg.detach({ tabId: dbg_tab_id });
-        } catch { /* ignore if already detached */ }
+        } catch (err) {
+            // B2-M14: 空 catch 补 warn（换 tab 前 detach 旧 tab 失败可诊断）
+            logger.warn('CDP detach previous tab failed', { tab_id: dbg_tab_id, error: String(err) });
+        }
         dbg_tab_id = null;
     }
 
@@ -281,6 +291,8 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
         duration_ms: null,
         start_time_ms: conn.created_ts,
         end_time_ms: ws_status === 'closed' ? Date.now() : null,
+        // t144: ws 网络记录补相对时间（created_ts 是绝对 epoch，转相对基准，供 timeline 定位）
+        relative_time: Math.max(0, conn.created_ts - start_time),
         request_headers: req_hdr_result.headers,
         response_headers: resp_hdr_result.headers,
         headers_status: headers_redacted ? 'redacted' : 'captured',
@@ -291,6 +303,13 @@ function send_ws_connection_event(req_id: string, conn: WsConnectionMeta, ws_sta
     });
     send_to_background({ event, data });
 }
+
+// H6: CDP webSocketFrame* 的 params.timestamp 是 MonotonicTime（任意起点秒数），
+// 减 epoch 起点 start_time 得巨型负数。统一用 Date.now() - start_time（与其它事件同基准）。
+function ws_frame_relative_time(now: number, start: number): number {
+    return now - start;
+}
+export const _ws_frame_relative_time_for_test = ws_frame_relative_time;
 
 function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'received', params: any): void {
     const resp = params?.response || {};
@@ -333,11 +352,12 @@ function send_ws_frame(req_key: string, req_id: string, direction: 'sent' | 'rec
         url: frame_url,
         tab_id: dbg_tab_id ?? undefined,
     };
+    // H6: 见 ws_frame_relative_time——统一 now-start 基准，避免 CDP monotonic 巨型负数
     const event = create_base_event({
         capture_id,
         category: 'network',
         type: 'ws_frame',
-        relative_time_ms: (params?.timestamp ? params.timestamp * 1000 : Date.now()) - start_time,
+        relative_time_ms: ws_frame_relative_time(Date.now(), start_time),
         tab_id: dbg_tab_id ?? current_tab_id,
         url: frame_data.url,
         source: 'background',
@@ -370,7 +390,10 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
             chrome.dbg.sendCommand(
                 child_target,
                 'Runtime.runIfWaitingForDebugger'
-            ).catch(() => { /* best-effort */ });
+            ).catch((err: unknown) => {
+                // B2-M14: 空 catch 补 warn（子目标恢复失败可诊断）
+                logger.warn('Sub-target runIfWaitingForDebugger failed', { sessionId: child_session, error: String(err) });
+            });
             logger.debug('sub_target_attached', { sessionId: child_session });
         }
         return;
@@ -504,7 +527,8 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                     }
                     logger.debug('stream_started', { req_key, mime });
                 }).catch((err: any) => {
-                    logger.debug('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
+                    // B2-M14: CDP 流式采集失败升级 warn（真实功能失败，非静默）
+                    logger.warn('streamResourceContent_failed', { req_key, error: String(err).slice(0, 80) });
                     const meta = cdp_request_meta.get(req_key);
                     if (meta) {
                         meta.response_body_status = 'partial';
@@ -652,7 +676,13 @@ function handle_cdp_event(source: { tabId?: number; sessionId?: string }, method
                 ? 'not_enabled' : 'cdp_failed';
             const fail_result: CdpBodyResult = { body: null, status, timestamp: Date.now(), preview: null, encoding: null, byte_size: null };
             cdp_body_results.set(req_key, fail_result);
-            logger.debug('get_body_error', { req_key, error: err_msg.slice(0, 100), status });
+            // B2-M14: 真实 CDP 失败（非 OPTIONS/HEAD/资源已释放）升级 warn，预期路径保持 debug
+            const detail = { req_key, error: err_msg.slice(0, 100), status };
+            if (status === 'cdp_failed') {
+                logger.warn('get_body_error', detail);
+            } else {
+                logger.debug('get_body_error', detail);
+            }
 
             // CDP-first: emit even on failure (status will be cdp_failed)
             const meta = cdp_request_meta.get(req_key);
@@ -834,6 +864,9 @@ function schedule_orphan_check(req_key: string, req_id: string): void {
             response_body: body_result.body,
             response_body_status: body_result.status,
             response_preview: body_result.preview,
+            // B1-L5: 透传实际编码/字节（CDP base64 场景不再被 build_network_data 误标 utf8）
+            response_body_encoding: body_result.encoding ?? null,
+            response_body_bytes: body_result.byte_size ?? null,
             request_headers: redact_hdrs ? redact_headers(meta?.request_headers || {}, true).headers : (meta?.request_headers || {}),
             response_headers: redact_hdrs ? redact_headers(meta?.response_headers || {}, true).headers : (meta?.response_headers || {})
         };
@@ -965,6 +998,8 @@ function build_network_event(
         mime_type: pending.mime_type,
         capture_method: 'web_request',
         body_capture_mode: config.capture_response_body ? 'extension_cdp' : 'none',
+        // t144: 落库带相对时间，供 dashboard timeline 定位
+        relative_time: relative_time_ms,
         extra: {
             // 旧语义：web_request 路径不派发 body 字节/编码（body 可能为 CDP base64）
             response_body_encoding: null,
@@ -1024,6 +1059,8 @@ function build_cdp_primary_network_event(
         mime_type: meta.mime_type,
         capture_method: 'cdp_primary',
         body_capture_mode: 'extension_cdp',
+        // t144: 落库带相对时间，供 dashboard timeline 定位
+        relative_time: relative_time_ms,
         extra: {
             response_body_encoding: body_result.encoding ?? null,
             response_body_bytes: body_result.byte_size ?? null,

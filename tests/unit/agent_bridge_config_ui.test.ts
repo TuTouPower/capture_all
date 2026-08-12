@@ -65,6 +65,29 @@ describe('agent bridge user config', () => {
             agent_bridge_url: 'http://localhost'
         })).toThrow('Bridge URL must include a port');
     });
+
+    // B2-M19: 与 external_cdp_bridge_client 统一口径后 agent bridge 也接受 [::1]
+    test('accepts IPv6 loopback [::1]', () => {
+        expect(normalize_agent_bridge_config({
+            ...base_config,
+            agent_bridge_url: 'http://[::1]:17831'
+        }).agent_bridge_url).toBe('http://[::1]:17831');
+    });
+
+    // B2-M19: 统一后拒绝 URL 内嵌凭据与非根路径（此前 agent_bridge_config 未校验）
+    test('rejects credentials in bridge URL', () => {
+        expect(() => normalize_agent_bridge_config({
+            ...base_config,
+            agent_bridge_url: 'http://user:pass@127.0.0.1:17831'
+        })).toThrow('credentials in URL not allowed');
+    });
+
+    test('rejects non-root path in bridge URL', () => {
+        expect(() => normalize_agent_bridge_config({
+            ...base_config,
+            agent_bridge_url: 'http://127.0.0.1:17831/some/path'
+        })).toThrow('path not allowed');
+    });
 });
 
 describe('browser_label handling', () => {

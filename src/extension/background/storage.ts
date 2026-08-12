@@ -159,7 +159,7 @@ export async function get_capture(capture_id: string): Promise<CaptureRecord | n
     });
 }
 
-export async function list_captures(): Promise<CaptureRecord[]> {
+export async function list_captures(limit?: number): Promise<CaptureRecord[]> {
     const database = await init_db();
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readonly');
@@ -170,7 +170,8 @@ export async function list_captures(): Promise<CaptureRecord[]> {
 
         request.onsuccess = () => {
             const cursor = request.result;
-            if (cursor) {
+            // t153 AC-007: limit 截断（最旧优先倒序的前 N 条）；undefined = 全量
+            if (cursor && captures.length < (limit ?? Infinity)) {
                 captures.push(cursor.value);
                 cursor.continue();
             } else {
@@ -229,10 +230,20 @@ export async function delete_capture(capture_id: string): Promise<void> {
             }
         }
 
-        tx.oncomplete = () => resolve();
+        tx.oncomplete = () => {
+            clear_size_state(capture_id);
+            resolve();
+        };
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
     });
+}
+
+// t148: 删除采集后清理内存限额状态（防长活 SW 内存随采集数增长）
+function clear_size_state(capture_id: string): void {
+    size_base.delete(capture_id);
+    size_delta.delete(capture_id);
+    size_base_loaded.delete(capture_id);
 }
 
 // ============================================================
@@ -248,7 +259,10 @@ const CATEGORY_STORE_MAP: Record<CategoryKey, string> = {
     storage: STORE_NAMES.STORAGE_CHANGES,
     cookie: STORE_NAMES.COOKIE_CHANGES,
     capture_lifecycle: STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
-    dom_data: STORE_NAMES.USER_ACTION_EVENTS, // fallback — dom_data events stored alongside user_action
+    // B2-L7: dom_data 类别无专属 store，且 dom_mutation 目前无生产者（dormant 类别）。
+    // 显式映射到 USER_ACTION_EVENTS 作为 fallback——有 dom_mutation 事件时按 user_action 存储，
+    // 读取经 user_action_events source 返回；新增 dom_mutation 生产者时再评估独立 store。
+    dom_data: STORE_NAMES.USER_ACTION_EVENTS,
 };
 
 // ============================================================
@@ -256,7 +270,11 @@ const CATEGORY_STORE_MAP: Record<CategoryKey, string> = {
 // ============================================================
 
 const buffers: Map<string, CaptureEvent[]> = new Map();
-let bytes_written: Map<string, number> = new Map();
+// t148: 限额字节跟踪 = 持久化基数（CaptureRecord.storage_bytes_written）+ 内存增量。
+// SW 重启后基数从 IndexedDB 重建（ensure_size_base），增量从 0 开始。
+let size_base: Map<string, number> = new Map();
+let size_base_loaded: Set<string> = new Set();
+let size_delta: Map<string, number> = new Map();
 
 function get_buffer(store_name: string): CaptureEvent[] {
     let buf = buffers.get(store_name);
@@ -407,8 +425,7 @@ export function stop_periodic_flush(): void {
 // ============================================================
 
 function update_bytes_written(capture_id: string, bytes: number): void {
-    const current = bytes_written.get(capture_id) || 0;
-    bytes_written.set(capture_id, current + bytes);
+    size_delta.set(capture_id, (size_delta.get(capture_id) || 0) + bytes);
 }
 
 // UTF-8 字节长度（替代 JSON.stringify().length 的字符数口径）
@@ -420,18 +437,33 @@ function json_byte_length(item: unknown): number {
     }
 }
 
-export function get_capture_size(capture_id: string): number {
-    return bytes_written.get(capture_id) || 0;
+/** 从 CaptureRecord.storage_bytes_written 重建持久化基数（每个 capture 只读一次）。 */
+export async function ensure_size_base(capture_id: string): Promise<void> {
+    if (size_base_loaded.has(capture_id)) return;
+    let base = 0;
+    try {
+        const rec = await get_capture(capture_id);
+        base = rec?.storage_bytes_written ?? 0;
+    } catch {
+        // storage 损坏/不可读：回退 0，限额检查按内存增量执行，不卡死
+        base = 0;
+    }
+    size_base.set(capture_id, base);
+    size_base_loaded.add(capture_id);
 }
 
-// T110 测试钩子：jsdom 下直接设 capture 写入字节数
+export function get_capture_size(capture_id: string): number {
+    return (size_base.get(capture_id) ?? 0) + (size_delta.get(capture_id) ?? 0);
+}
+
+// T110 测试钩子：jsdom 下直接设本实例内存增量（模拟重启后继续写入累计）
 export function set_capture_size_for_test(capture_id: string, size: number): void {
-    bytes_written.set(capture_id, size);
+    size_delta.set(capture_id, size);
 }
 
 export async function check_storage_limit(capture_id: string): Promise<boolean> {
-    const size = get_capture_size(capture_id);
-    return size >= MAX_SESSION_SIZE_BYTES;
+    await ensure_size_base(capture_id);
+    return get_capture_size(capture_id) >= MAX_SESSION_SIZE_BYTES;
 }
 
 // ============================================================
@@ -448,12 +480,25 @@ async function query_by_store<T>(
     const tx = database.transaction(store_name, 'readonly');
     const store = tx.objectStore(store_name);
     const index = store.index('capture_id');
-    const all = await new Promise<T[]>((resolve, reject) => {
-        const request = index.getAll(IDBKeyRange.only(capture_id));
-        request.onsuccess = () => resolve(request.result as T[]);
+    // t140: 用 cursor 直接分页，避免 index.getAll 全量取后再 slice（每页 O(n)，分页即 O(n²)）
+    const out: T[] = [];
+    let skipped = 0;
+    await new Promise<void>((resolve, reject) => {
+        const request = index.openCursor(IDBKeyRange.only(capture_id));
+        request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor || out.length >= limit) { resolve(); return; }
+            if (skipped < offset) {
+                skipped += 1;
+                cursor.continue();
+                return;
+            }
+            out.push(cursor.value as T);
+            cursor.continue();
+        };
         request.onerror = () => reject(request.error);
     });
-    return all.slice(offset, offset + limit);
+    return out;
 }
 
 // ============================================================

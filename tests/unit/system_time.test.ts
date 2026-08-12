@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import {
     add_system_times_to_capture_data,
     format_system_time,
@@ -329,5 +329,38 @@ describe('legacy IANA timezone migration', () => {
 
     test('already-valid browser passes through unchanged', () => {
         expect(migrate_iana_timezone('browser')).toBe('browser');
+    });
+});
+
+// ============================================================
+// t153 AC-002: browser 分支复用 formatter 缓存（不每次 new）
+// ============================================================
+describe('browser formatter 缓存 (t153 AC-002)', () => {
+    test('browser 分支多次 format_system_time 只 new 一次 Intl.DateTimeFormat，且输出不变', async () => {
+        // resetModules 取全新模块实例，避免文件内既有调用已填充模块级缓存
+        vi.resetModules();
+        const RealDateTimeFormat = Intl.DateTimeFormat;
+        // 用普通函数保持可构造（生产代码 new Intl.DateTimeFormat），转发到真实实现
+        const DateTimeFormat_spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (
+            this: unknown,
+            locales?: string | readonly string[],
+            options?: Intl.DateTimeFormatOptions,
+        ) {
+            return new RealDateTimeFormat(locales, options);
+        });
+        try {
+            const mod = await import('../../src/shared/system_time');
+            const cfg = { system_time_timezone: 'browser' as const };
+            const first = mod.format_system_time(1704067200000, cfg);
+            mod.format_system_time(1704067201000, cfg);
+            mod.format_system_time(1704067202000, cfg);
+            // 修前：每次调用 new Intl.DateTimeFormat（3 次）；修后：模块级缓存复用（1 次）
+            expect(DateTimeFormat_spy).toHaveBeenCalledTimes(1);
+            // 行为等价：输出格式不变
+            expect(mod.format_system_time(1704067203000, cfg)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+            expect(first).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+        } finally {
+            DateTimeFormat_spy.mockRestore();
+        }
     });
 });

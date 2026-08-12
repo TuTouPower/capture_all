@@ -13,6 +13,10 @@ import {
 import { DEFAULT_CONFIG } from '../../shared/constants';
 import { generate_capture_id } from '../../shared/id';
 import type { CaptureConfig } from '../../shared/types';
+import { Logger } from '../../shared/logger';
+import { get_app_log_transport } from './app_log_storage';
+
+const logger = new Logger('background/agent_dispatch', get_app_log_transport());
 
 export interface AgentRuntimeHandlers {
     start_capture: (capture_id: string, config: CaptureConfig) => Promise<{ success: boolean; error?: string }>;
@@ -227,6 +231,10 @@ function get_optional_sources(payload: Record<string, unknown>): AgentDataSource
     return payload.sources as AgentDataSource[];
 }
 
+// B2-M11: sample_rate_ms 合理区间上限——鼠标 mousemove 节流间隔（默认 50ms），
+// 10s 已远超任何实际用途；超大值会让采集形同虚设，clamp 而非放行。
+const MAX_SAMPLE_RATE_MS = 10000;
+
 const capture_config_keys = new Set<keyof CaptureConfig>([
     'mouse_precision',
     'capture_console',
@@ -260,6 +268,8 @@ function get_capture_config(value: unknown): CaptureConfig {
     if (!has_valid_capture_config_values(merged)) {
         throw new AgentCommandError('INVALID_QUERY', 'config contains invalid values');
     }
+    // B2-M11: sample_rate_ms clamp 到合理区间（合法但过大的取值会禁用 mouse 采样）
+    merged.sample_rate_ms = Math.min(MAX_SAMPLE_RATE_MS, merged.sample_rate_ms);
     return merged as CaptureConfig;
 }
 
@@ -294,9 +304,15 @@ function to_agent_error(error: unknown): AgentError {
         return { code: error.message, message: error.message };
     }
 
+    // B2-M15: 未知错误不回传内部路径/库错误串；结构化错误码 + 通用脱敏 message，
+    // 原始细节仅入本地 app_logs 供诊断。
+    logger.error('Agent command failed with unexpected error', {
+        name: error instanceof Error ? error.name : typeof error,
+        detail: error instanceof Error ? error.message : String(error),
+    });
     return {
         code: 'STORAGE_READ_FAILED',
-        message: error instanceof Error ? error.message : String(error)
+        message: 'Unexpected error executing command'
     };
 }
 

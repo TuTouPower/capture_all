@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
@@ -577,6 +577,37 @@ describe('bridge server', () => {
             error: {
                 code: 'ORIGIN_NOT_ALLOWED',
                 message: 'Origin is not allowed',
+            },
+        });
+    });
+
+    // B1-L3: resolve 未知 command_id 是客户端错误 → 400，非 500
+    it('returns 400 for unknown command_id on extension result (B1-L3)', async () => {
+        const server = await start_test_server();
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_id: DEFAULT_INSTANCE_ID, extension_version: '1.0.0', active_capture_id: null }),
+        });
+
+        const response = await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                [INSTANCE_HEADER]: DEFAULT_INSTANCE_ID,
+            },
+            body: JSON.stringify({ command_id: 'cmd_does_not_exist', ok: true, data: {} }),
+        });
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body).toEqual({
+            ok: false,
+            error: {
+                code: 'INVALID_QUERY',
+                message: 'Unknown command_id: cmd_does_not_exist',
             },
         });
     });
@@ -2007,5 +2038,27 @@ describe('auto export path 净化 (T096)', () => {
             if (previous === undefined) delete process.env.CAPTURE_ALL_EXPORT_DIR;
             else process.env.CAPTURE_ALL_EXPORT_DIR = previous;
         }
+    });
+});
+
+describe('bridge structured logs (B1-M13)', () => {
+    it('logs a structured auth_failed JSON line on invalid token', async () => {
+        const warn_spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const server = await start_test_server();
+
+        const response = await fetch(`${server.url}/mcp/status`, {
+            headers: { Authorization: 'Bearer wrong-token' },
+        });
+        expect(response.status).toBe(401);
+
+        expect(warn_spy).toHaveBeenCalled();
+        const line = warn_spy.mock.calls[0][0];
+        expect(typeof line).toBe('string');
+        const parsed = JSON.parse(line as string);
+        expect(parsed.event).toBe('auth_failed');
+        expect(parsed.level).toBe('warn');
+        expect(parsed.path).toContain('/mcp/status');
+
+        warn_spy.mockRestore();
     });
 });

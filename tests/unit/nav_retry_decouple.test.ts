@@ -69,7 +69,7 @@ function install_chrome_mock(): void {
 }
 
 function send_message(action: string, payload: Record<string, unknown> = {}): Promise<any> {
-    return new Promise((resolve) => on_message_cb!({ action, ...payload }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action, payload }, {}, resolve));
 }
 
 function on_activated_cb(): (info: { tabId: number; windowId: number }) => Promise<void> {

@@ -1,7 +1,8 @@
 // shared/theme.ts
+// B1-L6: 主题单一存储来源——user_config.theme 为唯一权威，废除独立的 'theme' storage key，
+// 避免 popup/dashboard 读取双存储源导致漂移。dashboard_settings 改主题时经 save_user_config 落盘。
 import type { ThemeMode } from '../../shared/types';
-
-const STORAGE_KEY = 'theme';
+import { load_user_config, save_user_config } from '../../shared/user_config';
 
 let current_theme: ThemeMode = 'follow-system';
 let media_query: MediaQueryList | null = null;
@@ -39,10 +40,8 @@ export function apply_theme(mode: ThemeMode): void {
 export async function init_theme(): Promise<void> {
     let mode: ThemeMode = 'follow-system';
     try {
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            const result = await chrome.storage.local.get(STORAGE_KEY);
-            if (result[STORAGE_KEY]) mode = result[STORAGE_KEY] as ThemeMode;
-        }
+        const cfg = await load_user_config();
+        mode = cfg.theme;
     } catch {
         // best-effort
     }
@@ -52,9 +51,7 @@ export async function init_theme(): Promise<void> {
 export async function set_theme(mode: ThemeMode): Promise<void> {
     apply_theme(mode);
     try {
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            await chrome.storage.local.set({ [STORAGE_KEY]: mode });
-        }
+        await save_user_config({ theme: mode });
     } catch {
         // best-effort
     }

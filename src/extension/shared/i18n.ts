@@ -123,6 +123,146 @@ export interface I18nStrings {
     capStorage: string;
     capCookie: string;
     capMask: string;
+
+    // Dashboard — shell / nav
+    captureRecords: string;
+    currentCapture: string;
+    exportTask: string;
+    localUser: string;
+
+    // Dashboard — captures list
+    allCaptures: string;
+    withErrors: string;
+    completed: string;
+    storageUsed: string;
+    estimatedSize: string;
+    captureCountSuffix: string;
+    noCaptureRecords: string;
+    captureRecordsDesc: string;
+    searchCapturesPlaceholder: string;
+    allFilter: string;
+    refresh: string;
+    reset: string;
+    statusLabel: string;
+    filterOf: string;
+    filterTotalSuffix: string;
+    filterTotal: string;
+    countUnit: string;
+    captureName: string;
+    time: string;
+    size: string;
+    actions: string;
+    selectedCount: string;
+    captureRecordsUnit: string;
+    clearSelection: string;
+    deleteSelectedConfirm: string;
+    deleteCaptureConfirm: string;
+    deleteFailed: string;
+    activeCaptureNoDelete: string;
+
+    // Dashboard — detail
+    overview: string;
+    ended: string;
+    openOriginalPage: string;
+    exportZip: string;
+    eventLabel: string;
+    detail: string;
+    source: string;
+    urlSourceDetail: string;
+    errorMessage: string;
+    stack: string;
+    keyLabel: string;
+    nameLabel: string;
+    searchRailPlaceholder: string;
+    quickFilter: string;
+    noEvents: string;
+    eventsCountSuffix: string;
+    listView: string;
+    trackView: string;
+    zoom: string;
+    laneNetwork: string;
+    laneUi: string;
+    laneConsole: string;
+    laneDom: string;
+    laneStorage: string;
+    laneNav: string;
+    laneError: string;
+    absoluteTime: string;
+    noNetworkRequests: string;
+    basicInfo: string;
+    statusCode: string;
+    resourceType: string;
+    protocol: string;
+    cache: string;
+    captureMethod: string;
+    requestHeaders: string;
+    responseHeaders: string;
+    requestBody: string;
+    responseBody: string;
+    noConsoleLogs: string;
+    levelLabel: string;
+    messageLabel: string;
+    lineLabel: string;
+    noData: string;
+    captureSummary: string;
+    totalEvents: string;
+    totalErrors: string;
+    categoryOverview: string;
+    keyTimeline: string;
+    configIntro: string;
+    settingsDefaultsLink: string;
+    captureModules: string;
+    captureOptions: string;
+    configLabel: string;
+
+    // Dashboard — settings
+    general: string;
+    privacyRedaction: string;
+    diagnosticsLogs: string;
+    integrations: string;
+    settingsDesc: string;
+    captureDefaults: string;
+    timeDisplay: string;
+    timezoneFollowBrowser: string;
+    captureLimitMb: string;
+    inlineTextLimitKb: string;
+    sensitiveCaptureNotice: string;
+    sensitiveCaptureDesc: string;
+    redactionBoundary: string;
+    redactionBoundaryDesc: string;
+    filenameTemplate: string;
+    exportCaptureDirectory: string;
+    exportLogDirectory: string;
+    logLevel: string;
+    maxLogSizeMb: string;
+    currentLogSize: string;
+    exportLogs: string;
+    clearLogs: string;
+    integrationsMcp: string;
+    changesSavedImmediately: string;
+    clearLogsConfirm: string;
+    exportFailed: string;
+
+    // Dashboard — current / exports
+    currentCaptureDesc: string;
+    noActiveCapture: string;
+    eventsSuffix: string;
+    requestsSuffix: string;
+    exportTaskDesc: string;
+
+    // Dashboard — shared event labels
+    mouseClick: string;
+    keyPress: string;
+    inputLabel: string;
+    openPage: string;
+    routeChangeLabel: string;
+    spaRouteChange: string;
+    domChangeLabel: string;
+    kindDom: string;
+    kindLifecycle: string;
+    pctPrefix: string;
+    captureNameSuffix: string;
+    exportFailedFlush: string;
 }
 
 const en: I18nStrings = {
@@ -239,6 +379,146 @@ const en: I18nStrings = {
     capStorage: 'Storage',
     capCookie: 'Cookie',
     capMask: 'Redaction',
+
+    // Dashboard — shell / nav
+    captureRecords: 'Capture Records',
+    currentCapture: 'Current Capture',
+    exportTask: 'Export Tasks',
+    localUser: 'Local User',
+
+    // Dashboard — captures list
+    allCaptures: 'All Captures',
+    withErrors: 'With Errors',
+    completed: 'Completed',
+    storageUsed: 'Storage Used',
+    estimatedSize: 'Estimated size',
+    captureCountSuffix: 'captures',
+    noCaptureRecords: 'No capture records',
+    captureRecordsDesc: 'Manage and view all completed capture records, with export, archive, and tag management.',
+    searchCapturesPlaceholder: 'Search capture name, URL, tags…',
+    allFilter: 'All',
+    refresh: 'Refresh',
+    reset: 'Reset',
+    statusLabel: 'Status',
+    filterOf: 'of',
+    filterTotalSuffix: '',
+    filterTotal: 'Total',
+    countUnit: 'records',
+    captureName: 'Name',
+    time: 'Time',
+    size: 'Size',
+    actions: 'Actions',
+    selectedCount: 'Selected',
+    captureRecordsUnit: 'records',
+    clearSelection: 'Clear selection',
+    deleteSelectedConfirm: 'Delete selected capture records?',
+    deleteCaptureConfirm: 'Delete this capture record?',
+    deleteFailed: 'Delete failed',
+    activeCaptureNoDelete: 'Active capture cannot be deleted',
+
+    // Dashboard — detail
+    overview: 'Overview',
+    ended: 'Ended',
+    openOriginalPage: 'Open Original Page',
+    exportZip: 'ZIP Archive',
+    eventLabel: 'Event',
+    detail: 'Detail',
+    source: 'Source',
+    urlSourceDetail: 'URL / Source / Detail',
+    errorMessage: 'Error Message',
+    stack: 'Stack',
+    keyLabel: 'Key',
+    nameLabel: 'Name',
+    searchRailPlaceholder: 'Search events, URLs, Storage keys…',
+    quickFilter: 'Quick Filter',
+    noEvents: 'No events',
+    eventsCountSuffix: 'events',
+    listView: 'List View',
+    trackView: 'Track View',
+    zoom: 'Zoom',
+    laneNetwork: 'Network',
+    laneUi: 'UI Events',
+    laneConsole: 'Console',
+    laneDom: 'DOM Changes',
+    laneStorage: 'Storage',
+    laneNav: 'Navigation',
+    laneError: 'Errors',
+    absoluteTime: 'Absolute Time',
+    noNetworkRequests: 'No network requests',
+    basicInfo: 'Basic Info',
+    statusCode: 'Status Code',
+    resourceType: 'Resource Type',
+    protocol: 'Protocol',
+    cache: 'Cache',
+    captureMethod: 'Capture Method',
+    requestHeaders: 'Request Headers',
+    responseHeaders: 'Response Headers',
+    requestBody: 'Request Body',
+    responseBody: 'Response Body',
+    noConsoleLogs: 'No console logs',
+    levelLabel: 'Level',
+    messageLabel: 'Message',
+    lineLabel: 'Line',
+    noData: 'No data',
+    captureSummary: 'Capture Summary',
+    totalEvents: 'Total Events',
+    totalErrors: 'Total Errors',
+    categoryOverview: 'Category Overview',
+    keyTimeline: 'Key Timeline',
+    configIntro: 'Config used for this capture (read-only snapshot). To change defaults, go to',
+    settingsDefaultsLink: 'Settings → Capture Defaults.',
+    captureModules: 'Capture Modules',
+    captureOptions: 'Capture Options',
+    configLabel: 'Config',
+
+    // Dashboard — settings
+    general: 'General',
+    privacyRedaction: 'Privacy & Redaction',
+    diagnosticsLogs: 'Diagnostics Logs',
+    integrations: 'Integrations',
+    settingsDesc: 'Manage Capture All preferences, capture defaults, privacy policy, export rules, and integrations.',
+    captureDefaults: 'Capture Defaults',
+    timeDisplay: 'Time Display',
+    timezoneFollowBrowser: 'Follow Browser',
+    captureLimitMb: 'Capture Limit (MB)',
+    inlineTextLimitKb: 'Inline Text Limit (KB)',
+    sensitiveCaptureNotice: 'Sensitive Data Notice',
+    sensitiveCaptureDesc: 'Request bodies, response bodies, and input values are captured by default and may contain credentials, tokens, private messages, or personal information. Disable them before your first capture if not needed.',
+    redactionBoundary: 'Redaction Boundary',
+    redactionBoundaryDesc: 'Password inputs are never captured. Headers, URL queries, and input values are redacted by rules; request and response bodies are size-limited only and are not scanned for sensitive content.',
+    filenameTemplate: 'Filename Template',
+    exportCaptureDirectory: 'Capture Export Directory',
+    exportLogDirectory: 'Log Export Directory',
+    logLevel: 'Log Level',
+    maxLogSizeMb: 'Max Log Size (MB)',
+    currentLogSize: 'Current Log Size',
+    exportLogs: 'Export Logs',
+    clearLogs: 'Clear All Logs',
+    integrationsMcp: 'Integrations · MCP Bridge',
+    changesSavedImmediately: 'Changes are saved automatically',
+    clearLogsConfirm: 'Clear all diagnostic logs? This cannot be undone.',
+    exportFailed: 'Export failed',
+
+    // Dashboard — current / exports
+    currentCaptureDesc: 'In-progress capture sessions. View the event stream live and stop at any time.',
+    noActiveCapture: 'No capture in progress',
+    eventsSuffix: 'events',
+    requestsSuffix: 'requests',
+    exportTaskDesc: 'Select capture records to export. Ready:',
+
+    // Dashboard — shared event labels
+    mouseClick: 'Click',
+    keyPress: 'Key',
+    inputLabel: 'Input',
+    openPage: 'Open',
+    routeChangeLabel: 'Route change',
+    spaRouteChange: 'SPA route change',
+    domChangeLabel: 'DOM change',
+    kindDom: 'DOM',
+    kindLifecycle: 'Lifecycle',
+    pctPrefix: '',
+    captureNameSuffix: ' capture',
+    exportFailedFlush: 'Export failed: could not persist buffered data',
 };
 
 const zh: I18nStrings = {
@@ -356,6 +636,146 @@ const zh: I18nStrings = {
     capStorage: 'Storage',
     capCookie: 'Cookie',
     capMask: '脱敏',
+
+    // Dashboard — shell / nav
+    captureRecords: '采集记录',
+    currentCapture: '当前采集',
+    exportTask: '导出任务',
+    localUser: '本地用户',
+
+    // Dashboard — captures list
+    allCaptures: '全部采集',
+    withErrors: '有错误',
+    completed: '已完成',
+    storageUsed: '占用空间',
+    estimatedSize: '估算大小',
+    captureCountSuffix: '次采集',
+    noCaptureRecords: '暂无采集记录',
+    captureRecordsDesc: '管理和查看所有已完成的采集记录，支持导出、归档和标签管理。',
+    searchCapturesPlaceholder: '搜索采集名称、URL、标签…',
+    allFilter: '全部',
+    refresh: '刷新',
+    reset: '重置',
+    statusLabel: '状态',
+    filterOf: '条（全部',
+    filterTotalSuffix: '）',
+    filterTotal: '共',
+    countUnit: '条',
+    captureName: '采集名称',
+    time: '时间',
+    size: '大小',
+    actions: '操作',
+    selectedCount: '已选择',
+    captureRecordsUnit: '条采集记录',
+    clearSelection: '清除选择',
+    deleteSelectedConfirm: '确定删除选中的采集记录？',
+    deleteCaptureConfirm: '确定删除此采集记录？',
+    deleteFailed: '删除失败',
+    activeCaptureNoDelete: '采集进行中不可删除',
+
+    // Dashboard — detail
+    overview: '概览',
+    ended: '已结束',
+    openOriginalPage: '打开原页面',
+    exportZip: 'ZIP 完整包',
+    eventLabel: '事件',
+    detail: '详情',
+    source: '来源',
+    urlSourceDetail: 'URL / 来源 / 详情',
+    errorMessage: '错误消息',
+    stack: '堆栈',
+    keyLabel: 'Key',
+    nameLabel: '名称',
+    searchRailPlaceholder: '搜索事件、URL、Storage key…',
+    quickFilter: '快速筛选',
+    noEvents: '暂无事件',
+    eventsCountSuffix: '个事件',
+    listView: '列表视图',
+    trackView: '轨道视图',
+    zoom: '缩放',
+    laneNetwork: '网络',
+    laneUi: '界面事件',
+    laneConsole: '控制台',
+    laneDom: 'DOM 变更',
+    laneStorage: '存储',
+    laneNav: '导航',
+    laneError: '错误',
+    absoluteTime: '绝对时间',
+    noNetworkRequests: '暂无网络请求',
+    basicInfo: '基本信息',
+    statusCode: '状态码',
+    resourceType: '资源类型',
+    protocol: '协议',
+    cache: '缓存',
+    captureMethod: '采集方式',
+    requestHeaders: '请求头',
+    responseHeaders: '响应头',
+    requestBody: '请求体',
+    responseBody: '响应体',
+    noConsoleLogs: '暂无控制台日志',
+    levelLabel: '级别',
+    messageLabel: '消息',
+    lineLabel: '行',
+    noData: '暂无数据',
+    captureSummary: '本次采集摘要',
+    totalEvents: '事件总数',
+    totalErrors: '错误总数',
+    categoryOverview: '七标签概览',
+    keyTimeline: '关键时间线',
+    configIntro: '本次采集使用的配置（只读快照）。如需修改默认值，请前往',
+    settingsDefaultsLink: '设置 → 采集默认值。',
+    captureModules: '采集模块',
+    captureOptions: '采集选项',
+    configLabel: '本次配置',
+
+    // Dashboard — settings
+    general: '通用',
+    privacyRedaction: '隐私与脱敏',
+    diagnosticsLogs: '诊断日志',
+    integrations: '集成',
+    settingsDesc: '管理 Capture All 的全局偏好、采集默认值、隐私策略、导出规则和集成能力。',
+    captureDefaults: '采集默认值',
+    timeDisplay: '时间显示',
+    timezoneFollowBrowser: '跟随浏览器',
+    captureLimitMb: '采集上限 (MB)',
+    inlineTextLimitKb: '内联文本上限 (KB)',
+    sensitiveCaptureNotice: '敏感采集提醒',
+    sensitiveCaptureDesc: '请求体、响应体和输入值采集默认开启，可能包含凭据、Token、私密消息或个人信息。不需要时请在首次采集前关闭。',
+    redactionBoundary: '脱敏边界',
+    redactionBoundaryDesc: '密码输入始终不采集。Header、URL 查询和输入值按规则脱敏；请求体和响应体只限制大小，不扫描内容中的敏感信息。',
+    filenameTemplate: '文件名模板',
+    exportCaptureDirectory: '采集导出目录',
+    exportLogDirectory: '日志导出目录',
+    logLevel: '日志级别',
+    maxLogSizeMb: '最大日志大小 (MB)',
+    currentLogSize: '当前日志大小',
+    exportLogs: '导出运行日志',
+    clearLogs: '清除所有日志',
+    integrationsMcp: '集成 · MCP Bridge',
+    changesSavedImmediately: '更改即时保存',
+    clearLogsConfirm: '确定清空所有诊断日志？此操作不可撤销。',
+    exportFailed: '导出失败',
+
+    // Dashboard — current / exports
+    currentCaptureDesc: '正在进行的采集会话，实时查看事件流并随时停止。',
+    noActiveCapture: '当前没有进行中的采集',
+    eventsSuffix: '事件',
+    requestsSuffix: '请求',
+    exportTaskDesc: '选择采集记录导出。已就绪',
+
+    // Dashboard — shared event labels
+    mouseClick: '点击',
+    keyPress: '按键',
+    inputLabel: '输入',
+    openPage: '打开',
+    routeChangeLabel: '路由变化',
+    spaRouteChange: 'SPA 路由变化',
+    domChangeLabel: 'DOM 变化',
+    kindDom: 'DOM',
+    kindLifecycle: '生命周期',
+    pctPrefix: '占比 ',
+    captureNameSuffix: ' 的采集',
+    exportFailedFlush: '导出失败：无法落盘缓冲数据',
 };
 
 const locales: Record<Locale, I18nStrings> = { en, zh };
@@ -372,18 +792,25 @@ export function get_locale(): Locale {
     return current_locale;
 }
 
+// t152: 单一事实来源 = user_config.locale（持久化由调用方经 save_user_config 落盘）。
+// set_locale 只切内存语言，不再写独立 'locale' storage key。
 export function set_locale(locale: Locale): void {
     current_locale = locale;
-    chrome.storage.local.set({ locale });
 }
 
 export async function init_locale(): Promise<void> {
-    const result = await chrome.storage.local.get('locale');
-    if (result.locale) {
-        current_locale = result.locale;
-    } else {
-        current_locale = detect_locale();
+    // 从 user_config.locale 恢复；未显式设置过（无 locale 键）时按浏览器语言自动检测。
+    try {
+        const result = await chrome.storage.local.get('user_config');
+        const stored = (result.user_config as Record<string, unknown> | undefined) ?? null;
+        if (stored && (stored.locale === 'en' || stored.locale === 'zh')) {
+            current_locale = stored.locale as Locale;
+            return;
+        }
+    } catch {
+        // fall through to detect
     }
+    current_locale = detect_locale();
 }
 
 export function t(key: keyof I18nStrings): string {

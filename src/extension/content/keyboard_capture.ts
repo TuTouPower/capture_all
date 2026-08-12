@@ -55,6 +55,13 @@ function is_shortcut_mode(): boolean {
     return config.keyboard_capture_mode === 'shortcuts';
 }
 
+// type=password 输入框永不采集击键值（不变量，见 domain.md），不受 redact_data 影响。
+// 用 composedPath 取实际目标：shadow DOM 内密码框触发时 event.target 被 retarget 为 host。
+function is_password_input(event: KeyboardEvent): boolean {
+    const t = event.composedPath()[0];
+    return t instanceof HTMLInputElement && t.type === 'password';
+}
+
 function build_key_event(
     event: KeyboardEvent,
     action: 'keydown' | 'keyup'
@@ -68,7 +75,7 @@ function build_key_event(
 
     const target = get_target_info(event);
 
-    const masked = config.redact_data;
+    const masked = config.redact_data || is_password_input(event);
 
     const base_event = create_content_event({
         capture_id: state.capture_id,

@@ -172,4 +172,21 @@ describe('AgentCommandQueue', () => {
         // p2 应被取消
         return expect(p2.result).resolves.toMatchObject({ ok: false, error: { code: 'COMMAND_CANCELLED' } });
     });
+
+    // B1-L15: pending_count 语义为「全部待处理」（含已取走在途），非仅「未取走」
+    it('pending_count 包含已 take 未 resolve 的在途命令（B1-L15）', () => {
+        const queue = new AgentCommandQueue();
+        const p1 = queue.enqueue('sessions.list', {});
+        const p2 = queue.enqueue('sessions.get', {});
+        expect(queue.pending_count()).toBe(2);
+
+        queue.take_next(); // 取走 1 条，未 resolve → 仍在 pending
+        expect(queue.pending_count()).toBe(2);
+
+        queue.resolve({ command_id: p1.command.command_id, ok: true, data: {} });
+        expect(queue.pending_count()).toBe(1);
+
+        queue.resolve({ command_id: p2.command.command_id, ok: true, data: {} });
+        expect(queue.pending_count()).toBe(0);
+    });
 });

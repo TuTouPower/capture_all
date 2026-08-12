@@ -76,7 +76,6 @@ src/
 │   │   ├── storage.ts            # IndexedDB CRUD 封装（store 路由 + flush）
 │   │   ├── network_capture.ts    # webRequest / CDP 网络采集
 │   │   ├── network_webrequest.ts # webRequest 纯工具函数
-│   │   ├── network_context.ts    # 网络上下文
 │   │   ├── network_correlator.ts # webRequest-CDP 请求关联（非活跃 tab）
 │   │   ├── cdp_handler.ts        # CDP 事件处理（复合键 sessionId:requestId）
 │   │   ├── console_capture.ts    # CDP console 采集
@@ -85,7 +84,6 @@ src/
 │   │   ├── body_capture_coordinator.ts # Body 捕获协调器（单飞轮询）
 │   │   ├── cdp_event_router.ts   # CDP 事件路由分发（session 注册/注销）
 │   │   ├── stream_buffer.ts      # SSE / 流式响应增量缓冲（finish 删 entry）
-│   │   ├── webrequest_handler.ts # webRequest 事件处理
 │   │   ├── external_cdp_bridge_client.ts # 外部 CDP bridge 客户端（URL allowlist）
 │   │   ├── agent_bridge_client.ts    # Agent bridge 轮询客户端（结果投递重试）
 │   │   ├── agent_command_dispatcher.ts # Agent 命令分发（结构化错误码）
@@ -101,6 +99,7 @@ src/
 │   │   ├── form_submit_capture.ts / fullscreen_capture.ts / print_capture.ts
 │   │   ├── resize_capture.ts / visibility_capture.ts
 │   │   ├── storage_capture.ts / websocket_capture.ts / network_hook.ts
+│   │   ├── content_page_script.ts # 注入脚本共享模板（还原守卫 + 头部声明）
 │   ├── popup/                    # 弹出窗口（3 状态）
 │   │   └── popup.html / popup.ts / popup.css
 │   ├── dashboard/                # 主面板
@@ -110,7 +109,7 @@ src/
 │   │   ├── sidebar_resize.ts / icons.ts
 │   │   └── *.css                 # Shell / pages / detail / views 样式
 │   ├── devtools/                 # DevTools 面板（轻量入口）
-│   │   └── devtools.html / devtools.ts / devtools_panel.html / devtools_panel.ts
+│   │   └── devtools.html / devtools.ts
 │   └── shared/                   # 仅扩展专用（依赖 background/content 或扩展 UI）
 │       ├── capture_data_reader.ts # 直连 IndexedDB 读取采集快照（依赖 background/storage）
 │       ├── i18n.ts / theme.ts    # 国际化 / 主题（扩展 UI 专用）
@@ -161,7 +160,7 @@ src/shared ──✗── 任何产品目录
 
 扩展生命周期管理、消息路由、采集协调、数据持久化。
 
-**采集状态机**（`capture_state.ts`）：单例模块，5 阶段 `idle → starting → capturing → stopping → idle`（失败走 `rolling_back`）。`run_exclusive` 串行化 start/stop。generation token 防 listener 跨采集写入。持久化活跃采集状态到 `chrome.storage.local`，SW 重启时 cleanup 恢复/终止旧采集。
+**采集状态机**（`capture_state.ts`）：单例模块，5 阶段 `idle → starting → capturing → stopping → idle`（失败走 `rolling_back`）。`run_exclusive` 串行化 start/stop。generation token 防 listener 跨采集写入。持久化活跃采集状态到 `chrome.storage.local`，SW 重启时 cleanup 恢复/终止旧采集。**SW 重启语义为「终止而非恢复」**（t148/s004）：`cleanup_stale_capture_state` 先 flush_all 保证已落库数据不丢，再终态化旧采集并清持久化键；不重连生产者（MV3 SW 销毁后 webRequest/debugger listener 需重注册，恢复成本高）。
 
 消息协议（`chrome.runtime.sendMessage`）：
 

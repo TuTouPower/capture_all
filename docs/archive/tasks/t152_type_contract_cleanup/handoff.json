@@ -1,0 +1,60 @@
+{
+  "tid": "t152",
+  "attempt": 1,
+  "execution_id": "d19d5bd162674cba9cfb47183c50d2b2",
+  "status": "done",
+  "branch": "t152_type_contract_cleanup",
+  "base_sha": "a5d21b1d8615f445993a1d1f73192d6aab8f6f5d",
+  "tests": "vitest run: 148 files / 1519 tests passed",
+  "blackbox": "npx tsc --noEmit exit 0",
+  "review": "待执行",
+  "ac_evidence": {
+    "AC-001": [
+      "src/shared/user_config.ts sanitize 白名单 detail_time_display_mode ['system','relative','absolute'] → ['system','relative']，与 types.ts DetailTimeDisplayMode（'relative'|'system'）一致",
+      "tests/unit/user_config_persistence.test.ts：AC-004 表驱动 absolute 移非法值 + 新增 t152 AC-001 断言 absolute 回退默认、relative/system 合法保留"
+    ],
+    "AC-002": [
+      "src/shared/user_config.ts locale 白名单 ['en','zh_CN'] → ['en','zh']；types.ts UserConfig.locale: string → 'en'|'zh'（与 i18n Locale 对齐）",
+      "src/extension/shared/i18n.ts set_locale 不再写独立 'locale' storage key（只切内存语言）；init_locale 从 user_config.locale 恢复，未显式设置时按 navigator.language 自动检测",
+      "设置页语言选择持久化生效：dashboard_settings persist({locale}) 写 user_config.locale（单一事实来源）",
+      "tests/unit/i18n_locale_single_source.test.ts（4 项）+ user_config_persistence.test.ts locale 用例"
+    ],
+    "AC-003": [
+      "src/extension/background/agent_data_queries.ts 查询按 type 路由：network_requests 源 get_record_type/summary/preview 以 'type' in record 判别 ws_frame/ws_message（CaptureEvent）与 NetworkRequestData，ws_frame 不再误读为请求、不产出 undefined 误导记录",
+      "tests/unit/t152_network_ws_type_route.test.ts（4 项）"
+    ],
+    "AC-004": [
+      "src/extension/content/storage_capture.ts L193、websocket_capture.ts L229：state.sender?.({...base,...data}) → state.sender?.(base, data)，payload 进 event.data（与 mouse/keyboard 等模块一致，content_script send_event 合并进 data）",
+      "tests/unit/storage_capture.test.ts 新增 AC-004 断言、websocket_capture_page.test.ts 全部断言改读第二参数（data）"
+    ],
+    "AC-005": [
+      "src/extension/dashboard/dashboard_detail.ts render_net_table 时间列 (r as any).timestamp → r.relative_time；render_con_table (l as any).timestamp → l.relative_time_ms（不再恒 +00.000s/空）",
+      "新增 _render_net_table_for_test 测试钩子；tests/unit/t152_detail_time_columns.test.ts（4 项）"
+    ],
+    "AC-006": [
+      "src/extension/dashboard/dashboard_shared.ts event_kind 改为 category_for_event_type 映射（user/nav/network/console/error/storage/cookie/dom/capture），删除 default→'capture' 谎言——ws/clipboard/form/visibility 等不再错标「生命周期」",
+      "tests/unit/t152_event_kind_alignment.test.ts（5 项，覆盖全类别 36 种 type）"
+    ],
+    "AC-007": [
+      "src/shared/id.ts 新增 generate_unique_suffix（crypto.randomUUID + 非 secure context fallback）与 stable_fingerprint（djb2）；event_utils.ts random_chars 删除改用 generate_unique_suffix（消除重复实现）",
+      "冲突位点加唯一化：agent_data_queries get_native_record_id fallback 追加 stable_fingerprint；service_worker.ts net_ 事件 id、dashboard_shared.ts con_ 事件 id、network_hook.ts hook_ request_id 均改用 generate_unique_suffix",
+      "tests/unit/t152_id_unification.test.ts（6 项：唯一性/定长/确定性/无碰撞）+ p060/dom_network_hook_event_id 不回退"
+    ],
+    "AC-008": [
+      "src/mcp/schemas.ts 顶层工具 schema 全部 .passthrough() → .strict()（未知参数报错）；capture_config_schema → .strip()（未知 config 键丢弃不静默透传）",
+      "tests/unit/mcp_schema.test.ts：'all tools passthrough unknown fields' 改为 strict 拒绝；'start_recording unknown config fields' 改为 strip 断言；target_instance_id 测试限定到声明 target 的工具（get_status/list_browsers 未声明则拒绝）"
+    ],
+    "AC-009": [
+      "src/shared/event_utils.ts get_relative_time 改为 Math.max(0, Date.now() - start)，时钟回拨 clamp 到 0",
+      "tests/unit/t152_relative_time_clamp.test.ts（3 项）"
+    ],
+    "AC-010": [
+      "npm test 148 files / 1519 tests passed（新增 6 个 t152 测试文件 + i18n_locale_single_source）；既有相关测试语义保留：p060_capture_id、t136_ws_frame_relative_time、dashboard_detail_xss_escape、detail_layout_source、t144_timeline_merge_network_console、export_large_fix 等全绿",
+      "npx tsc --noEmit exit 0"
+    ]
+  },
+  "pending": [
+    "spec「Finalization 时更新的 blueprint」注明 docs/blueprint/conventions.md 可补记 locale 单一来源规则——finalization/integrate 阶段执行"
+  ],
+  "findings": []
+}

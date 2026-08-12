@@ -5,7 +5,7 @@ import { init_locale, t, apply_translations } from '../shared/i18n';
 import { init_theme } from '../shared/theme';
 import { escape_html } from '../../shared/escape';
 import { load_user_config } from '../../shared/user_config';
-import { DEFAULT_USER_CONFIG } from '../../shared/constants';
+import { DEFAULT_USER_CONFIG, DEFAULT_CONFIG } from '../../shared/constants';
 import { format_system_time } from '../../shared/system_time';
 import { download_blob, build_capture_filename } from '../shared/export_utils';
 import { build_archive } from '../shared/archive_builder';
@@ -13,6 +13,7 @@ import { read_capture_snapshot } from '../shared/capture_data_reader';
 import { generate_capture_id } from '../../shared/id';
 import { Logger } from '../../shared/logger';
 import { get_app_log_transport } from '../background/app_log_storage';
+import { send_ui_message } from '../../shared/message_contract';
 import type { CaptureConfig } from '../../shared/types';
 
 const logger = new Logger('popup', get_app_log_transport());
@@ -27,6 +28,14 @@ let current_capture: CaptureRecord | null = null;
 let finished_capture: CaptureRecord | null = null;
 let live_counts: CaptureStats | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+// t153 AC-006: 轮询单飞保护——上一轮 get_status 未完成则跳过本轮（与 dashboard 一致），
+// 防慢响应下 refresh_counts 重叠堆积。
+let poll_in_flight = false;
+// t135: popup 自身写入 storage 的标记键。onChanged 监听检测该键即识别为自写、
+// 消费后跳过刷新，避免与 popup 本地状态（stop 后 state='saved'）竞争。
+// 采用 storage 键而非定时器复位——onChanged 派发与 set 返回时序解耦，
+// setTimeout(0) 会在自写 onChanged 到达前复位，无法可靠覆盖。
+const SELF_WRITE_KEY = '_popup_self_write';
 
 // Data label toggles — all ON by default, clickable only in 'ready' state
 const toggles: Record<string, boolean> = {
@@ -254,10 +263,7 @@ function wire_view(): void {
     view.querySelector('#exportBtn')?.addEventListener('click', async () => {
         if (!finished_capture) return;
         try {
-            const resp = await chrome.runtime.sendMessage({
-                action: 'get_capture_data',
-                capture_id: finished_capture.capture_id,
-            });
+            const resp = await send_ui_message('get_capture_data', { capture_id: finished_capture.capture_id });
             if (!resp?.success) {
                 logger.error('Export failed', resp?.error);
                 alert(`${t('error')}: ${resp?.error ?? 'Export failed'}`);
@@ -334,11 +340,13 @@ function get_capture_config(): CaptureConfig {
         capture_response_body: user_config.capture_response_body,
         max_body_capture_bytes: user_config.max_body_capture_bytes,
         inline_text_max_bytes: user_config.inline_text_max_bytes,
-        redact_data: toggles.mask !== false,
-        // Redaction settings
-        redact_sensitive_headers: true,
-        redact_url_query: true,
-        sample_rate_ms: 50,
+        // t154 AC-012: redact_data 以 user_config 为底叠加 popup mask toggle——
+        // 设置页关闭脱敏时 popup 不能越过该底重新开启
+        redact_data: user_config.redact_data && toggles.mask !== false,
+        // t154 AC-012: 硬编码缺省改引 DEFAULT_CONFIG（user_config 无这些字段）
+        redact_sensitive_headers: DEFAULT_CONFIG.redact_sensitive_headers,
+        redact_url_query: DEFAULT_CONFIG.redact_url_query,
+        sample_rate_ms: DEFAULT_CONFIG.sample_rate_ms,
         // Toggle flags for config display (carried as extra keys)
         event_count_enabled: toggles.event_count !== false,
         nav_count_enabled: toggles.nav_count !== false,
@@ -354,7 +362,7 @@ async function start_capture(): Promise<void> {
     const capture_id = generate_capture_id();
     logger.info('Starting capture', { capture_id });
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'start', capture_id: capture_id, config });
+        const response = await send_ui_message('start', { capture_id, config });
         if (!response?.success) {
             logger.error('Start capture failed', response?.error);
             alert(`${t('error')}: ${response?.error}`); return;
@@ -374,7 +382,7 @@ async function start_capture(): Promise<void> {
             updated_at: new Date().toISOString(),
         };
         live_counts = null;
-        chrome.storage.local.set({ is_capturing: true, current_capture, capture_toggles: toggles });
+        chrome.storage.local.set({ is_capturing: true, current_capture, capture_toggles: toggles, [SELF_WRITE_KEY]: Date.now() });
         state = 'capturing';
         render();
         start_timer();
@@ -387,12 +395,14 @@ async function stop_capture(): Promise<void> {
     if (!is_extension) { state = 'saved'; render(); return; }
     logger.info('Stopping capture');
     try {
-        const response = await chrome.runtime.sendMessage({ action: 'stop' });
+        const response = await send_ui_message('stop', {});
         if (!response?.success) {
-            logger.warn('stop returned success=false, forcing state transition');
-        } else {
-            logger.info('Capture stopped successfully');
+            // t154 AC-013: 失败不静默转完成态——提示具体原因，保持采集中（timer 继续跑）
+            logger.error('stop failed', response?.error);
+            alert(`${t('error')}: ${response?.error ?? 'Stop failed'}`);
+            return;
         }
+        logger.info('Capture stopped successfully');
         stop_timer();
         if (current_capture) {
             finished_capture = {
@@ -405,7 +415,7 @@ async function stop_capture(): Promise<void> {
         }
         current_capture = null;
         live_counts = null;
-        chrome.storage.local.set({ is_capturing: false, current_capture: null });
+        chrome.storage.local.set({ is_capturing: false, current_capture: null, [SELF_WRITE_KEY]: Date.now() });
         await load_history();
         state = 'saved';
         render();
@@ -430,11 +440,39 @@ function stop_timer(): void {
     if (timer) { clearInterval(timer); timer = null; }
 }
 
+/** t154 AC-010: SW 已自动结束（bridge/MCP 触发 stop）时把本地状态降级为完成态。 */
+async function finish_capture_locally(): Promise<void> {
+    if (current_capture) {
+        finished_capture = {
+            ...current_capture,
+            status: 'completed',
+            ended_at: new Date().toISOString(),
+            duration_ms: Date.now() - new Date(current_capture.started_at).getTime(),
+            stats: live_counts ?? current_capture.stats,
+        };
+    }
+    current_capture = null;
+    live_counts = null;
+    stop_timer();
+    await load_history();
+    state = 'saved';
+    render();
+}
+
 async function refresh_counts(): Promise<void> {
     if (!is_extension || state !== 'capturing') return;
+    // t153 AC-006: 单飞——上一轮 get_status 未完成则跳过，避免重叠轮询
+    if (poll_in_flight) return;
+    poll_in_flight = true;
     try {
-        const status = await chrome.runtime.sendMessage({ action: 'get_status' });
-        const stats: CaptureStats | undefined = status?.stats ?? status?.current_capture?.stats;
+        const status = await send_ui_message('get_status', {});
+        // t154 AC-010: SW 已自动结束但 storage 仍 is_capturing:true 时，以 status.is_capturing
+        // 校正本地状态（此前忽略该字段，popup 永久停在采集中且 live 计数恒 0）
+        if (status?.data && status.data.is_capturing === false) {
+            await finish_capture_locally();
+            return;
+        }
+        const stats: CaptureStats | undefined = status?.data?.current_capture?.stats;
         if (stats) {
             live_counts = stats;
             CAPTURE.forEach((src, i) => {
@@ -446,20 +484,28 @@ async function refresh_counts(): Promise<void> {
         }
     } catch {
         // best-effort live counts
+    } finally {
+        poll_in_flight = false;
     }
 }
 
 async function load_history(): Promise<void> {
     if (!is_extension) return;
     try {
-        recent_captures = await chrome.runtime.sendMessage({ action: 'list_captures' }) || [];
+        // t153 AC-007: 只拉最近 N 条（recent_list 渲染前 3 条），避免 list_captures 全量回传
+        const resp = await send_ui_message('list_captures', { limit: 10 });
+        recent_captures = resp?.data ?? [];
     } catch {
         recent_captures = [];
     }
 }
 
 async function load_state(): Promise<void> {
-    const result = await chrome.storage.local.get(['is_capturing', 'current_capture']);
+    const result = await chrome.storage.local.get(['is_capturing', 'current_capture', 'capture_toggles']);
+    // t154 AC-011: 重开 popup 读回 capture_toggles 恢复开关（此前写后无人消费，toggles 恒复位全开）
+    if (result.capture_toggles && typeof result.capture_toggles === 'object') {
+        Object.assign(toggles, result.capture_toggles);
+    }
     if (result.is_capturing && result.current_capture) {
         current_capture = result.current_capture;
         state = 'capturing';
@@ -483,6 +529,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // MCP 通过 Bridge 触发 start/stop 时，service_worker 写 storage 让 popup 实时反映状态变化。
     chrome.storage.onChanged.addListener((changes, area) => {
         if (area !== 'local') return;
+        // t135: popup 自身写入带 SELF_WRITE_KEY 标记——确定性识别自写，消费后跳过刷新，
+        // 避免与本地状态（saved/ready）竞争。外部（SW/MCP）写入无此键，仍同步刷新。
+        if (SELF_WRITE_KEY in changes) {
+            void chrome.storage.local.remove(SELF_WRITE_KEY);
+            return;
+        }
         if (!('is_capturing' in changes) && !('current_capture' in changes)) return;
         const was_capturing = state === 'capturing';
         void load_state().then(() => {

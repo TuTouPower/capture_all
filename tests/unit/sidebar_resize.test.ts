@@ -170,4 +170,45 @@ describe('sidebar_resize', () => {
         expect(mock_style.setProperty).toHaveBeenCalledWith('--sidebar-w', '232px');
         expect(mock_storage.setItem).toHaveBeenCalledWith('sidebar_width', '232');
     });
+
+    // ── t154 AC-007：pointercancel/mouseleave 清理——窗口外释放不卡死 ──
+    it('pointercancel 触发清理：停止拖拽并持久化当前宽度', () => {
+        const handle = create_handle();
+        wire_sidebar_resize({
+            handle,
+            storage_key: 'sidebar_width',
+            css_var: '--sidebar-w',
+            default_px: 232,
+            min_px: 160,
+            max_px: 400,
+        });
+        handle.dispatchEvent(new MouseEvent('mousedown', { clientX: 232 }));
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 300 }));
+        // pointercancel（如系统接管指针）应结束拖拽
+        window.dispatchEvent(new MouseEvent('pointercancel'));
+        expect(mock_storage.setItem).toHaveBeenCalledWith('sidebar_width', '300');
+        // 清理后 dragging=false：后续 mousemove 不再更新宽度
+        const before = mock_style.setProperty.mock.calls.length;
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400 }));
+        expect(mock_style.setProperty.mock.calls.length).toBe(before);
+    });
+
+    it('mouseleave 触发清理：窗口外释放不残留 dragging', () => {
+        const handle = create_handle();
+        wire_sidebar_resize({
+            handle,
+            storage_key: 'sidebar_width',
+            css_var: '--sidebar-w',
+            default_px: 232,
+            min_px: 160,
+            max_px: 400,
+        });
+        handle.dispatchEvent(new MouseEvent('mousedown', { clientX: 232 }));
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 280 }));
+        // 鼠标移出 document 应结束拖拽
+        document.dispatchEvent(new MouseEvent('mouseleave'));
+        const before = mock_style.setProperty.mock.calls.length;
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400 }));
+        expect(mock_style.setProperty.mock.calls.length).toBe(before);
+    });
 });

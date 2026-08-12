@@ -61,6 +61,41 @@ export async function generate_instance_id(): Promise<string> {
     return instance_id;
 }
 
+export interface BridgeUrlCheck {
+    ok: boolean;
+    reason?: string;
+}
+
+// B2-M19: 本地 Bridge URL 校验统一口径——host/凭据/path/fragment 规则唯一实现。
+// agent_bridge_config 的 parse_local_bridge_url 与 external_cdp_bridge_client.is_allowed_bridge_url
+// 共用本函数，scheme 与端口约束按各自调用方叠加（agent bridge 仅 http + 必须端口）。
+export function is_allowed_local_bridge_url(raw_url: string): BridgeUrlCheck {
+    let parsed: URL;
+    try {
+        parsed = new URL(raw_url);
+    } catch {
+        return { ok: false, reason: 'invalid URL' };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { ok: false, reason: 'scheme must be http/https' };
+    }
+    const host = parsed.hostname;
+    // 仅允许 127.0.0.1、localhost、[::1]（含 IPv6 loopback）
+    if (host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') {
+        return { ok: false, reason: 'host must be localhost / 127.0.0.1 / [::1]' };
+    }
+    if (parsed.username || parsed.password) {
+        return { ok: false, reason: 'credentials in URL not allowed' };
+    }
+    if (parsed.hash) {
+        return { ok: false, reason: 'fragment not allowed' };
+    }
+    if (parsed.pathname !== '/' && parsed.pathname !== '') {
+        return { ok: false, reason: 'path not allowed (use root)' };
+    }
+    return { ok: true };
+}
+
 function parse_local_bridge_url(raw_url: string): URL {
     let url: URL;
 
@@ -70,12 +105,17 @@ function parse_local_bridge_url(raw_url: string): URL {
         throw new Error('Invalid bridge URL');
     }
 
-    if (url.protocol !== 'http:') {
-        throw new Error('Bridge URL must use http');
+    const check = is_allowed_local_bridge_url(raw_url);
+    if (!check.ok) {
+        // 兼容既有错误消息：host 非法时保留原文案
+        if (check.reason === 'host must be localhost / 127.0.0.1 / [::1]') {
+            throw new Error('Bridge URL must use localhost or 127.0.0.1');
+        }
+        throw new Error(check.reason || 'Invalid bridge URL');
     }
 
-    if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') {
-        throw new Error('Bridge URL must use localhost or 127.0.0.1');
+    if (url.protocol !== 'http:') {
+        throw new Error('Bridge URL must use http');
     }
 
     if (!url.port) {

@@ -86,7 +86,7 @@ describe('get_status 按 sender.tab.id 权威 (T105)', () => {
 
         // sender.tab.id=5，current active tab 假设为 0（未采集）
         const resp = await send_message('get_status', { tab: { id: 5, url: 'https://example.com' } });
-        expect(resp.tab_id).toBe(5);
+        expect(resp.data.tab_id).toBe(5);
     });
 
     test('AC-001b: 采集进行中 current_capture.tab_id(A) 与 sender.tab.id(B) 不同时，响应为 B', async () => {
@@ -96,12 +96,12 @@ describe('get_status 按 sender.tab.id 权威 (T105)', () => {
 
         // 真实 start_capture：tabs.query mock 返回 active tab id=7 → current_capture.tab_id=7
         tabs_query.mockResolvedValue([{ id: 7, url: 'https://a.com', title: 'A', windowId: 1 }]);
-        const start_res = await new Promise((resolve) => on_message_cb!({ action: 'start', capture_id: 'cap_7', config: {} }, { tab: { id: 7, url: 'https://a.com' } }, resolve));
+        const start_res = await new Promise((resolve) => on_message_cb!({ action: 'start', payload: { capture_id: 'cap_7', config: {} } }, { tab: { id: 7, url: 'https://a.com' } }, resolve));
         expect(start_res.success).toBe(true);
 
         // sender.tab.id=5 ≠ 7
         const resp = await send_message('get_status', { tab: { id: 5, url: 'https://example.com' } });
-        expect(resp.tab_id).toBe(5);
+        expect(resp.data.tab_id).toBe(5);
     });
 
     test('AC-002: content 侧 on_active 使用 resp.tab_id（消息契约）', async () => {

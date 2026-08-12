@@ -72,7 +72,7 @@ function install_chrome_mock(): void {
 }
 
 function send_message(action: string): Promise<any> {
-    return new Promise((resolve) => on_message_cb!({ action, capture_id: 'cap' }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action, payload: { capture_id: 'cap' } }, {}, resolve));
 }
 
 beforeEach(() => {

@@ -67,7 +67,7 @@ function install_chrome_mock(): void {
 }
 
 function send_message(action: string, extra: Record<string, unknown> = {}): Promise<any> {
-    return new Promise((resolve) => on_message_cb!({ action, ...extra }, {}, resolve));
+    return new Promise((resolve) => on_message_cb!({ action, payload: extra }, {}, resolve));
 }
 
 const BASE_CONFIG = { capture_network: false, capture_console: false };
@@ -109,8 +109,22 @@ describe('存储限额 + 禁删活跃 (T110)', () => {
 
     it('AC-002b: 非活跃 capture 可删除', async () => {
         await import('../../src/extension/background/service_worker');
+        const storage = await import('../../src/extension/background/storage');
+        // 预置一条非活跃 capture，保证删除断言有判别力（t148 f004：cap_old 原从未 create 致恒真）
+        await storage.create_capture({
+            capture_id: 'cap_old',
+            name: 'old', status: 'completed',
+            started_at: new Date(Date.now() - 60000).toISOString(), ended_at: new Date().toISOString(),
+            duration_ms: 60000, start_url: 'https://x', end_url: null, tab_id: 1, window_id: 1,
+            config_snapshot: {}, stats: { event_count: 0, user_action_count: 0, nav_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0, total_body_bytes: 0 },
+            tags: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+        expect(await storage.get_capture('cap_old')).not.toBeNull();
+
         const del = await send_message('delete_capture', { capture_id: 'cap_old' });
         expect(del.success).toBe(true);
+        // 删除后数据实际消失（回归：delete_capture no-op 时 get_capture 仍返回记录）
+        expect(await storage.get_capture('cap_old')).toBeNull();
     });
 
     it('AC-003: cleanup_stale 终态化陈旧 active capture（status 非 active 且 ended_at 非空）', async () => {
@@ -147,12 +161,13 @@ describe('handle_event 限额停止 (T110 AC-001b)', () => {
 
         // 超限
         set_capture_size_for_test('cap_limit', 500 * 1024 * 1024);
-        const evt_res = await send_message('event', { event: { type: 'mouse_click', data: {} } });
+        // content→SW 的 event 为扁平内部消息（非 { action, payload }）
+        const evt_res = await new Promise((resolve) => on_message_cb!({ action: 'event', event: { type: 'mouse_click', data: {} } }, {}, resolve));
         expect(evt_res.success).toBe(false);
 
         // capture 已停止：get_status 显示未采集
         const status = await send_message('get_status');
-        expect(status.is_capturing).toBe(false);
+        expect(status.data.is_capturing).toBe(false);
 
         // p024 分句：限额停止写入 capture_stopped 事件且 reason === 'storage_limit'
         const { get_events_by_category } = await import('../../src/extension/background/storage');
@@ -197,6 +212,6 @@ describe('导航写路径限额停止 (T110 AC-001c)', () => {
         expect(nav_events.length).toBe(0);
 
         const status = await send_message('get_status');
-        expect(status.is_capturing).toBe(false);
+        expect(status.data.is_capturing).toBe(false);
     });
 });

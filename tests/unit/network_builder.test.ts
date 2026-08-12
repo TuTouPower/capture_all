@@ -92,4 +92,21 @@ describe('build_network_data', () => {
         expect(d.response_body_encoding).toBe('base64');
         expect(d.response_body_bytes).toBe(999);
     });
+
+    // B1-L5: 显式传 encoding/bytes 时以实际为准，不再按 utf8 派生（base64 陷阱）
+    it('显式 base64 encoding/bytes 覆盖 utf8 派生（B1-L5）', () => {
+        const d = build_network_data({
+            ...base(),
+            request_body: 'aGVsbG8=',
+            request_body_encoding: 'base64',
+            request_body_bytes: 5,
+            response_body: 'aGVsbG8=',
+            response_body_encoding: 'base64',
+            response_body_bytes: 5,
+        });
+        expect(d.request_body_encoding).toBe('base64');
+        expect(d.request_body_bytes).toBe(5);
+        expect(d.response_body_encoding).toBe('base64');
+        expect(d.response_body_bytes).toBe(5);
+    });
 });

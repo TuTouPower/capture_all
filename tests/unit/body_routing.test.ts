@@ -57,6 +57,12 @@ describe('is_text_body', () => {
     it('binary mimes are binary', () => {
         expect(is_text_body(null, 'image/png')).toBe(false);
     });
+
+    // B1-L14: 无 mime 时保守按二进制处理（防二进制响应被当作文本内联）
+    it('null mime is treated as binary (B1-L14)', () => {
+        expect(is_text_body(null, null)).toBe(false);
+        expect(plan_body({ encoding: null, mime: null, byte_size: 100, status: 'captured', has_body: true }, INLINE).placement).toBe('file');
+    });
 });
 
 describe('safe_request_id', () => {

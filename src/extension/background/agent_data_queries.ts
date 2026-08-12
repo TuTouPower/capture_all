@@ -1,4 +1,5 @@
 import { build_record_id, parse_record_id, type AgentDataSourceSummary, type AgentRecordDetail, type AgentRecordPreview, type AgentQueryRange } from '../../shared/protocol';
+import { stable_fingerprint } from '../../shared/id';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../shared/types';
 import {
     get_console_events,
@@ -154,7 +155,7 @@ export function get_timeline_item_from_capture_data(data: AgentCaptureData, item
 }
 
 function get_record_sort_key(record: AgentRecord): number {
-    if ('relative_time_ms' in record) return record.relative_time_ms;
+    if ('relative_time_ms' in record && typeof record.relative_time_ms === 'number') return record.relative_time_ms;
     if ('relative_time' in record && typeof record.relative_time === 'number') return record.relative_time;
     if ('start_time_ms' in record && typeof record.start_time_ms === 'number') return record.start_time_ms;
     return 0;
@@ -232,7 +233,14 @@ function get_record_absolute_time(record: AgentRecord): number | null {
 function get_native_record_id(record: AgentRecord): string {
     if ('event_id' in record && record.event_id) return record.event_id;
     if ('request_id' in record && record.request_id) return record.request_id;
-    return `${get_record_sort_key(record)}:${get_record_absolute_time(record) ?? ''}`;
+    // t152 AC-007: 无 event_id/request_id 时追加记录内容稳定指纹，防 (sort_key, absolute_time) 碰撞
+    return `${get_record_sort_key(record)}:${get_record_absolute_time(record) ?? ''}:${stable_fingerprint(record)}`;
+}
+
+// t152 AC-003: network_requests store 混存 ws_frame/ws_message（CaptureEvent 形态）与 NetworkRequestData。
+// 以是否带 type 字段判别事件形态，查询按 type 路由，避免 ws_frame 记录被误读成请求。
+function is_event_record(record: AgentRecord): record is CaptureEvent {
+    return 'type' in record;
 }
 
 function get_record_type(source: AgentDataSource, record: AgentRecord): string {
@@ -241,13 +249,19 @@ function get_record_type(source: AgentDataSource, record: AgentRecord): string {
         case 'navigation_events':
             return (record as CaptureEvent).type;
         case 'network_requests':
-            return (record as NetworkRequestData).resource_type;
+            return is_event_record(record)
+                ? (record as CaptureEvent).type
+                : (record as NetworkRequestData).resource_type;
         case 'console_events':
             return (record as ConsoleEventData).level;
         case 'error_events':
             return (record as RuntimeExceptionData).error_name ?? 'error';
-        case 'storage_changes':
-            return (record as StorageChangeData).action;
+        case 'storage_changes': {
+            // AC-004: storage 事件 payload 在 event.data（CaptureEvent 形状），非顶层
+            // f003: AC-004 后 payload 在 event.data；旧采集顶层形记录（无 data 键）fallback 读 record 自身，防旧数据查询崩溃
+            const sd = ((record as CaptureEvent).data ?? record) as unknown as StorageChangeData;
+            return sd.action;
+        }
         case 'cookie_changes':
             return (record as CookieChangeData).cause;
     }
@@ -261,6 +275,12 @@ function get_record_summary(source: AgentDataSource, record: AgentRecord): strin
             return `${event.type} ${event.url}`;
         }
         case 'network_requests': {
+            if (is_event_record(record)) {
+                const event = record as CaptureEvent;
+                // AC-004/f002: ws_message/ws_frame 事件 url 在 data.ws_url，base 事件 url=''
+                const ws_url = (event.data as { ws_url?: string } | null)?.ws_url;
+                return `${event.type} ${ws_url ?? event.url}`;
+            }
             const request = record as NetworkRequestData;
             return `${request.method} ${request.url} → ${request.status_code ?? 'pending'}`;
         }
@@ -273,8 +293,10 @@ function get_record_summary(source: AgentDataSource, record: AgentRecord): strin
             return `${error.error_name ?? 'error'} ${error.message}`;
         }
         case 'storage_changes': {
-            const storage_change = record as StorageChangeData;
-            return `${storage_change.storage_type}.${storage_change.action} ${storage_change.key ?? '*'}`;
+            // AC-004: storage 事件 payload 在 event.data（CaptureEvent 形状），非顶层
+            // f003: AC-004 后 payload 在 event.data；旧采集顶层形记录（无 data 键）fallback 读 record 自身，防旧数据查询崩溃
+            const sd = ((record as CaptureEvent).data ?? record) as unknown as StorageChangeData;
+            return `${sd.storage_type}.${sd.action} ${sd.key ?? '*'}`;
         }
         case 'cookie_changes': {
             const cookie_change = record as CookieChangeData;
@@ -291,6 +313,12 @@ function get_record_preview(source: AgentDataSource, record: AgentRecord): Recor
             return { url: event.url, tab_id: event.tab_id, frame_id: event.frame_id };
         }
         case 'network_requests': {
+            if (is_event_record(record)) {
+                const event = record as CaptureEvent;
+                // f002: ws_message/ws_frame 事件 url 在 data.ws_url，base 事件 url=''
+                const ws_url = (event.data as { ws_url?: string } | null)?.ws_url;
+                return { url: ws_url ?? event.url, tab_id: event.tab_id, frame_id: event.frame_id };
+            }
             const request = record as NetworkRequestData;
             return { url: request.url, status: request.status_code, duration: request.duration_ms };
         }
@@ -303,8 +331,10 @@ function get_record_preview(source: AgentDataSource, record: AgentRecord): Recor
             return { message: error.message, error_name: error.error_name };
         }
         case 'storage_changes': {
-            const storage_change = record as StorageChangeData;
-            return { key: storage_change.key, origin: storage_change.origin, value_status: storage_change.value_status };
+            // AC-004: storage 事件 payload 在 event.data（CaptureEvent 形状），非顶层
+            // f003: AC-004 后 payload 在 event.data；旧采集顶层形记录（无 data 键）fallback 读 record 自身，防旧数据查询崩溃
+            const sd = ((record as CaptureEvent).data ?? record) as unknown as StorageChangeData;
+            return { key: sd.key, origin: sd.origin, value_status: sd.value_status };
         }
         case 'cookie_changes': {
             const cookie_change = record as CookieChangeData;

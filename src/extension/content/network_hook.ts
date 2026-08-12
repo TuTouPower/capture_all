@@ -8,31 +8,32 @@ import { MAX_BODY_CAPTURE_BYTES } from '../../shared/constants';
 import type { CaptureEvent, NetworkRequestData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
-import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { generate_secret, verify_payload } from './content_hmac';
+import { inject_script_element, page_script_reinstall_guard, page_script_preamble, page_script_restore, report_injection_failure } from './content_page_script';
 import { build_network_data } from '../../shared/network_builder';
+import { generate_unique_suffix } from '../../shared/id';
+import { redact_url } from '../../shared/redaction';
+import { Logger, MessageLogTransport } from '../../shared/logger';
+
+const logger = new Logger('content/network_hook', new MessageLogTransport());
 
 const state = create_capture_state<NetworkRequestData>();
 const SIGNAL = '__capture_all_network_hook__';
 
 // 注入脚本构造器（导出便于测试 eval 验证行为）
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
-export function build_page_script(capture_response_body: boolean, secret: string): string {
+// t153 AC-005: max_body_capture_bytes 可注入（默认 MAX_BODY_CAPTURE_BYTES），供超限短路测试用小值覆盖。
+export function build_page_script(
+    capture_response_body: boolean,
+    secret: string,
+    max_body_capture_bytes: number = MAX_BODY_CAPTURE_BYTES,
+): string {
     return `(function() {
-    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
+    // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流；
     // 原 guard 语义从「阻止重注入」改为「还原后重装」，hook 链不叠加。
-    if (window.__capture_all_network_hook_installed__) {
-        var prev_hook = window.__capture_all_network_hook_prev__;
-        if (prev_hook) {
-            window.fetch = prev_hook.fetch;
-            XMLHttpRequest.prototype.open = prev_hook.open;
-            XMLHttpRequest.prototype.send = prev_hook.send;
-        }
-    }
-    window.__capture_all_network_hook_installed__ = true;
-    var SIGNAL = '${SIGNAL}';
+    ${page_script_reinstall_guard('network_hook', '            window.fetch = prev_hook.fetch;\n            XMLHttpRequest.prototype.open = prev_hook.open;\n            XMLHttpRequest.prototype.send = prev_hook.send;')}
+    ${page_script_preamble('network_hook', secret)}
     var CAPTURE_BODY = ${capture_response_body};
-    var SECRET = '${secret}';
-${SYNC_HMAC_JS}
     function post(data) {
         try {
             // T097: 每次发送从 window 动态读 nonce，content 每次 start 更新，解耦扩展重建/restart
@@ -51,7 +52,73 @@ ${SYNC_HMAC_JS}
         }
     }
 
-    function process_response(response, method, url, start) {
+    // t153 AC-005: 流式读取响应体，累计越过 cap 即短路 too_large 并 cancel reader，
+    // 避免超大响应体全量 clone().text() 缓冲进内存。行为不变：cap 内完整解码，cap 外截断 + too_large。
+    function concat_bytes(chunks) {
+        if (chunks.length === 0) return new Uint8Array(0);
+        var total = 0, i;
+        for (i = 0; i < chunks.length; i++) total += chunks[i].byteLength;
+        var out = new Uint8Array(total);
+        var pos = 0;
+        for (i = 0; i < chunks.length; i++) { out.set(chunks[i], pos); pos += chunks[i].byteLength; }
+        return out;
+    }
+    function cap_bytes(chunks, cap) {
+        var out = new Uint8Array(cap);
+        var pos = 0, i;
+        for (i = 0; i < chunks.length; i++) {
+            var c = chunks[i];
+            if (pos + c.byteLength >= cap) { out.set(c.subarray(0, cap - pos), pos); break; }
+            out.set(c, pos);
+            pos += c.byteLength;
+        }
+        return out;
+    }
+    function read_body_capped(response, cap) {
+        try {
+            var stream = response.body;
+            if (!stream || typeof stream.getReader !== 'function') {
+                // 非流式响应：回退整读后截断，与原行为一致
+                return response.clone().text().then(function(text) {
+                    var bytes = new TextEncoder().encode(text);
+                    var status = 'captured';
+                    var body = text;
+                    if (bytes.length > cap) {
+                        body = new TextDecoder().decode(bytes.slice(0, cap)) + '...[TRUNCATED]';
+                        status = 'too_large';
+                    }
+                    return { body: body, status: status };
+                });
+            }
+            var reader = stream.getReader();
+            var chunks = [];
+            var total = 0;
+            var too_large = false;
+            function pump() {
+                return reader.read().then(function(res) {
+                    if (res.done) {
+                        var bytes = too_large ? cap_bytes(chunks, cap) : concat_bytes(chunks);
+                        return { body: new TextDecoder().decode(bytes) + (too_large ? '...[TRUNCATED]' : ''), status: too_large ? 'too_large' : 'captured' };
+                    }
+                    total += res.value.byteLength;
+                    if (total > cap) {
+                        chunks.push(res.value);
+                        too_large = true;
+                        try { reader.cancel(); } catch (e) {}
+                        return { body: new TextDecoder().decode(cap_bytes(chunks, cap)) + '...[TRUNCATED]', status: 'too_large' };
+                    }
+                    chunks.push(res.value);
+                    return pump();
+                });
+            }
+            return pump();
+        } catch (e) {
+            return Promise.reject(e);
+        }
+    }
+
+    // B3-M7: resource_type 由调用方传入（fetch→'fetch'，XHR 直接 post 'xhr'），不再恒 'xhr'。
+    function process_response(response, method, url, start, res_type) {
         var duration = performance.now() - start;
         var status = response.status;
         var clone = null;
@@ -67,7 +134,7 @@ ${SYNC_HMAC_JS}
                 response_body: null,
                 response_body_status: 'failed',
                 duration_ms: duration,
-                resource_type: 'xhr',
+                resource_type: res_type,
                 request_body: null,
                 request_body_status: 'not_enabled',
                 timestamp: Date.now()
@@ -76,6 +143,24 @@ ${SYNC_HMAC_JS}
         }
 
         try {
+            // B3-L8: CAPTURE_BODY=false 时一律 not_enabled（先于 content-type 判断，
+            // 避免二进制响应在 body 采集关闭时报 'unsupported' 的误导语义）。
+            if (!CAPTURE_BODY) {
+                post({
+                    source: SIGNAL,
+                    method: method,
+                    url: url,
+                    status: status,
+                    response_body: null,
+                    response_body_status: 'not_enabled',
+                    duration_ms: duration,
+                    resource_type: res_type,
+                    request_body: null,
+                    request_body_status: 'not_enabled',
+                    timestamp: Date.now()
+                });
+                return;
+            }
             var content_type = response.headers.get('content-type') || '';
             if (content_type.includes('application/octet-stream') ||
                 content_type.includes('image/') ||
@@ -90,7 +175,7 @@ ${SYNC_HMAC_JS}
                     response_body: null,
                     response_body_status: 'unsupported',
                     duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -98,39 +183,16 @@ ${SYNC_HMAC_JS}
                 return;
             }
 
-            if (!CAPTURE_BODY) {
+            read_body_capped(clone, ${max_body_capture_bytes}).then(function(result) {
                 post({
                     source: SIGNAL,
                     method: method,
                     url: url,
                     status: status,
-                    response_body: null,
-                    response_body_status: 'not_enabled',
+                    response_body: result.body,
+                    response_body_status: result.status,
                     duration_ms: duration,
-                    resource_type: 'xhr',
-                    request_body: null,
-                    request_body_status: 'not_enabled',
-                    timestamp: Date.now()
-                });
-                return;
-            }
-            clone.text().then(function(text) {
-                var bytes = new TextEncoder().encode(text);
-                var truncated = text;
-                var body_status = 'captured';
-                if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
-                    truncated = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
-                    body_status = 'too_large';
-                }
-                post({
-                    source: SIGNAL,
-                    method: method,
-                    url: url,
-                    status: status,
-                    response_body: truncated,
-                    response_body_status: body_status,
-                    duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -144,7 +206,7 @@ ${SYNC_HMAC_JS}
                     response_body: null,
                     response_body_status: 'failed',
                     duration_ms: duration,
-                    resource_type: 'xhr',
+                    resource_type: res_type,
                     request_body: null,
                     request_body_status: 'not_enabled',
                     timestamp: Date.now()
@@ -159,7 +221,7 @@ ${SYNC_HMAC_JS}
                 response_body: null,
                 response_body_status: 'failed',
                 duration_ms: duration,
-                resource_type: 'xhr',
+                resource_type: res_type,
                 request_body: null,
                 request_body_status: 'not_enabled',
                 timestamp: Date.now()
@@ -182,7 +244,7 @@ ${SYNC_HMAC_JS}
 
         try {
             return orig_fetch.apply(this, arguments).then(function(response) {
-                try { process_response(response, method, url, start); } catch (e) {}
+                try { process_response(response, method, url, start, 'fetch'); } catch (e) {}
                 return response;
             }).catch(function(err) {
                 try {
@@ -194,7 +256,7 @@ ${SYNC_HMAC_JS}
                         response_body: null,
                         response_body_status: 'failed',
                         duration_ms: performance.now() - start,
-                        resource_type: 'xhr',
+                        resource_type: 'fetch',
                         request_body: null,
                         request_body_status: 'not_enabled',
                         timestamp: Date.now()
@@ -223,7 +285,13 @@ ${SYNC_HMAC_JS}
         if (!meta) return orig_send.apply(this, arguments);
         meta.start = performance.now();
 
-        this.addEventListener('loadend', function() {
+        // B3-L3: XHR 对象可复用（同一实例多次 open+send），每次 send 都新增 loadend 监听会累积。
+        // 先移除上次监听再添加，同一实例始终只挂一个。
+        var handler = self.__capture_all_loadend;
+        if (handler) {
+            self.removeEventListener('loadend', handler);
+        }
+        handler = function() {
             try {
                 var body = null;
                 // T098: 默认 not_enabled，CAPTURE_BODY 采集路径内才标 captured/too_large/failed
@@ -233,8 +301,8 @@ ${SYNC_HMAC_JS}
                     var text = self.responseText;
                     if (typeof text === 'string') {
                         var bytes = new TextEncoder().encode(text);
-                        if (bytes.length > ${MAX_BODY_CAPTURE_BYTES}) {
-                            body = new TextDecoder().decode(bytes.slice(0, ${MAX_BODY_CAPTURE_BYTES})) + '...[TRUNCATED]';
+                        if (bytes.length > ${max_body_capture_bytes}) {
+                            body = new TextDecoder().decode(bytes.slice(0, ${max_body_capture_bytes})) + '...[TRUNCATED]';
                             body_status = 'too_large';
                         } else {
                             body = text;
@@ -258,7 +326,9 @@ ${SYNC_HMAC_JS}
                     timestamp: Date.now()
                 });
             } catch (e) {}
-        });
+        };
+        self.__capture_all_loadend = handler;
+        this.addEventListener('loadend', handler);
 
         try {
             return orig_send.apply(this, arguments);
@@ -284,6 +354,11 @@ ${SYNC_HMAC_JS}
 
 let current_nonce = '';
 let capture_response_body = true;
+// t153 AC-005: 响应体截断/短路上限，随 config 注入（默认 MAX_BODY_CAPTURE_BYTES）。
+let max_body_capture_bytes = MAX_BODY_CAPTURE_BYTES;
+// H3: fallback 路径 URL 按配置脱敏（与 background CDP/web_request 路径一致）
+let redact_data = false;
+let redact_url_query = false;
 // T097 测试钩子：jsdom 下全局 crypto.randomUUID 被 DOM 内部调用污染，测试用显式 nonce 覆盖。
 let _nonce_override: string | null = null;
 export function _set_nonce_for_test(nonce: string | null): void {
@@ -297,6 +372,13 @@ export function _set_secret_for_test(secret: string | null): void {
 }
 
 let message_listener: ((e: MessageEvent) => void) | null = null;
+// B3-L2: request_id 自增计数拼接，避免同毫秒 Date.now + 6 位随机的碰撞覆盖。
+let hook_request_seq = 0;
+
+function next_hook_request_id(): string {
+    hook_request_seq += 1;
+    return `hook_${Date.now()}_${hook_request_seq}_${generate_unique_suffix(4)}`;
+}
 
 function update_page_nonce(nonce: string): void {
     // 每次 start 注入无 guard 的小脚本，更新页面 MAIN world 的 nonce 变量供注入脚本 post() 读取。
@@ -305,15 +387,26 @@ function update_page_nonce(nonce: string): void {
         s.textContent = `window.__capture_all_network_nonce__ = ${JSON.stringify(nonce)};`;
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
-    } catch {
-        // ignore
+    } catch (err) {
+        // t150-f003: nonce 更新失败静默降级（注入脚本用旧 nonce → 消息被拒），debug 级记录
+        logger.debug('update_page_nonce injection failed', { error: String(err) });
     }
 }
 
 function inject_page_script(): void {
+    // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
+    inject_script_element(build_page_script(capture_response_body, current_secret, max_body_capture_bytes), (reason) => {
+        logger.warn('Network hook page script injection failed', { reason });
+        report_injection_failure('network_hook', reason, state, state.sender);
+    });
+}
+
+// t142: stop 时还原 window API——注入脚本在 MAIN world，content script 无法直接改 window。
+function restore_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = build_page_script(capture_response_body, current_secret);
+        s.textContent = page_script_restore('network_hook',
+            '            window.fetch = prev.fetch;\n            XMLHttpRequest.prototype.open = prev.open;\n            XMLHttpRequest.prototype.send = prev.send;');
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -327,6 +420,7 @@ export function start_network_hook(
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
     new_capture_response_body = true,
+    cfg?: { redact_data: boolean; redact_url_query: boolean; max_body_capture_bytes?: number },
 ): void {
     if (!state.begin(sender, {
         capture_id: new_capture_id,
@@ -339,6 +433,11 @@ export function start_network_hook(
     // T121: secret 每次 start 旋转（内联进注入脚本闭包，不写 window）。
     current_secret = _secret_override ?? generate_secret();
     capture_response_body = new_capture_response_body;
+    // t153 AC-005: 随 config 注入 body 上限（缺省回退 100MB，行为等价）
+    max_body_capture_bytes = cfg?.max_body_capture_bytes ?? MAX_BODY_CAPTURE_BYTES;
+    // H3: 记录脱敏配置供接收侧处理
+    redact_data = cfg?.redact_data ?? false;
+    redact_url_query = cfg?.redact_url_query ?? false;
     update_page_nonce(current_nonce);
     inject_page_script();
 
@@ -352,13 +451,17 @@ export function start_network_hook(
         // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
         if (!verify_payload(current_secret, d)) return;
 
+        // H3: fallback 路径 URL 按配置脱敏，url_status 反映结果（不再恒 captured）
+        const redacted_url = redact_url(d.url || '', redact_data && redact_url_query);
         const data = build_network_data({
-            request_id: `hook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            // B3-L2: 自增计数保证同毫秒内不碰撞（旧实现 hook_${Date.now()}_${6位随机} 可能同毫秒同 id）
+            request_id: next_hook_request_id(),
             method: d.method || 'GET',
-            url: d.url || '',
-            url_status: 'captured',
+            url: redacted_url.url,
+            url_status: redacted_url.url_status,
             status_code: typeof d.status === 'number' ? d.status : 0,
-            resource_type: 'fetch',
+            // B3-M7: resource_type 从注入脚本透传（fetch→'fetch'、XHR→'xhr'），不再恒 'fetch'
+            resource_type: (d.resource_type || 'fetch') as NetworkRequestData['resource_type'],
             duration_ms: typeof d.duration_ms === 'number' ? Math.round(d.duration_ms * 100) / 100 : 0,
             request_headers: null,
             response_headers: null,
@@ -371,6 +474,8 @@ export function start_network_hook(
             capture_method: 'fallback_hook',
             body_capture_mode: 'fallback_hook',
             derive_body: false,
+            // t144: fallback 路径 data 带相对时间，供 dashboard timeline 定位
+            relative_time: get_relative_time(state.capture_start_epoch_ms),
         });
 
         state.sender?.(
@@ -390,6 +495,8 @@ export function start_network_hook(
 }
 
 export function stop_network_hook(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在扩展刷新/状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

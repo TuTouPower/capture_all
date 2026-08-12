@@ -93,9 +93,10 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 - **Bridge 端口由用户配置**，禁止硬编码；默认配置中的 `agent_bridge_url` 指向 `http://127.0.0.1:17831` 仅是占位，实际端口以用户配置为准。
 - **MCP 不自动脱敏、不自动摘要、不自动过滤**。工具层不替模型做数据判断。
 - **MCP 不提供删除采集 / 清空数据能力**。
-- **HTML 导出必须转义动态内容**（`</script>` → `<\/script>`，`<`/`>`/`&` 全转义）。
+- **HTML 导出必须转义动态内容**：内嵌 JSON 走 `escape_for_html_embed`（`\`/`'`/`<`/`>`/`&`/U+2028-29 转义，防 `</script>` 注入与 JS 字面量击穿）；HTML 文本/属性上下文走 `escape_html`。
 - **type=password input 永远不被采集**（`value_status: 'not_captured'`）。
 - **脱敏与截断分离**：`redact_data` 控制脱敏；payload size limit（`max_body_capture_bytes` / `inline_text_max_bytes` / console args 1KB / target_text 100 字符）永远生效，不受脱敏开关影响。
+- **脱敏行为跨采集通道一致**：background CDP/web_request 与 content ws/fallback 网络路径均对 URL 套 `redact_url`（按 `redact_data && redact_url_query`）、对文本预览置 `[REDACTED]`；logger 对 credential 形字段名（authorization/cookie/token/secret/password 等）整体脱敏。
 - **所有事件 store 用 `event_id`（`crypto.randomUUID()`）作 keyPath**，`capture_id` 作索引，避免复合主键碰撞。
 - **IndexedDB Console 和 Error 分两个独立 store**（`console.error()` ≠ 运行时异常）。
 - **write_events / write_network_requests / write_console_events 每次调用立即 await flush_store**（不依赖批量 buffer），保证 MV3 SW 回收不丢数据。
@@ -108,14 +109,13 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 
 | 限制 | 值 | 来源 |
 |---|---|---|
-| 单采集大小 | 500 MB | `MAX_SESSION_SIZE_BYTES` |
+| 单采集大小 | 500 MB | `MAX_SESSION_SIZE_BYTES`；字节数持久化到 `CaptureRecord.storage_bytes_written`（持久化基数 + 内存增量，SW 重启后从 IndexedDB 重建基数，t148） |
 | 单采集时长 | 24 小时 | `MAX_SESSION_DURATION_MS` |
 | 单条 body 截断 | 100 MB | `MAX_BODY_CAPTURE_BYTES` |
 | 单条 inline_text | 32 KB | `INLINE_TEXT_MAX_BYTES` |
 | 单条 console arg | 1 KB | `MAX_CONSOLE_ARG_BYTES` |
 | 单条日志上限 | 64 KB | `MAX_LOG_ENTRY_BYTES` |
 | target_text 预览 | 100 字符 | `MAX_TARGET_TEXT_CHARS` |
-| flush 批次 | 100 条 | `FLUSH_BATCH_SIZE`（周期 flush 兜底用） |
 | flush 间隔 | 1000 ms | `FLUSH_INTERVAL_MS`（周期 flush 兜底用） |
 | 导出分页 | 5000 条/页 | `PAGE_SIZE`（循环至耗尽） |
 | CDP events 单次轮询 | 100 条 | `MAX_EVENTS_PER_POLL` |

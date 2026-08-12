@@ -6,6 +6,7 @@ import {
     list_data_sources_from_capture_data,
     list_entries_from_capture_data,
     load_agent_capture_data,
+    type AgentDataSource,
     type AgentSessionData
 } from '../../src/extension/background/agent_data_queries';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../src/shared/types';
@@ -265,6 +266,86 @@ describe('agent data queries', () => {
             'RECORD_NOT_FOUND'
         );
     });
+
+    // ── t151 AC-005: 分页切片边界与结构化错误码补充 ────────────────
+    test('list_entries 分页切片：offset 越界返回空、limit=0 返回空、正常切片', () => {
+        const many = Array.from({ length: 5 }, (_, i) => ({
+            event_id: `nav_${i}`,
+            capture_id: 'capture_1',
+            category: 'navigation',
+            type: 'page_navigation',
+            relative_time_ms: i * 10,
+            tab_id: 1,
+            url: 'https://x',
+            source: 'content_script',
+            severity: 'info',
+            created_at: i,
+            data: {},
+        })) as CaptureEvent[];
+        const d: AgentSessionData = { capture, sources: { ...data.sources, navigation_events: many } };
+
+        const beyond = list_entries_from_capture_data(d, { source: 'navigation_events', offset: 10, limit: 100, order: 'asc' });
+        expect(beyond.total).toBe(5);
+        expect(beyond.records).toHaveLength(0);
+
+        const zero = list_entries_from_capture_data(d, { source: 'navigation_events', offset: 0, limit: 0, order: 'asc' });
+        expect(zero.total).toBe(5);
+        expect(zero.records).toHaveLength(0);
+
+        const page = list_entries_from_capture_data(d, { source: 'navigation_events', offset: 2, limit: 2, order: 'asc' });
+        expect(page.records).toHaveLength(2);
+        expect(page.records[0].record_id).toContain('nav_2');
+        expect(page.records[1].record_id).toContain('nav_3');
+    });
+
+    test('timeline 分页 offset 切片', () => {
+        const r = get_timeline_from_capture_data(data, { offset: 1, limit: 1, order: 'asc' });
+        // data 各 source 按时间升序：mouse(10) → request(20) → page_load(30) → console(40) → error(50)
+        expect(r.records.map((x) => x.record_id)).toEqual(['network_requests:request_1']);
+    });
+
+    test('无效 source → SOURCE_NOT_FOUND', () => {
+        expect(() => list_entries_from_capture_data(data, { source: 'bogus' as AgentDataSource })).toThrow('SOURCE_NOT_FOUND');
+    });
+
+    test('storage_changes 事件 payload 在 event.data 内（AC-004 回归：summary/preview 读 data 字段）', () => {
+        const d = {
+            capture: {},
+            sources: {
+                user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [],
+                storage_changes: [{
+                    event_id: 's1', capture_id: 'c', type: 'storage_change',
+                    relative_time_ms: 50, tab_id: 1, url: '', source: 'test', severity: 'info',
+                    // AC-004: StorageChangeData 在 data 内，非顶层
+                    data: { action: 'set', storage_type: 'local', key: 'theme', origin: 'https://x', value_status: 'captured' },
+                } as CaptureEvent],
+                cookie_changes: [],
+            },
+        };
+        const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
+        expect(res.total).toBe(1);
+        expect(res.records[0].type).toBe('set');
+        expect(res.records[0].summary).toBe('local.set theme');
+        expect(res.records[0].preview).toEqual({ key: 'theme', origin: 'https://x', value_status: 'captured' });
+    });
+
+    test('storage_changes 旧顶层形记录（无 data 键，AC-004 前采集）fallback 读 record 自身不崩溃（f003）', () => {
+        const d = {
+            capture: {},
+            sources: {
+                user_action_events: [], navigation_events: [], network_requests: [], console_events: [], error_events: [],
+                // 旧采集顶层形：StorageChangeData 直接顶层（无 CaptureEvent data 嵌套）
+                storage_changes: [{
+                    action: 'remove', storage_type: 'session', key: 'auth', origin: 'https://y', value_status: 'captured',
+                } as CaptureEvent],
+                cookie_changes: [],
+            },
+        };
+        const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
+        expect(res.total).toBe(1);
+        expect(res.records[0].type).toBe('remove');
+        expect(res.records[0].summary).toBe('session.remove auth');
+    });
 });
 
 describe('load_agent_capture_data', () => {
@@ -423,5 +504,70 @@ describe('load_agent_capture_data', () => {
         expect(result.sources.console_events).toEqual([console_log]);
         expect(result.sources.storage_changes).toEqual([storage_change]);
         expect(result.sources.cookie_changes).toEqual([cookie_change]);
+    });
+
+    // ── t151 AC-005: fetch_all 跨页聚合（满页 5000 后按 offset 续取） ──
+    test('fetch_all 跨页聚合：满页后按 offset 续取，不丢不重', async () => {
+        const cap_multi: CaptureRecord = {
+            capture_id: 'cap_multi',
+            name: 'Multi',
+            status: 'completed',
+            started_at: '1970-01-01T00:00:00.000Z',
+            ended_at: '1970-01-01T00:01:00.000Z',
+            duration_ms: 60000,
+            start_url: 'https://x',
+            end_url: null,
+            tab_id: 1,
+            window_id: null,
+            config_snapshot: {},
+            stats: { event_count: 0, request_count: 0, log_count: 0, error_count: 0, storage_change_count: 0, cookie_change_count: 0 },
+            export_status: 'not_exported',
+            tags: [],
+            created_at: '1970-01-01T00:00:00.000Z',
+            updated_at: '1970-01-01T00:01:00.000Z'
+        };
+
+        const big_page = Array.from({ length: 5000 }, (_, i) => ({
+            event_id: `evt_${i}`,
+            capture_id: 'cap_multi',
+            category: 'user_action',
+            type: 'click',
+            relative_time_ms: i,
+            tab_id: 1,
+            url: 'https://x',
+            source: 'test',
+            severity: 'info',
+            created_at: i,
+            data: {},
+        }));
+        const last = {
+            event_id: 'evt_last',
+            capture_id: 'cap_multi',
+            category: 'user_action',
+            type: 'click',
+            relative_time_ms: 5000,
+            tab_id: 1,
+            url: 'https://x',
+            source: 'test',
+            severity: 'info',
+            created_at: 5000,
+            data: {},
+        };
+
+        vi.mocked(get_capture).mockResolvedValue(cap_multi);
+        vi.mocked(get_events_by_category).mockImplementation(async (_capture_id, category, offset) => {
+            if (category === 'user_action') return offset === 0 ? big_page : [last];
+            return [];
+        });
+        vi.mocked(get_network_requests).mockResolvedValue([]);
+        vi.mocked(get_console_events).mockResolvedValue([]);
+        vi.mocked(get_error_events).mockResolvedValue([]);
+        vi.mocked(get_storage_changes).mockResolvedValue([]);
+        vi.mocked(get_cookie_changes).mockResolvedValue([]);
+
+        const result = await load_agent_capture_data('cap_multi');
+        expect(result.sources.user_action_events).toHaveLength(5001);
+        expect(get_events_by_category).toHaveBeenCalledWith('cap_multi', 'user_action', 0, 5000);
+        expect(get_events_by_category).toHaveBeenCalledWith('cap_multi', 'user_action', 5000, 5000);
     });
 });

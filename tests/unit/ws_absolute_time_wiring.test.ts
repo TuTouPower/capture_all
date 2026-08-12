@@ -78,7 +78,7 @@ function install_chrome_mock(): void {
 function send_message(action: string, payload: Record<string, unknown> = {}): Promise<any> {
     if (!on_message_cb) throw new Error('onMessage listener not registered');
     return new Promise((resolve) => {
-        on_message_cb!({ action, ...payload }, {}, resolve);
+        on_message_cb!({ action, payload }, {}, resolve);
     });
 }
 

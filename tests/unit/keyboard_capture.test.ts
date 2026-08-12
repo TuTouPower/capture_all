@@ -91,4 +91,60 @@ describe('keyboard_capture', () => {
         dispatch_key(document.body, 'a', 'KeyA');
         expect(sender).not.toHaveBeenCalled();
     });
+
+    it('password 输入框 + all 模式 + redact_data=false 时 key/code 仍不采集', () => {
+        start_keyboard_capture(make_config({ keyboard_capture_mode: 'all', redact_data: false }), 'cap1', Date.now(), 1, sender);
+        const input = document.createElement('input');
+        input.type = 'password';
+        document.body.appendChild(input);
+        dispatch_key(input, 's', 'KeyS');
+        expect(sender).toHaveBeenCalledTimes(1);
+        expect(events[0].data.key).toBeNull();
+        expect(events[0].data.code).toBeNull();
+        expect(events[0].data.key_status).toBe('masked');
+        // 元数据保留：target_input_type 仍标记为 password
+        expect(events[0].data.target_input_type).toBe('password');
+    });
+
+    it('password 输入框 + redact_data=false 时 keyup 同样不采集', () => {
+        start_keyboard_capture(make_config({ keyboard_capture_mode: 'all', redact_data: false }), 'cap1', Date.now(), 1, sender);
+        const input = document.createElement('input');
+        input.type = 'password';
+        document.body.appendChild(input);
+        const event = new KeyboardEvent('keyup', { key: 's', code: 'KeyS', bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+        expect(sender).toHaveBeenCalledTimes(1);
+        expect(events[0].data.action).toBe('keyup');
+        expect(events[0].data.key).toBeNull();
+    });
+
+    it('非密码 input 在 redact_data=false 时行为不变', () => {
+        start_keyboard_capture(make_config({ keyboard_capture_mode: 'all', redact_data: false }), 'cap1', Date.now(), 1, sender);
+        const input = document.createElement('input');
+        input.type = 'text';
+        document.body.appendChild(input);
+        dispatch_key(input, 'a', 'KeyA');
+        expect(events[0].data.key).toBe('a');
+        expect(events[0].data.code).toBe('KeyA');
+        expect(events[0].data.key_status).toBe('captured');
+    });
+
+    it('shadow DOM 内 password 输入框击键同样不采集（event.target 被 retarget 为 host）', () => {
+        start_keyboard_capture(make_config({ keyboard_capture_mode: 'all', redact_data: false }), 'cap1', Date.now(), 1, sender);
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const shadow = host.attachShadow({ mode: 'open' });
+        const input = document.createElement('input');
+        input.type = 'password';
+        shadow.appendChild(input);
+        const event = new KeyboardEvent('keydown', {
+            key: 's', code: 'KeyS', bubbles: true, cancelable: true, composed: true,
+        });
+        input.dispatchEvent(event);
+        expect(sender).toHaveBeenCalledTimes(1);
+        // document 级监听器收到的 event.target 是 host（retarget），守卫须经 composedPath 判明实际目标
+        expect(events[0].data.key).toBeNull();
+        expect(events[0].data.code).toBeNull();
+        expect(events[0].data.key_status).toBe('masked');
+    });
 });

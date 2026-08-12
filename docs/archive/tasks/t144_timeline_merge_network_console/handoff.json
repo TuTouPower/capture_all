@@ -1,0 +1,22 @@
+{
+  "tid": "t144",
+  "attempt": 1,
+  "execution_id": "6bf47ca1249049d38c71441d8f7cf034",
+  "status": "done",
+  "branch": "t144_timeline_merge_network_console",
+  "base_sha": "1098bc356e1846128b180fdb530a37c168801dba",
+  "tests": "npm test：全量 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1-5 FAIL → Round 6 PASS（f001-f010 处置，f007 遗留 p035）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t144_timeline_merge_network_console.test.ts：merge_detail_events 并入 network/console（3 事件含 user+net+con），event_kind 分类到对应轨道"],
+    "AC-002": ["tests/unit/t144_timeline_merge_network_console.test.ts：rail 计数 network/console 各 1、all 3"],
+    "AC-003": ["tests/unit/t144_timeline_merge_network_console.test.ts：无 network/console 时不产生虚假类型"],
+    "AC-004": ["dashboard.ts detail_snapshot_signature 变化检测：无变化不整页重渲染"],
+    "AC-005": ["dashboard_detail.ts _tl_dragging（marker + minimap 拖拽置位）轮询跳过"],
+    "AC-006": ["tests/unit/t144_timeline_merge_network_console.test.ts：排序升序 + relative_time_ms 读取（ws/console/content 形状）"],
+    "AC-007": ["既有 detail 测试（timeline_marker/zoom_control/search_preserve_input）保持通过"]
+  },
+  "pending": ["p035"],
+  "findings": []
+}

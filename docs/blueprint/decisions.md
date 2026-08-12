@@ -87,7 +87,7 @@
 
 ## 011 write_events 每次立即 flush（放弃 batch 优化换 durability）（2026-07-19）
 
-- 背景：MV3 SW 可在 buffer 未达 FLUSH_BATCH_SIZE 时被回收，调用方收到成功但数据未落 IndexedDB。
+- 背景：MV3 SW 可在 buffer 未达批次阈值时被回收，调用方收到成功但数据未落 IndexedDB。
 - 选项：A）保持批量 buffer 优化；B）每次 write_events 立即 await flush_store。
 - 结论：选 B。性能代价（失去 batch 合并）换 durability，MV3 SW 回收窗口不再丢数据。flush 失败 batch 放回 buffer 头部重试。详见 T038。
 - 替代：无

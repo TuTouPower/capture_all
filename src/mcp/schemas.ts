@@ -39,46 +39,47 @@ const capture_config_schema = z.object({
     redact_url_query: z.boolean().optional(),
     redact_data: z.boolean().optional(),
     sample_rate_ms: z.number().int().min(0).optional(),
-}).passthrough();
+    // t152 AC-008: 嵌套 config 未知键 strip（丢弃未知配置项，不静默透传）
+}).strip();
 
 // Per-tool schemas
 const get_status_schema = z.object({
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const list_browsers_schema = z.object({
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const start_recording_schema = z.object({
     capture_id: z.string().min(1).optional(),
     config: capture_config_schema.optional(),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const stop_recording_schema = z.object({
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const list_captures_schema = z.object({
     ...query_range_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const get_capture_schema = z.object({
     capture_id: capture_id_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const list_data_sources_schema = z.object({
     capture_id: capture_id_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const list_records_schema = z.object({
     capture_id: capture_id_schema,
@@ -86,7 +87,7 @@ const list_records_schema = z.object({
     ...query_range_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const get_record_schema = z.object({
     capture_id: capture_id_schema,
@@ -94,7 +95,7 @@ const get_record_schema = z.object({
     record_id: z.string().min(1, 'record_id is required'),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const get_timeline_schema = z.object({
     capture_id: capture_id_schema,
@@ -102,21 +103,21 @@ const get_timeline_schema = z.object({
     ...query_range_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const get_timeline_item_schema = z.object({
     capture_id: capture_id_schema,
     item_id: z.string().min(1, 'item_id is required'),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const get_all_capture_data_schema = z.object({
     capture_id: capture_id_schema,
     output_path: z.string().min(1).optional(),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 const export_capture_schema = z.object({
     capture_id: capture_id_schema,
@@ -125,7 +126,7 @@ const export_capture_schema = z.object({
     include_response_body: z.boolean().optional(),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
-}).passthrough();
+}).strict();
 
 // Map tool name -> schema
 // Alias tools (list_sessions, get_session, etc.) share schemas with their primary

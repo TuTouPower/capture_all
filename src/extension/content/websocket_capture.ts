@@ -2,7 +2,12 @@
 import type { CaptureEvent, WsMessageData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
-import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { generate_secret, verify_payload } from './content_hmac';
+import { inject_script_element, page_script_reinstall_guard, page_script_preamble, page_script_restore, report_injection_failure } from './content_page_script';
+import { redact_url } from '../../shared/redaction';
+import { Logger, MessageLogTransport } from '../../shared/logger';
+
+const logger = new Logger('content/websocket', new MessageLogTransport());
 
 const state = create_capture_state<WsMessageData>();
 let current_nonce = '';
@@ -20,21 +25,19 @@ export function _set_secret_for_test(secret: string | null): void {
 
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
+// H3: content 侧 ws_url/消息预览按配置脱敏（与 background CDP ws 路径一致）
+let redact_data = false;
+let redact_url_query = false;
+
 const SIGNAL = '__capture_all_ws__';
 
 // 注入页面脚本字符串（导出便于测试 eval 验证行为）
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
 export function build_page_script(secret: string): string {
     return `(function() {
-    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
-    if (window.__capture_all_ws_installed__) {
-        var prev_hook = window.__capture_all_ws_prev__;
-        if (prev_hook) window.WebSocket = prev_hook;
-    }
-    window.__capture_all_ws_installed__ = true;
-    var SIGNAL = '${SIGNAL}';
-    var SECRET = '${secret}';
-${SYNC_HMAC_JS}
+    // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
+    ${page_script_reinstall_guard('ws', '            window.WebSocket = prev_hook;')}
+    ${page_script_preamble('ws', secret)}
 
     // UTF-8 字节长度（兼容老浏览器，TextEncoder 不存在时用近似）
     function utf8_byte_len(s) {
@@ -142,15 +145,25 @@ function update_page_nonce(nonce: string): void {
         s.textContent = `window.__capture_all_ws_nonce__ = ${JSON.stringify(nonce)};`;
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
-    } catch {
-        // ignore
+    } catch (err) {
+        // t150-f003: nonce 更新失败静默降级（注入脚本用旧 nonce → 消息被拒），debug 级记录
+        logger.debug('update_page_nonce injection failed', { error: String(err) });
     }
 }
 
 function inject_page_script(): void {
+    // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
+    inject_script_element(build_page_script(current_secret), (reason) => {
+        logger.warn('WebSocket page script injection failed', { reason });
+        report_injection_failure('websocket', reason, state, state.sender);
+    });
+}
+
+// t142: stop 时还原 window.WebSocket——注入脚本在 MAIN world，content script 无法直接改 window。
+function restore_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = build_page_script(current_secret);
+        s.textContent = page_script_restore('ws', '            window.WebSocket = prev;');
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -163,12 +176,16 @@ export function start_websocket_capture(
     new_capture_id: string,
     new_capture_start_epoch_ms: number,
     new_tab_id: number,
+    cfg?: { redact_data: boolean; redact_url_query: boolean },
 ): void {
     if (!state.begin(sender, {
         capture_id: new_capture_id,
         capture_start_epoch_ms: new_capture_start_epoch_ms,
         tab_id: new_tab_id,
     })) return;
+    // H3: 记录脱敏配置供接收侧处理
+    redact_data = cfg?.redact_data ?? false;
+    redact_url_query = cfg?.redact_url_query ?? false;
     // T097: nonce 每次 start 旋转并写 window 变量；注入脚本 post() 动态读取，
     // 解耦 stop→start 与扩展重建路径（guard 阻止二次注入后脚本仍发最新 nonce）。
     current_nonce = _nonce_override ?? generate_nonce();
@@ -187,10 +204,15 @@ export function start_websocket_capture(
         // T121: per-message HMAC 校验；签名缺失或不匹配的消息被拒收。
         if (!verify_payload(current_secret, d)) return;
 
+        // H3: ws_url 按配置脱敏；data_preview 在 redact_data 开启时置 '[REDACTED]'（消息长度/方向等元数据保留）
+        const redacted_url = redact_url(d.ws_url ?? '', redact_data && redact_url_query);
+        // H3: 仅当有原始文本预览时脱敏；binary/too_large 原本 data_preview=null 保持 null，不混淆「无文本」与「已脱敏」
+        const raw_preview = d.data_preview ?? null;
         const data: WsMessageData = {
-            ws_url: d.ws_url ?? '',
+            ws_url: redacted_url.url,
+            url_status: redacted_url.url_status,
             direction: d.direction === 'sent' ? 'sent' : 'received',
-            data_preview: d.data_preview ?? null,
+            data_preview: redact_data && raw_preview !== null ? '[REDACTED]' : raw_preview,
             data_bytes: typeof d.data_bytes === 'number' ? d.data_bytes : 0,
             data_status: d.data_status ?? 'captured',
         };
@@ -204,12 +226,15 @@ export function start_websocket_capture(
             source: 'content_script',
         });
 
-        state.sender?.({ ...base, ...data } as CaptureEvent & WsMessageData);
+        // t152 AC-004: payload 放 event.data（与 mouse/keyboard 等模块一致，sender 第二参数合并进 data）
+        state.sender?.(base, data);
     };
     window.addEventListener('message', message_listener, true);
 }
 
 export function stop_websocket_capture(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

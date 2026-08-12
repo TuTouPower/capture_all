@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { create_bridge_server } from '../../src/bridge/server';
 import { BridgeMcpClient } from '../../src/mcp/client';
 import { execute_mcp_tool, MCP_TOOL_NAMES } from '../../src/mcp/tools';
@@ -39,6 +39,8 @@ afterEach(async () => {
         await cleanup();
         cleanup = null;
     }
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 describe('BridgeMcpClient', () => {
@@ -95,6 +97,63 @@ describe('BridgeMcpClient', () => {
         const client = new BridgeMcpClient(server.url, token);
 
         await expect(client.send_command('captures.list', {})).rejects.toThrow('EXTENSION_OFFLINE: Extension is offline');
+    });
+});
+
+describe('BridgeMcpClient timeouts (B1-M3)', () => {
+    it('get_status uses a fixed 10s AbortSignal timeout', async () => {
+        const timeout_spy = vi.spyOn(AbortSignal, 'timeout');
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await client.get_status();
+
+        expect(timeout_spy).toHaveBeenCalledWith(10 * 1000);
+    });
+
+    it('send_command uses timeout_ms + 5s grace for AbortSignal', async () => {
+        const timeout_spy = vi.spyOn(AbortSignal, 'timeout');
+        const server = await start_test_server();
+        const client = new BridgeMcpClient(server.url, token);
+
+        await fetch(`${server.url}/extension/heartbeat`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ instance_id: 'inst_mcp_test', extension_version: '1.0.0', active_capture_id: null }),
+        });
+
+        const cmd_promise = client.send_command('captures.get', { session_id: 's-1' }, 5000);
+        expect(timeout_spy).toHaveBeenCalledWith(10000);
+
+        // drain & resolve the queued command so the fetch settles
+        const command = await take_next_command(server.url);
+        await fetch(`${server.url}/extension/result`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Capture-All-Instance-Id': 'inst_mcp_test' },
+            body: JSON.stringify({ command_id: command.command_id, ok: true, data: { session_id: 's-1' } }),
+        });
+        await cmd_promise;
+    });
+
+    it('wraps a fetch TimeoutError into a clear message', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
+        const client = new BridgeMcpClient('http://127.0.0.1:9', token);
+
+        await expect(client.get_status()).rejects.toThrow('Bridge request timed out after 10000ms');
+    });
+
+    it('full_data 命令（capture.export）缺省用 300s+5s 对齐 bridge full_data_timeout（t150-f001）', async () => {
+        const timeout_spy = vi.spyOn(AbortSignal, 'timeout');
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('{"ok":true}', { status: 200 })));
+        const client = new BridgeMcpClient('http://127.0.0.1:9', token);
+
+        await client.send_command('capture.export', { capture_id: 'c1', format: 'json' });
+        expect(timeout_spy).toHaveBeenCalledWith(305 * 1000);
+
+        // 普通命令无 timeout_ms 仍 120s+5s
+        await client.send_command('captures.list', {});
+        expect(timeout_spy).toHaveBeenCalledWith(125 * 1000);
+        vi.unstubAllGlobals();
     });
 });
 

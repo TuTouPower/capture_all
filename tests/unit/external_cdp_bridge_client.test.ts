@@ -1,4 +1,5 @@
 // tests/external_cdp_bridge_client.test.ts
+import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     detect_external_cdp,
@@ -7,6 +8,7 @@ import {
     stop_external_cdp,
     type ExternalCdpBridgeConfig
 } from '../../src/extension/background/external_cdp_bridge_client';
+import { get_app_log_transport } from '../../src/extension/background/app_log_storage';
 
 const MOCK_CONFIG: ExternalCdpBridgeConfig = {
     bridge_url: 'http://127.0.0.1:17831',
@@ -293,5 +295,28 @@ describe('stop_external_cdp', () => {
         globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
 
         await expect(stop_external_cdp(MOCK_CONFIG, 'sk-gone')).resolves.toBeUndefined();
+    });
+});
+
+// B2-M14: 空 catch 补 warn 日志（行为不变，失败可诊断）
+describe('empty-catch warn logging (B2-M14)', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('detect failure logs a warn entry instead of silent swallow', async () => {
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+        const transport = get_app_log_transport();
+        await transport.clear();
+
+        const result = await detect_external_cdp(MOCK_CONFIG);
+        expect(result.success).toBe(false);
+
+        await transport.flush();
+        const entries = await transport.get_entries(100, 0);
+        const warn = entries.find((e) => e.message === 'CDP detect failed on port');
+        expect(warn).toBeDefined();
+        expect(warn?.level).toBe('warn');
+        expect(warn?.details).toMatchObject({ port: 9222 });
     });
 });

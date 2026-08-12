@@ -55,5 +55,27 @@ describe('BUG-004 contract: content_script uses status polling', () => {
         const stop_section = src.split(/function\s+stop_capture/)[1] ?? '';
         expect(stop_section).toMatch(/stop_status_poll/);
     });
+
+    it('B3-M8: 未知 action 显式 sendResponse 错误响应（通道不挂起）', async () => {
+        const fs = await import('fs');
+        const path = await import('path');
+        const src = fs.readFileSync(
+            path.resolve(__dirname, '..', '..', 'src', 'extension', 'content', 'content_script.ts'),
+            'utf8'
+        );
+        // 未知 action 分支必须调用 sendResponse，否则 return true 后通道永不 resolve
+        expect(src).toMatch(/sendResponse\(\{\s*success:\s*false,\s*error:\s*'unknown_action'\s*\}\)/);
+    });
+
+    it('B3-L6: page_load 时序显式 >0 判断，负值/0 置 null', async () => {
+        const fs = await import('fs');
+        const path = await import('path');
+        const src = fs.readFileSync(
+            path.resolve(__dirname, '..', '..', 'src', 'extension', 'content', 'content_script.ts'),
+            'utf8'
+        );
+        expect(src).toMatch(/load_ms\s*>\s*0\s*\?\s*load_ms\s*:\s*null/);
+        expect(src).toMatch(/dom_ms\s*>\s*0\s*\?\s*dom_ms\s*:\s*null/);
+    });
 });
 

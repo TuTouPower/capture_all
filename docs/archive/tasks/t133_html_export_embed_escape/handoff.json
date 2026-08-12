@@ -1,0 +1,19 @@
+{
+  "tid": "t133",
+  "attempt": 1,
+  "execution_id": "8cd7e9fda2e947f0a22c4809a49be2ef",
+  "status": "done",
+  "branch": "t133_html_export_embed_escape",
+  "base_sha": "d5421189251ad6a703c4d478d84d0e9a2618428b",
+  "tests": "npm test：1404 passed",
+  "blackbox": "npm test + npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test FAIL（f001 假绿已修）→ Round 2 code PASS / test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/exporter.test.ts:199-210 含单引号数据导出 HTML 后经真实 JS 字面量解码可 parse 且 capture_id 完整"],
+    "AC-002": ["tests/unit/exporter.test.ts:212-223 含换行/制表数据导出 HTML 后可 parse 且文本完整"],
+    "AC-003": ["tests/unit/exporter.test.ts:225-239 </script> 注入被转义为 \\u003c\\/script\\u003e 且回灌后文本完整"],
+    "AC-004": ["tests/unit/exporter.test.ts:185-191 extract_embedded_json 用 new Function 走真实 JS 字面量语义，pre-fix 缺陷抛 SyntaxError 捕获回归"]
+  },
+  "pending": [],
+  "findings": []
+}

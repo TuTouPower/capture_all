@@ -3,6 +3,10 @@ import type { CaptureEvent, StorageChangeData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
 import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
+import { inject_script_element, page_script_restore, report_injection_failure } from './content_page_script';
+import { Logger, MessageLogTransport } from '../../shared/logger';
+
+const logger = new Logger('content/storage', new MessageLogTransport());
 
 const state = create_capture_state<StorageChangeData>();
 let current_nonce = '';
@@ -21,6 +25,14 @@ export function _set_secret_for_test(secret: string | null): void {
 let message_listener: ((e: MessageEvent) => void) | null = null;
 
 const SIGNAL = '__capture_all_storage__';
+
+// B3-L5: 敏感 key 名是隐私外延——token/secret/password 匹配的 key 名置 [REDACTED]。
+const SENSITIVE_KEY_RE = /token|secret|password|passwd|credential|api[-_]?key|jwt/i;
+
+function redact_storage_key(key: string | null): string | null {
+    if (key === null) return null;
+    return SENSITIVE_KEY_RE.test(key) ? '[REDACTED]' : key;
+}
 
 // secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
 // 导出便于测试 eval 验证注入脚本级重注入（与 websocket_capture 一致）。
@@ -101,15 +113,31 @@ function update_page_nonce(nonce: string): void {
         s.textContent = `window.__capture_all_storage_nonce__ = ${JSON.stringify(nonce)};`;
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
-    } catch {
-        // ignore
+    } catch (err) {
+        // t150-f003: nonce 更新失败静默降级（注入脚本用旧 nonce → 消息被拒），debug 级记录
+        logger.debug('update_page_nonce injection failed', { error: String(err) });
     }
 }
 
 function inject_page_script(): void {
+    // B3-M3: 注入失败（CSP 拦截 / DOM 异常）诊断——warn 日志 + capture_error 事件
+    inject_script_element(build_page_script(current_secret), (reason) => {
+        logger.warn('Storage page script injection failed', { reason });
+        report_injection_failure('storage', reason, state, state.sender);
+    });
+}
+
+// t142: stop 时还原 localStorage/sessionStorage hook——注入脚本在 MAIN world，content script 无法直接改。
+function restore_page_script(): void {
     try {
         const s = document.createElement('script');
-        s.textContent = build_page_script(current_secret);
+        s.textContent = page_script_restore('storage',
+            '            if (prev.local_setItem) window.localStorage.setItem = prev.local_setItem;\n'
+            + '            if (prev.local_removeItem) window.localStorage.removeItem = prev.local_removeItem;\n'
+            + '            if (prev.local_clear) window.localStorage.clear = prev.local_clear;\n'
+            + '            if (prev.session_setItem) window.sessionStorage.setItem = prev.session_setItem;\n'
+            + '            if (prev.session_removeItem) window.sessionStorage.removeItem = prev.session_removeItem;\n'
+            + '            if (prev.session_clear) window.sessionStorage.clear = prev.session_clear;');
         (document.documentElement || document.head || document.body).appendChild(s);
         s.remove();
     } catch {
@@ -152,7 +180,7 @@ export function start_storage_capture(
         const data: StorageChangeData = {
             storage_type: d.storage_type,
             action,
-            key: d.key ?? null,
+            key: redact_storage_key(d.key ?? null),
             old_value_length: null,
             new_value_length: action === 'set' ? value_length : 0,
             value_status: 'not_captured',
@@ -170,12 +198,15 @@ export function start_storage_capture(
             source: 'content_script',
         });
 
-        state.sender?.({ ...base, ...data } as CaptureEvent & StorageChangeData);
+        // t152 AC-004: payload 放 event.data（与 mouse/keyboard 等模块一致，sender 第二参数合并进 data）
+        state.sender?.(base, data);
     };
     window.addEventListener('message', message_listener, true);
 }
 
 export function stop_storage_capture(): void {
+    // t142: 无条件还原页面 hook（state.end 可能在状态丢失时返回 false，但 MAIN world hook 仍残留）
+    restore_page_script();
     if (!state.end()) return;
     if (message_listener) {
         window.removeEventListener('message', message_listener, true);

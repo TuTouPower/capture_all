@@ -52,14 +52,16 @@ export async function load_agent_capture_data(capture_id: string): Promise<Agent
     }
 
     // t156: 分页聚合统一走 shared/paged_reader 的 fetch_all_records
-    const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes, capture_lifecycle_events] = await Promise.all([
         fetch_all_records((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
         fetch_all_records((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
         fetch_all_records((o, l) => get_network_requests(capture_id, o, l)),
         fetch_all_records((o, l) => get_console_events(capture_id, o, l)),
         fetch_all_records((o, l) => get_error_events(capture_id, o, l)),
         fetch_all_records((o, l) => get_storage_changes(capture_id, o, l)),
-        fetch_all_records((o, l) => get_cookie_changes(capture_id, o, l))
+        fetch_all_records((o, l) => get_cookie_changes(capture_id, o, l)),
+        // t180: lifecycle 视为完整采集证据，Agent 数据源包含 capture_lifecycle_events
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'capture_lifecycle', o, l))
     ]);
 
     return {
@@ -71,7 +73,8 @@ export async function load_agent_capture_data(capture_id: string): Promise<Agent
             console_events,
             error_events,
             storage_changes,
-            cookie_changes
+            cookie_changes,
+            capture_lifecycle_events
         }
     };
 }
@@ -225,6 +228,7 @@ function get_record_type(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
         case 'user_action_events':
         case 'navigation_events':
+        case 'capture_lifecycle_events': // t180: lifecycle 为 CaptureEvent 形态
             return (record as CaptureEvent).type;
         case 'network_requests':
             return is_event_record(record)
@@ -248,7 +252,8 @@ function get_record_type(source: AgentDataSource, record: AgentRecord): string {
 function get_record_summary(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
         case 'user_action_events':
-        case 'navigation_events': {
+        case 'navigation_events':
+        case 'capture_lifecycle_events': { // t180: lifecycle 为 CaptureEvent 形态
             const event = record as CaptureEvent;
             return `${event.type} ${event.url}`;
         }
@@ -286,7 +291,8 @@ function get_record_summary(source: AgentDataSource, record: AgentRecord): strin
 function get_record_preview(source: AgentDataSource, record: AgentRecord): Record<string, unknown> {
     switch (source) {
         case 'user_action_events':
-        case 'navigation_events': {
+        case 'navigation_events':
+        case 'capture_lifecycle_events': { // t180: lifecycle 为 CaptureEvent 形态
             const event = record as CaptureEvent;
             return { url: event.url, tab_id: event.tab_id, frame_id: event.frame_id };
         }
@@ -334,6 +340,7 @@ const SOURCE_STORE: Record<AgentDataSource, string> = {
     error_events: STORE_NAMES.ERROR_EVENTS,
     storage_changes: STORE_NAMES.STORAGE_CHANGES,
     cookie_changes: STORE_NAMES.COOKIE_CHANGES,
+    capture_lifecycle_events: STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, // t180: lifecycle 加入 Agent source
 };
 
 export interface AgentRecordListResultWithToken extends AgentRecordListResult {

@@ -61,18 +61,20 @@ export async function export_json(capture_id: string, options?: ExportOptions): 
     const capture = await get_capture(capture_id);
     if (!capture) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
     const network_requests = strip_body_parts(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
@@ -85,18 +87,20 @@ export async function export_jsonl(capture_id: string, options?: ExportOptions):
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
     const network_requests = strip_body_parts(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
@@ -120,18 +124,20 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
     const network_requests = strip_body_parts(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();

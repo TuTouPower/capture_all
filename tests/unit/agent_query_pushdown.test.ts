@@ -174,9 +174,9 @@ describe('agent 查询下推', () => {
         const net_source = sources.find(s => s.source === 'network_requests');
         expect(net_source?.count).toBe(1);
         // count/range 走索引：count_reads ≥ 1（index.count），keyset 读取仅来自 types 契约扫描
-        // （7 源 × 各 4 条以内的少量记录）——退化 getAll 实现 count_reads=0 会红
+        // （8 源 × 各 4 条以内的少量记录，t180 lifecycle 加入 Agent source）——退化 getAll 实现 count_reads=0 会红
         expect(_storage_stats_for_test.count_reads).toBeGreaterThanOrEqual(1);
-        expect(_storage_stats_for_test.count_reads).toBe(7);
+        expect(_storage_stats_for_test.count_reads).toBe(8);
     });
 
 

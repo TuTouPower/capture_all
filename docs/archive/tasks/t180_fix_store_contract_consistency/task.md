@@ -2,11 +2,11 @@
 tid: "t180"
 slug: "fix_store_contract_consistency"
 title: "IndexedDB store 契约与 lifecycle 可达性"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t180_fix_store_contract_consistency"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "b81d0ab2113563756b8edeca44eba1e8f0f05764"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,23 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t180_code_f001 | important | 待处置 | 已修 | `popup.ts` archive 导出事件合并补 `...snapshot.lifecycle_events`（与 dashboard_shared 一致），同格式 zip 导出跨入口一致 |
+| t180_code_f002 | minor | 待处置 | 已修 | domain.md MCP 枚举 7→8 源、domain.md:135 措辞改「STORE_NAMES 10 个当前 store」、architecture.md 图示 10→14 stores |
+| t180_test_f001 | minor | 提示 | 已修 | 新增行为链路测试：真实写 lifecycle 事件 → load_agent_capture_data 8 源返回 + list_sources_pushdown 汇总（importActual 转发真实读取） |
+| t180_test_f002 | minor | 提示 | 已修 | 新增 merge_detail_events 行为断言（UI 合并结果不含 capture_lifecycle 类别） |
+| t180_test_f003 | minor | 提示 | 已修 | 新增真实 versionchange 路径测试：更高版本 open 触发旧连接关闭、新连接不被 blocked |
+| t180_test_f004 | minor | 提示 | 已修 | agent_data_queries.test.ts 测试名 7→8 源 + 补 capture_lifecycle 类别 toHaveBeenCalledWith 断言 |
+
+## Round 2 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t180_test_f005 | important | 待处置 | 已修 | merge_detail_events 测试改为传含 `lifecycle_events` 的完整 snapshot（as never）——断言输出含普通事件 u1、不含 lifecycle（category/lc1 双断言），消除恒真 |
 
 ### Round 1 场景说明
 

@@ -85,6 +85,8 @@ export const AGENT_DATA_SOURCES = [
     STORE_NAMES.ERROR_EVENTS,
     STORE_NAMES.STORAGE_CHANGES,
     STORE_NAMES.COOKIE_CHANGES,
+    // t180: capture_lifecycle 视为完整采集证据，加入 Agent source（用户决策 2026-08-13）
+    STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
 ] as const;
 
 export const EXPORT_FORMATS = ['json', 'jsonl', 'html', 'har'] as const;

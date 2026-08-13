@@ -20,6 +20,8 @@ export interface CaptureSnapshot {
     error_events: CaptureEvent[];
     storage_changes: CaptureEvent[];
     cookie_changes: CaptureEvent[];
+    // t180: lifecycle 视为完整采集证据（用户决策 2026-08-13），快照包含；UI timeline 不展示（merge_detail_events Pick 不含）
+    lifecycle_events: CaptureEvent[];
 }
 
 // t160 已移除的 SourceCounts/source_counts_from_snapshot/read_capture_snapshot_incremental：
@@ -29,7 +31,7 @@ export interface CaptureSnapshot {
 
 export async function read_capture_snapshot(capture_id: string): Promise<CaptureSnapshot> {
     // t156: 全量分页读取（PAGE_SIZE=5000 逐类耗尽），替代固定 limit=100000 静默截断
-    const [capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_capture(capture_id),
         fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'user_action', offset, limit)),
         fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'navigation', offset, limit)),
@@ -38,8 +40,10 @@ export async function read_capture_snapshot(capture_id: string): Promise<Capture
         fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'error', offset, limit)),
         fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'storage', offset, limit)),
         fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'cookie', offset, limit)),
+        // t180: lifecycle 视为完整采集证据，快照包含
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'capture_lifecycle', offset, limit)),
     ]);
-    return { capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes };
+    return { capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes, lifecycle_events };
 }
 
 // t160 实施调整：IDB cursor 非追加序（event_id 随机 UUID），offset 增量不可靠（review 实证）。

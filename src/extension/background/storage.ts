@@ -35,6 +35,12 @@ export async function init_db(): Promise<IDBDatabase> {
 
         request.onsuccess = () => {
             db = request.result;
+            // t180 AC-004: versionchange 时关闭长连接——不阻塞其他上下文 schema bump；
+            // 关闭后置空 db，下次 init_db 重新 open（indexedDB.open 内部会完成升级事务）。
+            db.onversionchange = () => {
+                db?.close();
+                db = null;
+            };
             resolve(db);
         };
 

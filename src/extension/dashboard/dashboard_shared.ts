@@ -379,6 +379,8 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
                     ...snapshot.error_events,
                     ...snapshot.storage_changes,
                     ...snapshot.cookie_changes,
+                    // t180: lifecycle 视为完整采集证据，archive 导出事件合并包含
+                    ...snapshot.lifecycle_events,
                 ],
                 network_requests: snapshot.network_requests,
                 console_events: snapshot.console_events,

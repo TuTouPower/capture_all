@@ -52,7 +52,7 @@ MCP 工具名用动词短语（`start_recording` / `list_captures`），底层�
 
 `source` / `sources` / `format` 参数为公开枚举，由共享常量派生，与 Bridge/dispatcher 实际接受枚举一致（`src/shared/constants.ts` 的 `AGENT_DATA_SOURCES` / `EXPORT_FORMATS`），MCP Zod schema 禁止非法值在输入边界，不进入 Bridge：
 
-- `source` / `sources`：7 个数据源（`user_action_events` / `navigation_events` / `network_requests` / `console_events` / `error_events` / `storage_changes` / `cookie_changes`）
+- `source` / `sources`：8 个数据源（`user_action_events` / `navigation_events` / `network_requests` / `console_events` / `error_events` / `storage_changes` / `cookie_changes` / `capture_lifecycle_events`，t180 加入）
 - `format`：4 个导出格式（`json` / `jsonl` / `html` / `har`）
 
 ## 3. 内部分类 vs UI 标签
@@ -132,7 +132,11 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | Bridge body 上限 | 1 MiB | `read_json` |
 | 扩展结果回传上限 | 64 MiB | `MAX_EXTENSION_RESULT_BODY_BYTES` |
 
-数据库 `capture_all_db`，`DB_VERSION = 3`，10 stores。详见 `docs/archive/specs/storage.md`。
+数据库 `capture_all_db`，`DB_VERSION = 4`。实际 store 数 = **14**：`STORE_NAMES` 10 个当前 store（captures、7 事件源、capture_lifecycle_events、app_logs）+ 4 个 legacy stores（`sessions` / `events` / `console_logs` / `error_log`，旧版本保留、仅兼容不再写入；upgradeneeded 里若存在则保留不删）。t180 对齐：文档不再宣称 10 stores 为全量。详见 `docs/archive/specs/storage.md`。
+
+### capture_lifecycle_events 可见性（t180）
+
+`capture_lifecycle_events` store 视为完整采集证据（用户决策 2026-08-13）：已持久化事件可经公开查询/归档恢复——包含于 `CaptureSnapshot`（`capture_data_reader.ts`）、export 事件合并（json/jsonl/html/archive zip）与 Agent 数据源（`AGENT_DATA_SOURCES`，8 源）。UI 详情 timeline 仍不展示 lifecycle（`merge_detail_events` 显式 Pick 不含）。
 
 ## 7. 超时策略（Bridge）
 

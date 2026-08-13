@@ -53,7 +53,7 @@ beforeEach(() => {
     read_capture_snapshot.mockResolvedValue({
         capture: { capture_id: 'cap_busy' },
         user_events: [], nav_events: [], error_events: [], storage_changes: [], cookie_changes: [],
-        network_requests: [], console_events: [],
+        network_requests: [], console_events: [], lifecycle_events: [],
     });
     build_archive.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
     download_blob.mockResolvedValue(undefined);
@@ -87,7 +87,7 @@ describe('export_capture 防重入 (p027)', () => {
         resolve_snapshot({
             capture: { capture_id: 'cap_busy' },
             user_events: [], nav_events: [], error_events: [], storage_changes: [], cookie_changes: [],
-            network_requests: [], console_events: [],
+            network_requests: [], console_events: [], lifecycle_events: [],
         });
         await first;
 
@@ -135,7 +135,7 @@ describe('export_capture 防重入 (p027)', () => {
         resolve_snapshot_a({
             capture: { capture_id: 'cap_a' },
             user_events: [], nav_events: [], error_events: [], storage_changes: [], cookie_changes: [],
-            network_requests: [], console_events: [],
+            network_requests: [], console_events: [], lifecycle_events: [],
         });
         await first;
 

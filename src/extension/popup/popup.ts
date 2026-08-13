@@ -282,6 +282,8 @@ function wire_view(): void {
                     ...snapshot.error_events,
                     ...snapshot.storage_changes,
                     ...snapshot.cookie_changes,
+                    // t180: lifecycle 视为完整采集证据，archive 导出事件合并包含（与 dashboard 侧一致）
+                    ...snapshot.lifecycle_events,
                 ],
                 network_requests: snapshot.network_requests,
                 console_events: snapshot.console_events,

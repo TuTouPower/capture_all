@@ -32,7 +32,7 @@ graph TB
         POP["Popup<br/>轻量控制面板"]
         DASH["Dashboard<br/>主面板工作台"]
         DT["DevTools Panel<br/>DevTools 集成"]
-        IDB[("IndexedDB<br/>capture_all_db<br/>10 stores")]
+        IDB[("IndexedDB<br/>capture_all_db<br/>14 stores<br/>(10 当前 + 4 legacy)")]
         BC["Agent Bridge Client<br/>轮询命令 / 回传结果"]
         AQ["Agent Data Queries<br/>数据查询"]
     end

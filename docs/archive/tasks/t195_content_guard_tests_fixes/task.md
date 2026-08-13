@@ -2,11 +2,11 @@
 tid: "t195"
 slug: "content_guard_tests_fixes"
 title: "content 采集守卫行为测试与缺陷修复"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t195_content_guard_tests_fixes"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "d27f39080c667c03a863c7886d83e8b4424d80e7"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,24 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t195_code_f001 | minor | 待处置 | 已修 | generation 守卫恒真用例删除（行为由 capture_state.test.ts 承载）+ 该文件补「新 start 后旧 gen 失活」行为用例（守卫核心） |
+| t195_code_f002 | minor | 待处置 | 已修 | read_clipboard_text null 边界（clipboardData 不可读环境退化双报）注释记录 |
+| t195_code_f003 | minor | 待处置 | 已修 | readText 先读后 emit 的代价（读取抛错不再报 read）注释记录 |
+| t195_test_f001 | important | 需处置 | 已修 | 同 code f001——恒真断言删除，capture_state 补旧 gen 失活行为用例 |
+| t195_test_f002 | minor | 建议 | 已修 | B3-M8 断言锚定 sendResponse(unknown_action_response()) |
+| t195_test_f003 | minor | 建议 | 已修 | clipboard read 路径去重行为测试（paste 同内容 + readText 不双报） |
+| t195_test_f004 | minor | 建议 | 已修 | AC-001 保险丝正则改 `var SIGNAL = '${SIGNAL}'`（旧内联独特标志，模板展开后无） |
+
+## Round 2 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t195_test_f005 | minor | 待处置 | 已修 | 残留未使用 import is_active_generation 删除；capture_state.test.ts 末尾补换行 |
 
 ### Round 1 场景说明
 

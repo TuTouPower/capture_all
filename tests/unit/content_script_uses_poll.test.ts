@@ -64,7 +64,7 @@ describe('BUG-004 contract: content_script uses status polling', () => {
             'utf8'
         );
         // 未知 action 分支必须调用 sendResponse，否则 return true 后通道永不 resolve
-        expect(src).toMatch(/sendResponse\(\{\s*success:\s*false,\s*error:\s*'unknown_action'\s*\}\)/);
+        expect(src).toMatch(/sendResponse\(unknown_action_response\(\)\)/);
     });
 
     it('B3-L6: page_load 时序显式 >0 判断，负值/0 置 null', async () => {

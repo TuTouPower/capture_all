@@ -74,4 +74,15 @@ describe('capture_state', () => {
         expect(is_active_generation(h1.generation)).toBe(false);
         expect(is_active_generation(h2.generation)).toBe(true);
     });
+
+    it('t195 AC-004: 新 start 递增 generation 后旧 gen 失活（守卫核心）', () => {
+        const first = begin_start('cap_a', DEFAULT_CONFIG);
+        first.commit();
+        expect(is_active_generation(first.generation)).toBe(true);
+        // 第二次 start（如 restart）递增 gen——旧 gen 立即失活（await 后守卫拒绝写旧采集）
+        const second = begin_start('cap_b', DEFAULT_CONFIG);
+        expect(is_active_generation(first.generation)).toBe(false);
+        expect(is_active_generation(second.generation)).toBe(true);
+        second.rollback();
+    });
 });

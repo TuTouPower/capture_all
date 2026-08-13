@@ -122,6 +122,8 @@ body {
 /* ── unified capture-data cards (MetricCard) ────────────────────────── */
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .mcard {
+    /* t190 AC-001: button reset（原生控件替代 pointer div） */
+    font-family: inherit; text-align: left; color: inherit; cursor: default;
     display: flex; flex-direction: column; justify-content: center; gap: 5px;
     min-height: 62px; padding: 8px 9px;
     border-radius: 12px; border: 1px solid; background: var(--surface);

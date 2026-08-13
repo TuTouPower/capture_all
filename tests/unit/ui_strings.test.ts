@@ -191,24 +191,19 @@ describe('UI 字符串审计', () => {
         const real_hits = test_violations.filter((v) => {
             const s = v.snippet;
             if (s.includes('.not.toContain(')) return false;
-            if (s.includes('.not.toContain(')) return false;
             if (s.startsWith("'") && s.endsWith("'")) return false;
             if (s.startsWith('"') && s.endsWith('"')) return false;
             return true;
         });
-        if (real_hits.length > 0) {
-            console.log(`[UI审计] tests/ 发现 ${real_hits.length} 处预期外违规`);
-            for (const v of real_hits) {
-                console.log(`  ${v.file}:${v.line} [${v.desc}] ${v.snippet}`);
-            }
+        // t190 AC-004: 信息性用例仅输出（不设恒真断言）；真实门禁由上方 src/ 用例承担
+        for (const v of real_hits) {
+            console.log(`[UI审计] tests/ 发现 ${v.file}:${v.line} [${v.desc}] ${v.snippet}`);
         }
-        // 信息性，不阻塞
-        expect(real_hits.length).toBeLessThanOrEqual(real_hits.length);
     });
 
-    it('manifest.json 不含废弃字符串', () => {
-        const manifest_path = path.resolve(ROOT, 'manifest.json');
-        if (!fs.existsSync(manifest_path)) return;
+    it('manifest.json（真实文件 src/extension/manifest.json）不含废弃字符串', () => {
+        // t190 AC-004: 指向真实 manifest（旧断言读仓库根 manifest.json——不存在即跳过，空洞）
+        const manifest_path = path.resolve(ROOT, 'src', 'extension', 'manifest.json');
         const content = fs.readFileSync(manifest_path, 'utf-8');
         for (const { pattern, desc } of FORBIDDEN) {
             expect(content, `manifest.json 含 "${pattern}" (${desc})`).not.toContain(pattern);

@@ -158,7 +158,11 @@ export async function export_capture(id: string, format: string = 'archive'): Pr
             system_time_timezone: get_user_config().system_time_timezone,
         }, id, ext);
         await download_blob(blob, capture_filename, 'capture_export', get_user_config().export_save_as);
-    } catch (err) { logger.error('Export error', err); }
+    } catch (err) {
+        // t190 AC-002: export failure visible to user (not just log)
+        logger.error('Export error', err);
+        try { alert(t('exportFailed')); } catch { /* alert unavailable: silent */ }
+    }
     finally {
         export_in_flight.delete(key);
     }

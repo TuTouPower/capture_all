@@ -2,11 +2,11 @@
 tid: "t190"
 slug: "fix_dashboard_ui_misc"
 title: "Dashboard/Popup UI 小修复集"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t190_fix_dashboard_ui_misc"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "05bba2f67c2a65d53108155d913f39be9c12d6cd"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,15 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t190_gen_f001 | important | 待处置 | 已修 | `init_locale` 两条路径（storage 恢复/自动检测）均调用 `apply_locale_to_dom` 同步 document.lang；dashboard.html 移除硬编码 `lang="zh"`（由 init 设置） |
+| t190_gen_f002 | minor | 待处置 | 已修 | switch button 加 `aria-label`（可访问名来自 field-lbl 的 t key，6 处调用补全） |
+| t190_gen_f003 | minor | 待处置 | 已修 | mcard 仅 can_toggle 态渲染 button；capturing/saved 态用 div（无 aria-pressed/键盘死按钮） |
+| t190_gen_f004 | minor | 待处置 | 已修 | 补 jsdom 行为断言（button 可聚焦 + click 状态同步；键盘 Enter/Space 为浏览器原生语义标 [deploy]）+ aria 同步/断言加强 |
 
 ### Round 1 场景说明
 

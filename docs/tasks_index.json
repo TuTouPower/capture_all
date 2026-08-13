@@ -94,21 +94,6 @@
             "dir": "docs/tasks/t161_fix_agent_query_pushdown"
         },
         {
-            "tid": "t162",
-            "slug": "fix_ci_e2e_coverage",
-            "title": "CI 接入完整 E2E 与 Python 工具链测试",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t162_fix_ci_e2e_coverage"
-        },
-        {
             "tid": "t163",
             "slug": "strengthen_e2e_assertions",
             "title": "E2E 断言质量补强",
@@ -122,81 +107,6 @@
             "schedule_status": "",
             "note": "",
             "dir": "docs/tasks/t163_strengthen_e2e_assertions"
-        },
-        {
-            "tid": "t164",
-            "slug": "fix_review_scope_fingerprint",
-            "title": "review scope 指纹覆盖未跟踪文件",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t164_fix_review_scope_fingerprint"
-        },
-        {
-            "tid": "t165",
-            "slug": "fix_integrate_transaction",
-            "title": "单 task integrate 增加事务与 merge_sha 校验",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t165_fix_integrate_transaction"
-        },
-        {
-            "tid": "t166",
-            "slug": "fix_chain_lock_and_recovery",
-            "title": "chain integrate 锁覆盖与 index 恢复校验",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t166_fix_chain_lock_and_recovery"
-        },
-        {
-            "tid": "t167",
-            "slug": "fix_repo_tooling_concurrency",
-            "title": "工具链并发与原子性修复集",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t167_fix_repo_tooling_concurrency"
-        },
-        {
-            "tid": "t168",
-            "slug": "fix_tooling_output_bound",
-            "title": "工具链输出路径与监听绑定边界",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t168_fix_tooling_output_bound"
         },
         {
             "tid": "t169",
@@ -484,21 +394,6 @@
             "dir": "docs/tasks/t187_refactor_mcp_bridge_token_dep"
         },
         {
-            "tid": "t188",
-            "slug": "refactor_front_matter_parser",
-            "title": "front matter parser 统一",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t188_refactor_front_matter_parser"
-        },
-        {
             "tid": "t189",
             "slug": "fix_content_state_navigation",
             "title": "content 采集状态与事件正确性修复集",
@@ -572,6 +467,21 @@
             "schedule_status": "",
             "note": "",
             "dir": "docs/tasks/t193_fix_perf_budget_leftovers"
+        },
+        {
+            "tid": "t194",
+            "slug": "ci_e2e_project_coverage",
+            "title": "CI 接入完整 E2E 项目覆盖",
+            "status": "backlog",
+            "branch": "",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/tasks/t194_ci_e2e_project_coverage"
         }
     ]
 }

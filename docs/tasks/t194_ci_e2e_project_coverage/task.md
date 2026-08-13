@@ -1,7 +1,7 @@
 ---
-tid: "t167"
-slug: "fix_repo_tooling_concurrency"
-title: "工具链并发与原子性修复集"
+tid: "t194"
+slug: "ci_e2e_project_coverage"
+title: "CI 接入完整 E2E 项目覆盖"
 status: "backlog"
 branch: ""
 worktree: ""

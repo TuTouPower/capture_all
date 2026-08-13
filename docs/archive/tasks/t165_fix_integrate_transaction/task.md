@@ -1,15 +1,15 @@
 ---
-tid: "t164"
-slug: "fix_review_scope_fingerprint"
-title: "review scope 指纹覆盖未跟踪文件"
-status: "backlog"
+tid: "t165"
+slug: "fix_integrate_transaction"
+title: "单 task integrate 增加事务与 merge_sha 校验"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "full"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: ""
+note: "dropped: repo_template 工具链修复移交外部 agent，本 task 归档"
 ---
 
 # Task 过程总账

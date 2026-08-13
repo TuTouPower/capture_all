@@ -1,15 +1,15 @@
 ---
-tid: "t162"
-slug: "fix_ci_e2e_coverage"
-title: "CI 接入完整 E2E 与 Python 工具链测试"
-status: "backlog"
+tid: "t188"
+slug: "refactor_front_matter_parser"
+title: "front matter parser 统一"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "full"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: ""
+note: "dropped: repo_template 工具链修复移交外部 agent，本 task 归档"
 ---
 
 # Task 过程总账

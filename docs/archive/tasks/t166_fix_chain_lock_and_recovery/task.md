@@ -2,14 +2,14 @@
 tid: "t166"
 slug: "fix_chain_lock_and_recovery"
 title: "chain integrate 锁覆盖与 index 恢复校验"
-status: "backlog"
+status: "dropped"
 branch: ""
 worktree: ""
 review_level: "full"
 diff_anchor: ""
 depends_on: ""
 conflicts_with: ""
-note: ""
+note: "dropped: repo_template 工具链修复移交外部 agent，本 task 归档"
 ---
 
 # Task 过程总账

@@ -205,9 +205,9 @@ describe('MCP schema: output_path / include_response_body', () => {
         const parsed = MCP_TOOL_SCHEMAS.export_capture.parse({
             capture_id: 'cap_1',
             format: 'json',
-            output_path: '/tmp/out.json',
+            output_path: 'exports/out.json',
         });
-        expect(parsed.output_path).toBe('/tmp/out.json');
+        expect(parsed.output_path).toBe('exports/out.json');
     });
 
     it('export_capture accepts include_response_body', async () => {
@@ -233,9 +233,9 @@ describe('MCP schema: output_path / include_response_body', () => {
         const { MCP_TOOL_SCHEMAS } = await import('../../src/mcp/schemas');
         const parsed = MCP_TOOL_SCHEMAS.get_all_capture_data.parse({
             capture_id: 'cap_1',
-            output_path: '/tmp/all.json',
+            output_path: 'exports/all.json',
         });
-        expect(parsed.output_path).toBe('/tmp/all.json');
+        expect(parsed.output_path).toBe('exports/all.json');
     });
 
     it('export_session shares the extended schema', async () => {
@@ -243,10 +243,10 @@ describe('MCP schema: output_path / include_response_body', () => {
         const parsed = MCP_TOOL_SCHEMAS.export_session.parse({
             capture_id: 'cap_1',
             format: 'har',
-            output_path: '/tmp/out.har',
+            output_path: 'exports/out.har',
             include_response_body: false,
         });
-        expect(parsed.output_path).toBe('/tmp/out.har');
+        expect(parsed.output_path).toBe('exports/out.har');
         expect(parsed.include_response_body).toBe(false);
     });
 });

@@ -886,6 +886,9 @@ async function resolve_auto_output_path(payload: Record<string, unknown>): Promi
 // t137: explicit output_path 约束到导出目录内，防路径穿越与符号链接任意写。
 // realpath 解析符号链接后校验真实路径在 base 内（path.resolve 纯词法不解析链接）。
 async function safe_output_path(raw: string, base: string): Promise<string> {
+    // t176: 默认导出目录可能不存在（首次使用）——先安全创建，realpath(base) 才不抛 ENOENT。
+    // 创建前无 symlink 竞争窗口（base 由配置/环境变量指定，非攻击者可控路径）。
+    await mkdir(base, { recursive: true });
     const resolved = resolve(base, raw);
     if (resolved !== base && !resolved.startsWith(base + sep)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path must be inside export dir');
@@ -912,6 +915,13 @@ async function safe_output_path(raw: string, base: string): Promise<string> {
     const resolved_real = resolve(real_parent, remaining);
     if (resolved_real !== base_real && !resolved_real.startsWith(base_real + sep)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path resolves outside export dir');
+    }
+    // t176: 嵌套父目录可能不存在——创建后再 realpath 校验（防 symlink 逃逸窗口：
+    // 若 base 下预置 symlink 指向外部，mkdir 跟随后在真实路径校验处被拒）。
+    await mkdir(dirname(resolved), { recursive: true });
+    const parent_real = await realpath(dirname(resolved));
+    if (parent_real !== base_real && !parent_real.startsWith(base_real + sep)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path parent resolves outside export dir');
     }
     return resolved;
 }

@@ -2,11 +2,11 @@
 tid: "t176"
 slug: "fix_output_path_contract"
 title: "output_path 契约与首次目录 500 修复"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t176_fix_output_path_contract"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "9b9df37746fa4cd3279a1db8c9cb27330e5d348f"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,13 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 20:15 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t176_code_f001|minor|已修|schema refine 补 Windows 根相对（\foo）与 drive-relative（C:foo）拒绝|src/mcp/schemas.ts:16|
+|t176_test_f001|important|已修|AC-003 补断言：嵌套父目录被创建（stat isDirectory），旧实现不创建会红|tests/unit/output_path_contract.test.ts:AC-003|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +67,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 指南相对路径示例；AC-002 base 不存在创建成功；AC-003 嵌套父目录创建 + 再校验；AC-004 绝对/../symlink/schema 拒绝不退化；AC-005 四类测试
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS（1 minor）/ test：FAIL（1 important）
+- Round 2 code：PASS / test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+output_path 契约落地：`safe_output_path` mkdir(base) 前置（解决 ENOENT→500）+ 嵌套父目录创建后 realpath 再校验（symlink 逃逸窗口闭合）；MCP schema 相对路径校验（禁绝对/../Windows 根相对/drive-relative）；指南契约更新（相对路径示例 + file_path 绝对解释）。t137 防护不退化。

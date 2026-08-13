@@ -61,12 +61,12 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 {
   "capture_id": "session-xxx",
   "format": "json",
-  "output_path": "/absolute/path/export.json",
+  "output_path": "exports/session-xxx.json",
   "include_response_body": false
 }
 ```
 
-- `output_path`：Bridge 将导出内容写入本地文件，MCP 只返回 `{ file_path, size_bytes }`
+- `output_path`：导出根目录（`CAPTURE_ALL_EXPORT_DIR`，默认系统临时目录 `capture-all-exports/`）内相对路径/文件名（t176 契约），拒绝绝对路径与 `..`；嵌套父目录自动创建。Bridge 将导出内容写入文件，MCP 只返回 `{ file_path, size_bytes }`（`file_path` 为解析后的绝对路径）
 - `include_response_body: false`：省略 `network_requests[].response_body`（HAR 省略 `entries[].response.content.text`），体积通常从几十 MB 降到 1MB 量级
 - `get_all_capture_data` 也支持 `output_path` / 自动分流，行为同上
 

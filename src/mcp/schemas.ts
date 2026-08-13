@@ -10,6 +10,15 @@ const start_time_schema = z.number().optional();
 const end_time_schema = z.number().optional();
 const target_instance_id_schema = z.string().min(1).optional();
 const target_label_schema = z.string().min(1).optional();
+// t176: output_path 契约——导出根目录内相对路径/文件名；拒绝绝对路径与 ..
+const output_path_schema = z.string().min(1).refine(
+    (p) => {
+        if (p.startsWith('/') || p.startsWith('\\') || /^[a-zA-Z]:/.test(p)) return false;
+        if (p.split(/[\\/]/).includes('..')) return false;
+        return true;
+    },
+    'output_path must be a relative path inside the export dir (no absolute path, no ..)',
+).optional();
 
 const target_schemas = {
     target_instance_id: target_instance_id_schema,
@@ -115,7 +124,7 @@ const get_timeline_item_schema = z.object({
 
 const get_all_capture_data_schema = z.object({
     capture_id: capture_id_schema,
-    output_path: z.string().min(1).optional(),
+    output_path: output_path_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).strict();
@@ -123,7 +132,7 @@ const get_all_capture_data_schema = z.object({
 const export_capture_schema = z.object({
     capture_id: capture_id_schema,
     format: z.string(),
-    output_path: z.string().min(1).optional(),
+    output_path: output_path_schema,
     include_response_body: z.boolean().optional(),
     include_request_body: z.boolean().optional(),
     include_preview: z.boolean().optional(),

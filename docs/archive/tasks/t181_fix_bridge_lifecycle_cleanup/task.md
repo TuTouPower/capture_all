@@ -2,11 +2,11 @@
 tid: "t181"
 slug: "fix_bridge_lifecycle_cleanup"
 title: "Bridge close 与 registry 生命周期清理"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t181_fix_bridge_lifecycle_cleanup"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "089aac35499ed013030efd52a35bb38e530c9952"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,16 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t181_code_f001 | minor | 待处置 | 已修 | AC-003 源码文本断言用例删除（可观测行为已由 AC-001 elapsed<2000 计时断言覆盖），文件头注明 |
+| t181_code_f002 | minor | 待处置 | 已修 | AC-004 重 enroll 断言改为携带原 instance_id——未 sweep 时 existing 分支 403、sweep 后新登记 200，建立判别力 |
+| t181_test_f001 | important | 待处置 | 已修 | 同 code f002——重 enroll body 带 instance_id（原实现生成新随机 id 恒 200 无判别力） |
+| t181_test_f002 | important | 待处置 | 已修 | AC-003 源码正则用例删除；行为由 AC-001 计时断言承担 |
+| t181_test_f003 | minor | 待处置 | 已修 | AC-004 时序窗口 TTL=10ms→100ms，sleep 40→300ms，命令送达竞态消除 |
 
 ### Round 1 场景说明
 

@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, AGENT_ERROR_CODES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import { AgentCommandQueue } from './command_queue';
-import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
+import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop, destroy_all_sessions } from './cdp_handler';
 import { next_default_label } from './label';
 import { bridge_warn } from './logger';
 
@@ -49,6 +49,35 @@ const INLINE_RESULT_MAX_BYTES = 1 * 1024 * 1024;
 const INSTANCE_HEADER = 'x-capture-all-instance-id';
 
 const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture.get_all_data']);
+
+// t181: 过期实例 sweep——TTL + grace 后清理（queue cancel、instance/queue 删除、owner 清理）。
+// 与 cdp_handler 的 _set_*_for_test 同模式提供测试钩子（默认值不变）。
+let _extension_ttl_ms = EXTENSION_TTL_MS;
+let _extension_sweep_grace_ms = 30000;
+export function _set_extension_ttl_for_test(ms: number): void { _extension_ttl_ms = ms; }
+export function _set_extension_sweep_grace_for_test(ms: number): void { _extension_sweep_grace_ms = ms; }
+
+// t181 AC-004: 超过 TTL + grace 的实例被 sweep——cancel pending queue、删除 instance/queue、
+// 清理归属该实例的 command_owners 条目。enroll/heartbeat/status 懒清理（list_online 入口）。
+function sweep_expired_instances(instances: Map<string, ExtensionInstance>, queues: Map<string, AgentCommandQueue>, command_owners: Map<string, string>, now = Date.now()): void {
+    for (const [id, inst] of [...instances.entries()]) {
+        if (now - inst.seen_at <= _extension_ttl_ms + _extension_sweep_grace_ms) continue;
+        instances.delete(id);
+        const queue = queues.get(id);
+        if (queue) {
+            queue.cancel_all();
+            queues.delete(id);
+        }
+        for (const [cmd_id, owner_id] of [...command_owners.entries()]) {
+            if (owner_id === id) {
+                command_owners.delete(cmd_id);
+            }
+        }
+        bridge_warn('extension_swept', { instance_id: id, reason: 'ttl_expired' });
+    }
+}
+
+const GRACEFUL_CLOSE_TIMEOUT_MS = 2000;
 
 export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
     const instances = new Map<string, ExtensionInstance>();
@@ -114,7 +143,9 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     }
 
     function list_online(now = Date.now()): ExtensionInstance[] {
-        return [...instances.values()].filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
+        // t181 AC-004: 懒清理——每次枚举在线实例前先 sweep 过期实例
+        sweep_expired_instances(instances, queues, command_owners, now);
+        return [...instances.values()].filter((inst) => now - inst.seen_at <= _extension_ttl_ms);
     }
 
     function resolve_target(payload: Record<string, unknown>): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'TARGET_AMBIGUOUS' | 'EXTENSION_OFFLINE'; message: string } } {
@@ -169,11 +200,14 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
     }
 
     function build_status(port: number): AgentStatus {
+        // t181 AC-004: status 懒清理过期实例（sweep 在 status/enroll/heartbeat 入口触发）
+        sweep_expired_instances(instances, queues, command_owners);
         const now = Date.now();
         const all = [...instances.values()];
-        const online = all.filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
+        // t181: 统一用 _extension_ttl_ms（测试钩子可注入；sweep 在 list_online 已执行）
+        const online = all.filter((inst) => now - inst.seen_at <= _extension_ttl_ms);
         const extensions = all.map((inst) => {
-            const is_on = now - inst.seen_at <= EXTENSION_TTL_MS;
+            const is_on = now - inst.seen_at <= _extension_ttl_ms;
             const queue = queues.get(inst.instance_id);
             return {
                 instance_id: inst.instance_id,
@@ -287,6 +321,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/enroll') {
+                // t181 AC-004: enroll 入口懒清理过期实例（registry 不无限增长）
+                sweep_expired_instances(instances, queues, command_owners);
                 // t169 SEC-001: chrome-extension origin 形状可伪造（本地进程可构造 header），
                 // 不再作首次登记主凭据。首次 enroll（新 instance_id）要求真正 secret——
                 // MCP Bearer token 或有效 pairing code（/pair/open 持 token 打开后 code 才有效）。
@@ -430,6 +466,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/heartbeat') {
+                // t181 AC-004: heartbeat 入口懒清理过期实例
+                sweep_expired_instances(instances, queues, command_owners);
                 const body = validate_heartbeat(await read_json(request));
                 if (auth_instance_id && auth_instance_id !== body.instance_id) {
                     bridge_warn('auth_failed', { path: request.url, reason: 'heartbeat_instance_mismatch' });
@@ -495,7 +533,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     });
                 }
                 const inst = instances.get(instance_id);
-                if (!inst || Date.now() - inst.seen_at > EXTENSION_TTL_MS) {
+                if (!inst || Date.now() - inst.seen_at > _extension_ttl_ms) {
                     return send_json(response, 503, {
                         ok: false,
                         error: { code: 'EXTENSION_OFFLINE', message: 'Instance is offline; send heartbeat first' },
@@ -654,7 +692,34 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
 
     return {
         url: `http://${config.host}:${actual_port(server)}`,
-        close: () => new Promise((resolve) => server.close(() => resolve())),
+        close: async () => {
+            // t181 AC-001: 先 cancel 所有 pending command——COMMAND_CANCELLED 终态，
+            // 不阻塞至 timeout（/mcp/command 可 await 至 300s）
+            for (const queue of queues.values()) {
+                queue.cancel_all();
+            }
+            queues.clear();
+            // AC-002: 关闭全部 CDP sessions（WS/timer/映射），不阻止进程退出
+            destroy_all_sessions();
+            // 清理 registry
+            instances.clear();
+            command_owners.clear();
+            // AC-003: 有界 graceful close——先 server.close 等正常结束，超时再强制 closeAllConnections
+            await new Promise<void>((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(() => {
+                    try { server.closeAllConnections?.(); } catch { /* best-effort */ }
+                    finish();
+                }, GRACEFUL_CLOSE_TIMEOUT_MS);
+                server.close(() => finish());
+            });
+        },
         _server: server,
     };
 }

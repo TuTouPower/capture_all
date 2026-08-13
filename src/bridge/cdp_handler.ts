@@ -156,6 +156,13 @@ function destroy_session(session_key: string): void {
     sessions.delete(session_key);
 }
 
+// t181 AC-002: Bridge close 时销毁全部 CDP sessions（WS/timer/映射），不阻止进程退出
+export function destroy_all_sessions(): void {
+    for (const key of [...sessions.keys()]) {
+        destroy_session(key);
+    }
+}
+
 // t158: 建连成功后 WS 异常关闭/错误 → 终态化 session（幂等）。
 // 终态化所有 pending 事件、关闭 WS；session 保留在 map 中供 /cdp/events 返回 410（terminal 可观察），
 // 并设 terminal TTL（5 分钟）自动销毁——即使调用方不主动 stop，内存也被回收（t158 f001）。

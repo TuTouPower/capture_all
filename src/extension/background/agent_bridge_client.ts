@@ -245,14 +245,19 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
 
 async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token?: string): Promise<{ instance_id: string; instance_token: string }> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    // T091: bridge_token 可选 —— 缺省时依赖 chrome-extension origin 由 Bridge 直通。
     if (bridge_token) {
         headers.Authorization = `Bearer ${bridge_token}`;
+    }
+    // t169 SEC-001: 无配置 token 时自动获取 pairing code（MCP 客户端持 token 调 /pair/open 后
+    // code 有效；扩展从 /pair/status 读取）——真实扩展零配置自动连接，不依赖可伪造的 Origin。
+    let pairing_code: string | undefined;
+    if (!bridge_token) {
+        pairing_code = await resolve_pairing_code(url);
     }
     const response = await fetch(`${url}/extension/enroll`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id }),
+        body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id, pairing_code }),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);
@@ -260,6 +265,18 @@ async function enroll(url: string, browser_label: string, extension_version: str
     const body = await response.json();
     if (!body.ok) throw new Error(body.error?.message || 'Enroll failed');
     return body.data;
+}
+
+// t169: 读取 Bridge pairing 状态（open 时返回 code）。loopback fetch 由扩展 host_permissions 覆盖。
+async function resolve_pairing_code(bridge_url: string): Promise<string | undefined> {
+    try {
+        const res = await fetch(`${bridge_url}/pair/status`);
+        if (!res.ok) return undefined;
+        const body = await res.json() as { data?: { open: boolean; code: string | null } };
+        return body?.data?.open ? body.data.code ?? undefined : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps, browser_label?: string): Promise<void> {

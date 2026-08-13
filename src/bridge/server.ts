@@ -1,8 +1,8 @@
 import http from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { AgentCommandQueue } from './command_queue';
@@ -58,6 +58,50 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         code: null,
         expires_at: 0,
     };
+
+    // t169: 已绑定实例持久化（重启恢复，instance token 机制不中断）。best-effort 写盘。
+    function persist_instances(): void {
+        if (!config.instances_file) return;
+        const data = [...instances.entries()].map(([id, inst]) => ({ id, ...inst }));
+        void (async () => {
+            try {
+                await mkdir(dirname(config.instances_file!), { recursive: true });
+                await writeFile(config.instances_file!, JSON.stringify(data), { mode: 0o600 });
+            } catch {
+                // best-effort：持久化失败不阻断运行
+            }
+        })();
+    }
+
+    // t169: 启动加载已绑定实例（token hash 持久化，非明文 token）
+    if (config.instances_file) {
+        try {
+            const raw = await readFile(config.instances_file, 'utf8');
+            const loaded = JSON.parse(raw) as Array<ExtensionInstance & { id: string }>;
+            for (const item of loaded) {
+                instances.set(item.id, {
+                    instance_id: item.instance_id,
+                    extension_version: item.extension_version,
+                    active_capture_id: item.active_capture_id,
+                    browser_label: item.browser_label,
+                    token_hash: item.token_hash,
+                    seen_at: item.seen_at,
+                    origin_extension_id: item.origin_extension_id,
+                });
+            }
+        } catch {
+            // 无文件/损坏：从空开始
+        }
+    }
+
+    // t169 AC-003: 启动自动 open pairing（安全分发 credential 承接零配置：
+    // MCP token 文件 0600 本机 owner 可读 = 同用户已授权；伪造者同用户本可读 token，
+    // pairing code 不新增暴露面）。code 一次性消费（enroll 成功后关闭）。
+    if (config.pairing_auto_open !== false) {
+        pairing_state.open = true;
+        pairing_state.code = generate_pairing_code();
+        pairing_state.expires_at = Date.now() + PAIRING_DEFAULT_DURATION_MS;
+    }
 
     function get_or_create_queue(instance_id: string): AgentCommandQueue {
         let queue = queues.get(instance_id);
@@ -242,31 +286,44 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'POST' && request.url === '/extension/enroll') {
-                // T091: loopback + chrome-extension origin 直通 enroll，pairing 不再强制。
-                // 保留 mcp token 路径作为可选；pairing 端点保留作为跨机/手动场景的可选增强。
+                // t169 SEC-001: chrome-extension origin 形状可伪造（本地进程可构造 header），
+                // 不再作首次登记主凭据。首次 enroll（新 instance_id）要求真正 secret——
+                // MCP Bearer token 或有效 pairing code（/pair/open 持 token 打开后 code 才有效）。
+                // 重 enroll（既有 instance_id）沿用 t137 origin 扩展 ID 绑定校验放行（真实扩展重启）。
                 const has_mcp = is_authorized(request, config.token);
                 const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
-                if (!has_mcp && !has_ext_origin) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'enroll_no_credential' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Enroll requires chrome-extension origin or mcp token' },
-                    });
-                }
 
                 const body = validate_enroll(await read_json(request));
                 const instance_id = body.instance_id || `inst_${randomBytes(8).toString('hex')}`;
+                const ext_id = has_ext_origin ? extension_id_from_origin(origin!) : null;
+                let pairing_valid = false; // t169: 首次门槛与 pairing 消费共用
 
-                // T091: pairing 仅当扩展显式传 pairing_code 时校验（可选增强）；默认不要求。
-                if (!has_mcp && body.pairing_code) {
-                    const allowed = is_enroll_allowed(pairing_state, body.pairing_code);
-                    if (!allowed) {
+                // t137: 已有 instance_id 时校验 Origin 扩展 ID 绑定——同扩展重启重 enroll 用同
+                // Origin 扩展 ID 放行；伪造 origin 顶替因扩展 ID 不匹配被拒。
+                const existing = instances.get(instance_id);
+                if (existing) {
+                    if (ext_id === null) {
+                        // 无扩展 origin（mcp token 路径）无法验证扩展绑定，不允许顶替既有实例
                         return send_json(response, 403, {
                             ok: false,
-                            error: {
-                                code: 'PAIRING_REQUIRED',
-                                message: 'Pairing code rejected. Open /pair page on this machine to allow this browser, or omit pairing_code for loopback auto-enroll.',
-                            },
+                            error: { code: 'TOKEN_INVALID', message: 'Re-enroll requires matching chrome-extension origin' },
+                        });
+                    }
+                    if (existing.origin_extension_id !== null && existing.origin_extension_id !== ext_id) {
+                        // 扩展 ID 与首次登记不一致 → 攻击顶替
+                        return send_json(response, 403, {
+                            ok: false,
+                            error: { code: 'TOKEN_INVALID', message: 'Origin extension id mismatch: re-enroll rejected' },
+                        });
+                    }
+                } else {
+                    // t169 SEC-001: 首次登记必须携带真正 secret（Origin 形状可伪造不作凭据）
+                    pairing_valid = is_enroll_allowed(pairing_state, body.pairing_code);
+                    if (!has_mcp && !pairing_valid) {
+                        bridge_warn('auth_failed', { path: request.url, reason: 'enroll_no_credential' });
+                        return send_json(response, 401, {
+                            ok: false,
+                            error: { code: 'TOKEN_INVALID', message: 'Enroll requires mcp token or valid pairing code' },
                         });
                     }
                 }
@@ -277,8 +334,6 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 // T091: label 为空时按现有在线实例自动分配中文默认编号（一/二/三…）。
                 // Replace any existing binding with the same non-empty label (extension restart path);
                 // 自定义 label 顶替旧实例；自动编号 label 不会冲突（next_default_label 已避开占用）。
-                // t137: Origin 扩展 ID 提取（label 顶替与 instance_id 顶替校验共用）
-                const ext_id = has_ext_origin ? extension_id_from_origin(origin!) : null;
                 const provided_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
                 const new_label = provided_label ?? next_default_label(
                     [...instances.values()]
@@ -309,25 +364,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     }
                 }
 
-                // t137: 已有 instance_id 时校验 Origin 扩展 ID 绑定（s003 spike 结论）——
-                // 同扩展重启重 enroll 用同 Origin 扩展 ID 放行；伪造 origin 顶替因扩展 ID 不匹配被拒。
-                const existing = instances.get(instance_id);
-                if (existing) {
-                    if (ext_id === null) {
-                        // 无扩展 origin（mcp token 路径）无法验证扩展绑定，不允许顶替既有实例
-                        return send_json(response, 403, {
-                            ok: false,
-                            error: { code: 'TOKEN_INVALID', message: 'Re-enroll requires matching chrome-extension origin' },
-                        });
-                    }
-                    if (existing.origin_extension_id !== null && existing.origin_extension_id !== ext_id) {
-                        // 扩展 ID 与首次登记不一致 → 攻击顶替
-                        return send_json(response, 403, {
-                            ok: false,
-                            error: { code: 'TOKEN_INVALID', message: 'Origin extension id mismatch: re-enroll rejected' },
-                        });
-                    }
-                }
+                // t169: 首次/重 enroll 门槛已在上方（existing → t137 origin 校验；!existing → secret 要求）。
 
                 instances.set(instance_id, {
                     instance_id,
@@ -339,6 +376,14 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     origin_extension_id: ext_id,
                 });
                 get_or_create_queue(instance_id);
+                persist_instances();
+
+                // t169: pairing code 一次性消费——用 pairing 完成 enroll 后关闭（窗口内单次使用）
+                if (!has_mcp && pairing_valid) {
+                    pairing_state.open = false;
+                    pairing_state.code = null;
+                    pairing_state.expires_at = 0;
+                }
 
                 return send_json(response, 200, {
                     ok: true,
@@ -436,6 +481,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     origin_extension_id: prev?.origin_extension_id ?? null,
                 });
                 get_or_create_queue(body.instance_id);
+                persist_instances();
                 return send_json(response, 200, { ok: true });
             }
 

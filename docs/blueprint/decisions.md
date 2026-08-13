@@ -140,7 +140,7 @@
 - 背景：扩展装上要用户手填 Token 并通过 `/pair` 配对码才能首次 enroll；MCP 客户端 `.mcp.json` 硬编码 Token 又与 SessionStart hook 自生成 Token 对不上，整条链路对普通用户不可用。
 - 选项：A）保持 pairing 硬门槛 + 手填 Token；B）loopback 内凭 chrome-extension origin 直通 enroll，Bridge 自生成 MCP Token，MCP 客户端按 `env > 持久化文件`自动读取，扩展未填 label 时按到达顺序自动编号。
 - 结论：选 B。
-    - **Bridge enroll**：去掉「扩展 origin + 非 dev_mode 必须过 pairing」硬门槛；保留 `is_allowed_extension_origin`（`chrome-extension://<32-char-id>`）防本机非扩展页面伪造。pairing 端点保留为可选增强（扩展显式传 `pairing_code` 才校验；跨机 / 高安全场景）。
+    - **Bridge enroll**：~~去掉「扩展 origin + 非 dev_mode 必须过 pairing」硬门槛~~ **（t169/ADR-023 已推翻：首次登记要求 MCP token 或有效 pairing code，Origin 仅附加校验；重 enroll 保持 origin 绑定校验）**；`is_allowed_extension_origin` 仅作附加一致性校验。pairing 端点保留（跨机 / 高安全场景）。
     - **自动编号**：扩展 enroll 时未传 label，Bridge 调 `next_default_label` 分配默认编号（`1 号` / `2 号` / `3 号` …，跳过自定义 label，取已用最大序号 +1）。自定义 label 顶替逻辑保留；自动编号 label 由 `next_default_label` 保证唯一不触发顶替。heartbeat 未传 label 时保留已分配的默认编号（覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号）。
     - **MCP token 文件回退**：`resolve_client_token(env, file_path)` env 优先，缺省读 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。`.mcp.json` 默认不再出现明文 Token。
 - 安全不变量：instance_token 与 MCP token 仍分离（硬约束保留）；自登记端点仅签发 instance_token，不暴露 MCP token；保留 127.0.0.1 绑定。
@@ -181,3 +181,12 @@
 - 选项：A）保留全量加载 + 内存过滤；B）storage 层 keyset 分页（复合索引 `[capture_id, relative_time_ms, event_id]` + `IDBKeyRange.bound` 双界），谓词/order/limit 推入 IndexedDB。
 - 结论：选 B（DB_VERSION 3→4 迁移补复合索引，s006 spike + d008 实证）。keyset token = 末条 (relative_time_ms, event_id)，下界闭（cursor 停在「下一条起点」）；页读取量 O(limit)、页间时间序一致、capture 隔离、同刻按 event_id 继续。`data.get`/`timeline.get` 主键点查（store.get）；`sources.list` count/range 用 index.count + first/last cursor（不读记录体），types 为契约字段保留扫描；`captures.list` 用 started_at 索引方向直接排序 + count() total。对外返回契约不变（AC-005 gate）；纯函数路径保留供 get_all_data 与契约对拍。
 - 替代：A（基线）。全量遍历（get_all_data/export）保留，仅内部游标效率改进。
+
+## 023 首次 enroll 认证模型：Origin 不作主凭据（2026-08-13）
+
+- 背景：`/extension/enroll` 首次登记仅凭合法形状 `chrome-extension://[a-p]{32}` Origin 放行——Origin 是客户端可构造 header，本地进程可伪造，不证明请求来自真实扩展（SEC-001）。t137 只防不同扩展 ID 顶替既有绑定，未建立首次登记身份。
+- 选项：A）保留 loopback origin 直通（T091 零配置）；B）首次登记要求真正 secret：MCP Bearer token 或有效 pairing code（/pair/open 持 token 打开后 code 才有效），Origin 仅附加一致性校验。
+- 结论：选 B（supersede 018 的 origin 直通条款）。重 enroll（既有 instance_id）沿用 t137 origin 扩展 ID 绑定校验放行（真实扩展重启不受影响）。零配置体验由安全分发承接：MCP 客户端（读 0600 token 文件）调 /pair/open → 扩展从 /pair/status 自动取 pairing code enroll（无人工手填 token，扩展侧 resolve_pairing_code）。
+  - **零配置落地**：Bridge 启动默认自动 open pairing（`pairing_auto_open`，可关）——真实扩展从 `/pair/status` 自动取 code 完成首次 enroll（扩展侧 `resolve_pairing_code`），无需人工手填；code 一次性消费（enroll 成功后关闭）。威胁模型：伪造者同用户本可读 0600 token 文件，pairing code 不新增暴露面。
+  - **重启恢复**：已绑定实例（token hash + 元数据）持久化到 `instances_file`，bridge 重启后 heartbeat/重 enroll 不中断（instance token 机制保留）。
+- 替代：A（T091 基线，origin 直通已被本 ADR 移除）。pairing 端点保留（跨机/高安全场景；`pairing_auto_open:false` 时需显式 /pair/open）。

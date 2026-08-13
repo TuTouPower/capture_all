@@ -11,7 +11,7 @@ const DEFAULT_INSTANCE_ID = 'inst_test_1';
 const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
 let cleanup: (() => Promise<void>) | null = null;
 
-async function start_test_server(overrides?: { dev_mode?: boolean }) {
+async function start_test_server(overrides?: { dev_mode?: boolean; pairing_auto_open?: boolean }) {
     const server = await create_bridge_server({
         host: '127.0.0.1',
         port: 0,
@@ -19,6 +19,7 @@ async function start_test_server(overrides?: { dev_mode?: boolean }) {
         command_timeout_ms: 30000,
         full_data_timeout_ms: 120000,
         dev_mode: overrides?.dev_mode ?? false,
+        pairing_auto_open: overrides?.pairing_auto_open ?? false,
     });
     cleanup = server.close;
     return server;
@@ -1501,6 +1502,8 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
+                // t169: 首次登记需真正 secret——带 MCP token（Origin 仅附加校验）
+                Authorization: `Bearer ${token}`,
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
@@ -1529,11 +1532,13 @@ describe('bridge server', () => {
         expect(typeof json.data.instance_token).toBe('string');
     });
 
-    it('AC-1: S0 dev_mode allows extension enroll without pairing', async () => {
+    it('AC-1: S0 dev_mode allows extension enroll with mcp token', async () => {
         const server = await start_test_server({ dev_mode: true });
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
+                // t169: 首次登记需 secret（dev_mode 不豁免 Origin 伪造面）
+                Authorization: `Bearer ${token}`,
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
@@ -1634,9 +1639,9 @@ describe('bridge server', () => {
         expect(typeof json.data.instance_token).toBe('string');
     });
 
-    it('T091: extension enroll without pairing_code succeeds even when pairing window open (loopback bypass)', async () => {
+    it('T091 (t169): extension enroll with pairing code from open window succeeds', async () => {
         const server = await start_test_server();
-        await fetch(`${server.url}/pair/open`, {
+        const open_res = await fetch(`${server.url}/pair/open`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -1644,15 +1649,16 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({}),
         });
+        const { pairing_code } = (await open_res.json()).data;
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
+            // t169: 无 token 时凭有效 pairing code 完成首次 enroll（零配置路径）
+            body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code }),
         });
-        // T091: 不传 pairing_code 即不走 pairing 校验，loopback 直通
         expect(response.status).toBe(200);
         const json = await response.json();
         expect(json.ok).toBe(true);
@@ -1701,8 +1707,9 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code: '000000' }),
         });
-        expect(response.status).toBe(403);
-        expect((await response.json()).error.code).toBe('PAIRING_REQUIRED');
+        // t169: 无 token + 错误 pairing code → 首次登记无有效 secret，401 拒绝
+        expect(response.status).toBe(401);
+        expect((await response.json()).error.code).toBe('TOKEN_INVALID');
     });
 
     it('AC-3: enroll with pairing_code after pairing expires is rejected', async () => {
@@ -1725,7 +1732,8 @@ describe('bridge server', () => {
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0', pairing_code }),
         });
-        expect(response.status).toBe(403);
+        // t169: 过期 pairing code 无有效 secret → 401
+        expect(response.status).toBe(401);
     });
 
     it('AC-4: existing heartbeat with valid token bypasses pairing', async () => {
@@ -1750,17 +1758,18 @@ describe('bridge server', () => {
         expect(response.status).toBe(200);
     });
 
-    it('T091: extension enroll without pairing_code succeeds when pairing window closed (loopback bypass)', async () => {
+    it('T091: extension enroll succeeds when pairing window closed (with mcp token)', async () => {
         const server = await start_test_server();
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
+                // t169: MCP token 是首次登记 secret（配对窗口状态无关）
+                Authorization: `Bearer ${token}`,
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ browser_label: 'work', extension_version: '1.0.0' }),
         });
-        // T091: pairing 窗口关 + 不传 pairing_code = loopback 直通
         expect(response.status).toBe(200);
         const json = await response.json();
         expect(json.ok).toBe(true);
@@ -1773,6 +1782,8 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
             headers: {
+                // t169: 首次登记带 MCP token（label 自动编号语义不变）
+                Authorization: `Bearer ${token}`,
                 Origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                 'Content-Type': 'application/json',
             },
@@ -1788,17 +1799,17 @@ describe('bridge server', () => {
         const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
         const r1 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         })).json();
         const r2 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         })).json();
         const r3 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         })).json();
         expect(r1.data.browser_label).toBe('1 号');
@@ -1812,13 +1823,13 @@ describe('bridge server', () => {
         // 自定义 label 先入
         const r1 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ browser_label: '工作机', extension_version: '1.0.0' }),
         })).json();
         // 空 label 自动编号 → 1 号
         const r2 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         })).json();
         expect(r1.data.browser_label).toBe('工作机');
@@ -1831,7 +1842,7 @@ describe('bridge server', () => {
         // 首次 enroll 不传 label → 分配「1 号」
         const enroll_res = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
@@ -1857,7 +1868,7 @@ describe('bridge server', () => {
         // 首次 enroll 不传 label → 分配「1 号」
         const enroll_res = await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         });
         const { instance_id, instance_token } = (await enroll_res.json()).data;
@@ -1879,13 +1890,13 @@ describe('bridge server', () => {
         // 自定义 label 显式设为「1 号」
         const r1 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ browser_label: '1 号', extension_version: '1.0.0' }),
         })).json();
         // 空 label 自动编号 → 应跳过「1 号」拿「2 号」（自定义占用了序号 1）
         const r2 = await (await fetch(`${server.url}/extension/enroll`, {
             method: 'POST',
-            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            headers: { Authorization: `Bearer ${token}`, Origin: origin, 'Content-Type': 'application/json' },
             body: JSON.stringify({ extension_version: '1.0.0' }),
         })).json();
         expect(r1.data.browser_label).toBe('1 号');

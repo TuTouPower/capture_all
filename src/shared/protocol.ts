@@ -63,6 +63,11 @@ export interface AgentBridgeConfig {
     command_timeout_ms: number;
     full_data_timeout_ms: number;
     dev_mode?: boolean;
+    /** t169: 启动时自动 open pairing（真实扩展经 /pair/status 取 code 完成首次零配置 enroll）。
+     *  默认 true；高安全场景设 false（需显式 /pair/open）。code 一次性消费，窗口有限。 */
+    pairing_auto_open?: boolean;
+    /** t169: 已绑定实例持久化文件（重启恢复，instance token 机制不中断）。默认缺省不持久化。 */
+    instances_file?: string;
 }
 
 export interface ExtensionBridgeConfig {

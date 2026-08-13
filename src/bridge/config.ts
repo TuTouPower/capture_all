@@ -7,6 +7,8 @@ interface RawBridgeConfig {
     host?: string;
     port?: number;
     token?: string;
+    pairing_auto_open?: boolean;
+    instances_file?: string;
     command_timeout_ms?: number;
     full_data_timeout_ms?: number;
 }
@@ -34,15 +36,19 @@ export function parse_bridge_config(raw: RawBridgeConfig): AgentBridgeConfig {
         token: raw.token,
         command_timeout_ms: raw.command_timeout_ms ?? 120000,
         full_data_timeout_ms: raw.full_data_timeout_ms ?? 300000,
+        pairing_auto_open: raw.pairing_auto_open ?? true,
+        instances_file: raw.instances_file,
     };
 }
 
 export function parse_bridge_cli_args(
     argv: string[],
-    env: { CAPTURE_ALL_BRIDGE_TOKEN?: string } = process.env,
+    env: { CAPTURE_ALL_BRIDGE_TOKEN?: string; CAPTURE_ALL_INSTANCES_FILE?: string; CAPTURE_ALL_PAIRING_AUTO_OPEN?: string } = process.env,
 ): RawBridgeConfig {
     const raw: RawBridgeConfig = {
         token: env.CAPTURE_ALL_BRIDGE_TOKEN || undefined,
+        instances_file: env.CAPTURE_ALL_INSTANCES_FILE || undefined,
+        pairing_auto_open: env.CAPTURE_ALL_PAIRING_AUTO_OPEN === '0' || env.CAPTURE_ALL_PAIRING_AUTO_OPEN === 'false' ? false : undefined,
     };
 
     for (let index = 0; index < argv.length; index += 1) {

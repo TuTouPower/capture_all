@@ -2,11 +2,11 @@
 tid: "t194"
 slug: "ci_e2e_project_coverage"
 title: "CI 接入完整 E2E 项目覆盖"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t194_ci_e2e_project_coverage"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "18f891abc7c72cc0b9692d72513d28a784ca3e4a"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,16 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t194_code_f001 | minor | 建议修复 | 已修 | guard 改用相对 e2e 目录完整路径匹配（--list 输出含子目录路径），防未来同名 spec 真孤儿漏报 |
+| t194_code_f002 | minor | 建议修复 | 已修 | AC-001 断言改动态枚举数（count_specs 独立统计），不硬编码 37 |
+| t194_test_f001 | minor | 需处置 | 已修 | 同 code f002——断言数 = 独立枚举 spec 数 |
+| t194_test_f002 | minor | 需处置 | 已修 | AC-003 反向断言加 m flag（防命令序列中间残留旧 test:e2e 行） |
+| t194_test_f003 | minor | 需处置 | 已修 | guard DUP 分支保留并说明（当前配置实测无 DUP；未来多项目选中即失败，行为由 guard 实现保证） |
 
 ### Round 1 场景说明
 

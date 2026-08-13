@@ -72,7 +72,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- headed 扩展模式在 Linux CI 的最小可行方案（xvfb 等）：`UNVERIFIED-SPIKE`，执行期在本地/CI 验证 Chromium 扩展加载。
+- headed 扩展模式在 Linux CI 的最小可行方案（xvfb 等）：结论=`xvfb-run` 可用（`/usr/bin/xvfb-run` + Xvfb，2026-08-14 本地核实）。CI E2E job 用 `xvfb-run -a npm run test:e2e:all` 跑全项目（含 headed 扩展模式），扩展经 `--load-extension` 加载 artifacts/dist。
 
 ### 风险与回退
 

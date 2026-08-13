@@ -1,0 +1,19 @@
+{
+  "tid": "t194",
+  "attempt": 1,
+  "execution_id": "4e4562cf697f40268af78d4c11f45c85",
+  "status": "done",
+  "branch": "t194_ci_e2e_project_coverage",
+  "base_sha": "18f891abc7c72cc0b9692d72513d28a784ca3e4a",
+  "tests": "npm test：1886 passed（新增 e2e_project_coverage 5 用例；open_source_automation CI 断言更新）",
+  "blackbox": "npm test（退出码 0）&& npx tsc --noEmit 通过；node scripts/check_e2e_coverage.mjs PASS（37 spec 全覆盖）",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（2+3 minor：guard 同名风险、硬编码断言等）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["scripts/check_e2e_coverage.mjs 枚举 tests/e2e/**/*.spec.ts 经 playwright --list 判覆盖（相对路径匹配）；实测 37 文件全覆盖 PASS；playwright.config e2e-ext glob 含此前 7 个未覆盖文件"],
+    "AC-002": ["e2e_project_coverage.test.ts::临时孤儿 spec → guard exit 非 0 且报出文件名（测后清理）"],
+    "AC-003": ["ci.yml E2E job：npm run build + check:e2e-coverage + xvfb-run -a test:e2e:all（[deploy] 真实 CI 验证）；open_source_automation 断言镜像新命令"],
+    "AC-004": ["test:e2e:all = playwright test（全项目）；guard 保证全文件入项目；test:e2e 保持 --project=e2e 语义"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -44,3 +44,6 @@ docs/runtime/
 
 # 说明：模板仓 gitignore 忽略 .agents/skills/repo-template-sync/sync_state.json；
 # 消费项目必须跟踪该状态文件（repo-template-sync 同步基线），故此处不忽略。
+
+# CommandCode local runtime state
+.commandcode/

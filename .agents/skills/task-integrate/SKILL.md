@@ -37,12 +37,16 @@ disable-model-invocation: true
   "tests": "pytest -q：120 passed",
   "blackbox": "黑盒命令通过",
   "review": "第 2 轮 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/test_x.py::test_y 通过"],
+    "AC-002": ["黑盒输出：返回 200"]
+  },
   "pending": ["p047"],
   "findings": ["d012"]
 }
 ```
 
-`tests`、`blackbox`、`review` 都是非空字符串；`pending`、`findings` 都是字符串数组，可为空数组；全部字段必填。`attempt` 必须是非 bool 的正整数。`base_sha` 是执行 commit 前的 HEAD，必须同时等于 task front matter 的 `diff_anchor` 与 branch tip 的 first parent 完整 SHA；该机械等式保证一个 task 恰有一个执行 commit。链上后继成员的 `base_sha` 还必须等于紧邻前一成员 branch tip。
+`tests`、`blackbox`、`review` 都是非空字符串；`ac_evidence` 是 JSON 对象，键必须精确等于 spec 验收标准节的全部 `AC-NNN` 编号（缺或多都会导致 integrate 门禁失败），值为非空字符串数组，每项是一条证据引用；`pending`、`findings` 都是字符串数组，可为空数组；全部字段必填。`attempt` 必须是非 bool 的正整数。`base_sha` 是执行 commit 前的 HEAD，必须同时等于 task front matter 的 `diff_anchor` 与 branch tip 的 first parent 完整 SHA；该机械等式保证一个 task 恰有一个执行 commit。链上后继成员的 `base_sha` 还必须等于紧邻前一成员 branch tip。
 
 ## 单 task：cleanup + integrate
 
@@ -149,7 +153,7 @@ scripts/repo_template/task.py integrate-chain {TAIL_TID} --continue
 ## 冲突处置
 
 |冲突位置|处置|
-|------|------|
+|---|---|
 |`docs/blueprint/`|真语义冲突。读双方意图后合成一致表述，不叠加两段|
 |`docs/specs_index.md`|两侧各加一行；保留双方，按 slug 排序|
 |`docs/tasks_index.json`|派生缓存。先解决为可继续状态，成功后由脚本重建覆盖|

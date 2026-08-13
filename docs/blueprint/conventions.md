@@ -19,6 +19,7 @@
 - 行尾不留空白；文件末尾保留一个换行。
 - 时间戳统一使用中国时间，格式 `YYYY-MM-DD HH:MM UTC+8`。
 - `docs/archive/tasks_audit.log` 由 `scripts/repo_template/task.py rewind`/`purge` 自动写入。
+- 非归档 Markdown 统一用 md_kx 格式化（`scripts/repo_template/md_format.py`），表用 `compact`（`|a|b|`）。改完 md 后跑 `python3 scripts/repo_template/md_format.py --changed`（或点名路径）；commit 前 `--check` 为绿。格式由 `.md_kx.toml` 统一，禁止 prettier / 按列 pad。
 - TypeScript strict mode。
 - 语言和框架已有稳定惯例时，在本文件补充项目级例外，不强行覆盖生态要求。
 

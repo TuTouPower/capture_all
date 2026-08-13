@@ -2,11 +2,11 @@
 tid: "t193"
 slug: "fix_perf_budget_leftovers"
 title: "性能预算遗留项"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t193_fix_perf_budget_leftovers"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "edc7619a630df17209128ea4aaa182365b1b4a92"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,14 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t193_gen_f001 | important | 待处置 | 已修 | ZIP 真流式：`Zip` + `ZipPassThrough`（store 模式无压缩 worker，无并行竞争；逐文件 add+push，chunk 收集拼接），ADR-025（新条目） |
+| t193_gen_f002 | important | 待处置 | 已修 | 补行为测试：list_captures offset 下推（fake-indexeddb，desc+offset/asc+offset 语义等价）；render_dt_list 600 事件行数 ≤ 窗口+省略行（detail_render_consistency） |
+| t193_gen_f003 | minor | 待处置 | 已修 | windowed 截断前 500 语义说明（预算优先，搜索可缩小窗口）——保留设计并注释明确 |
 
 ### Round 1 场景说明
 

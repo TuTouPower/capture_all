@@ -21,7 +21,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && npm run copy:locales && npm run build:bridge && npm run build:mcp && npm run build:zip",
+    "build": "tsc && vite build && npm run copy:locales && npm run build:bridge && npm run build:mcp && npm run build:zip && npm run check:bundle",
     "copy:locales": "node scripts/copy_locales.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -36,7 +36,8 @@
     "test:e2e:server": "npx tsx tests/support/fixtures/server.ts",
     "build:bridge": "esbuild src/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs",
     "build:mcp": "esbuild src/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs",
-    "build:zip": "cd artifacts/dist && zip -r ../extension.zip ."
+    "build:zip": "cd artifacts/dist && zip -r ../extension.zip .",
+    "check:bundle": "node scripts/check_bundle_budget.mjs"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",

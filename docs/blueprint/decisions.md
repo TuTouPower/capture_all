@@ -197,3 +197,15 @@
 - 选项：A）保持默认全开 + 文档警示；B）body 默认关闭（UI/MCP 显式 opt-in）+ 开启后按 MIME 敏感 key 脱敏 + 不可解析降级。
 - 结论：选 B。`capture_request_body`/`capture_response_body` 默认 false；`redact_body`（shared/body_redaction.ts）在 `handle_network_request` 落库前（redact_data 时）对 form-urlencoded/JSON 按敏感 key（password/token/api_key/secret/auth/credential/jwt/cookie 等子串匹配）脱敏为 `[REDACTED]`；multipart 含敏感 name 或不可解析/未知 MIME 降级为 `[body_redacted:len=N,preview=...]`（不落盘完整原始内容）。导出新增 `include_request_body`/`include_preview`（与既有 `include_response_body` 独立剥离）。影响仅新采集与导出边界；不改变已落库历史格式。
 - 替代：A（基线）。body 默认关影响诊断能力——advanced 用户 UI/MCP 显式开启。
+
+
+## 025 性能预算与流式导出（2026-08-14）
+
+- 背景：PERF-L008/L009/L010/H004/I011——app log 实际峰值接近 2× 配置上限、captures.list 全量读取、app log 导出巨型字符串、Dashboard 全量 DOM、ZIP 全量组装、无 bundle 门禁。
+- 决策：
+  - app log trim 后 `_estimated_bytes` 设为保留字节（峰值 ≤ 上限 + 单批容差）。
+  - `captures.list` offset 下推（cursor.advance）+ limit 截断，不再全量读取二次排序。
+  - app log 导出显式上限 100000 + truncated 标记。
+  - Dashboard 详情列表 windowed（`LIST_WINDOW=500` + 超窗省略行）。
+  - ZIP 组装用 fflate `Zip` + `ZipPassThrough` 流式（store 模式，无压缩 worker 无并行竞争；逐文件 add+push、chunk 收集拼接，不构建全量 files 对象同时驻留）。
+  - bundle size 预算门禁 `npm run check:bundle`（bridge.mjs ≤ 200KB、mcp.mjs ≤ 2MB、extension.zip ≤ 500KB、dist/ ≤ 2MB），build 链尾自动执行；预算基于 2026-08-14 实测 + 50% 余量，可放宽但门禁存在。

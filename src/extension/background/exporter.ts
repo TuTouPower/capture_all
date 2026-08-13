@@ -439,7 +439,17 @@ export async function export_app_logs(options: ExportAppLogsOptions = {}): Promi
     const transport = get_app_log_transport();
     // Flush pending buffer entries before querying IndexedDB
     await transport.flush();
-    const entries = await transport.get_entries(100000, 0, {
+    // t193 AC-003: 明确导出上限（PERF-L010）——先 count 判定截断，避免固定全量读取后构建
+    // 无界巨型字符串；超限时截断并在尾部标记（与 t156 截断模式一致）
+    const EXPORT_LIMIT = 100000;
+    const total = await transport.count({
+        level: options.level,
+        module: options.module,
+        since: options.since,
+        until: options.until,
+    });
+    const limit = Math.min(total, EXPORT_LIMIT);
+    const entries = await transport.get_entries(limit, 0, {
         level: options.level,
         module: options.module,
         since: options.since,
@@ -447,9 +457,13 @@ export async function export_app_logs(options: ExportAppLogsOptions = {}): Promi
     });
     const user_config = await load_user_config();
 
-    return entries.map(entry => {
+    let out = entries.map(entry => {
         const time = format_system_time(entry.timestamp, user_config);
         const details = entry.details === undefined ? '' : ` ${JSON.stringify(entry.details)}`;
         return `${time} [${entry.level}] [${entry.module}] ${entry.message}${details}`;
     }).join('\n');
+    if (total > EXPORT_LIMIT) {
+        out += `\n[truncated: ${total - EXPORT_LIMIT} entries omitted]`;
+    }
+    return out;
 }

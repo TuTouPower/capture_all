@@ -142,12 +142,14 @@ async function list_captures(payload: Record<string, unknown>): Promise<unknown>
     const order = get_order(payload) ?? 'desc';
     // t161: 索引方向直接给出排序序（started_at prev=desc/next=asc），limit 截断读取量，
     // 不再全量读取后二次排序再 slice；total 用 count() 轻量查询。
+    // t193 AC-002: offset 下推（cursor.advance），不读取被跳过的记录（PERF-L009）
     const direction = order === 'asc' ? 'next' : 'prev';
-    const captures = await storage_list_captures(offset + limit, direction);
+    const captures = await storage_list_captures(limit, direction, offset);
 
     return {
         total: await count_captures(),
-        captures: captures.slice(offset, offset + limit)
+        // t193 AC-002: storage 已下推 offset/limit（cursor advance + 截断），无需再 slice
+        captures,
     };
 }
 

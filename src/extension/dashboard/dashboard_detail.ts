@@ -160,11 +160,15 @@ function render_dt_list(): string {
     const dt_sel = get_dt_sel();
     const detail_events = get_detail_events();
     const list = filtered_events();
+    // t193 AC-004: windowed 渲染预算——大列表仅渲染前 WINDOW 条（PERF-H004 渲染部分），
+    // 超窗省略并提示；DOM 节点数受预算约束，避免全量渲染峰值内存
+    const LIST_WINDOW = 500;
+    const visible = list.slice(0, LIST_WINDOW);
     // t153 AC-004: 预建 idx 映射（对象恒等，与原线性 index 查找的 === 语义严格等价），
     // 消除 list.map 内每次对全量事件数组做线性 index 查找的 O(n²)。
     const idx_map = new Map<CaptureEvent, number>();
     for (let i = 0; i < detail_events.length; i++) idx_map.set(detail_events[i], i);
-    const rows = list.map((e) => {
+    const rows = visible.map((e) => {
         const k = KIND[event_kind(e)];
         const isErr = event_kind(e) === 'error' || (e.type === 'console_event' && (e.data as Record<string, unknown>)?.level === 'error');
         const d = (e.data || {}) as Record<string, unknown>;
@@ -182,6 +186,10 @@ function render_dt_list(): string {
             <td><span class="ev-src">${esc((e.data as Record<string, unknown>)?.source || e.source || '—')}</span></td>
         </tr>`;
     }).join('');
+    // t193 AC-004: 超窗省略提示（DOM 节点预算；窗口内完整数据可经筛选/搜索缩小）
+    const overflow_row = list.length > LIST_WINDOW
+        ? `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:12px">${t('noEvents')} — ${list.length - LIST_WINDOW} ${t('eventsCountSuffix')} hidden (windowed)</td></tr>`
+        : '';
     const empty = `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:36px">${t('noEvents')}</td></tr>`;
     return `<div class="dt-list">
         <div class="dt-list-bar">
@@ -194,7 +202,7 @@ function render_dt_list(): string {
         </div>
         ${dt_view === 'trace'
             ? `<div class="dt-events">${render_trace()}</div>`
-            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>${t('time')}</th><th>${t('type')}</th><th>${t('eventLabel')}</th><th>${t('detail')}</th><th>${t('source')}</th></tr></thead><tbody>${rows || empty}</tbody></table></div>`}
+            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>${t('time')}</th><th>${t('type')}</th><th>${t('eventLabel')}</th><th>${t('detail')}</th><th>${t('source')}</th></tr></thead><tbody>${rows || empty}${overflow_row}</tbody></table></div>`}
     </div>`;
 }
 

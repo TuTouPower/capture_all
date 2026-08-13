@@ -74,7 +74,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- bundle size 预算阈值取值：`UNVERIFIED-SPIKE`，执行期按当前构建产物大小与产品目标核实。
+- bundle size 预算阈值取值：结论=基于 2026-08-14 实测构建产物（`npm run build`）：`bridge.mjs` 77KB、`mcp.mjs` 1.1MB、`extension.zip` 124KB、`dist/` 508KB。预算取当前 + 50% 余量：bridge.mjs ≤ 200KB、mcp.mjs ≤ 2MB、extension.zip ≤ 500KB、dist/ 总 ≤ 2MB（新 bundle size 门禁脚本 `scripts/check_bundle_budget.mjs`，`npm run check:bundle`）。
 
 ### 风险与回退
 

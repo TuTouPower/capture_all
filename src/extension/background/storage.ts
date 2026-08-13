@@ -207,7 +207,7 @@ export async function get_capture(capture_id: string): Promise<CaptureRecord | n
     });
 }
 
-export async function list_captures(limit?: number, direction: 'next' | 'prev' = 'prev'): Promise<CaptureRecord[]> {
+export async function list_captures(limit?: number, direction: 'next' | 'prev' = 'prev', offset = 0): Promise<CaptureRecord[]> {
     const database = await init_db();
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readonly');
@@ -215,9 +215,16 @@ export async function list_captures(limit?: number, direction: 'next' | 'prev' =
         const index = store.index('started_at');
         const request = index.openCursor(null, direction);
         const captures: CaptureRecord[] = [];
+        let skip = offset;
 
         request.onsuccess = () => {
             const cursor = request.result;
+            // t193 AC-002: offset 下推——cursor.advance 跳过，不读取被跳过的记录（PERF-L009）
+            if (cursor && skip > 0) {
+                cursor.advance(skip);
+                skip = 0; // advance 一次即跳到目标位置，后续正常迭代
+                return;
+            }
             // t153 AC-007: limit 截断（最旧优先倒序的前 N 条）；undefined = 全量
             // t161: direction 支持 asc/desc，避免调用方全量读取后二次排序
             if (cursor && captures.length < (limit ?? Infinity)) {

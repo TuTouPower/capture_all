@@ -276,7 +276,7 @@ describe('agent data queries', () => {
             event_id: `nav_${i}`,
             capture_id: 'capture_1',
             category: 'navigation',
-            type: 'page_navigation',
+            type: 'route_change',
             relative_time_ms: i * 10,
             tab_id: 1,
             url: 'https://x',

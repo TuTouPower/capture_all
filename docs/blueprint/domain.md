@@ -48,6 +48,10 @@ MCP 工具名用动词短语（`start_recording` / `list_captures`），底层�
 
 兼容别名：`list_sessions` / `get_session` / `get_all_session_data` / `export_session` 映射到同命令。
 
+### MCP session alias 退出条件（t192）
+
+四个 `session` alias（`list_sessions` / `get_session` / `get_all_session_data` / `export_session`）为用户决策保留的显式兼容面（2026-08-13），不立即删除。退出条件：当任一外部消费者确认不再使用 `session` 命名（迁移到 `captures`/`capture` 工具），或在下一个破坏性版本窗口（v2.0）移除；移除时同步删除 `src/mcp/tools.ts` 的 `TOOL_COMMANDS` 别名项与 `MCP_TOOL_SCHEMAS` 共享 schema 注册。
+
 ### MCP 参数枚举（t179）
 
 `source` / `sources` / `format` 参数为公开枚举，由共享常量派生，与 Bridge/dispatcher 实际接受枚举一致（`src/shared/constants.ts` 的 `AGENT_DATA_SOURCES` / `EXPORT_FORMATS`），MCP Zod schema 禁止非法值在输入边界，不进入 Bridge：

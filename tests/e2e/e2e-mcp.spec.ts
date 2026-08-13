@@ -145,7 +145,7 @@ test.describe.serial('MCP Bridge E2E', () => {
             headers: { 'Authorization': `Bearer ${BRIDGE_TOKEN}` }
         });
         const data = await res.json() as Record<string, unknown>;
-        expect(data.extension_online).toBe(true);
+        expect(data.online_count).toBeGreaterThan(0);
     });
 
     test('MCP: sessions.list', async () => {

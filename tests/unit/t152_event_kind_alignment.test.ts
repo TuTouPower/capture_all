@@ -26,17 +26,14 @@ const SAMPLE_TYPES: EventType[] = [
     'mouse_event', 'keyboard_event', 'scroll_event', 'input_event',
     'clipboard_write', 'clipboard_read', 'form_submit', 'focus_event',
     'resize_event', 'fullscreen_change', 'print_event',
-    'page_navigation', 'route_change', 'page_load', 'tab_switch',
+    'route_change', 'page_load', 'tab_switch',
     'tab_created', 'tab_url_change', 'dom_ready', 'visibility_change',
     'network_request', 'ws_frame', 'ws_message',
     'console_event',
-    'runtime_exception', 'unhandled_rejection', 'resource_error',
-    'network_failed', 'capture_error',
+    'runtime_exception', 'capture_error',
     'storage_change',
     'cookie_change',
-    'dom_mutation',
-    'capture_started', 'capture_stopped', 'capture_config_changed',
-    'permission_missing', 'debugger_attach_status', 'body_capture_status_changed',
+    'capture_started', 'capture_stopped',
 ];
 
 describe('t152 AC-006 event_kind 与 category_for_event_type 对齐', () => {

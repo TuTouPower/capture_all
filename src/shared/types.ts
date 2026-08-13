@@ -98,7 +98,6 @@ export type EventType =
     | 'fullscreen_change'
     | 'print_event'
     // navigation
-    | 'page_navigation'
     | 'route_change'
     | 'page_load'
     | 'tab_switch'
@@ -114,27 +113,17 @@ export type EventType =
     | 'console_event'
     // error
     | 'runtime_exception'
-    | 'unhandled_rejection'
-    | 'resource_error'
-    | 'network_failed'
     | 'capture_error'
     // storage
     | 'storage_change'
     // cookie
     | 'cookie_change'
-    // dom_data
-    | 'dom_mutation'
     // capture_lifecycle
     | 'capture_started'
-    | 'capture_stopped'
-    | 'capture_config_changed'
-    | 'permission_missing'
-    | 'debugger_attach_status'
-    | 'body_capture_status_changed';
+    | 'capture_stopped';
 
 export type EventSource = 'content_script' | 'background';
 export type Severity = 'info' | 'warning' | 'error' | 'fatal';
-export type RedactionStatus = 'none' | 'redacted';
 
 // ============================================================
 // user_action event data
@@ -253,16 +242,6 @@ export interface WsMessageData {
 // navigation event data
 // ============================================================
 
-export interface PageNavigationData {
-    from_url: string | null;
-    to_url: string;
-    navigation_type: 'link' | 'typed' | 'form_submit' | 'script' | 'meta' | 'other';
-    transition_type: string | null;
-    title: string | null;
-    referrer: string | null;
-    is_main_frame: boolean;
-}
-
 export interface RouteChangeData {
     from_url: string;
     to_url: string;
@@ -280,16 +259,6 @@ export interface PageLoadData {
     load_event_time_ms: number | null;
     dom_content_loaded_time_ms: number | null;
     navigation_start_time: string | null;
-}
-
-export interface DomMutationData {
-    action: string;
-    target_selector?: string;
-    target_tag?: string;
-    target_path?: string;
-    attribute_name?: string;
-    old_value?: string;
-    new_value?: string;
 }
 
 export interface DomReadyData {
@@ -427,34 +396,6 @@ export interface RuntimeExceptionData {
     related_event_ids: string[];
 }
 
-export interface UnhandledRejectionData {
-    message: string;
-    reason_preview: string | null;
-    stack_trace: string | null;
-    source_url: string | null;
-    line: number | null;
-    column: number | null;
-    severity: 'warning' | 'error';
-}
-
-export interface ResourceErrorData {
-    resource_url: string;
-    resource_type: 'script' | 'stylesheet' | 'image' | 'font' | 'media' | 'other';
-    message: string | null;
-    element_selector: string | null;
-    status_code: number | null;
-}
-
-export interface NetworkFailedData {
-    request_id: string;
-    method: string;
-    url: string;
-    status_code: number | null;
-    error_text: string | null;
-    duration_ms: number | null;
-    failure_type: 'http_error' | 'network_error';
-}
-
 export interface CaptureErrorData {
     module: string;
     message: string;
@@ -521,33 +462,6 @@ export interface CaptureStoppedData {
     stats: object;
 }
 
-export interface CaptureConfigChangedData {
-    changed_by: 'user' | 'system';
-    field: string;
-    old_value: unknown;
-    new_value: unknown;
-}
-
-export interface PermissionMissingData {
-    permission: string;
-    module: string;
-    impact: string;
-    recoverable: boolean;
-}
-
-export interface DebuggerAttachStatusData {
-    status: 'attached' | 'detached';
-    reason: string | null;
-    fallback_used: boolean;
-    affected_modules: string[];
-}
-
-export interface BodyCaptureStatusChangedData {
-    body_capture_mode: BodyCaptureMode;
-    status: 'enabled' | 'disabled';
-    reason: string | null;
-}
-
 // ============================================================
 // CaptureEvent discriminated union (type → data mapping)
 // ============================================================
@@ -564,7 +478,6 @@ export type CaptureEventDataMap = {
     resize_event: ResizeEventData;
     fullscreen_change: FullscreenChangeData;
     print_event: PrintEventData;
-    page_navigation: PageNavigationData;
     route_change: RouteChangeData;
     page_load: PageLoadData;
     tab_switch: TabSwitchData;
@@ -577,25 +490,16 @@ export type CaptureEventDataMap = {
     ws_message: WsMessageData;
     console_event: ConsoleEventData;
     runtime_exception: RuntimeExceptionData;
-    unhandled_rejection: UnhandledRejectionData;
-    resource_error: ResourceErrorData;
-    network_failed: NetworkFailedData;
     capture_error: CaptureErrorData;
     storage_change: StorageChangeData;
     cookie_change: CookieChangeData;
-    dom_mutation: DomMutationData;
     capture_started: CaptureStartedData;
     capture_stopped: CaptureStoppedData;
-    capture_config_changed: CaptureConfigChangedData;
-    permission_missing: PermissionMissingData;
-    debugger_attach_status: DebuggerAttachStatusData;
-    body_capture_status_changed: BodyCaptureStatusChangedData;
 };
 
 export type TypedCaptureEvent<T extends EventType = EventType> =
     Omit<CaptureEvent, 'data'> & { type: T; data?: CaptureEventDataMap[T] };
 
-export type CaptureEventUnion = TypedCaptureEvent;
 
 // ============================================================
 // Body capture types (preserved, slightly adjusted)

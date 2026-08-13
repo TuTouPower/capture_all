@@ -50,17 +50,8 @@ describe('P0.36: user_action event type consistency', () => {
         expect(DASHBOARD_WHITELIST.sort()).toEqual(DETAIL_WHITELIST.sort());
     });
 
-    it('whitelists do not contain stale dom_mutation type', () => {
-        expect(DASHBOARD_WHITELIST).not.toContain('dom_mutation');
-        expect(DETAIL_WHITELIST).not.toContain('dom_mutation');
-    });
-
     it('input_event is categorized as user_action', () => {
         expect(category_for_event_type('input_event')).toBe('user_action');
     });
 
-    it('dom_mutation is NOT categorized as user_action', () => {
-        // dom_mutation is categorized as dom_data, not user_action
-        expect(category_for_event_type('dom_mutation')).not.toBe('user_action');
-    });
 });

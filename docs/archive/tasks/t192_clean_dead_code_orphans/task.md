@@ -2,11 +2,11 @@
 tid: "t192"
 slug: "clean_dead_code_orphans"
 title: "死代码与孤儿清理"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t192_clean_dead_code_orphans"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "48e9398f30300afd5b1ad350e7f3a2d03d57dc16"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,13 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t192_gen_f001 | important | 需修 | 已修 | 6 个测试文件残留清理：agent_data_queries/xss_escape/live_data_queries fixture page_navigation→route_change；p036/p043 dom_mutation 断言用例删除（类型已删）；t152 SAMPLE_TYPES 行内删 9 事件；dead_code_cleanup 补全仓（src+tests）9 事件残留扫描（排除本文件与注释行） |
+| t192_gen_f002 | minor | 建议补 | 已修 | dead_code_cleanup AC-002 断言补 `extension_version:` 顶层字段检查 |
 
 ### Round 1 场景说明
 

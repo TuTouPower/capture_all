@@ -700,7 +700,9 @@ describe('bridge server', () => {
         expect(response.status).toBe(200);
         const status = await response.json();
         expect(status.bridge_version).toBe('0.1.0');
-        expect(status.extension_online).toBe(false);
+        // t192 AC-002: deprecated 顶层字段已删除——用 online_count / extensions 断言
+        expect(status.online_count).toBe(0);
+        expect(status.extensions).toEqual([]);
         expect(status.pending_commands).toBe(0);
     });
 

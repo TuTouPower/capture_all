@@ -319,9 +319,8 @@ const CATEGORY_STORE_MAP: Record<CategoryKey, string> = {
     storage: STORE_NAMES.STORAGE_CHANGES,
     cookie: STORE_NAMES.COOKIE_CHANGES,
     capture_lifecycle: STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
-    // B2-L7: dom_data 类别无专属 store，且 dom_mutation 目前无生产者（dormant 类别）。
-    // 显式映射到 USER_ACTION_EVENTS 作为 fallback——有 dom_mutation 事件时按 user_action 存储，
-    // 读取经 user_action_events source 返回；新增 dom_mutation 生产者时再评估独立 store。
+    // B2-L7/t192: dom_data 类别无专属 store 且无事件类型（原 dom_mutation 事件已随 DD-007 删除）。
+    // 映射保留为 fallback（未来新增 dom 生产者时再评估独立 store）。
     dom_data: STORE_NAMES.USER_ACTION_EVENTS,
 };
 
@@ -378,12 +377,6 @@ export async function write_console_events(batch: ConsoleEventData[]): Promise<v
     const buf = get_buffer(STORE_NAMES.CONSOLE_EVENTS);
     buf.push(...(batch as unknown as CaptureEvent[]));
     await flush_store(STORE_NAMES.CONSOLE_EVENTS);
-}
-
-export async function write_error_events(batch: RuntimeExceptionData[]): Promise<void> {
-    const buf = get_buffer(STORE_NAMES.ERROR_EVENTS);
-    buf.push(...(batch as unknown as CaptureEvent[]));
-    await flush_store(STORE_NAMES.ERROR_EVENTS);
 }
 
 // ============================================================

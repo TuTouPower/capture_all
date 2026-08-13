@@ -50,7 +50,6 @@ describe('BridgeMcpClient', () => {
 
         await expect(client.get_status()).resolves.toMatchObject({
             bridge_url: server.url,
-            extension_online: false,
         });
     });
 
@@ -186,7 +185,6 @@ describe('execute_mcp_tool', () => {
 
         await expect(execute_mcp_tool(client, { name: 'get_status' })).resolves.toMatchObject({
             bridge_url: server.url,
-            extension_online: false,
         });
     });
 

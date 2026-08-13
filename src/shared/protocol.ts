@@ -73,12 +73,6 @@ export interface AgentBridgeConfig {
     instances_file?: string;
 }
 
-export interface ExtensionBridgeConfig {
-    bridge_url: string;
-    bridge_token: string;
-    poll_interval_ms: number;
-}
-
 export interface AgentQueryRange {
     offset?: number;
     limit?: number;
@@ -129,12 +123,8 @@ export interface AgentExtensionStatus {
 export interface AgentStatus {
     bridge_version: string;
     bridge_url: string;
-    /** @deprecated use extensions; true if any instance online */
-    extension_online: boolean;
-    /** @deprecated use extensions */
-    extension_version: string | null;
-    /** @deprecated use extensions */
-    active_capture_id: string | null;
+    // t192 AC-002: 顶层 deprecated 字段（extension_online/extension_version/active_capture_id）已删除；
+    // 单目标选择用 extensions[] 内 instance_id / browser_label
     pending_commands: number;
     extensions: AgentExtensionStatus[];
     online_count: number;

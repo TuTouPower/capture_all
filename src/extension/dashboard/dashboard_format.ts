@@ -108,8 +108,6 @@ export function event_detail(e: CaptureEvent): string {
         case 'keyboard_event': return `${d.action} ${d.key || ''}`;
         case 'scroll_event': return `scroll (${d.scroll_x}, ${d.scroll_y})`;
         case 'input_event': return `${d.target_tag || ''} ${d.target_selector || ''}`;
-        case 'dom_mutation': return `${d.action || ''} ${d.target_selector || d.target_tag || ''}`;
-        case 'page_navigation': return `${d.from || ''} → ${d.to || ''}`;
         case 'route_change': return String(d.to || t('spaRouteChange'));
         case 'page_load': return `loaded in ${d.load_time_ms}ms`;
         case 'network_request': return String(d.url || '');
@@ -126,13 +124,11 @@ export function event_title(e: CaptureEvent): string {
         case 'keyboard_event': return `${t('keyPress')} ${d.key || ''}`;
         case 'scroll_event': return t('scroll');
         case 'input_event': return t('inputLabel');
-        case 'page_navigation': return `${t('openPage')} ${d.to || ''}`;
         case 'route_change': return `${t('routeChangeLabel')} ${d.to || ''}`;
         case 'network_request': return `${d.method || ''} ${strip_proto(String(d.url || ''))}`;
         case 'console_event': return String(d.level || 'log');
         case 'storage_change': return `${d.key || 'storage'} changed`;
         case 'cookie_change': return `${d.name || 'cookie'} changed`;
-        case 'dom_mutation': return t('domChangeLabel');
         case 'capture_started': return t('startCapture');
         case 'capture_stopped': return t('stopCapture');
         default: return e.type;

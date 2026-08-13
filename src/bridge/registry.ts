@@ -209,15 +209,12 @@ export class BridgeRegistry {
                 pending_commands: queue?.pending_count() ?? 0,
             };
         });
-        // Prefer listing online first for consumers; still include recently seen offline in map until replaced
-        const primary = online[0] ?? null;
+        // t192 AC-002: 删除 deprecated 顶层字段（extension_online/extension_version/active_capture_id）与 primary 派生；
+        // 消费者统一读 extensions / online_count，单目标按 instance_id 或 browser_label 选择
         const pending_commands = online.reduce((sum, inst) => sum + (this.queues.get(inst.instance_id)?.pending_count() ?? 0), 0);
         return {
             bridge_version: BRIDGE_VERSION,
             bridge_url: `http://${host}:${port}`,
-            extension_online: online.length > 0,
-            extension_version: primary?.extension_version ?? null,
-            active_capture_id: primary?.active_capture_id ?? null,
             pending_commands,
             extensions,
             online_count: online.length,

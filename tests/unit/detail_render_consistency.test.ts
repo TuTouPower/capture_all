@@ -91,7 +91,7 @@ describe('detail render consistency (t151 AC-002)', () => {
     it('render_dt_list 按事件类别渲染对应行（七类标签覆盖）', () => {
         set_detail_events([
             ev('input_event', 10),
-            ev('page_navigation', 20),
+            ev('route_change', 20),
             ev('network_request', 30),
             ev('console_event', 40),
             ev('runtime_exception', 50),

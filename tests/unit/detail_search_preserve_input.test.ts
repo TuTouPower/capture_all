@@ -63,8 +63,8 @@ describe('详情时间线搜索保留输入 (T108)', () => {
     it('AC-002: 输入搜索词后可见列表仅含匹配事件（p022）', () => {
         document.body.innerHTML = '<input id="dtSearch">';
         set_detail_events([
-            { type: 'page_navigation', relative_time_ms: 100, source: 'background', data: { to: 'https://example.com/orders' } },
-            { type: 'page_navigation', relative_time_ms: 200, source: 'background', data: { to: 'https://example.com/settings' } },
+            { type: 'route_change', relative_time_ms: 100, source: 'background', data: { to: 'https://example.com/orders' } },
+            { type: 'route_change', relative_time_ms: 200, source: 'background', data: { to: 'https://example.com/settings' } },
         ]);
 
         (document.getElementById('dtSearch') as HTMLInputElement).value = 'orders';
@@ -78,8 +78,8 @@ describe('详情时间线搜索保留输入 (T108)', () => {
     it('AC-002b: 空搜索词时列表含全部事件', () => {
         document.body.innerHTML = '<input id="dtSearch">';
         set_detail_events([
-            { type: 'page_navigation', relative_time_ms: 100, source: 'background', data: { to: 'https://example.com/orders' } },
-            { type: 'page_navigation', relative_time_ms: 200, source: 'background', data: { to: 'https://example.com/settings' } },
+            { type: 'route_change', relative_time_ms: 100, source: 'background', data: { to: 'https://example.com/orders' } },
+            { type: 'route_change', relative_time_ms: 200, source: 'background', data: { to: 'https://example.com/settings' } },
         ]);
 
         (document.getElementById('dtSearch') as HTMLInputElement).value = '';

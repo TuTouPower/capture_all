@@ -1,0 +1,19 @@
+{
+  "tid": "t197",
+  "attempt": 1,
+  "execution_id": "6484aa0e28da48a987cd8bd5f2d47b4f",
+  "status": "done",
+  "branch": "t197_dashboard_ui_interactions",
+  "base_sha": "d188458404aafa22f7560a0e99a4c44358d18c18",
+  "tests": "vitest：1908 passed（202 files，含 t197 新增 6 用例）",
+  "blackbox": "npm test（1908 passed）&& npx tsc --noEmit 通过",
+  "review": "第 2 轮 PASS（code PASS / test PASS；Round 1 test FAIL 3 important 已修，code 1 minor 已修）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/dashboard_ui_interactions.test.ts「空白区 pointerdown 置 _tl_dragging；拖拽期间无中间 render；pointercancel 清理并刷新」通过", "tests/unit/dashboard_ui_interactions.test.ts「空白区拖拽结束（pointerup）清理标记」通过"],
+    "AC-002": ["tests/unit/dashboard_ui_interactions.test.ts「batchDel 部分失败：已删成功项不残留 selected，失败项保留（行为级）」通过", "tests/unit/dashboard_ui_interactions.test.ts「batchDel 全成功：selected 清空」通过"],
+    "AC-003": ["tests/unit/dashboard_ui_interactions.test.ts「rail resize：mousedown 后 pointercancel 清理（active 移除 + mousemove listener 解绑）」通过", "tests/unit/dashboard_ui_interactions.test.ts「network inspect resize：mousedown 后 mouseleave 清理」通过"],
+    "AC-004": ["npm test 全量 1908 passed（新增 6 用例 + 既有 1902 无回归）", "npx tsc --noEmit 干净"]
+  },
+  "pending": ["p050"],
+  "findings": []
+}

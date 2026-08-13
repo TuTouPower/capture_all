@@ -738,17 +738,22 @@ function wire_lane_pointerdown(
             return;
         }
         // Normal lanes drag — non-marker area
+        // t197 AC-001: 空白区拖拽置 _tl_dragging（2s 轮询不打断）；pointerdown 不再直接
+        // render_content（seek 读 detached overlay 失效），拖拽结束统一刷新
+        _tl_dragging = true;
         seek(pe.clientX);
         set_dt_insp_open(false);
-        router.render_content();
         const mv = (ev: PointerEvent) => seek(ev.clientX);
         // t189 AC-006: normal lane 同样统一 pointerup/pointercancel/lostpointercapture/blur 清理
+        // （首次调用即移除全部 listener，后续事件不可能再次触发）
         const finish_lane = () => {
             window.removeEventListener('pointermove', mv);
             window.removeEventListener('pointerup', finish_lane);
             window.removeEventListener('pointercancel', finish_lane);
             window.removeEventListener('lostpointercapture', finish_lane);
             window.removeEventListener('blur', finish_lane);
+            _tl_dragging = false;
+            router.render_content();
         };
         window.addEventListener('pointermove', mv);
         window.addEventListener('pointerup', finish_lane);

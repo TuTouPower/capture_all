@@ -182,6 +182,8 @@ function wire_captures(): void {
                 await load_captures(); router.render_content();
                 return;
             }
+            // t197 AC-002: 成功项即时移除——中途失败时已删项不残留 selected（p040）
+            selected.delete(id);
         }
         selected.clear(); await load_captures(); router.render_content();
     });

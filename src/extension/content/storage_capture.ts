@@ -34,7 +34,7 @@ function redact_storage_key(key: string | null): string | null {
     return SENSITIVE_KEY_RE.test(key) ? '[REDACTED]' : key;
 }
 
-// secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
+// secret 内联进注入脚本闭包（不写 window，普通页面无法读取构造签名）；t174：注入脚本文本可被观察注入过程的对抗页面读取（ADR-020 威胁模型排除，见 content_page_script.ts 注释）。
 // 导出便于测试 eval 验证注入脚本级重注入（与 websocket_capture 一致）。
 export function build_page_script(secret: string): string {
     return `(function() {

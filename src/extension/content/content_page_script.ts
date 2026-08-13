@@ -20,6 +20,11 @@ ${restore_body}
 }
 
 // 注入脚本头部：SIGNAL / SECRET 声明 + HMAC 同步实现（sign_str）。
+// t174 SEC-005: secret 以字符串字面量经 <script> textContent 注入页面 DOM——观察注入过程的
+// 对抗页面（hook appendChild / MutationObserver）可读取。残余风险明确：威胁模型排除对抗页面
+// （ADR-020：页面与扩展 MAIN world 同权，无隐藏共享通道）；executeScript func,args 迁移需
+// scripting 权限且页面级对抗仍可观察（s007/d009），不采纳。防御对象是「仅读 window nonce
+// 的普通页面」——secret 不写 window，普通页面无法构造合法签名。
 export function page_script_preamble(signal: string, secret: string): string {
     return `var SIGNAL = '__capture_all_${signal}__';
     var SECRET = '${secret}';

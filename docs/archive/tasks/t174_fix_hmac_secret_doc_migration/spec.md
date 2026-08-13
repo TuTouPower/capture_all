@@ -70,7 +70,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- `chrome.scripting.executeScript` MAIN world `func,args` 在目标浏览器传递 secret 的暴露面：`UNVERIFIED-SPIKE`，执行期最小复现验证。
+- `chrome.scripting.executeScript` MAIN world `func,args` 传递 secret 的暴露面：结论=不落 DOM 文本但需新增 `scripting` 权限，且页面级对抗仍可观察（s007 spike + d009 findings，2026-08-13 已核实）；t174 采用注释残余风险 + spec combined 契约路径，executeScript 迁移不采纳。
 
 ### 风险与回退
 

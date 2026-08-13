@@ -1,6 +1,6 @@
 // content 侧共享：per-message HMAC 签名/校验（t121）。
 // 安全模型：secret 由 content 每次 start 生成，内联进注入脚本闭包（不写 window），
-// 页面脚本仅可读 window nonce、无法构造合法签名。
+// 页面脚本仅可读 window nonce、无法构造合法签名（普通页面；观察注入过程的对抗页面可读 secret，ADR-020 威胁模型排除）。
 // 注入脚本与 content 共用同一同步 HMAC-SHA256 实现（避免 subtle 异步时序与双实现漂移），
 // 正确性由 RFC 4231 测试向量锁定。
 

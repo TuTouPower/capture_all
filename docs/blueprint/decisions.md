@@ -98,6 +98,7 @@
 - 选项：A）提高固定上限；B）分页循环读取至耗尽。
 - 结论：选 B。PAGE_SIZE=5000，循环 offset 直至 batch.length < PAGE_SIZE。Promise.all 并行 7 类。内存仍全量加载（流式输出留后续）。详见 T043。
 - 替代：无
+- 落地（t156，2026-08-13）：统一分页实现收敛到 `src/extension/shared/paged_reader.ts` 的 `fetch_all_records`（PAGE_SIZE=5000，offset 单调推进至空批，异常原样传播）。`capture_data_reader.ts`（页面快照读取器，修复固定 100000 截断）、`exporter.ts`、`agent_data_queries.ts` 三处共用。读取路径禁止引入固定上限；若未来需内存预算约束，须显式 truncated/失败而非静默裁切。
 
 ## 013 错误码渐进迁移：新码 + 别名兼容至 v2.0（2026-07-19，2026-08-11 已移除）
 

@@ -10,6 +10,7 @@ import {
     get_storage_changes,
     get_capture
 } from './storage';
+import { fetch_all_records } from '../shared/paged_reader';
 
 export type AgentDataSource =
     | 'user_action_events'
@@ -50,38 +51,21 @@ const ALL_SOURCES: AgentDataSource[] = [
     'cookie_changes'
 ];
 
-// T043: 分页聚合，替代固定 FULL_DATA_LIMIT=100000 截断
-const PAGE_SIZE = 5000;
-
-async function fetch_all<T>(
-    fetcher: (offset: number, limit: number) => Promise<T[]>
-): Promise<T[]> {
-    const all: T[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await fetcher(offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
-}
-
 export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);
     if (!capture) {
         throw new Error('CAPTURE_NOT_FOUND');
     }
 
+    // t156: 分页聚合统一走 shared/paged_reader 的 fetch_all_records
     const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
-        fetch_all((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
-        fetch_all((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
-        fetch_all((o, l) => get_network_requests(capture_id, o, l)),
-        fetch_all((o, l) => get_console_events(capture_id, o, l)),
-        fetch_all((o, l) => get_error_events(capture_id, o, l)),
-        fetch_all((o, l) => get_storage_changes(capture_id, o, l)),
-        fetch_all((o, l) => get_cookie_changes(capture_id, o, l))
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
+        fetch_all_records((o, l) => get_network_requests(capture_id, o, l)),
+        fetch_all_records((o, l) => get_console_events(capture_id, o, l)),
+        fetch_all_records((o, l) => get_error_events(capture_id, o, l)),
+        fetch_all_records((o, l) => get_storage_changes(capture_id, o, l)),
+        fetch_all_records((o, l) => get_cookie_changes(capture_id, o, l))
     ]);
 
     return {

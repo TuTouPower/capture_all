@@ -2,11 +2,11 @@
 tid: "t156"
 slug: "fix_ui_export_100k_truncation"
 title: "修复 UI 与 ZIP 导出 100000 条静默截断"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t156_fix_ui_export_100k_truncation"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "4f6368f8d12565cf352fd5692f4626b72f939d5b"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 13:44 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t156_code_f001|minor|已修|fetch_all_records 补 fetcher 隐式契约注释（单批≤limit、offset 单调不重不漏）|src/extension/shared/paged_reader.ts:11|
+|t156_test_f001|minor|已修|补 fetcher reject 传播测试，防共享 helper 吞错回归|tests/unit/paged_reader.test.ts:56|
+|t156_test_f002|minor|已修|AC-005 断言改为不锁返回结构形状，仅断言全量返回无静默截断|tests/unit/capture_data_reader.test.ts:127|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +68,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/005 由 `capture_data_reader.test.ts` + `paged_reader.test.ts`（100001 条分页 fixture 全量返回、offset 序列 `[0,5000,...,100000]`、limit 恒 5000）；AC-003/004 由 `capture_archive_count.test.ts`（build_archive manifest counts.events=100001、merge_detail_events 条数=统计值，均 >100000）
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
+- Round 2 复核（minor 处置后）：code PASS / test PASS（维持）
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+统一全量分页 helper（`src/extension/shared/paged_reader.ts`）落地，`read_capture_snapshot` 弃固定 100000 截断改分页耗尽，exporter/agent_data_queries 收敛共享实现；ZIP 与详情不再入口相关截断。遗留 export_app_logs 固定 100000 疑点登记 p045。

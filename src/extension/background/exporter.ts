@@ -4,14 +4,13 @@ import { get_capture, get_events_by_category, get_network_requests, get_console_
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
 import { add_absolute_system_time, add_capture_system_times, add_system_times_to_capture_data, format_system_time } from '../../shared/system_time';
+import { fetch_all_records } from '../shared/paged_reader';
 import type { NetworkRequestData, CaptureRecord, UserConfig, LogLevel, CaptureEvent, ConsoleEventData, CategoryKey } from '../../shared/types';
 import type { ExportableCaptureData } from '../../shared/system_time';
 
 export interface ExportOptions {
     include_response_body?: boolean;
 }
-
-const PAGE_SIZE = 5000;
 
 // T045: HAR body size 用 UTF-8 字节
 function utf8_byte_len(s: string): number {
@@ -26,44 +25,18 @@ function base64_decoded_len(s: string): number {
     return triples + (rem >= 2 ? (rem === 2 ? 1 : 2) : 0);
 }
 
-// T043: 分页读取直到耗尽，替代固定 100000 截断
-async function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
-    const all: CaptureEvent[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_events_by_category(capture_id, category, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+// t156: 统一走 shared/paged_reader 的 fetch_all_records（PAGE_SIZE=5000 分页耗尽），
+// 与 capture_data_reader / agent_data_queries 共享同一分页实现
+function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
+    return fetch_all_records((offset, limit) => get_events_by_category(capture_id, category, offset, limit));
 }
 
-async function get_all_network_requests(capture_id: string): Promise<NetworkRequestData[]> {
-    const all: NetworkRequestData[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_network_requests(capture_id, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+function get_all_network_requests(capture_id: string): Promise<NetworkRequestData[]> {
+    return fetch_all_records((offset, limit) => get_network_requests(capture_id, offset, limit));
 }
 
-async function get_all_console_events(capture_id: string): Promise<ConsoleEventData[]> {
-    const all: ConsoleEventData[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_console_events(capture_id, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+function get_all_console_events(capture_id: string): Promise<ConsoleEventData[]> {
+    return fetch_all_records((offset, limit) => get_console_events(capture_id, offset, limit));
 }
 
 function strip_response_body(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {

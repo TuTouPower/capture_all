@@ -2,11 +2,11 @@
 tid: "t185"
 slug: "refactor_network_capture_state"
 title: "network_capture CDP 状态机拆分"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t185_refactor_network_capture_state"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "6fcebbb93176964ef79f2df6a14de88b3f492aac"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,15 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t185_code_f001 | minor | 建议修 | 已修 | getResponseBody 成功路径的 `cdp_primary_event_emitted` debug 日志移入 `finalize_request` 统一输出（覆盖全部 finalize 路径，信息等价） |
+| t185_code_f002 | minor | 建议修 | 已修 | 收敛重复删除：capture_response_body=false 分支去掉末行重复 finished delete（cleanup 已覆盖）；streaming 分支改为 finalize（meta 存在删 finished）/ else 单删；cleanup_streaming_state 注释修正 |
+| t185_code_f003 | minor | 建议修 | 已修 | NetworkCaptureContext 删除无读取冗余字段（is_capturing/pending_requests/deferred_web_requests/orphan_timers），仅保留 handle_cdp_event 路径实际读取字段 |
+| t185_test_f001 | minor | 待处置 | 已修 | 表测试建立清空判别力：body=false 用例注入 body/streaming/finished 三态、SSE 用例注入 body、loadingFailed 用例注入 finished，断言非恒真 |
 
 ### Round 1 场景说明
 

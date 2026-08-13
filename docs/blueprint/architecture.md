@@ -251,6 +251,10 @@ Agent → MCP 工具调用
 
 见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
+### network_capture 分层（t185）
+
+`network_capture.handle_cdp_event` 为薄分发：按 method family 拆 `handle_target_event` / `handle_http_event` / `handle_websocket_event`，状态经显式 `NetworkCaptureContext`（Map/Set 引用 + capture generation 快照）访问，不直接读写散落模块级状态。request lifecycle 终态收敛到 `finalize_request` / `cleanup_streaming_state` 单一 API（emit + 清理多集合）；异步回调守卫读模块级实时值（ctx 快照不更新）。terminal-path 清理不变量由 `network_capture_terminal_cleanup.test.ts` 表测试钉住。
+
 ## 6. Chrome 权限
 
 `manifest.json` 声明：`storage`、`webRequest`、`debugger`、`tabs`、`alarms`、`downloads`、`cookies`；`host_permissions: ["<all_urls>"]`。`tabs` 用于读取和广播全部标签页；内容脚本通过 `content_scripts` 声明式注入，因此不需要 `activeTab` 或 `scripting`。CSP：`script-src 'self'; object-src 'self'`。

@@ -1,0 +1,19 @@
+{
+  "tid": "t185",
+  "attempt": 1,
+  "execution_id": "3bf32c87e00441f6aeb9fb958aea9b5a",
+  "status": "done",
+  "branch": "t185_refactor_network_capture_state",
+  "base_sha": "6fcebbb93176964ef79f2df6a14de88b3f492aac",
+  "tests": "npm test：1809 passed（新增 network_capture_terminal_cleanup 5 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（3+1 minor：日志收敛、冗余清理、ctx 冗余字段、恒真断言）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["network_cdp.test.ts（21）+ streaming_capture（12）+ loading_failed + session_key + body_budget + response_body_config + network_capture（93）等生产接线测试全绿，采集结果不变"],
+    "AC-002": ["handle_cdp_event 仅 build_capture_context() + method family 分发；handle_target/http/websocket_event 状态均经 ctx（代码审查 + 行为回归）"],
+    "AC-003": ["finalize_request/cleanup_streaming_state 收敛全部 terminal 调用点（body=false / streaming flush / getResponseBody then+catch），无手工删多集合"],
+    "AC-004": ["tests/unit/network_capture_terminal_cleanup.test.ts::5 用例表测试（body=false/SSE/getResponseBody 成功失败/loadingFailed），注入状态建立清空判别力，逐项断言相关 state 清空"]
+  },
+  "pending": [],
+  "findings": []
+}

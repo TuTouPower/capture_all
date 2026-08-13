@@ -70,7 +70,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- heartbeat 与 5 秒 TTL 的合理 timeout 取值：`UNVERIFIED-SPIKE`，执行期按 Bridge TTL 常量核实。
+- heartbeat 与 5 秒 TTL 的合理 timeout 取值：结论=`heartbeat=4000ms`（< Bridge `EXTENSION_TTL_MS` 5000，留 1s 余量，避免 slow heartbeat 期间被判 offline）、`enroll=5000ms`、`command fetch=5000ms`（轮询取命令，短超时不影响命令执行）、`result=MAX_COMMAND_TIMEOUT_MS`（300s，结果 body 可能大；2026-08-13 按 `src/bridge/server.ts` EXTENSION_TTL_MS 与 MCP client AbortSignal.timeout 模式核实）。
 
 ### 风险与回退
 

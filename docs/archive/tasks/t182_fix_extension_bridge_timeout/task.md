@@ -2,11 +2,11 @@
 tid: "t182"
 slug: "fix_extension_bridge_timeout"
 title: "Extension Bridge fetch 超时与取消"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t182_fix_extension_bridge_timeout"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "eac721d474ebbbfcc7463e6d27b82789d34f4678"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,15 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t182_code_f001 | minor | 待处置 | 已修 | 补 command fetch 超时 abort 用例（heartbeat 正常响应 + command fetch pending 捕获 signal，注入 timeout 断言 abort） |
+| t182_code_f002 | minor | 待处置 | 已修 | manifest 加 `minimum_chrome_version: 116`（机器可执行约束，满足 f002「manifest 或 decisions.md」或语义；decisions.md 未改——ADR 011 编号已占用，不补） |
+| t182_test_f001 | minor | 待处置 | 已修 | 同 code f001——command fetch 超时用例补齐（AC-002 三类请求全覆盖） |
+| t182_test_f002 | minor | 待处置 | 已修 | enroll 用例捕获 (url, signal) 并断言 `url` 含 `/extension/enroll`，session mock 失效时不误测 heartbeat；AC-001/003 同加 url 锚定 |
 
 ### Round 1 场景说明
 

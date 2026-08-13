@@ -190,3 +190,10 @@
   - **零配置落地**：Bridge 启动默认自动 open pairing（`pairing_auto_open`，可关）——真实扩展从 `/pair/status` 自动取 code 完成首次 enroll（扩展侧 `resolve_pairing_code`），无需人工手填；code 一次性消费（enroll 成功后关闭）。威胁模型：伪造者同用户本可读 0600 token 文件，pairing code 不新增暴露面。
   - **重启恢复**：已绑定实例（token hash + 元数据）持久化到 `instances_file`，bridge 重启后 heartbeat/重 enroll 不中断（instance token 机制保留）。
 - 替代：A（T091 基线，origin 直通已被本 ADR 移除）。pairing 端点保留（跨机/高安全场景；`pairing_auto_open:false` 时需显式 /pair/open）。
+
+## 024 Body 采集隐私默认与 MIME 脱敏（2026-08-13）
+
+- 背景：`DEFAULT_CONFIG`/`DEFAULT_USER_CONFIG` 默认 `capture_request_body=true`/`capture_response_body=true`（单条上限 100MB），CDP postData 与 response body 原样采集，登录表单/OAuth token/API key/PII 可明文进 IndexedDB 与导出；`redact_data=true` 的 body helper 只截断不脱敏，易误以为统一脱敏（SEC-003）。
+- 选项：A）保持默认全开 + 文档警示；B）body 默认关闭（UI/MCP 显式 opt-in）+ 开启后按 MIME 敏感 key 脱敏 + 不可解析降级。
+- 结论：选 B。`capture_request_body`/`capture_response_body` 默认 false；`redact_body`（shared/body_redaction.ts）在 `handle_network_request` 落库前（redact_data 时）对 form-urlencoded/JSON 按敏感 key（password/token/api_key/secret/auth/credential/jwt/cookie 等子串匹配）脱敏为 `[REDACTED]`；multipart 含敏感 name 或不可解析/未知 MIME 降级为 `[body_redacted:len=N,preview=...]`（不落盘完整原始内容）。导出新增 `include_request_body`/`include_preview`（与既有 `include_response_body` 独立剥离）。影响仅新采集与导出边界；不改变已落库历史格式。
+- 替代：A（基线）。body 默认关影响诊断能力——advanced 用户 UI/MCP 显式开启。

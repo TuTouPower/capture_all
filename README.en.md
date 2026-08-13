@@ -203,7 +203,7 @@ Captured data lives in the extension-local IndexedDB database `capture_all_db`, 
 
 Important boundaries:
 
-- Input values and request/response body capture are enabled by default. Turn them off before first capture if not needed.
+- Request/response body capture is **disabled by default** (t171 privacy default; opt-in via UI/MCP). When enabled, bodies are redacted per MIME for sensitive keys (password/token/api_key), and unparseable bodies are stored as a length summary. Input value capture is enabled by default; turn it off before first capture if not needed.
 - `<all_urls>` and `all_frames: true` allow the Content Script to run on top-level pages and embedded third-party iframes.
 - Redaction reduces exposure risk but does not guarantee removal of all credentials or personal data.
 - MCP queries may forward selected capture data to the connected AI Provider or client environment.

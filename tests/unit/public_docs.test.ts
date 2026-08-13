@@ -114,18 +114,19 @@ describe('public project entry points', () => {
         expect(extension_manifest.description).not.toMatch(/\brecord\b/i);
     });
 
-    test('warns that sensitive capture options are enabled by default', () => {
+    test('t171: request/response body capture defaults to disabled (privacy)', () => {
         expect(DEFAULT_USER_CONFIG).toMatchObject({
             capture_input_values: true,
-            capture_request_body: true,
-            capture_response_body: true,
+            capture_request_body: false,
+            capture_response_body: false,
         });
 
+        // AC-005: 文档与默认一致——body 默认关闭、输入值默认开启
         expect(read_project_file('README.en.md')).toContain(
-            'Input values and request/response body capture are enabled by default.',
+            'Request/response body capture is **disabled by default**',
         );
         expect(read_project_file('README.md')).toContain(
-            '输入值、请求 body、响应 body 采集默认开启',
+            '请求 body、响应 body 采集**默认关闭**',
         );
     });
 
@@ -141,7 +142,8 @@ describe('public project entry points', () => {
         expect(privacy).toContain('AI agent');
         expect(privacy).toContain('third-party iframes');
         expect(privacy).toContain('all_frames: true');
-        expect(privacy).toContain('request and response bodies are not content-scanned');
+        expect(privacy).toContain('Request and response body capture is **disabled by default**');
+        expect(privacy).toContain('redacted per MIME for sensitive keys');
         expect(privacy).toContain('Exported files are independent copies');
 
         expect(security).toContain('GitHub Private Vulnerability Reporting is enabled');

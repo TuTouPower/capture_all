@@ -21,6 +21,7 @@ import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_re
 import { arm_duration_limit, disarm_duration_limit, is_duration_alarm, compute_deadline_ms } from './duration_limit';
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../../shared/redaction';
+import { redact_body } from '../../shared/body_redaction';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
 import { generate_unique_suffix } from '../../shared/id';
 import { create_empty_capture_stats, increment_capture_event_stats } from '../shared/capture_stats';
@@ -1072,6 +1073,25 @@ async function handle_network_request(payload: { event: CaptureEvent; data: Netw
         request.absolute_time = new Date(current_capture.started_at).getTime() + event.relative_time_ms;
     }
     normalize_network_request(request);
+    // t171 SEC-003: redact_data 时 body 落库前按 MIME 敏感 key 脱敏；不可解析降级 preview
+    // （不落盘完整原始内容）。request body mime 用 request_body_mime，response 用 mime_type。
+    // preview 阈值用 inline_text_max_bytes（32KB，f002：max_body_capture_bytes 100MB 会含完整原文）。
+    if (current_config?.redact_data) {
+        const preview_limit = current_config.inline_text_max_bytes;
+        if (request.request_body != null) {
+            const r = redact_body(request.request_body, request.request_body_mime, preview_limit);
+            if (r) request.request_body = r.content;
+        }
+        if (request.response_body != null) {
+            const r = redact_body(request.response_body, request.mime_type, preview_limit);
+            if (r) request.response_body = r.content;
+        }
+        if (request.response_preview != null) {
+            // f001: preview 是原始 body 前缀，同样须脱敏（防明文泄漏到 preview/导出/agent 上下文）
+            const r = redact_body(request.response_preview, request.mime_type, preview_limit);
+            if (r) request.response_preview = r.content;
+        }
+    }
     try {
         await write_network_requests([request]);
         if (!capture_state.is_active_generation(gen)) return;

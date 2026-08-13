@@ -124,6 +124,8 @@ const export_capture_schema = z.object({
     format: z.string(),
     output_path: z.string().min(1).optional(),
     include_response_body: z.boolean().optional(),
+    include_request_body: z.boolean().optional(),
+    include_preview: z.boolean().optional(),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).strict();

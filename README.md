@@ -123,7 +123,7 @@ npm run build
 ## 基础使用
 
 1. 打开 Capture All popup。
-2. 检查采集选项，尤其是输入值、请求 body 和响应 body。
+2. 检查采集选项：请求/响应 body 默认关闭（需要时显式开启）；输入值默认开启，不需要时关闭。
 3. 开始采集。
 4. 复现需要调查的浏览器行为。
 5. 停止采集。
@@ -204,7 +204,7 @@ npm run mcp                # 从 TypeScript 源码启动 MCP Server
 
 重要边界：
 
-- 输入值、请求 body、响应 body 采集默认开启。不需要这些数据时，应在首次采集前关闭。
+- 请求 body、响应 body 采集**默认关闭**（t171 隐私默认，UI/MCP 显式开启）。开启后按 MIME 对 password/token/api_key 等敏感 key 脱敏，无法安全解析的 body 以长度摘要存储。输入值采集默认开启，不需要时应在首次采集前关闭。
 - `<all_urls>` 和 `all_frames: true` 允许 Content Script 在顶层页面及嵌入式第三方 iframe 中运行。
 - 脱敏只能降低暴露风险，无法保证清除所有凭据或个人信息。
 - MCP 查询可能将选中的采集数据发送给所连接的 AI Provider 或客户端环境。

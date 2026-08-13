@@ -16,7 +16,7 @@ Capture All can collect seven data groups during a capture:
 
 Capture All can collect from the top-level page and embedded frames, including third-party iframes, because its declared content script runs with `all_frames: true`. Embedded payment, authentication, chat, advertising, and other third-party frames may therefore contribute user actions or page metadata during a capture.
 
-Input values, request bodies, and response bodies are enabled by default. These data can contain credentials, tokens, private messages, personal information, or other sensitive content. Review the capture defaults before the first capture and disable data not needed for the investigation.
+Input values are enabled by default. Request and response body capture is **disabled by default** and must be explicitly enabled; body data can contain credentials, tokens, private messages, personal information, or other sensitive content. Review the capture defaults before the first capture and disable data not needed for the investigation.
 
 Password input values are never captured. Storage values and Cookie values are not captured; their changes and metadata may still be stored.
 
@@ -24,7 +24,7 @@ Password input values are never captured. Storage values and Cookie values are n
 
 Redaction is enabled by default. It masks known sensitive headers, selected URL query parameters, password inputs, and configured text previews.
 
-Redaction is rule-based and cannot guarantee removal of every secret or personal value. In particular, request and response bodies are not content-scanned for credentials or personal information; they are limited by size only. Disabling redaction can expose headers, URL queries, and input values without these protections.
+Redaction is rule-based and cannot guarantee removal of every secret or personal value. When body capture is enabled, form-urlencoded and JSON bodies are redacted per MIME for sensitive keys (password, token, api_key, secret, and similar); bodies that cannot be safely parsed are stored as a length summary rather than full content. Disabling redaction can expose headers, URL queries, input values, and body content without these protections.
 
 Redaction happens when data is captured. Export and MCP queries do not apply a second redaction pass to data already stored.
 

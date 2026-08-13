@@ -33,8 +33,9 @@ export const DEFAULT_CONFIG: CaptureConfig = {
     capture_network: true,
     keyboard_capture_mode: 'shortcuts',
     capture_input_values: true,
-    capture_request_body: true,
-    capture_response_body: true,
+    // t171 SEC-003: body 采集默认关闭（隐私），UI/MCP 显式 opt-in 开启
+    capture_request_body: false,
+    capture_response_body: false,
     max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
     inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_sensitive_headers: true,
@@ -47,8 +48,9 @@ export const DEFAULT_USER_CONFIG = {
     mouse_precision: 'clicks_scroll_drag' as const,
     keyboard_capture_mode: 'none' as const,
     capture_input_values: true,
-    capture_request_body: true,
-    capture_response_body: true,
+    // t171 SEC-003: body 采集默认关闭（隐私），UI/MCP 显式 opt-in 开启
+    capture_request_body: false,
+    capture_response_body: false,
     max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
     inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_data: true,

@@ -10,6 +10,10 @@ import type { ExportableCaptureData } from '../../shared/system_time';
 
 export interface ExportOptions {
     include_response_body?: boolean;
+    /** t171 AC-004: 独立剥离 request body */
+    include_request_body?: boolean;
+    /** t171 AC-004: 独立剥离 preview（response_preview） */
+    include_preview?: boolean;
 }
 
 // T045: HAR body size 用 UTF-8 字节
@@ -39,9 +43,16 @@ function get_all_console_events(capture_id: string): Promise<ConsoleEventData[]>
     return fetch_all_records((offset, limit) => get_console_events(capture_id, offset, limit));
 }
 
-function strip_response_body(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {
-    if (options?.include_response_body === false) {
-        return requests.map(({ response_body: _omit, ...rest }) => rest as NetworkRequestData);
+// t171 AC-004: 独立剥离 request body / response body / preview（默认保留；显式 false 剥离）
+function strip_body_parts(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {
+    if (options?.include_response_body === false || options?.include_request_body === false || options?.include_preview === false) {
+        return requests.map((r) => {
+            const out = { ...r } as Partial<NetworkRequestData> & Record<string, unknown>;
+            if (options?.include_response_body === false) delete out.response_body;
+            if (options?.include_request_body === false) delete out.request_body;
+            if (options?.include_preview === false) delete out.response_preview;
+            return out as NetworkRequestData;
+        });
     }
     return requests;
 }
@@ -60,7 +71,7 @@ export async function export_json(capture_id: string, options?: ExportOptions): 
         get_all_events_by_category(capture_id, 'cookie')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
+    const network_requests = strip_body_parts(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
@@ -84,7 +95,7 @@ export async function export_jsonl(capture_id: string, options?: ExportOptions):
         get_all_events_by_category(capture_id, 'cookie')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
+    const network_requests = strip_body_parts(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
@@ -119,7 +130,7 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
         get_all_events_by_category(capture_id, 'cookie')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
+    const network_requests = strip_body_parts(network_requests_raw, options);
     const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
@@ -203,7 +214,7 @@ export async function export_har(capture_id: string, options?: ExportOptions): P
     if (!session) throw new Error('Capture not found');
 
     const network_requests_raw = await get_all_network_requests(capture_id);
-    const network_requests = strip_response_body(network_requests_raw, options);
+    const network_requests = strip_body_parts(network_requests_raw, options);
     const user_config = await load_user_config();
     const har = build_har(session, network_requests, user_config);
     return JSON.stringify(har, null, 2);

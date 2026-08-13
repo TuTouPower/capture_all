@@ -94,6 +94,8 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'capture.export':
             return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'), {
                 include_response_body: get_optional_boolean(payload, 'include_response_body'),
+                include_request_body: get_optional_boolean(payload, 'include_request_body'),
+                include_preview: get_optional_boolean(payload, 'include_preview'),
             });
         default:
             // T048: 未知命令类型显式拒绝，避免返回 ok:true data:undefined
@@ -159,7 +161,7 @@ async function get_capture_metadata(capture_id: string): Promise<unknown> {
     return capture;
 }
 
-async function export_capture(capture_id: string, format: string, options?: { include_response_body?: boolean }): Promise<unknown> {
+async function export_capture(capture_id: string, format: string, options?: { include_response_body?: boolean; include_request_body?: boolean; include_preview?: boolean }): Promise<unknown> {
     switch (format) {
         case 'json':
             return { format, content: await export_json(capture_id, options) };

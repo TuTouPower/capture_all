@@ -28,6 +28,7 @@
 | fix_ui_export_100k_truncation | t156 | 2026-08-13 |
 | dashboard_ui_interactions | t197 | 2026-08-14 |
 | storage_export_boundaries | t198 | 2026-08-14 |
+| cdp_network_integration | t199 | 2026-08-14 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

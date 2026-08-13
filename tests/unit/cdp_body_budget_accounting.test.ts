@@ -295,4 +295,29 @@ describe('CDP body budget accounting', () => {
 
         await handle_cdp_stop({ session_key });
     });
+
+    test('t199 AC-001: body 预算超限淘汰生产链路闭环——回写累加、淘汰最旧、账本归零、幸存事件完整返回', async () => {
+        _set_max_session_body_bytes_for_test(300);
+        const session_key = await start_session();
+        const socket = MockWebSocket.instance!;
+
+        // 三条带 body 事件各 200B：r1+r2=400 > 300 触发淘汰（r1 被淘汰），r3 再 +200 → 400>300 又淘汰 r2
+        emit_completed_with_body(socket, 'r1', 'x'.repeat(200));
+        emit_completed_with_body(socket, 'r2', 'y'.repeat(200));
+        emit_completed_with_body(socket, 'r3', 'z'.repeat(200));
+
+        const session = _get_session_for_test(session_key)!;
+        // 淘汰闭环：只留最年轻 r3，账本 = 其 body 字节数
+        expect(session.events.map(e => e.request_id)).toEqual(['r3']);
+        expect(session.body_bytes).toBe(200);
+
+        // 幸存事件经真实 /cdp/events 返回，账本归零
+        const events = await poll_session(session_key);
+        expect(events.length).toBe(1);
+        expect(events[0].request_id).toBe('r3');
+        expect(events[0].response_body).toBe('z'.repeat(200));
+        expect(session.body_bytes).toBe(0);
+
+        await handle_cdp_stop({ session_key });
+    });
 });

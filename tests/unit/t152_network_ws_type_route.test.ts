@@ -14,6 +14,7 @@ const BASE_SOURCES = {
     error_events: [],
     storage_changes: [],
     cookie_changes: [],
+    capture_lifecycle_events: [], // t180: Agent 数据源 8 源
 };
 
 function make_data(network_requests: unknown[]) {

@@ -1,14 +1,26 @@
+// bridge/server.ts — t184: 薄 create_bridge_server（state/context 构造 + http server）+ 4 个 route handler。
+// 每个 handler 返回统一 RouteResult {status, body, contentType?}；server 层只做 CORS、异常映射与发送。
+// 行为等价重构：endpoint 对外状态码/body/认证语义不变（agent_bridge_server + t137 测试为 gate）。
+
 import http from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
-import { AgentCommandQueue } from './command_queue';
-import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
-import { next_default_label } from './label';
+import { AGENT_COMMAND_TYPES, AGENT_ERROR_CODES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType } from '../shared/protocol';
+import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
+import { BRIDGE_SERVICE_ID, BRIDGE_VERSION } from './config';
+import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop, destroy_all_sessions } from './cdp_handler';
 import { bridge_warn } from './logger';
+import {
+    BridgeRegistry,
+    generate_instance_id,
+    type ExtensionInstance,
+} from './registry';
+
+// t181 测试钩子兼容 re-export（测试从 server import）
+export { _set_extension_ttl_for_test, _set_extension_sweep_grace_for_test } from './registry';
 
 interface PairingState {
     open: boolean;
@@ -23,24 +35,12 @@ function generate_pairing_code(): string {
     return String(n);
 }
 
-interface ExtensionInstance {
-    instance_id: string;
-    extension_version: string;
-    active_capture_id: string | null;
-    browser_label: string | null;
-    token_hash: string | null;
-    seen_at: number;
-    origin_extension_id: string | null;
-}
-
 interface CommandRequest {
     type: AgentCommandType;
     payload: Record<string, unknown>;
     timeout_ms?: number;
 }
 
-const EXTENSION_TTL_MS = 5000;
-const BRIDGE_VERSION = '0.1.0';
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
 const MAX_EXTENSION_RESULT_BODY_BYTES = 64 * 1024 * 1024;
 // MCP 文本通道不适配大 payload；超过阈值自动写文件，只回元数据。
@@ -49,109 +49,398 @@ const INSTANCE_HEADER = 'x-capture-all-instance-id';
 
 const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture.get_all_data']);
 
+const GRACEFUL_CLOSE_TIMEOUT_MS = 2000;
+
+/** t184 AC-003: 统一 route 结果——默认 application/json；contentType 覆盖（如 pair 页面 HTML）。 */
+export interface RouteResult {
+    status: number;
+    body: unknown;
+    contentType?: string;
+}
+
+export interface BridgeRouteContext {
+    config: AgentBridgeConfig;
+    registry: BridgeRegistry;
+    pairing_state: PairingState;
+    server: http.Server;
+}
+
+export function create_route_handlers(ctx: BridgeRouteContext): {
+    handle_pair_route: (request: http.IncomingMessage, method: string, path: string) => Promise<RouteResult>;
+    handle_extension_route: (request: http.IncomingMessage, method: string, path: string) => Promise<RouteResult>;
+    handle_mcp_route: (request: http.IncomingMessage, method: string, path: string) => Promise<RouteResult>;
+    handle_cdp_route: (request: http.IncomingMessage, method: string, path: string) => Promise<RouteResult>;
+} {
+    const { config, registry, pairing_state, server } = ctx;
+
+    function port(): number {
+        return (server.address() as AddressInfo).port;
+    }
+
+    // ── pair 路由（API + HTML 页面） ──────────────────────────
+    async function handle_pair_route(request: http.IncomingMessage, method: string, path: string): Promise<RouteResult> {
+        if (method === 'GET' && path === '/pair') {
+            return { status: 200, body: serve_pair_html(), contentType: 'text/html; charset=utf-8' };
+        }
+        if (method === 'GET' && path === '/pair/status') {
+            return { status: 200, body: { ok: true, data: build_pairing_status(pairing_state) } };
+        }
+        if (method === 'POST' && path === '/pair/open') {
+            if (!is_authorized(request, config.token)) {
+                bridge_warn('auth_failed', { path: request.url, reason: 'pair_open_invalid_token' });
+                return { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+            }
+            const body = await read_json(request).catch(() => ({}));
+            const duration_ms = typeof (body as Record<string, unknown>).duration_minutes === 'number'
+                ? (body as Record<string, unknown>).duration_minutes as number * 60 * 1000
+                : PAIRING_DEFAULT_DURATION_MS;
+            const now = Date.now();
+            pairing_state.open = true;
+            pairing_state.code = generate_pairing_code();
+            pairing_state.expires_at = now + duration_ms;
+            return {
+                status: 200,
+                body: { ok: true, data: { pairing_code: pairing_state.code, expires_at: pairing_state.expires_at } },
+            };
+        }
+        if (method === 'POST' && path === '/pair/close') {
+            if (!is_authorized(request, config.token)) {
+                bridge_warn('auth_failed', { path: request.url, reason: 'pair_close_invalid_token' });
+                return { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+            }
+            pairing_state.open = false;
+            pairing_state.code = null;
+            pairing_state.expires_at = 0;
+            return { status: 200, body: { ok: true, data: { open: false } } };
+        }
+        return { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
+    }
+
+    // ── extension 路由（enroll / heartbeat / command / result） ─
+    async function handle_extension_route(request: http.IncomingMessage, method: string, path: string): Promise<RouteResult> {
+        const origin = request.headers.origin ?? null;
+
+        if (method === 'POST' && path === '/extension/enroll') {
+            // t181 AC-004: enroll 入口懒清理过期实例（registry 不无限增长）
+            registry.sweep_expired();
+            // t169 SEC-001: chrome-extension origin 形状可伪造（本地进程可构造 header），
+            // 不再作首次登记主凭据。首次 enroll（新 instance_id）要求真正 secret——
+            // MCP Bearer token 或有效 pairing code（/pair/open 持 token 打开后 code 才有效）。
+            // 重 enroll（既有 instance_id）沿用 t137 origin 扩展 ID 绑定校验放行（真实扩展重启）。
+            const has_mcp = is_authorized(request, config.token);
+            const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
+
+            const body = validate_enroll(await read_json(request));
+            const instance_id = body.instance_id || generate_instance_id();
+            const ext_id = has_ext_origin ? extension_id_from_origin(origin!) : null;
+            let pairing_valid = false; // t169: 首次门槛与 pairing 消费共用
+
+            // t137: 已有 instance_id 时校验 Origin 扩展 ID 绑定——同扩展重启重 enroll 用同
+            // Origin 扩展 ID 放行；伪造 origin 顶替因扩展 ID 不匹配被拒。
+            const existing = registry.instances.get(instance_id);
+            if (existing) {
+                if (ext_id === null) {
+                    // 无扩展 origin（mcp token 路径）无法验证扩展绑定，不允许顶替既有实例
+                    return {
+                        status: 403,
+                        body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Re-enroll requires matching chrome-extension origin' } },
+                    };
+                }
+                if (existing.origin_extension_id !== null && existing.origin_extension_id !== ext_id) {
+                    // 扩展 ID 与首次登记不一致 → 攻击顶替
+                    return {
+                        status: 403,
+                        body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Origin extension id mismatch: re-enroll rejected' } },
+                    };
+                }
+            } else {
+                // t169 SEC-001: 首次登记必须携带真正 secret（Origin 形状可伪造不作凭据）
+                pairing_valid = is_enroll_allowed(pairing_state, body.pairing_code);
+                if (!has_mcp && !pairing_valid) {
+                    bridge_warn('auth_failed', { path: request.url, reason: 'enroll_no_credential' });
+                    return {
+                        status: 401,
+                        body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Enroll requires mcp token or valid pairing code' } },
+                    };
+                }
+            }
+
+            const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
+            const token_hash = hash_token(instance_token);
+
+            // T091: label 为空时按现有在线实例自动分配中文默认编号（一/二/三…）。
+            // Replace any existing binding with the same non-empty label (extension restart path);
+            // 自定义 label 顶替旧实例；自动编号 label 不会冲突（next_default_label 已避开占用）。
+            const provided_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
+            const new_label = provided_label ?? registry.next_default_label(instance_id);
+            // t184 AC-002: label 顶替清理收敛到 BridgeRegistry.replace_instance_by_label
+            registry.replace_instance_by_label(instance_id, new_label, ext_id);
+
+            // t169: 首次/重 enroll 门槛已在上方（existing → t137 origin 校验；!existing → secret 要求）。
+            registry.instances.set(instance_id, {
+                instance_id,
+                extension_version: body.extension_version,
+                active_capture_id: null,
+                browser_label: new_label,
+                token_hash,
+                seen_at: Date.now(),
+                origin_extension_id: ext_id,
+            });
+            registry.get_or_create_queue(instance_id);
+            registry.persist();
+
+            // t169: pairing code 一次性消费——用 pairing 完成 enroll 后关闭（窗口内单次使用）
+            if (!has_mcp && pairing_valid) {
+                pairing_state.open = false;
+                pairing_state.code = null;
+                pairing_state.expires_at = 0;
+            }
+
+            return {
+                status: 200,
+                body: { ok: true, data: { instance_id, instance_token, browser_label: new_label } },
+            };
+        }
+
+        const is_extension_data_path = path === '/extension/heartbeat'
+            || path === '/extension/command'
+            || path.startsWith('/extension/command?')
+            || path === '/extension/result';
+        if (!is_extension_data_path) {
+            return { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
+        }
+
+        // extension data path 认证（heartbeat/command/result 共用 token 语义）
+        const resolved = resolve_extension_auth(request, config.token, registry.instances);
+        if (!resolved.ok) {
+            bridge_warn('auth_failed', { path: request.url, reason: 'extension_path_invalid_token' });
+            return { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+        }
+        const auth_instance_id = resolved.instance_id;
+
+        if (method === 'POST' && path === '/extension/heartbeat') {
+            // t181 AC-004: heartbeat 入口懒清理过期实例
+            registry.sweep_expired();
+            const body = validate_heartbeat(await read_json(request));
+            if (auth_instance_id && auth_instance_id !== body.instance_id) {
+                bridge_warn('auth_failed', { path: request.url, reason: 'heartbeat_instance_mismatch' });
+                return {
+                    status: 401,
+                    body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'instance_id does not match token' } },
+                };
+            }
+            const prev = registry.instances.get(body.instance_id);
+            // T091: 扩展未设 label 时保留 Bridge 自动分配的默认编号；自定义 label 优先。
+            // （覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号，不再清成 null。）
+            const provided_label = body.browser_label !== undefined
+                ? (body.browser_label && body.browser_label.length > 0 ? body.browser_label : null)
+                : null;
+            const new_label = provided_label ?? prev?.browser_label ?? registry.next_default_label(body.instance_id);
+            // 检测 label 变化：若新 label 与其他实例冲突则顶替（与 enroll 一致）
+            // t137: heartbeat 顶替校验 origin 绑定——用被认证实例自身绑定的扩展 ID（而非请求 Origin，
+            // 因无 Origin 客户端可绕过）。伪造 origin 不得经 label 顶替删真实实例。
+            const hb_ext_id = prev?.origin_extension_id ?? null;
+            // t184 AC-002: 与 enroll 共用 replace_instance_by_label
+            registry.replace_instance_by_label(body.instance_id, new_label, hb_ext_id);
+
+            registry.instances.set(body.instance_id, {
+                instance_id: body.instance_id,
+                extension_version: body.extension_version,
+                active_capture_id: body.active_capture_id,
+                browser_label: new_label,
+                token_hash: prev?.token_hash ?? null,
+                seen_at: Date.now(),
+                origin_extension_id: prev?.origin_extension_id ?? null,
+            });
+            registry.get_or_create_queue(body.instance_id);
+            registry.persist();
+            return { status: 200, body: { ok: true } };
+        }
+
+        if (method === 'GET' && (path === '/extension/command' || path.startsWith('/extension/command?'))) {
+            const instance_id = auth_instance_id || read_instance_id(request);
+            if (!instance_id) {
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: 'X-Capture-All-Instance-Id header is required' } },
+                };
+            }
+            const inst = registry.instances.get(instance_id);
+            if (!inst || Date.now() - inst.seen_at > registry.extension_ttl_ms) {
+                return {
+                    status: 503,
+                    body: { ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Instance is offline; send heartbeat first' } },
+                };
+            }
+            const queue = registry.get_or_create_queue(instance_id);
+            return { status: 200, body: queue.take_next() };
+        }
+
+        if (method === 'POST' && path === '/extension/result') {
+            const instance_id = auth_instance_id || read_instance_id(request);
+            if (!instance_id) {
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: 'X-Capture-All-Instance-Id header is required' } },
+                };
+            }
+            const body = await read_json(
+                request,
+                MAX_EXTENSION_RESULT_BODY_BYTES,
+            ) as AgentCommandResult;
+            // t177: 运行时 schema 校验——畸形 result 拒绝且不 resolve/delete pending command
+            const validation_error = validate_result_body(body);
+            if (validation_error) {
+                bridge_warn('result_invalid', { reason: validation_error });
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: `Invalid result: ${validation_error}` } },
+                };
+            }
+            const owner = registry.command_owners.get(body.command_id);
+            if (owner && owner !== instance_id) {
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: 'command_id does not belong to this instance' } },
+                };
+            }
+            const queue = registry.queues.get(instance_id);
+            if (!queue) {
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: 'Unknown instance queue' } },
+                };
+            }
+            // B1-L3: resolve 未知 command_id 是客户端错误，返回 400 而非抛给顶层变 500
+            try {
+                queue.resolve(body);
+            } catch {
+                return {
+                    status: 400,
+                    body: { ok: false, error: { code: 'INVALID_QUERY', message: `Unknown command_id: ${body.command_id}` } },
+                };
+            }
+            registry.command_owners.delete(body.command_id);
+            return { status: 200, body: { ok: true } };
+        }
+
+        return { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
+    }
+
+    // ── MCP 路由（status / command + 文件 spill） ──────────────
+    async function handle_mcp_route(request: http.IncomingMessage, method: string, path: string): Promise<RouteResult> {
+        if (!is_authorized(request, config.token)) {
+            bridge_warn('auth_failed', { path: request.url, reason: 'mcp_path_invalid_token' });
+            return { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+        }
+
+        if (method === 'GET' && path === '/mcp/status') {
+            return { status: 200, body: registry.build_status(config.host, port()) };
+        }
+
+        if (method === 'POST' && path === '/mcp/command') {
+            const body = validate_command_request(await read_json(request));
+            // t137: explicit output_path 尽早校验（resolve_target 之前），防穿越路径进入导出写盘
+            if (typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0) {
+                await safe_output_path(body.payload.output_path, default_export_dir());
+            }
+            const target = registry.resolve_target(body.payload);
+            if ('error' in target) {
+                const status = target.error.code === 'EXTENSION_OFFLINE' ? 503 : 400;
+                return { status, body: { ok: false, error: target.error } };
+            }
+
+            const default_timeout = FULL_DATA_COMMANDS.has(body.type)
+                ? config.full_data_timeout_ms
+                : config.command_timeout_ms;
+            const queue = registry.get_or_create_queue(target.instance_id);
+            const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || default_timeout);
+            registry.command_owners.set(pending.command.command_id, target.instance_id);
+            const result = await pending.result;
+            registry.command_owners.delete(pending.command.command_id);
+            if (result.ok === false && result.error?.code === 'COMMAND_TIMEOUT') {
+                // B1-M13: 命令超时补结构化日志
+                bridge_warn('command_timeout', {
+                    command_id: pending.command.command_id,
+                    type: body.type,
+                    timeout_ms: body.timeout_ms || default_timeout,
+                });
+            }
+
+            if (result.ok && FULL_DATA_COMMANDS.has(body.type)) {
+                const explicit_path = typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0
+                    ? body.payload.output_path
+                    : null;
+                const content = extract_result_content(result);
+                const size_bytes = Buffer.byteLength(content, 'utf-8');
+
+                if (explicit_path || size_bytes > INLINE_RESULT_MAX_BYTES) {
+                    // t137: explicit 路径约束到导出目录内（含符号链接收敛），防路径穿越任意写
+                    const output_path = explicit_path
+                        ? await safe_output_path(explicit_path, default_export_dir())
+                        : await resolve_auto_output_path(body.payload);
+                    const written = await write_result_to_file(result, output_path, content);
+                    return { status: 200, body: written };
+                }
+            }
+
+            return { status: 200, body: result };
+        }
+
+        return { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
+    }
+
+    // ── CDP 路由（透传 cdp_handler 的 {status, body}） ─────────
+    async function handle_cdp_route(request: http.IncomingMessage, method: string, path: string): Promise<RouteResult> {
+        if (!is_authorized(request, config.token)) {
+            bridge_warn('auth_failed', { path: request.url, reason: 'mcp_path_invalid_token' });
+            return { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+        }
+
+        if (method === 'POST' && path === '/cdp/detect') {
+            const body = await read_json(request) as Record<string, unknown>;
+            const result = await handle_cdp_detect(request, body);
+            return { status: result.status, body: result.body };
+        }
+        if (method === 'POST' && path === '/cdp/start') {
+            const body = await read_json(request) as Record<string, unknown>;
+            const result = await handle_cdp_start(request, body);
+            return { status: result.status, body: result.body };
+        }
+        if (method === 'GET' && path.startsWith('/cdp/events')) {
+            const url = new URL(request.url!, `http://${config.host}:${port()}`);
+            const result = await handle_cdp_events(request, url);
+            return { status: result.status, body: result.body };
+        }
+        if (method === 'POST' && path === '/cdp/stop') {
+            const body = await read_json(request) as Record<string, unknown>;
+            const result = await handle_cdp_stop(body);
+            return { status: result.status, body: result.body };
+        }
+        return { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
+    }
+
+    return { handle_pair_route, handle_extension_route, handle_mcp_route, handle_cdp_route };
+}
+
 export async function create_bridge_server(config: AgentBridgeConfig): Promise<{ url: string; close: () => Promise<void>; _server: http.Server }> {
-    const instances = new Map<string, ExtensionInstance>();
-    const queues = new Map<string, AgentCommandQueue>();
-    const command_owners = new Map<string, string>();
+    // t184: 状态集中到 BridgeRegistry（instances/queues/owners + 顶替/移除/sweep）
+    const registry = new BridgeRegistry(config.instances_file);
+    await registry.load_persisted();
+
     const pairing_state: PairingState = {
         open: false,
         code: null,
         expires_at: 0,
     };
 
-    function get_or_create_queue(instance_id: string): AgentCommandQueue {
-        let queue = queues.get(instance_id);
-        if (!queue) {
-            queue = new AgentCommandQueue();
-            queues.set(instance_id, queue);
-        }
-        return queue;
-    }
-
-    function list_online(now = Date.now()): ExtensionInstance[] {
-        return [...instances.values()].filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
-    }
-
-    function resolve_target(payload: Record<string, unknown>): { instance_id: string } | { error: { code: 'TARGET_REQUIRED' | 'TARGET_NOT_FOUND' | 'TARGET_AMBIGUOUS' | 'EXTENSION_OFFLINE'; message: string } } {
-        const online = list_online();
-        if (online.length === 0) {
-            return { error: { code: 'EXTENSION_OFFLINE', message: 'Extension is offline' } };
-        }
-
-        const target_instance_id = typeof payload.target_instance_id === 'string' && payload.target_instance_id.length > 0
-            ? payload.target_instance_id
-            : null;
-        const target_label = typeof payload.target_label === 'string' && payload.target_label.length > 0
-            ? payload.target_label
-            : null;
-
-        if (target_instance_id) {
-            const inst = online.find((item) => item.instance_id === target_instance_id);
-            if (!inst) {
-                return { error: { code: 'TARGET_NOT_FOUND', message: `Target instance not online: ${target_instance_id}` } };
-            }
-            return { instance_id: inst.instance_id };
-        }
-
-        if (target_label) {
-            const matches = online.filter((item) => item.browser_label === target_label);
-            if (matches.length === 0) {
-                return { error: { code: 'TARGET_NOT_FOUND', message: `No online extension with label="${target_label}"` } };
-            }
-            if (matches.length > 1) {
-                return { error: { code: 'TARGET_AMBIGUOUS', message: `Multiple online extensions share label="${target_label}"; specify target_instance_id` } };
-            }
-            return { instance_id: matches[0].instance_id };
-        }
-
-        if (online.length === 1) {
-            return { instance_id: online[0].instance_id };
-        }
-
-        // Multi-instance: require explicit target (instance_id preferred; label as human alias).
-        // If all instances have unique labels, surface them; otherwise flag anonymous.
-        const labels = online.map((item) => item.browser_label).filter((l): l is string => Boolean(l));
-        const has_anonymous = labels.length < online.length;
-        const hint = has_anonymous
-            ? 'Multiple extensions online; some have no label. Set browser_label in each extension settings, then specify target_label or target_instance_id.'
-            : `Multiple extensions online; specify target_label (one of: ${Array.from(new Set(labels)).join(', ')}) or target_instance_id.`;
-        return {
-            error: {
-                code: 'TARGET_REQUIRED',
-                message: hint,
-            },
-        };
-    }
-
-    function build_status(port: number): AgentStatus {
-        const now = Date.now();
-        const all = [...instances.values()];
-        const online = all.filter((inst) => now - inst.seen_at <= EXTENSION_TTL_MS);
-        const extensions = all.map((inst) => {
-            const is_on = now - inst.seen_at <= EXTENSION_TTL_MS;
-            const queue = queues.get(inst.instance_id);
-            return {
-                instance_id: inst.instance_id,
-                browser_label: inst.browser_label,
-                online: is_on,
-                extension_version: inst.extension_version,
-                active_capture_id: is_on ? inst.active_capture_id : null,
-                pending_commands: queue?.pending_count() ?? 0,
-            };
-        });
-        // Prefer listing online first for consumers; still include recently seen offline in map until replaced
-        const primary = online[0] ?? null;
-        const pending_commands = online.reduce((sum, inst) => sum + (queues.get(inst.instance_id)?.pending_count() ?? 0), 0);
-        return {
-            bridge_version: BRIDGE_VERSION,
-            bridge_url: `http://${config.host}:${port}`,
-            extension_online: online.length > 0,
-            extension_version: primary?.extension_version ?? null,
-            active_capture_id: primary?.active_capture_id ?? null,
-            pending_commands,
-            extensions,
-            online_count: online.length,
-        };
+    // t169 AC-003: 启动自动 open pairing（安全分发 credential 承接零配置：
+    // MCP token 文件 0600 本机 owner 可读 = 同用户已授权；伪造者同用户本可读 token，
+    // pairing code 不新增暴露面）。code 一次性消费（enroll 成功后关闭）。
+    if (config.pairing_auto_open !== false) {
+        pairing_state.open = true;
+        pairing_state.code = generate_pairing_code();
+        pairing_state.expires_at = Date.now() + PAIRING_DEFAULT_DURATION_MS;
     }
 
     const server = http.createServer(async (request, response) => {
@@ -163,10 +452,7 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 bridge_warn('auth_failed', { path: request.url, reason: 'origin_not_allowed' });
                 return send_json(response, 403, {
                     ok: false,
-                    error: {
-                        code: 'ORIGIN_NOT_ALLOWED',
-                        message: 'Origin is not allowed',
-                    },
+                    error: { code: 'ORIGIN_NOT_ALLOWED', message: 'Origin is not allowed' },
                 });
             }
 
@@ -180,405 +466,59 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                 return;
             }
 
-            if (request.method === 'GET' && request.url === '/health') {
-                return send_json(response, 200, { ok: true });
-            }
+            const method = request.method ?? 'GET';
+            // t184 AC-004: 分发保持旧严格 URL 匹配语义（含 query 的原样 URL），
+            // 边界输入状态码/认证行为与重构前一致（f001 修复）。
+            const url = request.url ?? '';
 
-            if (request.method === 'GET' && request.url === '/extension/discover') {
+            // t184 AC-003: 路由分发——server 层只做 CORS/异常映射/发送，各 handler 返回 {status, body}
+            const handlers = route_handlers;
+            let result: RouteResult;
+
+            if (method === 'GET' && url === '/health') {
+                // t183 AC-001: 稳定产品标识 + 版本（is_bridge_healthy 据此识别本服务）
+                result = { status: 200, body: { ok: true, service: BRIDGE_SERVICE_ID, bridge_version: BRIDGE_VERSION } };
+            } else if (method === 'GET' && url === '/extension/discover') {
                 // Local discovery: no secret; only useful on loopback + extension origin checks above.
-                return send_json(response, 200, {
-                    ok: true,
-                    pairable: true,
-                    bridge_version: BRIDGE_VERSION,
-                    enroll_path: '/extension/enroll',
-                });
-            }
-
-            if (request.method === 'GET' && request.url === '/pair') {
-                return serve_pair_page(response, pairing_state, config.host, actual_port(server));
-            }
-
-            if (request.method === 'GET' && request.url === '/pair/status') {
-                return send_json(response, 200, { ok: true, data: build_pairing_status(pairing_state) });
-            }
-
-            if (request.method === 'POST' && request.url === '/pair/open') {
+                result = {
+                    status: 200,
+                    body: { ok: true, pairable: true, bridge_version: BRIDGE_VERSION, enroll_path: '/extension/enroll' },
+                };
+            } else if (
+                (method === 'GET' && url === '/pair')
+                || (method === 'GET' && url === '/pair/status')
+                || (method === 'POST' && url === '/pair/open')
+                || (method === 'POST' && url === '/pair/close')
+            ) {
+                // t184 f001: pair 分发含 method 联合——错误 method 请求落入 else 认证兜底（与重构前一致）
+                result = await handlers.handle_pair_route(request, method, url);
+            } else if (
+                (method === 'POST' && url === '/extension/enroll')
+                || (method === 'POST' && url === '/extension/heartbeat')
+                || (method === 'GET' && (url === '/extension/command' || url.startsWith('/extension/command?')))
+                || (method === 'POST' && url === '/extension/result')
+            ) {
+                result = await handlers.handle_extension_route(request, method, url);
+            } else if (url.startsWith('/mcp/')) {
+                result = await handlers.handle_mcp_route(request, method, url);
+            } else if (url.startsWith('/cdp/')) {
+                result = await handlers.handle_cdp_route(request, method, url);
+            } else {
                 if (!is_authorized(request, config.token)) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'pair_open_invalid_token' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
-                    });
+                    bridge_warn('auth_failed', { path: request.url, reason: 'invalid_token' });
+                    result = { status: 401, body: { ok: false, error: { code: 'TOKEN_INVALID', message: 'Invalid token' } } };
+                } else {
+                    result = { status: 404, body: { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } } };
                 }
-                const body = await read_json(request).catch(() => ({}));
-                const duration_ms = typeof (body as Record<string, unknown>).duration_minutes === 'number'
-                    ? (body as Record<string, unknown>).duration_minutes as number * 60 * 1000
-                    : PAIRING_DEFAULT_DURATION_MS;
-                const now = Date.now();
-                pairing_state.open = true;
-                pairing_state.code = generate_pairing_code();
-                pairing_state.expires_at = now + duration_ms;
-                return send_json(response, 200, {
-                    ok: true,
-                    data: {
-                        pairing_code: pairing_state.code,
-                        expires_at: pairing_state.expires_at,
-                    },
-                });
             }
 
-            if (request.method === 'POST' && request.url === '/pair/close') {
-                if (!is_authorized(request, config.token)) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'pair_close_invalid_token' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
-                    });
-                }
-                pairing_state.open = false;
-                pairing_state.code = null;
-                pairing_state.expires_at = 0;
-                return send_json(response, 200, { ok: true, data: { open: false } });
+            // 发送（html 或 json）
+            if (result.contentType) {
+                response.writeHead(result.status, { 'Content-Type': result.contentType });
+                response.end(String(result.body));
+            } else {
+                send_json(response, result.status, result.body);
             }
-
-            if (request.method === 'POST' && request.url === '/extension/enroll') {
-                // T091: loopback + chrome-extension origin 直通 enroll，pairing 不再强制。
-                // 保留 mcp token 路径作为可选；pairing 端点保留作为跨机/手动场景的可选增强。
-                const has_mcp = is_authorized(request, config.token);
-                const has_ext_origin = Boolean(origin && is_allowed_extension_origin(origin));
-                if (!has_mcp && !has_ext_origin) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'enroll_no_credential' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Enroll requires chrome-extension origin or mcp token' },
-                    });
-                }
-
-                const body = validate_enroll(await read_json(request));
-                const instance_id = body.instance_id || `inst_${randomBytes(8).toString('hex')}`;
-
-                // T091: pairing 仅当扩展显式传 pairing_code 时校验（可选增强）；默认不要求。
-                if (!has_mcp && body.pairing_code) {
-                    const allowed = is_enroll_allowed(pairing_state, body.pairing_code);
-                    if (!allowed) {
-                        return send_json(response, 403, {
-                            ok: false,
-                            error: {
-                                code: 'PAIRING_REQUIRED',
-                                message: 'Pairing code rejected. Open /pair page on this machine to allow this browser, or omit pairing_code for loopback auto-enroll.',
-                            },
-                        });
-                    }
-                }
-
-                const instance_token = `ext_${randomBytes(24).toString('base64url')}`;
-                const token_hash = hash_token(instance_token);
-
-                // T091: label 为空时按现有在线实例自动分配中文默认编号（一/二/三…）。
-                // Replace any existing binding with the same non-empty label (extension restart path);
-                // 自定义 label 顶替旧实例；自动编号 label 不会冲突（next_default_label 已避开占用）。
-                // t137: Origin 扩展 ID 提取（label 顶替与 instance_id 顶替校验共用）
-                const ext_id = has_ext_origin ? extension_id_from_origin(origin!) : null;
-                const provided_label = body.browser_label && body.browser_label.length > 0 ? body.browser_label : null;
-                const new_label = provided_label ?? next_default_label(
-                    [...instances.values()]
-                        .filter((inst) => inst.instance_id !== instance_id)
-                        .map((inst) => inst.browser_label),
-                );
-                if (provided_label) {
-                    for (const [id, inst] of [...instances.entries()]) {
-                        if (id !== instance_id && inst.browser_label === new_label) {
-                            // t137: label 顶替删除旧实例前校验 origin 绑定——伪造 origin 不得踢下线已绑定扩展的真实实例
-                            if (inst.origin_extension_id !== null && ext_id !== null
-                                && inst.origin_extension_id !== ext_id) {
-                                continue;
-                            }
-                            instances.delete(id);
-                            const old_queue = queues.get(id);
-                            if (old_queue) {
-                                old_queue.cancel_all();
-                                queues.delete(id);
-                            }
-                            // 清理归属该实例的 command_owners 条目
-                            for (const [cmd_id, owner_id] of [...command_owners.entries()]) {
-                                if (owner_id === id) {
-                                    command_owners.delete(cmd_id);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // t137: 已有 instance_id 时校验 Origin 扩展 ID 绑定（s003 spike 结论）——
-                // 同扩展重启重 enroll 用同 Origin 扩展 ID 放行；伪造 origin 顶替因扩展 ID 不匹配被拒。
-                const existing = instances.get(instance_id);
-                if (existing) {
-                    if (ext_id === null) {
-                        // 无扩展 origin（mcp token 路径）无法验证扩展绑定，不允许顶替既有实例
-                        return send_json(response, 403, {
-                            ok: false,
-                            error: { code: 'TOKEN_INVALID', message: 'Re-enroll requires matching chrome-extension origin' },
-                        });
-                    }
-                    if (existing.origin_extension_id !== null && existing.origin_extension_id !== ext_id) {
-                        // 扩展 ID 与首次登记不一致 → 攻击顶替
-                        return send_json(response, 403, {
-                            ok: false,
-                            error: { code: 'TOKEN_INVALID', message: 'Origin extension id mismatch: re-enroll rejected' },
-                        });
-                    }
-                }
-
-                instances.set(instance_id, {
-                    instance_id,
-                    extension_version: body.extension_version,
-                    active_capture_id: null,
-                    browser_label: new_label,
-                    token_hash,
-                    seen_at: Date.now(),
-                    origin_extension_id: ext_id,
-                });
-                get_or_create_queue(instance_id);
-
-                return send_json(response, 200, {
-                    ok: true,
-                    data: {
-                        instance_id,
-                        instance_token,
-                        browser_label: new_label,
-                    },
-                });
-            }
-
-            const path = request.url?.split('?')[0] || '';
-            const is_extension_data_path = path === '/extension/heartbeat'
-                || path === '/extension/command'
-                || path === '/extension/result';
-            const is_mcp_path = path.startsWith('/mcp/') || path.startsWith('/cdp/');
-
-            let auth_instance_id: string | null = null;
-            if (is_extension_data_path) {
-                const resolved = resolve_extension_auth(request, config.token, instances);
-                if (!resolved.ok) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'extension_path_invalid_token' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
-                    });
-                }
-                auth_instance_id = resolved.instance_id;
-            } else if (is_mcp_path) {
-                if (!is_authorized(request, config.token)) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'mcp_path_invalid_token' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
-                    });
-                }
-            } else if (!is_authorized(request, config.token)) {
-                bridge_warn('auth_failed', { path: request.url, reason: 'invalid_token' });
-                return send_json(response, 401, {
-                    ok: false,
-                    error: { code: 'TOKEN_INVALID', message: 'Invalid token' },
-                });
-            }
-
-            if (request.method === 'POST' && request.url === '/extension/heartbeat') {
-                const body = validate_heartbeat(await read_json(request));
-                if (auth_instance_id && auth_instance_id !== body.instance_id) {
-                    bridge_warn('auth_failed', { path: request.url, reason: 'heartbeat_instance_mismatch' });
-                    return send_json(response, 401, {
-                        ok: false,
-                        error: { code: 'TOKEN_INVALID', message: 'instance_id does not match token' },
-                    });
-                }
-                const prev = instances.get(body.instance_id);
-                // T091: 扩展未设 label 时保留 Bridge 自动分配的默认编号；自定义 label 优先。
-                // （覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号，不再清成 null。）
-                const provided_label = body.browser_label !== undefined
-                    ? (body.browser_label && body.browser_label.length > 0 ? body.browser_label : null)
-                    : null;
-                const new_label = provided_label ?? prev?.browser_label ?? next_default_label(
-                    [...instances.values()]
-                        .filter((inst) => inst.instance_id !== body.instance_id)
-                        .map((inst) => inst.browser_label),
-                );
-                // 检测 label 变化：若新 label 与其他实例冲突则顶替（与 enroll 一致）
-                if (new_label) {
-                    // t137: heartbeat 顶替校验 origin 绑定——用被认证实例自身绑定的扩展 ID（而非请求 Origin，
-                    // 因无 Origin 客户端可绕过）。伪造 origin 不得经 label 顶替删真实实例。
-                    const hb_ext_id = prev?.origin_extension_id ?? null;
-                    for (const [id, inst] of [...instances.entries()]) {
-                        if (id !== body.instance_id && inst.browser_label === new_label) {
-                            if (inst.origin_extension_id !== null && hb_ext_id !== null
-                                && inst.origin_extension_id !== hb_ext_id) {
-                                continue;
-                            }
-                            instances.delete(id);
-                            const old_queue = queues.get(id);
-                            if (old_queue) {
-                                old_queue.cancel_all();
-                                queues.delete(id);
-                            }
-                            for (const [cmd_id, owner_id] of [...command_owners.entries()]) {
-                                if (owner_id === id) command_owners.delete(cmd_id);
-                            }
-                        }
-                    }
-                }
-                instances.set(body.instance_id, {
-                    instance_id: body.instance_id,
-                    extension_version: body.extension_version,
-                    active_capture_id: body.active_capture_id,
-                    browser_label: new_label,
-                    token_hash: prev?.token_hash ?? null,
-                    seen_at: Date.now(),
-                    origin_extension_id: prev?.origin_extension_id ?? null,
-                });
-                get_or_create_queue(body.instance_id);
-                return send_json(response, 200, { ok: true });
-            }
-
-            if (request.method === 'GET' && (request.url === '/extension/command' || request.url?.startsWith('/extension/command?'))) {
-                const instance_id = auth_instance_id || read_instance_id(request);
-                if (!instance_id) {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: 'X-Capture-All-Instance-Id header is required' },
-                    });
-                }
-                const inst = instances.get(instance_id);
-                if (!inst || Date.now() - inst.seen_at > EXTENSION_TTL_MS) {
-                    return send_json(response, 503, {
-                        ok: false,
-                        error: { code: 'EXTENSION_OFFLINE', message: 'Instance is offline; send heartbeat first' },
-                    });
-                }
-                const queue = get_or_create_queue(instance_id);
-                return send_json(response, 200, queue.take_next());
-            }
-
-            if (request.method === 'POST' && request.url === '/extension/result') {
-                const instance_id = auth_instance_id || read_instance_id(request);
-                if (!instance_id) {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: 'X-Capture-All-Instance-Id header is required' },
-                    });
-                }
-                const body = await read_json(
-                    request,
-                    MAX_EXTENSION_RESULT_BODY_BYTES,
-                ) as AgentCommandResult;
-                const owner = command_owners.get(body.command_id);
-                if (owner && owner !== instance_id) {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: 'command_id does not belong to this instance' },
-                    });
-                }
-                const queue = queues.get(instance_id);
-                if (!queue) {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: 'Unknown instance queue' },
-                    });
-                }
-                // B1-L3: resolve 未知 command_id 是客户端错误，返回 400 而非抛给顶层变 500
-                try {
-                    queue.resolve(body);
-                } catch {
-                    return send_json(response, 400, {
-                        ok: false,
-                        error: { code: 'INVALID_QUERY', message: `Unknown command_id: ${body.command_id}` },
-                    });
-                }
-                command_owners.delete(body.command_id);
-                return send_json(response, 200, { ok: true });
-            }
-
-            if (request.method === 'GET' && request.url === '/mcp/status') {
-                return send_json(response, 200, build_status(actual_port(server)));
-            }
-
-            if (request.method === 'POST' && request.url === '/mcp/command') {
-                const body = validate_command_request(await read_json(request));
-                // t137: explicit output_path 尽早校验（resolve_target 之前），防穿越路径进入导出写盘
-                if (typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0) {
-                    await safe_output_path(body.payload.output_path, default_export_dir());
-                }
-                const target = resolve_target(body.payload);
-                if ('error' in target) {
-                    const status = target.error.code === 'EXTENSION_OFFLINE' ? 503 : 400;
-                    return send_json(response, status, {
-                        ok: false,
-                        error: target.error,
-                    });
-                }
-
-                const default_timeout = FULL_DATA_COMMANDS.has(body.type)
-                    ? config.full_data_timeout_ms
-                    : config.command_timeout_ms;
-                const queue = get_or_create_queue(target.instance_id);
-                const pending = queue.enqueue(body.type, body.payload, body.timeout_ms || default_timeout);
-                command_owners.set(pending.command.command_id, target.instance_id);
-                const result = await pending.result;
-                command_owners.delete(pending.command.command_id);
-                if (result.ok === false && result.error?.code === 'COMMAND_TIMEOUT') {
-                    // B1-M13: 命令超时补结构化日志
-                    bridge_warn('command_timeout', {
-                        command_id: pending.command.command_id,
-                        type: body.type,
-                        timeout_ms: body.timeout_ms || default_timeout,
-                    });
-                }
-
-                if (result.ok && FULL_DATA_COMMANDS.has(body.type)) {
-                    const explicit_path = typeof body.payload.output_path === 'string' && body.payload.output_path.length > 0
-                        ? body.payload.output_path
-                        : null;
-                    const content = extract_result_content(result);
-                    const size_bytes = Buffer.byteLength(content, 'utf-8');
-
-                    if (explicit_path || size_bytes > INLINE_RESULT_MAX_BYTES) {
-                        // t137: explicit 路径约束到导出目录内（含符号链接收敛），防路径穿越任意写
-                        const output_path = explicit_path
-                            ? await safe_output_path(explicit_path, default_export_dir())
-                            : await resolve_auto_output_path(body.payload);
-                        const written = await write_result_to_file(result, output_path, content);
-                        return send_json(response, 200, written);
-                    }
-                }
-
-                return send_json(response, 200, result);
-            }
-
-            // CDP bridge routes
-            if (request.method === 'POST' && request.url === '/cdp/detect') {
-                const body = await read_json(request) as Record<string, unknown>;
-                const result = await handle_cdp_detect(request, body);
-                return send_json(response, result.status, result.body);
-            }
-
-            if (request.method === 'POST' && request.url === '/cdp/start') {
-                const body = await read_json(request) as Record<string, unknown>;
-                const result = await handle_cdp_start(request, body);
-                return send_json(response, result.status, result.body);
-            }
-
-            if (request.method === 'GET' && request.url?.startsWith('/cdp/events')) {
-                const url = new URL(request.url, `http://${config.host}:${actual_port(server)}`);
-                const result = await handle_cdp_events(request, url);
-                return send_json(response, result.status, result.body);
-            }
-
-            if (request.method === 'POST' && request.url === '/cdp/stop') {
-                const body = await read_json(request) as Record<string, unknown>;
-                const result = await handle_cdp_stop(body);
-                return send_json(response, result.status, result.body);
-            }
-
-            return send_json(response, 404, { ok: false, error: { code: 'BRIDGE_UNAVAILABLE', message: 'Route not found' } });
         } catch (error) {
             if (error instanceof BridgeHttpError) {
                 return send_json(response, error.status, {
@@ -594,11 +534,34 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
         }
     });
 
+    const route_handlers = create_route_handlers({ config, registry, pairing_state, server });
+
     await new Promise<void>((resolve) => server.listen(config.port, config.host, resolve));
 
     return {
         url: `http://${config.host}:${actual_port(server)}`,
-        close: () => new Promise((resolve) => server.close(() => resolve())),
+        close: async () => {
+            // t181 AC-001: 先 cancel 所有 pending command——COMMAND_CANCELLED 终态，
+            // 不阻塞至 timeout（/mcp/command 可 await 至 300s）；registry 清空（t184 收敛）
+            registry.cancel_all();
+            // AC-002: 关闭全部 CDP sessions（WS/timer/映射），不阻止进程退出
+            destroy_all_sessions();
+            // AC-003: 有界 graceful close——先 server.close 等正常结束，超时再强制 closeAllConnections
+            await new Promise<void>((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(() => {
+                    try { server.closeAllConnections?.(); } catch { /* best-effort */ }
+                    finish();
+                }, GRACEFUL_CLOSE_TIMEOUT_MS);
+                server.close(() => finish());
+            });
+        },
         _server: server,
     };
 }
@@ -747,13 +710,8 @@ function build_pairing_status(state: PairingState): { open: boolean; code: strin
     };
 }
 
-function serve_pair_page(
-    response: http.ServerResponse,
-    _state: PairingState,
-    _host: string,
-    _port: number,
-): void {
-    const html = `<!DOCTYPE html>
+function serve_pair_html(): string {
+    return `<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
@@ -789,8 +747,6 @@ refresh();
 </script>
 </body>
 </html>`;
-    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    response.end(html);
 }
 
 class BridgeHttpError extends Error {
@@ -839,6 +795,9 @@ async function resolve_auto_output_path(payload: Record<string, unknown>): Promi
 // t137: explicit output_path 约束到导出目录内，防路径穿越与符号链接任意写。
 // realpath 解析符号链接后校验真实路径在 base 内（path.resolve 纯词法不解析链接）。
 async function safe_output_path(raw: string, base: string): Promise<string> {
+    // t176: 默认导出目录可能不存在（首次使用）——先安全创建，realpath(base) 才不抛 ENOENT。
+    // 创建前无 symlink 竞争窗口（base 由配置/环境变量指定，非攻击者可控路径）。
+    await mkdir(base, { recursive: true });
     const resolved = resolve(base, raw);
     if (resolved !== base && !resolved.startsWith(base + sep)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path must be inside export dir');
@@ -865,6 +824,13 @@ async function safe_output_path(raw: string, base: string): Promise<string> {
     const resolved_real = resolve(real_parent, remaining);
     if (resolved_real !== base_real && !resolved_real.startsWith(base_real + sep)) {
         throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path resolves outside export dir');
+    }
+    // t176: 嵌套父目录可能不存在——创建后再 realpath 校验（防 symlink 逃逸窗口：
+    // 若 base 下预置 symlink 指向外部，mkdir 跟随后在真实路径校验处被拒）。
+    await mkdir(dirname(resolved), { recursive: true });
+    const parent_real = await realpath(dirname(resolved));
+    if (parent_real !== base_real && !parent_real.startsWith(base_real + sep)) {
+        throw new BridgeHttpError(400, 'INVALID_QUERY', 'output_path parent resolves outside export dir');
     }
     return resolved;
 }
@@ -937,9 +903,9 @@ function validate_command_request(value: unknown): CommandRequest {
     }
 
     if (value.timeout_ms !== undefined) {
-        // T063: timeout_ms 必须是正整数且有合理上限（300000ms=5min）
-        if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0 || value.timeout_ms > 300000) {
-            throw new BridgeHttpError(400, 'INVALID_QUERY', 'Command timeout must be a positive integer <= 300000');
+        // T063: timeout_ms 必须是正整数且有合理上限（MAX_COMMAND_TIMEOUT_MS=5min）
+        if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0 || value.timeout_ms > MAX_COMMAND_TIMEOUT_MS) {
+            throw new BridgeHttpError(400, 'INVALID_QUERY', `Command timeout must be a positive integer <= ${MAX_COMMAND_TIMEOUT_MS}`);
         }
     }
 
@@ -990,4 +956,35 @@ async function read_json(
 function send_json(response: http.ServerResponse, status: number, body: unknown): void {
     response.writeHead(status, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify(body));
+}
+
+// t177: /extension/result 运行时校验——plain object、非空 command_id、boolean ok、
+// 合法 AgentErrorCode、ok:true 不带 error、ok:false 必须带 error。返回错误消息或 null。
+function validate_result_body(body: unknown): string | null {
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+        return 'result must be a plain object';
+    }
+    const b = body as Record<string, unknown>;
+    if (typeof b.command_id !== 'string' || b.command_id.length === 0) {
+        return 'command_id must be a non-empty string';
+    }
+    if (typeof b.ok !== 'boolean') {
+        return 'ok must be a boolean';
+    }
+    if (b.ok === true) {
+        if (b.error !== undefined) return 'ok:true must not carry error';
+        return null;
+    }
+    // ok:false
+    const err = b.error as Record<string, unknown> | undefined;
+    if (!err || typeof err !== 'object') {
+        return 'ok:false must carry an error object';
+    }
+    if (typeof err.code !== 'string' || !(AGENT_ERROR_CODES as readonly string[]).includes(err.code)) {
+        return `unknown error code: ${String(err.code)}`;
+    }
+    if (typeof err.message !== 'string') {
+        return 'error.message must be a string';
+    }
+    return null;
 }

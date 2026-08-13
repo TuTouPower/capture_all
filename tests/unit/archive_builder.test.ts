@@ -297,6 +297,8 @@ describe('t153 AC-001: 归档压缩异步（调用路径锚点）', () => {
             'utf8',
         );
         expect(src).not.toMatch(/zipSync/);
-        expect(src).toMatch(/\bzip\(/);
+        // t193 AC-005: 流式 Zip + ZipPassThrough（store 流式，无压缩 worker 竞争）
+        expect(src).toMatch(/new Zip\(/);
+        expect(src).toMatch(/new ZipPassThrough\(entry\.name\)/);
     });
 });

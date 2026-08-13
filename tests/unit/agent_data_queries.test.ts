@@ -11,7 +11,8 @@ import {
 } from '../../src/extension/background/agent_data_queries';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../src/shared/types';
 
-vi.mock('../../src/extension/background/storage', () => ({
+vi.mock('../../src/extension/background/storage', async (import_original) => ({
+    ...await import_original<typeof import('../../src/extension/background/storage')>(),
     get_capture: vi.fn(),
     get_events_by_category: vi.fn(),
     get_network_requests: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../src/extension/background/storage', () => ({
     get_error_events: vi.fn(),
     get_storage_changes: vi.fn(),
     get_cookie_changes: vi.fn(),
+    // t161: 下推路径用到的 storage API——importOriginal 保留真实实现，测试覆盖旧路径用例不受影响
 }));
 
 import {
@@ -166,7 +168,8 @@ const data: AgentSessionData = {
         console_events,
         error_events,
         storage_changes: [],
-        cookie_changes: []
+        cookie_changes: [],
+        capture_lifecycle_events: [] // t180: Agent 数据源 8 源
     }
 };
 
@@ -273,7 +276,7 @@ describe('agent data queries', () => {
             event_id: `nav_${i}`,
             capture_id: 'capture_1',
             category: 'navigation',
-            type: 'page_navigation',
+            type: 'route_change',
             relative_time_ms: i * 10,
             tab_id: 1,
             url: 'https://x',
@@ -320,6 +323,7 @@ describe('agent data queries', () => {
                     data: { action: 'set', storage_type: 'local', key: 'theme', origin: 'https://x', value_status: 'captured' },
                 } as CaptureEvent],
                 cookie_changes: [],
+                capture_lifecycle_events: [], // t180: Agent 数据源 8 源
             },
         };
         const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
@@ -339,6 +343,7 @@ describe('agent data queries', () => {
                     action: 'remove', storage_type: 'session', key: 'auth', origin: 'https://y', value_status: 'captured',
                 } as CaptureEvent],
                 cookie_changes: [],
+                capture_lifecycle_events: [], // t180: Agent 数据源 8 源
             },
         };
         const res = list_entries_from_capture_data(d as never, { source: 'storage_changes', offset: 0, limit: 10, order: 'asc' });
@@ -349,7 +354,7 @@ describe('agent data queries', () => {
 });
 
 describe('load_agent_capture_data', () => {
-    test('loads all 7 data sources and wraps capture', async () => {
+    test('loads all 8 data sources and wraps capture', async () => {
         const mock_capture: CaptureRecord = {
             capture_id: 'cap-1',
             name: 'Test Capture',
@@ -387,7 +392,8 @@ describe('load_agent_capture_data', () => {
             console_events: [],
             error_events: [],
             storage_changes: [],
-            cookie_changes: []
+            cookie_changes: [],
+            capture_lifecycle_events: [] // t180: lifecycle 加入 Agent source（8 源）
         });
 
         expect(get_capture).toHaveBeenCalledWith('cap-1');
@@ -399,6 +405,8 @@ describe('load_agent_capture_data', () => {
         expect(get_error_events).toHaveBeenCalledWith('cap-1', 0, 5000);
         expect(get_storage_changes).toHaveBeenCalledWith('cap-1', 0, 5000);
         expect(get_cookie_changes).toHaveBeenCalledWith('cap-1', 0, 5000);
+        // t180: lifecycle 加入 Agent source，分页读取包含 capture_lifecycle 类别
+        expect(get_events_by_category).toHaveBeenCalledWith('cap-1', 'capture_lifecycle', 0, 5000);
     });
 
     test('throws CAPTURE_NOT_FOUND when capture is missing', async () => {

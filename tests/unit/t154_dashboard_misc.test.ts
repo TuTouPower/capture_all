@@ -40,6 +40,7 @@ import {
     set_detail_capture,
     set_dt_tab, get_dt_tab, set_dt_view, get_dt_view, set_dt_quick, get_dt_quick,
     set_detail_events, set_detail_network, set_dt_sel,
+    wire_dashboard_router,
 } from '../../src/extension/dashboard/dashboard_shared';
 import { render_captures, del_capture } from '../../src/extension/dashboard/dashboard_captures';
 import {
@@ -106,6 +107,10 @@ describe('t154 dashboard misc fixes', () => {
         set_detail_network([]);
         set_dt_sel(-1);
         set_cap_search('');
+        // t186 AC-002/003: 每例显式 wire router（未接线调用抛错，不再静默 no-op）
+        wire_dashboard_router({
+            go: vi.fn(), render_content: vi.fn(), render_shell: vi.fn(), open_detail: vi.fn(), is_tl_dragging: vi.fn(() => false),
+        });
         // 恢复模块默认视图状态
         set_dt_tab('timeline'); set_dt_view('list'); set_dt_quick('all');
         send_message_mock.mockImplementation(async ({ action }: { action: string }) => {

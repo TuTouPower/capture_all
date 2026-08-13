@@ -58,8 +58,10 @@ function build_segment(element: Element): string {
     const tag = element.tagName.toLowerCase();
     const cls = get_first_meaningful_class(element);
     const n = get_nth_of_type(element);
-    const class_part = cls ? `.${cls}` : '';
-    return `${tag}${class_part}:nth-child(${n})`;
+    // t189 AC-003: :nth-of-type 按同 tag 兄弟计数（与 get_nth_of_type 语义一致），
+    // 原 :nth-child 把同 tag 位置误当全部子元素位置；class 用 CSS.escape 防特殊字符
+    const class_part = cls ? `.${CSS.escape(cls)}` : '';
+    return `${tag}${class_part}:nth-of-type(${n})`;
 }
 
 function build_css_path(element: Element): string {
@@ -69,7 +71,8 @@ function build_css_path(element: Element): string {
 
     while (current && current !== document.body && current.nodeType === 1 && depth < MAX_PATH_DEPTH) {
         if (current.id) {
-            segments.unshift(`#${current.id}`);
+            // t189 AC-003: id 含特殊字符（冒号/点/空格等）时 CSS.escape，querySelector round-trip 成立
+            segments.unshift(`#${CSS.escape(current.id)}`);
             return segments.join(' > ');
         }
         segments.unshift(build_segment(current));
@@ -79,6 +82,9 @@ function build_css_path(element: Element): string {
 
     return segments.join(' > ');
 }
+
+// t189 AC-003: 测试导出——jsdom round-trip 验证 querySelector(generated) === target
+export const _build_css_path_for_test = build_css_path;
 
 function get_target_info(element: HTMLElement): { selector: string; xpath: string; tag: string } {
     return {

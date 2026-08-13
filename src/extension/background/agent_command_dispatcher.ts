@@ -1,16 +1,15 @@
 import type { AgentCommand, AgentCommandResult, AgentError, AgentErrorCode } from '../../shared/protocol';
-import { list_captures as storage_list_captures, get_capture } from './storage';
+import { list_captures as storage_list_captures, count_captures, get_capture } from './storage';
 import { export_har, export_html, export_json, export_jsonl } from './exporter';
 import {
-    get_entry_from_capture_data,
-    get_timeline_from_capture_data,
-    get_timeline_item_from_capture_data,
-    list_data_sources_from_capture_data,
-    list_entries_from_capture_data,
     load_agent_capture_data,
+    get_entry_pushdown,
+    list_entries_pushdown,
+    list_sources_pushdown,
+    get_timeline_pushdown,
     type AgentDataSource
 } from './agent_data_queries';
-import { DEFAULT_CONFIG } from '../../shared/constants';
+import { DEFAULT_CONFIG, MAX_BODY_CAPTURE_BYTES, INLINE_TEXT_MAX_BYTES } from '../../shared/constants';
 import { generate_capture_id } from '../../shared/id';
 import type { CaptureConfig } from '../../shared/types';
 import { Logger } from '../../shared/logger';
@@ -53,24 +52,29 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'captures.get':
             return get_capture_metadata(get_required_capture_id(payload));
         case 'sources.list':
-            return list_data_sources_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)));
+            // t161 AC-003: 下推——count/range 用索引，不读记录体
+            return list_sources_pushdown(get_required_capture_id(payload));
         case 'data.list':
-            return list_entries_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
+            // t161 AC-002/004: 下推——读取量受 limit 约束，返回 next_token
+            return list_entries_pushdown(get_required_capture_id(payload), {
                 source: get_required_string(payload, 'source') as AgentDataSource,
                 offset: get_optional_non_negative_int(payload, 'offset'),
                 limit: get_optional_non_negative_int(payload, 'limit', 100000),
                 start_time: get_optional_number(payload, 'start_time'),
                 end_time: get_optional_number(payload, 'end_time'),
-                order: get_order(payload)
+                order: get_order(payload),
+                after: payload.after as { relative_time_ms: number; event_id: string } | undefined | null,
             });
         case 'data.get':
-            return get_entry_from_capture_data(
-                await load_agent_capture_data(get_required_capture_id(payload)),
+            // t161 AC-001: 点查——主键直查对应 store
+            return get_entry_pushdown(
+                get_required_capture_id(payload),
                 get_required_string(payload, 'source') as AgentDataSource,
                 get_required_string(payload, 'record_id')
             );
         case 'timeline.list':
-            return get_timeline_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
+            // t161 AC-002: 下推——per-source keyset 有界读取后合并
+            return get_timeline_pushdown(get_required_capture_id(payload), {
                 sources: get_optional_sources(payload),
                 offset: get_optional_non_negative_int(payload, 'offset'),
                 limit: get_optional_non_negative_int(payload, 'limit', 100000),
@@ -79,8 +83,10 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
                 order: get_order(payload)
             });
         case 'timeline.get':
-            return get_timeline_item_from_capture_data(
-                await load_agent_capture_data(get_required_capture_id(payload)),
+            // t161 AC-001: 点查（item_id 带 source 前缀）
+            return get_entry_pushdown(
+                get_required_capture_id(payload),
+                get_required_string(payload, 'item_id').split(':')[0] as AgentDataSource,
                 get_required_string(payload, 'item_id')
             );
         case 'capture.get_all_data':
@@ -88,6 +94,8 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'capture.export':
             return export_capture(get_required_capture_id(payload), get_required_string(payload, 'format'), {
                 include_response_body: get_optional_boolean(payload, 'include_response_body'),
+                include_request_body: get_optional_boolean(payload, 'include_request_body'),
+                include_preview: get_optional_boolean(payload, 'include_preview'),
             });
         default:
             // T048: 未知命令类型显式拒绝，避免返回 ok:true data:undefined
@@ -120,28 +128,28 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
 }
 
 async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
+    // t177: stop 幂等——空闲态 stop_capture 返回 success:true，capture_id 允许 null；
+    // NO_ACTIVE_CAPTURE 错误码契约已删除（协议与文档同步）。
     const active_capture_id = handlers.get_status().active_capture_id;
     const result = await handlers.stop_capture();
 
-    if (!result.success) {
-        throw new AgentCommandError('NO_ACTIVE_CAPTURE', 'No active capture');
-    }
-
-    return { capture_id: active_capture_id, status: 'stopped' };
+    return { capture_id: result.success ? active_capture_id : null, status: result.success ? 'stopped' : 'idle' };
 }
 
 async function list_captures(payload: Record<string, unknown>): Promise<unknown> {
     const offset = get_optional_non_negative_int(payload, 'offset') ?? 0;
     const limit = get_optional_non_negative_int(payload, 'limit', 100000) ?? 100;
     const order = get_order(payload) ?? 'desc';
-    const captures = await storage_list_captures();
-    const sorted = [...captures].sort((a, b) => order === 'asc'
-        ? new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-        : new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+    // t161: 索引方向直接给出排序序（started_at prev=desc/next=asc），limit 截断读取量，
+    // 不再全量读取后二次排序再 slice；total 用 count() 轻量查询。
+    // t193 AC-002: offset 下推（cursor.advance），不读取被跳过的记录（PERF-L009）
+    const direction = order === 'asc' ? 'next' : 'prev';
+    const captures = await storage_list_captures(limit, direction, offset);
 
     return {
-        total: sorted.length,
-        captures: sorted.slice(offset, offset + limit)
+        total: await count_captures(),
+        // t193 AC-002: storage 已下推 offset/limit（cursor advance + 截断），无需再 slice
+        captures,
     };
 }
 
@@ -153,7 +161,7 @@ async function get_capture_metadata(capture_id: string): Promise<unknown> {
     return capture;
 }
 
-async function export_capture(capture_id: string, format: string, options?: { include_response_body?: boolean }): Promise<unknown> {
+async function export_capture(capture_id: string, format: string, options?: { include_response_body?: boolean; include_request_body?: boolean; include_preview?: boolean }): Promise<unknown> {
     switch (format) {
         case 'json':
             return { format, content: await export_json(capture_id, options) };
@@ -273,6 +281,14 @@ function get_capture_config(value: unknown): CaptureConfig {
     return merged as CaptureConfig;
 }
 
+function is_within_body_cap(v: unknown): boolean {
+    return is_non_negative_integer(v) && Number(v) <= MAX_BODY_CAPTURE_BYTES;
+}
+
+function is_within_inline_cap(v: unknown): boolean {
+    return is_non_negative_integer(v) && Number(v) <= INLINE_TEXT_MAX_BYTES;
+}
+
 function has_valid_capture_config_values(value: Record<string, unknown>): boolean {
     return (
         ['clicks', 'clicks_scroll_drag', 'full_trajectory'].includes(String(value.mouse_precision))
@@ -282,8 +298,9 @@ function has_valid_capture_config_values(value: Record<string, unknown>): boolea
         && typeof value.capture_input_values === 'boolean'
         && typeof value.capture_request_body === 'boolean'
         && typeof value.capture_response_body === 'boolean'
-        && is_non_negative_integer(value.max_body_capture_bytes)
-        && is_non_negative_integer(value.inline_text_max_bytes)
+        // t178: body/inline 硬上限（spike s008 结论，复用既有常量）
+        && is_within_body_cap(value.max_body_capture_bytes)
+        && is_within_inline_cap(value.inline_text_max_bytes)
         && typeof value.redact_sensitive_headers === 'boolean'
         && typeof value.redact_url_query === 'boolean'
         && typeof value.redact_data === 'boolean'

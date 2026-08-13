@@ -23,8 +23,9 @@ export function normalize_agent_bridge_config(config: AgentBridgeUserConfig): Ag
         : MIN_POLL_INTERVAL_MS;
 
     return {
-        // T091: 零配置 —— token 空时不再强制禁用 agent_bridge_enabled。
-        // 扩展可凭 chrome-extension origin 在 loopback 内直通 enroll，无需手填 token。
+        // T091/t169: 零配置 —— token 空时不强制禁用 agent_bridge_enabled。
+        // 首次 enroll 需真正凭据（t169）：扩展自动读取 Bridge 启动生成的一次性配对码
+        // （/pair/status）完成登记，无需手填 token；仅伪造 chrome-extension origin 会被 401 拒绝。
         agent_bridge_enabled: config.agent_bridge_enabled,
         agent_bridge_url: url.toString().replace(/\/$/, ''),
         agent_bridge_token: token,

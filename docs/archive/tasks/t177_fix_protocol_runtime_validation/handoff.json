@@ -1,0 +1,19 @@
+{
+  "tid": "t177",
+  "attempt": 1,
+  "execution_id": "25fae29797024bf789d7d9a86a10c2a8",
+  "status": "done",
+  "branch": "t177_fix_protocol_runtime_validation",
+  "base_sha": "79e6f7075ec1e3509704c7b9cd39cf97e544faa5",
+  "tests": "npm test：1732 passed（新增 result_runtime_validation 6 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code FAIL/test FAIL（恒真断言 + stop 判别力）→ Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/result_runtime_validation.test.ts::AC-001a-d 四类畸形 400 + 同 command_id 合法 result 仍 200（pending 未丢）"],
+    "AC-002": ["tests/unit/result_runtime_validation.test.ts::AC-002a 合法 result 200；AC-002b ok:false + 合法 CAPTURE_NOT_FOUND → 200"],
+    "AC-003": ["tests/unit/agent_command_dispatcher.test.ts::stop 幂等：空闲/失败均成功返回 capture_id null；NO_ACTIVE_CAPTURE 从协议/domain 删除"],
+    "AC-004": ["tests/unit/result_runtime_validation.test.ts::四类畸形 + 合法投递测试通过"]
+  },
+  "pending": ["p049"],
+  "findings": []
+}

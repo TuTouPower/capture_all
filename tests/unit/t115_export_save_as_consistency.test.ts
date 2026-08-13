@@ -127,7 +127,7 @@ describe('t115 Dashboard capture AC-004 接线锚定', () => {
         const { resolve } = require('node:path');
         return readFileSync(resolve(__dirname, '..', '..', rel), 'utf8');
     };
-    const src = read('src/extension/dashboard/dashboard_shared.ts');
+    const src = read('src/extension/dashboard/dashboard_data.ts');
 
     it('archive 路径 flush 先于 read_capture_snapshot（顺序锚定）', () => {
         // 锚定 export_capture 函数体内：flush 调用须在 read_capture_snapshot 之前

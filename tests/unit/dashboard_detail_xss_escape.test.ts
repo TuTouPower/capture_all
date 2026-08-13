@@ -43,7 +43,7 @@ const XSS_VECTORS = [
 
 function nav_event(v: string): CaptureEvent {
     return {
-        type: 'page_navigation',
+        type: 'route_change',
         relative_time_ms: 100,
         absolute_time: '2026-01-01T00:00:00Z',
         source: v,

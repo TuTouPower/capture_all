@@ -624,6 +624,13 @@ describe('T0006: auto-enroll and session management', () => {
         return vi.spyOn(global, 'fetch').mockImplementation(
             async (input: string | URL | Request, init?: RequestInit) => {
                 const url = input.toString();
+                if (url.endsWith('/pair/status')) {
+                    // t169: 无 token 时扩展自动读取 pairing code（MCP 客户端 open 后有效）
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: { open: true, code: '123456', expires_at: Date.now() + 60000 },
+                    }), { status: 200 });
+                }
                 if (url.endsWith('/extension/enroll') && init?.method === 'POST') {
                     if (!ok) return new Response('{}', { status: 400 });
                     return new Response(JSON.stringify({
@@ -761,7 +768,7 @@ describe('T0006: auto-enroll and session management', () => {
 
     // ─── T091: 零配置 —— 无 agent_bridge_token 时依赖 loopback origin 直通 enroll ───
 
-    test('T091: enroll succeeds without agent_bridge_token (no Authorization header sent)', async () => {
+    test('T091 (t169): enroll without agent_bridge_token auto-reads pairing code and sends it', async () => {
         const no_token_config = {
             agent_bridge_enabled: true,
             agent_bridge_url: 'http://127.0.0.1:17831',
@@ -775,17 +782,22 @@ describe('T0006: auto-enroll and session management', () => {
         await run_initial_poll();
         stop_bridge_client();
 
-        // 1. enroll 被调用
+        // 1. 无 token 时先读 /pair/status（自动获取 pairing code）
+        const pair_calls = fetch_spy.mock.calls.filter(
+            ([input]) => input.toString().endsWith('/pair/status'),
+        );
+        expect(pair_calls.length).toBeGreaterThan(0);
+
+        // 2. enroll 请求不带 Authorization（零配置），但 body 携带自动获取的 pairing_code
         const enroll_calls = fetch_spy.mock.calls.filter(
             ([input]) => input.toString().endsWith('/extension/enroll'),
         );
         expect(enroll_calls.length).toBeGreaterThan(0);
-
-        // 2. enroll 请求不带 Authorization header（T091 核心行为）
         const enroll_init = enroll_calls[0][1] as RequestInit | undefined;
         const headers = enroll_init?.headers as Record<string, string> | undefined;
         expect(headers?.Authorization).toBeUndefined();
-        expect(headers?.authorization).toBeUndefined();
+        const enroll_body = JSON.parse(String(enroll_init?.body)) as { pairing_code?: string };
+        expect(enroll_body.pairing_code).toBe('123456');
 
         // 3. session 仍被保存（Bridge 颁发的 instance_token 持久化）
         expect(storage_set).toHaveBeenCalledWith(

@@ -22,6 +22,3 @@ export function bridge_warn(event: string, fields?: Record<string, unknown>): vo
     bridge_log('warn', event, fields);
 }
 
-export function bridge_error(event: string, fields?: Record<string, unknown>): void {
-    bridge_log('error', event, fields);
-}

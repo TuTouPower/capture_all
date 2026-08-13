@@ -29,6 +29,8 @@ describe('parse_bridge_config', () => {
             token: '<TEST_BRIDGE_TOKEN>',
             command_timeout_ms: 120000,
             full_data_timeout_ms: 300000,
+            // t169: 默认启动自动 open pairing（零配置 enroll）
+            pairing_auto_open: true,
         });
     });
 

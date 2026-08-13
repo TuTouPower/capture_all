@@ -1,0 +1,20 @@
+{
+  "tid": "t183",
+  "attempt": 1,
+  "execution_id": "7f6fb5edaa3e48ca8e41b1d5c402935e",
+  "status": "done",
+  "branch": "t183_fix_bridge_health_probe",
+  "base_sha": "c274da4d06ad162bdec1cd9acc9e0f45fa8f549e",
+  "tests": "npm test：1797 passed（bridge_config_health 重写 11 + bridge_main_health_probe 新增 7）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL/test FAIL（SessionStart hook 未复用探测 important + 4 minor）→ 处置（hook 改 --probe + BRIDGE_SERVICE_ID 同源）→ Round 2 双 PASS → Round 3（mock 常量同源）双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/agent_bridge_server.test.ts::真实 /health 返回 service: BRIDGE_SERVICE_ID + bridge_version（toMatchObject）"],
+    "AC-002": ["tests/unit/bridge_config_health.test.ts::probe_bridge_health 三态：任意 2xx 非本服务/非 JSON → occupied；is_bridge_healthy false"],
+    "AC-003": ["tests/unit/bridge_main_health_probe.test.ts::occupied → rejects.toThrow(/non-capture-all/) 非 already listening；入口 glue process.exit(1)"],
+    "AC-004": ["tests/unit/bridge_main_health_probe.test.ts::.claude/settings.json SessionStart hook 文本断言（--probe/healthy/occupied，无 grep -q 200）；run_bridge_probe 三态行为"],
+    "AC-005": ["tests/unit/bridge_config_health.test.ts（11 用例）+ bridge_main_health_probe.test.ts（7 用例）全绿；全量 unit 188 文件 / 1797 测试通过"]
+  },
+  "pending": [],
+  "findings": []
+}

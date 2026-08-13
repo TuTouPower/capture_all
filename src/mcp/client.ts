@@ -4,11 +4,12 @@ interface BridgeErrorResponse {
     error?: AgentError;
 }
 
-// B1-M3: bridge 挂起时 fetch 无限阻塞。get_status 固定 10s；send_command 取
+// B1-M3: bridge 挂起时 fetch 无限阻塞。get_status 默认 30s（t175 可传 timeout_ms）；send_command 取
 // timeout_ms+5s（timeout_ms 缺省时对齐 bridge config command_timeout_ms=120s 缺省）。
 // t150-f001: 全量数据命令（export/get_all_data）bridge 缺省 full_data_timeout_ms=300s，
 // client 超时必须对齐（否则 125~300s 合法导出被 AbortSignal 过早中断）。
-const GET_STATUS_TIMEOUT_MS = 10 * 1000;
+// t175: status 类默认对齐 domain 查询类 30s；显式 timeout_ms 优先（AC-002）
+const GET_STATUS_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 120 * 1000;
 const DEFAULT_FULL_DATA_TIMEOUT_MS = 300 * 1000;
 const TIMEOUT_GRACE_MS = 5 * 1000;
@@ -17,10 +18,10 @@ const FULL_DATA_COMMANDS = new Set<AgentCommandType>(['capture.export', 'capture
 export class BridgeMcpClient {
     constructor(private bridge_url: string, private token: string) {}
 
-    async get_status(): Promise<AgentStatus> {
+    async get_status(timeout_ms?: number): Promise<AgentStatus> {
         const response = await fetch_with_timeout(`${this.bridge_url}/mcp/status`, {
             headers: this.headers(),
-        }, GET_STATUS_TIMEOUT_MS);
+        }, timeout_ms ?? GET_STATUS_TIMEOUT_MS);
 
         return await this.parse_response<AgentStatus>(response);
     }

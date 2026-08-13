@@ -1,4 +1,5 @@
 import { build_record_id, parse_record_id, type AgentDataSourceSummary, type AgentRecordDetail, type AgentRecordPreview, type AgentQueryRange } from '../../shared/protocol';
+import { AGENT_DATA_SOURCES } from '../../shared/constants';
 import { stable_fingerprint } from '../../shared/id';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../shared/types';
 import {
@@ -8,17 +9,19 @@ import {
     get_events_by_category,
     get_network_requests,
     get_storage_changes,
-    get_capture
+    get_capture,
+    query_by_store_keyset,
+    count_by_store_keyset,
+    first_last_keys_by_store,
+    get_store_record_by_id,
+    STORE_NAMES,
+    type KeysetToken,
 } from './storage';
+import { fetch_all_records } from '../shared/paged_reader';
+import type { KeysetPage } from './storage';
 
-export type AgentDataSource =
-    | 'user_action_events'
-    | 'navigation_events'
-    | 'network_requests'
-    | 'console_events'
-    | 'error_events'
-    | 'storage_changes'
-    | 'cookie_changes';
+// t179: 数据源枚举唯一来源 = shared/constants.AGENT_DATA_SOURCES（MCP Zod 同步派生，防漂移）
+export type AgentDataSource = typeof AGENT_DATA_SOURCES[number];
 
 type AgentRecord = CaptureEvent | NetworkRequestData | ConsoleEventData | RuntimeExceptionData | StorageChangeData | CookieChangeData;
 
@@ -40,33 +43,7 @@ interface AgentRecordListResult {
     records: AgentRecordPreview[];
 }
 
-const ALL_SOURCES: AgentDataSource[] = [
-    'user_action_events',
-    'navigation_events',
-    'network_requests',
-    'console_events',
-    'error_events',
-    'storage_changes',
-    'cookie_changes'
-];
-
-// T043: 分页聚合，替代固定 FULL_DATA_LIMIT=100000 截断
-const PAGE_SIZE = 5000;
-
-async function fetch_all<T>(
-    fetcher: (offset: number, limit: number) => Promise<T[]>
-): Promise<T[]> {
-    const all: T[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await fetcher(offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
-}
+const ALL_SOURCES: AgentDataSource[] = [...AGENT_DATA_SOURCES];
 
 export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);
@@ -74,14 +51,17 @@ export async function load_agent_capture_data(capture_id: string): Promise<Agent
         throw new Error('CAPTURE_NOT_FOUND');
     }
 
-    const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
-        fetch_all((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
-        fetch_all((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
-        fetch_all((o, l) => get_network_requests(capture_id, o, l)),
-        fetch_all((o, l) => get_console_events(capture_id, o, l)),
-        fetch_all((o, l) => get_error_events(capture_id, o, l)),
-        fetch_all((o, l) => get_storage_changes(capture_id, o, l)),
-        fetch_all((o, l) => get_cookie_changes(capture_id, o, l))
+    // t156: 分页聚合统一走 shared/paged_reader 的 fetch_all_records
+    const [user_action_events, navigation_events, network_requests, console_events, error_events, storage_changes, cookie_changes, capture_lifecycle_events] = await Promise.all([
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'user_action', o, l)),
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'navigation', o, l)),
+        fetch_all_records((o, l) => get_network_requests(capture_id, o, l)),
+        fetch_all_records((o, l) => get_console_events(capture_id, o, l)),
+        fetch_all_records((o, l) => get_error_events(capture_id, o, l)),
+        fetch_all_records((o, l) => get_storage_changes(capture_id, o, l)),
+        fetch_all_records((o, l) => get_cookie_changes(capture_id, o, l)),
+        // t180: lifecycle 视为完整采集证据，Agent 数据源包含 capture_lifecycle_events
+        fetch_all_records((o, l) => get_events_by_category(capture_id, 'capture_lifecycle', o, l))
     ]);
 
     return {
@@ -93,7 +73,8 @@ export async function load_agent_capture_data(capture_id: string): Promise<Agent
             console_events,
             error_events,
             storage_changes,
-            cookie_changes
+            cookie_changes,
+            capture_lifecycle_events
         }
     };
 }
@@ -247,6 +228,7 @@ function get_record_type(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
         case 'user_action_events':
         case 'navigation_events':
+        case 'capture_lifecycle_events': // t180: lifecycle 为 CaptureEvent 形态
             return (record as CaptureEvent).type;
         case 'network_requests':
             return is_event_record(record)
@@ -270,7 +252,8 @@ function get_record_type(source: AgentDataSource, record: AgentRecord): string {
 function get_record_summary(source: AgentDataSource, record: AgentRecord): string {
     switch (source) {
         case 'user_action_events':
-        case 'navigation_events': {
+        case 'navigation_events':
+        case 'capture_lifecycle_events': { // t180: lifecycle 为 CaptureEvent 形态
             const event = record as CaptureEvent;
             return `${event.type} ${event.url}`;
         }
@@ -308,7 +291,8 @@ function get_record_summary(source: AgentDataSource, record: AgentRecord): strin
 function get_record_preview(source: AgentDataSource, record: AgentRecord): Record<string, unknown> {
     switch (source) {
         case 'user_action_events':
-        case 'navigation_events': {
+        case 'navigation_events':
+        case 'capture_lifecycle_events': { // t180: lifecycle 为 CaptureEvent 形态
             const event = record as CaptureEvent;
             return { url: event.url, tab_id: event.tab_id, frame_id: event.frame_id };
         }
@@ -341,4 +325,138 @@ function get_record_preview(source: AgentDataSource, record: AgentRecord): Recor
             return { name: cookie_change.name, domain: cookie_change.domain, removed: cookie_change.removed };
         }
     }
+}
+
+// ============================================================
+// t161: 下推查询路径——谓词/order/limit 推入 IndexedDB（keyset 分页，d008），
+// 不再先 Promise.all 加载七源全量再内存过滤。对外返回契约与纯函数路径等价（AC-005）。
+// ============================================================
+
+const SOURCE_STORE: Record<AgentDataSource, string> = {
+    user_action_events: STORE_NAMES.USER_ACTION_EVENTS,
+    navigation_events: STORE_NAMES.NAVIGATION_EVENTS,
+    network_requests: STORE_NAMES.NETWORK_REQUESTS,
+    console_events: STORE_NAMES.CONSOLE_EVENTS,
+    error_events: STORE_NAMES.ERROR_EVENTS,
+    storage_changes: STORE_NAMES.STORAGE_CHANGES,
+    cookie_changes: STORE_NAMES.COOKIE_CHANGES,
+    capture_lifecycle_events: STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS, // t180: lifecycle 加入 Agent source
+};
+
+export interface AgentRecordListResultWithToken extends AgentRecordListResult {
+    next_token?: KeysetToken | null;
+}
+
+/** t161 AC-001: 点查——主键 store.get，只访问对应 store 对应记录（不触及其他六源）。 */
+export async function get_entry_pushdown(
+    capture_id: string,
+    source: AgentDataSource,
+    record_id: string,
+): Promise<AgentRecordDetail<AgentRecord>> {
+    const parsed = parse_record_id(record_id);
+    if (parsed.source !== source) {
+        throw new Error('RECORD_NOT_FOUND');
+    }
+    const record = await get_store_record_by_id<AgentRecord>(SOURCE_STORE[source], parsed.native_id);
+    // 主键为全局 event_id，校验归属 capture 防跨采集误查
+    if (!record || !record_belongs_to_capture(record, capture_id)) {
+        throw new Error('RECORD_NOT_FOUND');
+    }
+    return { record_id, source, data: record };
+}
+
+/** t161 AC-002/004: 单源 keyset 分页——读取量受 offset+limit 约束，不加载七源全量；
+ * 谓词（start/end）与 order 推入索引；返回 next_token 供下一页从 last key 继续。 */
+export async function list_entries_pushdown(
+    capture_id: string,
+    query: ListRecordsQuery,
+): Promise<AgentRecordListResultWithToken> {
+    const source = query.source;
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 100000;
+    const take = Math.max(1, offset + limit);
+    const page = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, {
+        limit: take,
+        start_time: query.start_time,
+        end_time: query.end_time,
+        direction: query.order === 'desc' ? 'prev' : 'next',
+        after: query.after,
+    });
+    // prev cursor 已降序（新→旧），next cursor 已升序——与纯函数 sort 语义一致，无需重排
+    const records = page.records.slice(offset, offset + limit);
+    const total = await count_by_store_keyset(SOURCE_STORE[source], capture_id, {
+        start_time: query.start_time,
+        end_time: query.end_time,
+    });
+    return {
+        total,
+        records: records.map((record, index) => to_record_preview(source, record, offset + index + 1)),
+        next_token: page.next_token,
+    };
+}
+
+/** t161 AC-003: sources.list 下推——count/range 用索引 count 与 first/last cursor（不读记录体）；
+ * types 为契约字段需扫描记录 type（见 spec 风险与回退标注）。 */
+export async function list_sources_pushdown(capture_id: string): Promise<AgentDataSourceSummary[]> {
+    const summaries = await Promise.all(ALL_SOURCES.map(async (source) => {
+        const store = SOURCE_STORE[source];
+        const count = await count_by_store_keyset(store, capture_id);
+        const { first, last } = await first_last_keys_by_store(store, capture_id);
+        const types = count > 0 ? await collect_source_types(source, capture_id) : [];
+        return { source, count, time_range: { start: first, end: last }, types };
+    }));
+    return summaries.filter(s => s.count > 0);
+}
+
+/** t161: timeline.list 下推——per-source keyset 各取前 (offset+limit) 条（读取量有界），
+ * 内存合并跨源排序后 slice；契约语义与纯函数等价。 */
+export async function get_timeline_pushdown(
+    capture_id: string,
+    query: TimelineQuery = {},
+): Promise<AgentRecordListResult> {
+    const sources = query.sources ?? ALL_SOURCES;
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 100000;
+    const take = Math.max(1, offset + limit);
+    const direction = query.order === 'desc' ? 'prev' : 'next';
+    const per_source = await Promise.all(sources.map(async (source) => {
+        const page = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, {
+            limit: take,
+            start_time: query.start_time,
+            end_time: query.end_time,
+            direction,
+        });
+        return page.records.map(record => ({ source, record }));
+    }));
+    const merged = per_source.flat()
+        .sort((a, b) => sort_records(a.record, b.record, query.order))
+        .slice(offset, offset + limit);
+    const total = (await Promise.all(sources.map(s => count_by_store_keyset(SOURCE_STORE[s], capture_id, {
+        start_time: query.start_time,
+        end_time: query.end_time,
+    })))).reduce((a, b) => a + b, 0);
+    return {
+        total,
+        records: merged.map((item, index) => to_record_preview(item.source, item.record, offset + index + 1)),
+    };
+}
+
+/** 点查归属校验（CaptureEvent 必有 capture_id；NetworkRequestData 可选） */
+function record_belongs_to_capture(record: AgentRecord, capture_id: string): boolean {
+    const cid = (record as { capture_id?: string }).capture_id;
+    return cid === undefined || cid === capture_id;
+}
+
+async function collect_source_types(source: AgentDataSource, capture_id: string): Promise<string[]> {
+    const types = new Set<string>();
+    let after: KeysetToken | null = null;
+    while (true) {
+        const page: KeysetPage<AgentRecord> = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, { limit: 5000, after });
+        for (const record of page.records) {
+            types.add(get_record_type(source, record));
+        }
+        if (!page.next_token) break;
+        after = page.next_token;
+    }
+    return Array.from(types).sort();
 }

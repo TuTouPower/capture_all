@@ -232,14 +232,22 @@ test.describe.serial('导出内容正确性', () => {
             /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
         );
 
-        // CDP body capture：至少一条 entry 的 response.content.text 非空
-        const has_body = har.log.entries.some(
+        // t163 AC-002: 断言存在某 entry 的 response.content.text 非空且等于预期值
+        // （test-page.html 的 /api/test 请求，fixture 返回 { status:'ok', message:'E2E_API_MARKER' }）
+        const body_entries = har.log.entries.filter(
+            (e: any) => e.request?.url?.includes('/api/test'),
+        );
+        expect(body_entries.length, 'HAR 应包含 /api/test entry').toBeGreaterThan(0);
+        const with_body = body_entries.filter(
             (e: any) =>
                 e.response?.content?.text &&
-                e.response.content.text.length > 0,
+                e.response.content.text.length > 0 &&
+                e.response.content.text.includes('E2E_API_MARKER'),
         );
-        // body capture 依赖 CDP，可能未启用；此处仅验证布尔判断不出错
-        expect(typeof has_body, 'body capture 检测应为布尔值').toBe('boolean');
+        expect(
+            with_body.length,
+            '/api/test entry 的 response.content.text 应非空且含 E2E_API_MARKER',
+        ).toBeGreaterThan(0);
     });
 
     // ================================================================

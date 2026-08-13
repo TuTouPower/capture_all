@@ -1,0 +1,19 @@
+{
+  "tid": "t170",
+  "attempt": 1,
+  "execution_id": "a433fd4081464a88be9b4aa9fde130dd",
+  "status": "done",
+  "branch": "t170_fix_cdp_ws_url_allowlist",
+  "base_sha": "053eb1d8a9f9755b2f1fef827c3857ca2c9e4cf3",
+  "tests": "npm test：1676 passed（新增 cdp_ws_url_allowlist 9 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test FAIL（f001 判别力）→ Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cdp_ws_url_allowlist.test.ts::AC-001/001b 放行且断言构造 ws://127.0.0.1:{port}/devtools/page/{id}（不信任 discovery）"],
+    "AC-002": ["tests/unit/cdp_ws_url_allowlist.test.ts::AC-002 远端 host 拒绝 400 cdp_invalid_ws_url 不建 WS"],
+    "AC-003": ["tests/unit/cdp_ws_url_allowlist.test.ts::AC-003a/b/c/d/e 不同端口/wss/userinfo/fragment/默认端口拒绝"],
+    "AC-004": ["tests/unit/cdp_ws_url_allowlist.test.ts::AC-004 畸形 URL/空 id 负向组合"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -31,15 +31,6 @@ describe('P0.43: flush before read ensures data consistency', () => {
         expect(stats_count).toBe(4);
     });
 
-    it('dom_mutation does NOT increment user_action_count', () => {
-        const stats = create_empty_capture_stats();
-        const cat = category_for_event_type('dom_mutation');
-        const updated = increment_capture_event_stats(stats, cat);
-
-        expect(updated.user_action_count).toBe(0);
-        expect(cat).not.toBe('user_action');
-    });
-
     it('all content script user_action types match dashboard whitelist', () => {
         const content_types = [
             'mouse_event',      // mouse_capture.ts

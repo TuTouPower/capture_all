@@ -1,0 +1,20 @@
+{
+  "tid": "t171",
+  "attempt": 1,
+  "execution_id": "2c8bcb6afbfd45af9269b2dc3493ebfc",
+  "status": "done",
+  "branch": "t171_fix_body_capture_privacy_default",
+  "base_sha": "9d9a0f34ff67782abc55377e9648bdea051d8916",
+  "tests": "npm test：1691 passed（新增 body_redaction 11 + export_body_strip 4）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL（3 important）/ test FAIL（2 important）→ Round 2/3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/body_redaction.test.ts::DEFAULT_CONFIG/DEFAULT_USER_CONFIG capture_request_body/response_body=false"],
+    "AC-002": ["tests/unit/body_redaction.test.ts::form-urlencoded password/JSON 嵌套 token/api_key 脱敏为 [REDACTED]（词边界含数字后缀）"],
+    "AC-003": ["tests/unit/body_redaction.test.ts::未知 MIME/解析失败/multipart file part 降级长度摘要不落盘完整原文"],
+    "AC-004": ["tests/unit/export_body_strip.test.ts::include_request_body/response_body/preview 独立剥离 + 默认保留"],
+    "AC-005": ["tests/unit/public_docs.test.ts::README/PRIVACY body 默认关 + MIME 脱敏边界断言"]
+  },
+  "pending": ["p048"],
+  "findings": []
+}

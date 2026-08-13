@@ -249,6 +249,9 @@ export class IndexedDBLogTransport implements LogTransport {
             };
             cursor_req.onerror = () => reject(cursor_req.error);
         });
+        // t193 AC-001: trim 后 estimate 设为保留字节（而非 0）——避免下一次再写接近 max 才触发 trim，
+        // 实际峰值接近 2× 上限的问题（PERF-L008）
+        this._estimated_bytes = Math.max(0, total_bytes - freed);
     }
 }
 

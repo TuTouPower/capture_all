@@ -44,7 +44,9 @@ export default defineConfig({
         },
         {
             name: 'e2e-ext',
-            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina,logging,T0001*}.spec.ts',
+            // t194: 全量接入（此前 7 文件无项目覆盖）——capture-baidu/capture-local/cdp-retry/
+            // cycle-integrity/export-content/settings-effects/toggle-effects
+            testMatch: 'e2e-{baidu,states,labels,stop,ui-audit,export,realtime-detail,consistency,dashboard-list,detail-tabs,toutiao,qq,sina,logging,capture-baidu,capture-local,cdp-retry,cycle-integrity,export-content,settings-effects,toggle-effects,T0001*}.spec.ts',
             fullyParallel: false,
             workers: 1,
             retries: 0,

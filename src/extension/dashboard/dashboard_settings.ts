@@ -18,8 +18,11 @@ declare const __BUILD_TIME__: string;
 function seg(name: string, opts: [string, string][], val: string): string {
     return `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-val="${v}" data-on="${val === v ? 1 : 0}">${l}</button>`).join('')}</div>`;
 }
-function sw(name: string, on: boolean, sm = false): string {
-    return `<span class="switch${sm ? ' sm' : ''}" data-sw="${name}" data-on="${on ? 1 : 0}"><span class="knob"></span></span>`;
+function sw(name: string, on: boolean, sm = false, label?: string): string {
+    // t190 AC-001: 原生 button[aria-pressed]——Tab 聚焦 + Enter/Space 激活 + 状态宣布
+    // t190 f002: aria-label 提供可访问名（读屏报含义而非仅「切换按钮」）
+    const aria_label = label ? ` aria-label="${esc(label)}"` : '';
+    return `<button type="button" class="switch${sm ? ' sm' : ''}" data-sw="${name}" data-on="${on ? 1 : 0}" aria-pressed="${on ? 'true' : 'false'}"${aria_label}><span class="knob"></span></button>`;
 }
 
 function render_settings(): string {
@@ -56,16 +59,16 @@ function render_settings(): string {
                     <h2>${t('captureDefaults')}</h2>
                     <div class="set-card">
                         <div class="set-grid c3">
-                            <div class="field"><span class="field-lbl">${t('captureRequestBody')}</span>${sw('capture_request_body', cfg.capture_request_body)}</div>
-                            <div class="field"><span class="field-lbl">${t('captureResponseBody')}</span>${sw('capture_response_body', cfg.capture_response_body)}</div>
-                            <div class="field"><span class="field-lbl">${t('captureInputValues')}</span>${sw('capture_input_values', cfg.capture_input_values)}</div>
+                            <div class="field"><span class="field-lbl">${t('captureRequestBody')}</span>${sw('capture_request_body', cfg.capture_request_body, false, t('captureRequestBody'))}</div>
+                            <div class="field"><span class="field-lbl">${t('captureResponseBody')}</span>${sw('capture_response_body', cfg.capture_response_body, false, t('captureResponseBody'))}</div>
+                            <div class="field"><span class="field-lbl">${t('captureInputValues')}</span>${sw('capture_input_values', cfg.capture_input_values, false, t('captureInputValues'))}</div>
                             <div class="field"><span class="field-lbl">${t('captureLimitMb')}</span><input class="input mono" type="number" data-cfg="max_body_capture_bytes" value="${esc(String(Math.round(cfg.max_body_capture_bytes / 1048576)))}" min="1" max="1024" step="1"></div>
                             <div class="field"><span class="field-lbl">${t('inlineTextLimitKb')}</span><input class="input mono" type="number" data-cfg="inline_text_max_bytes" value="${esc(String(Math.round(cfg.inline_text_max_bytes / 1024)))}" min="0" max="1024" step="1"></div>
                         </div>
                     </div>
                 </section>
                 <section class="set-section" id="set-privacy">
-                    <div class="set-subhead"><h2>${t('privacyRedaction')}</h2>${sw('redact_data', cfg.redact_data)}</div>
+                    <div class="set-subhead"><h2>${t('privacyRedaction')}</h2>${sw('redact_data', cfg.redact_data, false, t('privacyRedaction'))}</div>
                     <div class="set-card"><div class="set-grid">
                         <div class="field span2"><span class="field-lbl">${t('sensitiveCaptureNotice')}</span><span style="font-size:12px;color:var(--ink-3)">${t('sensitiveCaptureDesc')}</span></div>
                         <div class="field span2"><span class="field-lbl">${t('redactionBoundary')}</span><span style="font-size:12px;color:var(--ink-3)">${t('redactionBoundaryDesc')}</span></div>
@@ -77,7 +80,7 @@ function render_settings(): string {
                         <div class="field span2"><span class="field-lbl">${t('filenameTemplate')}</span><input class="input mono" data-cfg="export_filename_template" value="${esc(cfg.export_filename_template)}"></div>
                         <div class="field span2"><span class="field-lbl">${t('exportCaptureDirectory')}</span><input class="input mono" data-cfg="export_capture_directory" value="${esc(cfg.export_capture_directory)}" placeholder="capture-all/exports"></div>
                         <div class="field span2"><span class="field-lbl">${t('exportLogDirectory')}</span><input class="input mono" data-cfg="export_log_directory" value="${esc(cfg.export_log_directory)}" placeholder="capture-all/logs"></div>
-                        <div class="field"><span class="field-lbl">${t('exportSaveAs')}</span>${sw('export_save_as', cfg.export_save_as)}</div>
+                        <div class="field"><span class="field-lbl">${t('exportSaveAs')}</span>${sw('export_save_as', cfg.export_save_as, false, t('exportSaveAs'))}</div>
                     </div></div>
                 </section>
                 <section class="set-section" id="set-diagnostics">
@@ -95,7 +98,7 @@ function render_settings(): string {
                 <section class="set-section" id="set-integrations" style="margin-bottom:8px">
                     <h2>${t('integrationsMcp')}</h2>
                     <div class="set-card"><div class="set-grid">
-                        <div class="field"><span class="field-lbl">${t('agentBridgeEnabled')}</span>${sw('agent_bridge_enabled', cfg.agent_bridge_enabled)}</div>
+                        <div class="field"><span class="field-lbl">${t('agentBridgeEnabled')}</span>${sw('agent_bridge_enabled', cfg.agent_bridge_enabled, false, t('agentBridgeEnabled'))}</div>
                         <div class="field span2"><span class="field-lbl">${t('agentBridgeUrl')}</span><input class="input mono" data-cfg="agent_bridge_url" value="${esc(cfg.agent_bridge_url)}" placeholder="http://127.0.0.1:17831"></div>
                         <div class="field"><span class="field-lbl">${t('agentBridgeBrowserLabel')}</span><input class="input mono" data-cfg="browser_label" value="${esc(cfg.browser_label || '')}" placeholder="${esc(t('agentBridgeBrowserLabelPlaceholder'))}"></div>
                         <div class="field"><span class="field-lbl">${t('agentBridgePollInterval')}</span><input class="input mono" type="number" data-cfg="agent_bridge_poll_interval_ms" value="${esc(cfg.agent_bridge_poll_interval_ms)}"></div>
@@ -191,6 +194,8 @@ function wire_settings(): void {
         const name = (el as HTMLElement).dataset.sw!;
         const on = (el as HTMLElement).dataset.on !== '1';
         (el as HTMLElement).dataset.on = on ? '1' : '0';
+        // t190 AC-001: aria-pressed 同步状态（辅助技术宣布）
+        (el as HTMLElement).setAttribute('aria-pressed', on ? 'true' : 'false');
         if (name.startsWith('agent_bridge')) await persist_bridge();
         else await persist({ [name]: on } as Partial<UserConfig>);
     }));

@@ -32,7 +32,7 @@ graph TB
         POP["Popup<br/>轻量控制面板"]
         DASH["Dashboard<br/>主面板工作台"]
         DT["DevTools Panel<br/>DevTools 集成"]
-        IDB[("IndexedDB<br/>capture_all_db<br/>10 stores")]
+        IDB[("IndexedDB<br/>capture_all_db<br/>14 stores<br/>(10 当前 + 4 legacy)")]
         BC["Agent Bridge Client<br/>轮询命令 / 回传结果"]
         AQ["Agent Data Queries<br/>数据查询"]
     end
@@ -105,7 +105,11 @@ src/
 │   ├── dashboard/                # 主面板
 │   │   ├── dashboard.html / dashboard.ts
 │   │   ├── dashboard_captures.ts / dashboard_detail.ts / dashboard_settings.ts
-│   │   ├── dashboard_integrations.ts / dashboard_shared.ts
+│   │   ├── dashboard_integrations.ts
+│   │   ├── dashboard_shared.ts    # façade + router 接线（t186）
+│   │   ├── dashboard_state.ts     # 显式 DashboardState + factory/reset（t186）
+│   │   ├── dashboard_data.ts      # load/export 数据服务（t186）
+│   │   └── dashboard_format.ts    # 纯函数（格式化/KIND/merge_detail_events）（t186）
 │   │   ├── sidebar_resize.ts / icons.ts
 │   │   └── *.css                 # Shell / pages / detail / views 样式
 │   ├── devtools/                 # DevTools 面板（轻量入口）
@@ -123,6 +127,7 @@ src/
 ├── bridge/                       # Bridge 产品（HTTP 服务器 + 命令队列 + CDP）
 │   ├── main.ts                   # 入口（`npm run bridge`）
 │   ├── server.ts                 # HTTP 服务器（/health, /mcp/command, /extension/command …）
+│   ├── registry.ts               # BridgeRegistry：instances/queues/owners + 顶替/移除/sweep（t184）
 │   ├── command_queue.ts          # 命令队列
 │   ├── config.ts                 # Bridge CLI/环境变量配置
 │   └── cdp_handler.ts            # 外部 CDP 检测/启动/停止/事件
@@ -152,7 +157,10 @@ extension ──✗── bridge / mcp
 bridge    ──✗── extension / mcp
 mcp       ──✗── extension / bridge（运行时只走 HTTP）
 src/shared ──✗── 任何产品目录
+src/node_shared ──► 中立 Node-only 层（t187）：bridge/mcp 同向依赖；extension 禁止引用（不进浏览器 bundle）
 ```
+
+t187：`src/shared` 禁 Node API（extension 浏览器 bundle 引用）；Bridge token 文件契约（类型/路径/读写）移入 `src/node_shared/bridge_token_file.ts`，Bridge config 与 MCP resolver 同向依赖。产品间 import 边界由 `tests/unit/import_boundaries.test.ts` 钉住。
 
 ## 4. 模块职责
 
@@ -179,6 +187,10 @@ src/shared ──✗── 任何产品目录
 
 见 `docs/archive/specs/dashboard.md`。
 
+### Dashboard 分层（t186）
+
+`dashboard_shared.ts` 拆为：`dashboard_state.ts`（显式 `DashboardState` + `create_dashboard_state`/`reset_dashboard_state` factory，模块默认实例承载既有 getter/setter）、`dashboard_data.ts`（load_captures/load_detail/export_capture）、`dashboard_format.ts`（纯函数）。router 由入口 `wire_dashboard_router()` 一次性显式接线，未接线调用抛明确错误（不再静默 no-op）；`is_tl_dragging` 由 dashboard.ts 注入 detail 的 getter，detail 不再反向覆写 router。
+
 ### 4.4 Agent / MCP 系统
 
 见 `docs/archive/specs/mcp_server.md` + `docs/archive/specs/bridge.md`。
@@ -186,6 +198,16 @@ src/shared ──✗── 任何产品目录
 ### 4.5 Body Capture 三层架构
 
 Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
+
+#### CDP WebSocket authority allowlist（t170）
+
+`/cdp/start` 对 discovery 返回的 `webSocketDebuggerUrl` 做 URL 校验后，用 target ID 自行构造 loopback URL 连接（`ws://127.0.0.1:{port}/devtools/page/{id}`），不信任 discovery authority。允许条件：`ws:` scheme、hostname ∈ {127.0.0.1, localhost, [::1]}、端口等于请求 port；拒绝 `wss:`、远端 host、credentials、fragment、畸形 URL。
+
+#### /cdp/events 终态契约（t158）
+
+- `200 { ok:true, events:[...] }`：正常返回 completed 事件（含 evicted 终态）；`404 { ok:false, events:[] }`：未知 session（未创建或已 stop 销毁）。
+- `410 { ok:false, events:[终态化后的全部事件], error:{ code:'cdp_session_terminal', reason, message } }`：session 因建连后 WS close/error 终止——pending 事件已终态化为 `cdp_failed`，调用方可读最后一批事件后停止轮询。
+- 扩展 client：410 抛 `CdpSessionTerminalError`（带 events + reason）；其他非 2xx 抛 `cdp_poll_failed`；不再静默降空数组。coordinator 对 terminal 停止 poll 并将状态置 `failed`（fallback hook 为既有降级路径）。
 
 ## 5. 数据流
 
@@ -240,6 +262,10 @@ Agent → MCP 工具调用
 
 见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
+### network_capture 分层（t185）
+
+`network_capture.handle_cdp_event` 为薄分发：按 method family 拆 `handle_target_event` / `handle_http_event` / `handle_websocket_event`，状态经显式 `NetworkCaptureContext`（Map/Set 引用 + capture generation 快照）访问，不直接读写散落模块级状态。request lifecycle 终态收敛到 `finalize_request` / `cleanup_streaming_state` 单一 API（emit + 清理多集合）；异步回调守卫读模块级实时值（ctx 快照不更新）。terminal-path 清理不变量由 `network_capture_terminal_cleanup.test.ts` 表测试钉住。
+
 ## 6. Chrome 权限
 
 `manifest.json` 声明：`storage`、`webRequest`、`debugger`、`tabs`、`alarms`、`downloads`、`cookies`；`host_permissions: ["<all_urls>"]`。`tabs` 用于读取和广播全部标签页；内容脚本通过 `content_scripts` 声明式注入，因此不需要 `activeTab` 或 `scripting`。CSP：`script-src 'self'; object-src 'self'`。
@@ -253,4 +279,12 @@ Agent → MCP 工具调用
 - 测试输出：`artifacts/test-results/`。
 
 Bridge/MCP 产物为 esbuild bundled ESM，不依赖 tsx 和 node_modules，可直接 `node bridge.mjs` 运行。
+
+### Bridge server 路由分层（t184）
+
+`create_bridge_server` 为薄壳（registry/pairing 状态构造 + `http.createServer` + CORS/异常映射/发送）；4 个 route handler（`handle_pair_route` / `handle_extension_route` / `handle_mcp_route` / `handle_cdp_route`）各自返回统一 `{status, body}`。实例注册表集中到 `BridgeRegistry`（`registry.ts`）：`replace_instance_by_label` 统一 enroll/heartbeat 的 label 顶替清理，`remove_instance` 为唯一删除路径（sweep/顶替/close 复用）。
+
+### /health 识别契约（t183）
+
+`GET /health` 返回 `{ok:true, service:"capture-all-bridge", bridge_version:"<version>"}`（始终 200）。Bridge 启动判定与 SessionStart hook 复用 `probe_bridge_health`（`src/bridge/config.ts`）：校验 status + Content-Type + 完整标识；任意 2xx 非本服务 → `occupied`（端口冲突，main 明确报错并非零退出，不打印「already listening」）；非 2xx/连接失败/超时 → `unreachable`（正常启动）。版本号仅展示，识别字段为 `service` 名，防误判。`--probe <url>` 子命令输出三态文本 + exit code（healthy=0 / occupied=2 / unreachable=3），SessionStart hook 与自动化脚本复用。
 MCP Server 通过 Claude Code 的 `.claude/settings.json` `mcpServers` 注册，启动后自动加载 17 个 MCP 工具（15 主工具 + 2 别名对）。

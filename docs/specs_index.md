@@ -9,7 +9,7 @@
 | network_capture_session_key | t094, t112, t119 | 2026-08-11 |
 | body_external_poll_stop | t095 | 2026-08-11 |
 | bridge_auto_export_path | t096 | 2026-08-11 |
-| content_postmessage_nonce | t097, t121 | 2026-08-11 |
+| content_postmessage_nonce | t097, t121, t174 | 2026-08-13 |
 | network_hook_config_gate | t098 | 2026-08-11 |
 | sw_cleanup_stale_mutex | t099 | 2026-08-11 |
 | privacy_logger_stack_redact_url | t100, t113, t114 | 2026-08-11 |
@@ -25,6 +25,7 @@
 | test_case_coverage_pack | t116 | 2026-08-11 |
 | dead_code_shared_helper_cleanup | t117 | 2026-08-11 |
 | content_page_script | t126 | 2026-08-12 |
+| fix_ui_export_100k_truncation | t156 | 2026-08-13 |
 <!-- 示例行（实际项目使用时从真实 task 收尾开始填写；示例勿放表内，「在表即生效」）：
 | example_slug | t000 | 2026-07-21 |
 -->

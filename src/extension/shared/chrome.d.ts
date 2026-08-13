@@ -35,7 +35,7 @@ declare namespace chrome {
     }
 
     namespace alarms {
-        function create(name: string, alarmInfo: { periodInMinutes: number }): void;
+        function create(name: string, alarmInfo: { periodInMinutes?: number; when?: number }): void;
         function clear(name: string): Promise<boolean>;
         const onAlarm: {
             addListener(callback: (alarm: { name: string }) => void): void;

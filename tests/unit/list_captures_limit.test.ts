@@ -48,4 +48,15 @@ describe('list_captures limit（t153 AC-007）', () => {
         const all = await list_captures(100);
         expect(all.map((c) => c.capture_id).sort()).toEqual(['c1', 'c2', 'c3', 'c4']);
     });
+
+    it('t193 AC-002: offset 下推——跳过前 N 条（cursor.advance），语义与 slice 等价', async () => {
+        await create_capture(make_capture('c5', '2026-01-05T00:00:00.000Z'));
+        await create_capture(make_capture('c6', '2026-01-06T00:00:00.000Z'));
+        // desc + offset 2 → 最旧优先倒序（c6,c5,c4,c3,c2,c1）跳过前 2 → c4,c3
+        const paged = await list_captures(2, 'prev', 2);
+        expect(paged.map((c) => c.capture_id)).toEqual(['c4', 'c3']);
+        // asc + offset 1 → 正序（c1..c6）跳过 c1 → c2
+        const asc = await list_captures(1, 'next', 1);
+        expect(asc.map((c) => c.capture_id)).toEqual(['c2']);
+    });
 });

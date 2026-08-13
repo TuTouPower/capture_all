@@ -32,11 +32,13 @@ export const MCP_TOOL_NAMES = [
 
 export async function execute_mcp_tool(client: BridgeMcpClient, call: McpToolCall): Promise<unknown> {
     if (call.name === 'get_status') {
-        return await client.get_status();
+        const { timeout_ms } = call.arguments || {};
+        return await client.get_status(typeof timeout_ms === 'number' ? timeout_ms : undefined);
     }
 
     if (call.name === 'list_browsers') {
-        const status = await client.get_status();
+        const { timeout_ms } = call.arguments || {};
+        const status = await client.get_status(typeof timeout_ms === 'number' ? timeout_ms : undefined);
         return { browsers: status.extensions };
     }
 

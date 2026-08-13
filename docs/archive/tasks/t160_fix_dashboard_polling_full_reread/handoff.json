@@ -1,0 +1,19 @@
+{
+  "tid": "t160",
+  "attempt": 1,
+  "execution_id": "1f4df1caa4d343798eb6079e204d053d",
+  "status": "done",
+  "branch": "t160_fix_dashboard_polling_full_reread",
+  "base_sha": "84b0841e31080b6a83fa4e2442880ace8f7bf50e",
+  "tests": "npm test：1648 passed（新增 detail_poll_incremental 5 + detail_poll_visibility 2 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "5 轮闭环：Round 1 code FAIL（f001 critical + f002）+ test FAIL → Round 2/3（f005/f006 口径修复）→ Round 4 双 PASS → Round 5 test PASS（f008）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/detail_poll_incremental.test.ts::AC-001 stats 未推进连续两轮只 metadata（send_ui_message 每轮）不调 read_capture_snapshot"],
+    "AC-002": ["tests/unit/detail_poll_incremental.test.ts::AC-002 stats 推进触发一次全量重建替换；AC-002b event_count 信号；AC-002c ws_frame 累计无偏差；AC-002d stats/store 脱钩"],
+    "AC-003": ["tests/unit/detail_poll_visibility.test.ts::AC-003 visibilitychange hidden 清理 interval / visible 重建（含防重入）"],
+    "AC-004": ["tests/unit/detail_poll_visibility.test.ts::AC-004 page 守卫 + poll_interval 可清理"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -1,0 +1,19 @@
+{
+  "tid": "t174",
+  "attempt": 1,
+  "execution_id": "a657002b4046490fb6c2bace882e5919",
+  "status": "done",
+  "branch": "t174_fix_hmac_secret_doc_migration",
+  "base_sha": "8d3b5d53fbb67f9bf43e4f6ebe88d3c4d1af759c",
+  "tests": "npm test：1713 passed（新增 hmac_secret_doc_migration 4 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code FAIL/test FAIL（websocket 注释残留）→ Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/hmac_secret_doc_migration.test.ts::AC-001 spec combined 契约短语（HMAC/per-start secret/canonical/拒绝规则）"],
+    "AC-002": ["tests/unit/hmac_secret_doc_migration.test.ts::AC-002 注入注释含残余风险 + ADR-020"],
+    "AC-003": ["tests/unit/content_hmac_vectors.test.ts + content_postmessage_nonce.test.ts::三通道 + HMAC/nonce 测试回归"],
+    "AC-004": ["tests/unit/hmac_secret_doc_migration.test.ts::AC-004a/b 三通道注释普通页面限定 + ADR-020 边界"]
+  },
+  "pending": [],
+  "findings": ["d009"]
+}

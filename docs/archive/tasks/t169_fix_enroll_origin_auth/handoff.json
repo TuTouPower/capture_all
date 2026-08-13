@@ -1,0 +1,19 @@
+{
+  "tid": "t169",
+  "attempt": 1,
+  "execution_id": "0d85dc23412f4dd49d4f731e449555f2",
+  "status": "done",
+  "branch": "t169_fix_enroll_origin_auth",
+  "base_sha": "a631e0030d4ba8225a161f25ef1665b1af77a154",
+  "tests": "npm test：1667 passed（新增 t137 t169 AC-001/002/003a/003b + client pairing 断言 + config 接线测试）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL（f001 important）/ test FAIL → Round 2 code FAIL（f004 important）→ Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/t137_bridge_security.test.ts::t169 AC-001 伪造合法形状 Origin 无凭据首次 enroll 401 不签发 token"],
+    "AC-002": ["tests/unit/t137_bridge_security.test.ts::t169 AC-002 MCP token 首次 enroll 成功 + heartbeat 后续认证 200；AC-003b 持久化恢复后重 enroll 放行"],
+    "AC-003": ["tests/unit/t137_bridge_security.test.ts::AC-003a pairing_auto_open 启动自动 open → 扩展凭 code enroll → code 一次性消费 closed", "tests/unit/agent_bridge_client.test.ts::无 token enroll 自动读 /pair/status 带 pairing_code"],
+    "AC-004": ["tests/unit/t137_bridge_security.test.ts::t169 AC-001 伪造 Origin 401 测试（AC-004 门禁）"]
+  },
+  "pending": ["p046", "p047"],
+  "findings": []
+}

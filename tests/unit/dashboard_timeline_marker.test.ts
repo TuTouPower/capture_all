@@ -5,7 +5,9 @@ import {
     set_detail_events, set_dt_quick, set_dt_play, set_dt_zoom,
     set_dt_view, set_dt_sel, set_dt_insp_open,
     get_dt_play, get_dt_sel, get_dt_insp_open,
+    wire_dashboard_router,
 } from '../../src/extension/dashboard/dashboard_shared';
+import { get_tl_dragging } from '../../src/extension/dashboard/dashboard_detail';
 import type { CaptureEvent } from '../../src/shared/types';
 
 function make_event(overrides: Partial<CaptureEvent> & { relative_time_ms: number; type: CaptureEvent['type'] }): CaptureEvent {
@@ -39,6 +41,13 @@ async function load_module() {
     render_trace = mod.render_trace as unknown as () => string;
     wire_detail = mod.wire_detail as unknown as () => void;
 }
+
+// t186 AC-002/003: 文件级 beforeEach 显式 wire router——覆盖全部 describe（不依赖跨 describe 状态残留）
+beforeEach(() => {
+    wire_dashboard_router({
+        go: () => {}, render_content: () => {}, render_shell: () => {}, open_detail: () => {}, is_tl_dragging: () => false,
+    });
+});
 
 // ── data-event-idx attribute ──
 
@@ -337,6 +346,56 @@ describe('trace view DOM: marker click chain', () => {
 
         expect(get_dt_play()).toBeCloseTo(25, 5);
         expect(parseFloat(head.style.left)).toBeCloseTo(25, 5);
+    });
+
+    it('t189 AC-006: lane drag pointercancel 清 _tl_dragging（详情轮询不永久跳过）', () => {
+        document.body.innerHTML = `<div id="content">${render_trace()}</div>`;
+        const lanes = document.getElementById('tlLanes') as HTMLElement;
+        const overlay = document.getElementById('tlTrackOverlay') as HTMLElement;
+        lanes.getBoundingClientRect = () => ({
+            x: 100, y: 0, left: 100, top: 0, right: 700, bottom: 200, width: 600, height: 200, toJSON: () => ({}),
+        });
+        overlay.getBoundingClientRect = () => ({
+            x: 288, y: 0, left: 288, top: 0, right: 700, bottom: 200, width: 412, height: 200, toJSON: () => ({}),
+        });
+        wire_detail();
+
+        // marker 拖拽才置 _tl_dragging（t144）；pointercancel 统一 finish 清理
+        const marker = document.querySelector('[data-event-idx]') as HTMLElement;
+        expect(marker).toBeTruthy();
+        marker.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 20 }));
+        expect(get_tl_dragging()).toBe(true);
+        // pointercancel（触屏中断）→ 统一 finish 清理
+        window.dispatchEvent(new PointerEvent('pointercancel'));
+        expect(get_tl_dragging()).toBe(false);
+        // lostpointercapture 同样清理（二次触发幂等）
+        window.dispatchEvent(new PointerEvent('lostpointercapture'));
+        expect(get_tl_dragging()).toBe(false);
+    });
+
+    it('t189 AC-006: lane drag blur 与 normal-lane 路径同样清理', () => {
+        document.body.innerHTML = `<div id="content">${render_trace()}</div>`;
+        const lanes = document.getElementById('tlLanes') as HTMLElement;
+        const overlay = document.getElementById('tlTrackOverlay') as HTMLElement;
+        lanes.getBoundingClientRect = () => ({
+            x: 100, y: 0, left: 100, top: 0, right: 700, bottom: 200, width: 600, height: 200, toJSON: () => ({}),
+        });
+        overlay.getBoundingClientRect = () => ({
+            x: 288, y: 0, left: 288, top: 0, right: 700, bottom: 200, width: 412, height: 200, toJSON: () => ({}),
+        });
+        wire_detail();
+
+        // marker 拖拽 blur 清理
+        const marker = document.querySelector('[data-event-idx]') as HTMLElement;
+        marker.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 20 }));
+        expect(get_tl_dragging()).toBe(true);
+        window.dispatchEvent(new Event('blur'));
+        expect(get_tl_dragging()).toBe(false);
+
+        // normal-lane 拖拽（非 marker 区域）不置标记；pointercancel 清理 listener 无异常
+        lanes.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 391, clientY: 20 }));
+        window.dispatchEvent(new PointerEvent('pointercancel'));
+        expect(get_tl_dragging()).toBe(false);
     });
 });
 

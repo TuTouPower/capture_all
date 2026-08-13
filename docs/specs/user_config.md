@@ -23,7 +23,7 @@
 ## 读写语义
 
 - `load_user_config()`：读 storage，缺失字段由默认值补齐，返回通过白名单校验的完整 `UserConfig`。旧 IANA 时区值自动迁移为固定 UTC 偏移并写回。
-- `save_user_config(patch)`：先 load 当前值，再以 `{ ...current, ...patch }` 整表写回。因此任意 partial patch 不会抹掉 patch 中未出现的字段。
+- `save_user_config(patch)`：先 load 当前值，再以 `{ ...current, ...patch }` 整表写回。因此任意 partial patch 不会抹掉 patch 中未出现的字段。t178 起：合并结果经 `sanitize_user_config` 白名单校验后再落库（load/save 对称），非法 enum/number/type 字段被滤，不进入 storage。
 
 ## 相关实现
 

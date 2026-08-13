@@ -1,6 +1,6 @@
 import { dispatch_agent_command, type AgentRuntimeHandlers } from './agent_command_dispatcher';
 import type { AgentCommandType } from '../../shared/protocol';
-import { MAX_EXTENSION_RESULT_BODY_BYTES } from '../../shared/constants';
+import { MAX_EXTENSION_RESULT_BODY_BYTES, MAX_COMMAND_TIMEOUT_MS } from '../../shared/constants';
 import {
     normalize_agent_bridge_config,
     type AgentBridgeUserConfig,
@@ -17,9 +17,32 @@ const logger = new Logger('background/bridge', get_app_log_transport());
 const BRIDGE_ERROR_LOG_INTERVAL_MS = 60_000;
 const INSTANCE_HEADER = 'X-Capture-All-Instance-Id';
 
+// t182: fetch 短超时——heartbeat < Bridge EXTENSION_TTL_MS(5000) 留 1s 余量，
+// 避免 slow heartbeat 期间被判 offline；enroll/command fetch 为轮询类短请求；
+// result 投递用完整命令预算（结果 body 可能大，见 spike s009 结论）。
+// 测试钩子可注入（AbortSignal.timeout 内部定时器不受 fake timers 控制，测试用真实 timers + 短注入）。
+let _enroll_timeout_ms = 5000;
+let _heartbeat_timeout_ms = 4000;
+let _command_fetch_timeout_ms = 5000;
+let _result_timeout_ms = MAX_COMMAND_TIMEOUT_MS;
+export function _set_bridge_client_timeouts_for_test(v: { enroll_ms?: number; heartbeat_ms?: number; command_fetch_ms?: number; result_ms?: number }): void {
+    if (v.enroll_ms !== undefined) _enroll_timeout_ms = v.enroll_ms;
+    if (v.heartbeat_ms !== undefined) _heartbeat_timeout_ms = v.heartbeat_ms;
+    if (v.command_fetch_ms !== undefined) _command_fetch_timeout_ms = v.command_fetch_ms;
+    if (v.result_ms !== undefined) _result_timeout_ms = v.result_ms;
+}
+
 let runtime_instance_id = '';
 let session_token: string | null = null;
 let enrolled = false;
+
+// t182: lifecycle 级 AbortController——stop 时 abort 全部 in-flight fetch（AC-001）
+let active_abort: AbortController | null = null;
+
+/** t182: 组合 lifecycle abort 信号与每请求超时（AbortSignal.any 兜底，Chrome 116+）。 */
+function lifecycle_signal(timeout_ms: number): AbortSignal {
+    return AbortSignal.any([active_abort?.signal ?? new AbortController().signal, AbortSignal.timeout(timeout_ms)]);
+}
 
 export function set_bridge_session_for_tests(token: string | null): void {
     session_token = token;
@@ -70,6 +93,8 @@ export function start_bridge_client(deps: AgentBridgeClientDeps): void {
     if (running) return;
     running = true;
     lifecycle_id += 1;
+    // t182 AC-003: 新 lifecycle 建新 AbortController（stop 只 abort 旧 lifecycle 的 in-flight 请求）
+    active_abort = new AbortController();
     last_error_log_at = create_error_log_state();
     logger.info('Bridge client started');
     schedule_poll(deps, lifecycle_id);
@@ -82,6 +107,9 @@ export function stop_bridge_client(): void {
     lifecycle_id += 1;
     session_token = null;
     enrolled = false;
+    // t182 AC-001: abort 当前 lifecycle 全部 in-flight fetch（poll_cycle 不再等待 deferred resolve）
+    active_abort?.abort();
+    active_abort = null;
     if (poll_timer !== null) {
         clearTimeout(poll_timer);
         poll_timer = null;
@@ -245,14 +273,21 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
 
 async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token?: string): Promise<{ instance_id: string; instance_token: string }> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    // T091: bridge_token 可选 —— 缺省时依赖 chrome-extension origin 由 Bridge 直通。
     if (bridge_token) {
         headers.Authorization = `Bearer ${bridge_token}`;
+    }
+    // t169 SEC-001: 无配置 token 时自动获取 pairing code（MCP 客户端持 token 调 /pair/open 后
+    // code 有效；扩展从 /pair/status 读取）——真实扩展零配置自动连接，不依赖可伪造的 Origin。
+    let pairing_code: string | undefined;
+    if (!bridge_token) {
+        pairing_code = await resolve_pairing_code(url);
     }
     const response = await fetch(`${url}/extension/enroll`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id }),
+        body: JSON.stringify({ browser_label: browser_label || null, extension_version, instance_id, pairing_code }),
+        // t182 AC-002: 短超时 abort（enroll 5s）
+        signal: lifecycle_signal(_enroll_timeout_ms),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);
@@ -260,6 +295,18 @@ async function enroll(url: string, browser_label: string, extension_version: str
     const body = await response.json();
     if (!body.ok) throw new Error(body.error?.message || 'Enroll failed');
     return body.data;
+}
+
+// t169: 读取 Bridge pairing 状态（open 时返回 code）。loopback fetch 由扩展 host_permissions 覆盖。
+async function resolve_pairing_code(bridge_url: string): Promise<string | undefined> {
+    try {
+        const res = await fetch(`${bridge_url}/pair/status`, { signal: lifecycle_signal(_enroll_timeout_ms) });
+        if (!res.ok) return undefined;
+        const body = await res.json() as { data?: { open: boolean; code: string | null } };
+        return body?.data?.open ? body.data.code ?? undefined : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 async function send_heartbeat(url: string, token: string, deps: AgentBridgeClientDeps, browser_label?: string): Promise<void> {
@@ -273,7 +320,9 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
             active_capture_id: status.active_capture_id,
             // T047: heartbeat 携带 browser_label，Bridge 检测配置变化后更新实例元数据
             browser_label: browser_label ?? null,
-        })
+        }),
+        // t182 AC-002: heartbeat 4s < Bridge TTL 5s（spike s009 结论）
+        signal: lifecycle_signal(_heartbeat_timeout_ms),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);
@@ -285,7 +334,9 @@ async function fetch_command(url: string, token: string): Promise<PendingCommand
         headers: {
             'Authorization': `Bearer ${token}`,
             [INSTANCE_HEADER]: runtime_instance_id,
-        }
+        },
+        // t182 AC-002: 取命令短超时（5s）；命令本身在 Bridge queue 中等待，不受影响
+        signal: lifecycle_signal(_command_fetch_timeout_ms),
     });
 
     if (response.status === 204) return null;
@@ -343,6 +394,8 @@ async function send_result(url: string, token: string, result: unknown): Promise
             [INSTANCE_HEADER]: runtime_instance_id,
         },
         body: JSON.stringify(payload),
+        // t182 AC-002: result 投递用完整命令预算（300s，body 可能大）
+        signal: lifecycle_signal(_result_timeout_ms),
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);

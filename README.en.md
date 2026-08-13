@@ -42,7 +42,7 @@ Visualize and inspect via popup, main panel, and DevTools panel. For deeper anal
 - Export JSON, JSONL, HTML, or HAR files.
 - Control capture via MCP, and query data in pages and time ranges.
 - Captured data stays in local IndexedDB by default; it only leaves extension storage on explicit export or MCP query.
-- Authorize the local Bridge with a user-supplied token.
+- Authorize the local Bridge with an auto-generated MCP token (zero-config, two-token model).
 - Support redacting sensitive URL params and headers, with size limits always enforced.
 
 ## Architecture
@@ -64,7 +64,7 @@ Local Bridge
 MCP Server ──► Claude Code or other MCP clients
 ```
 
-Bridge binds `127.0.0.1` only. The extension, Bridge, and MCP config must use the same token.
+Bridge binds `127.0.0.1` only. Token model is two-token zero-config: the MCP client resolves its token with priority `env > Bridge-persisted file` (auto-generated and persisted to `$XDG_RUNTIME_DIR/capture-all/bridge_token`, mode 0600); the extension enrolls with its own instance token, independent of the MCP token. See `SECURITY.md`.
 
 ## Project status
 
@@ -203,7 +203,7 @@ Captured data lives in the extension-local IndexedDB database `capture_all_db`, 
 
 Important boundaries:
 
-- Input values and request/response body capture are enabled by default. Turn them off before first capture if not needed.
+- Request/response body capture is **disabled by default** (t171 privacy default; opt-in via UI/MCP). When enabled, bodies are redacted per MIME for sensitive keys (password/token/api_key), and unparseable bodies are stored as a length summary. Input value capture is enabled by default; turn it off before first capture if not needed.
 - `<all_urls>` and `all_frames: true` allow the Content Script to run on top-level pages and embedded third-party iframes.
 - Redaction reduces exposure risk but does not guarantee removal of all credentials or personal data.
 - MCP queries may forward selected capture data to the connected AI Provider or client environment.

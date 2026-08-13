@@ -65,7 +65,7 @@ Capture All 扩展
 MCP Server ──► Claude Code 或其他 MCP 客户端
 ```
 
-Bridge 仅绑定 `127.0.0.1`。默认零配置：扩展凭 chrome-extension origin 自动 enroll，Bridge 自生成 MCP Token 并持久化，MCP 客户端按 `env > 持久化文件`自动读取，三者自动对齐。
+Bridge 仅绑定 `127.0.0.1`。默认零配置：Bridge 启动自动生成一次性配对码并持久化实例，扩展自动读取配对码 enroll（首次登记须真正凭据，仅伪造 origin 会被 401 拒绝），Bridge 自生成 MCP Token 并持久化，MCP 客户端按 `env > 持久化文件`自动读取，三者自动对齐。
 
 ## 项目状态
 
@@ -123,7 +123,7 @@ npm run build
 ## 基础使用
 
 1. 打开 Capture All popup。
-2. 检查采集选项，尤其是输入值、请求 body 和响应 body。
+2. 检查采集选项：请求/响应 body 默认关闭（需要时显式开启）；输入值默认开启，不需要时关闭。
 3. 开始采集。
 4. 复现需要调查的浏览器行为。
 5. 停止采集。
@@ -144,7 +144,7 @@ cp .mcp.json.example .mcp.json # 复制本机 MCP 配置（已被 .gitignore 忽
 完成后的流程：
 
 1. **Bridge 自动启动**：进入本项目目录的 Claude Code 会话时，SessionStart hook 自动拉起本地 Bridge（端口 17831，仅绑 127.0.0.1）。Bridge 首次启动自动生成随机 MCP Token，持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。
-2. **扩展自动登记**：在 Chrome 加载 `artifacts/dist/`，扩展 popup 默认启用 Agent Bridge。扩展后台轮询 `127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，无需 Token / 配对码。Bridge 按到达顺序给每个浏览器自动编号（1 号、2 号、3 号…），用户可在扩展设置里改成自定义备注。
+2. **扩展自动登记**：在 Chrome 加载 `artifacts/dist/`，扩展 popup 默认启用 Agent Bridge。扩展后台轮询 `127.0.0.1:17831`，首次连接自动读取 Bridge 启动时生成的一次性配对码完成 enroll（无需人工手填 Token / 配对码；仅伪造 origin 无凭据会被 401 拒绝）。Bridge 按到达顺序给每个浏览器自动编号（1 号、2 号、3 号…），用户可在扩展设置里改成自定义备注。
 3. **MCP 客户端自动读 Token**：MCP Server 启动时按 `env > Bridge 持久化文件`的优先级解析 Token，与 Bridge 自动对齐。
 
 ```text
@@ -204,7 +204,7 @@ npm run mcp                # 从 TypeScript 源码启动 MCP Server
 
 重要边界：
 
-- 输入值、请求 body、响应 body 采集默认开启。不需要这些数据时，应在首次采集前关闭。
+- 请求 body、响应 body 采集**默认关闭**（t171 隐私默认，UI/MCP 显式开启）。开启后按 MIME 对 password/token/api_key 等敏感 key 脱敏，无法安全解析的 body 以长度摘要存储。输入值采集默认开启，不需要时应在首次采集前关闭。
 - `<all_urls>` 和 `all_frames: true` 允许 Content Script 在顶层页面及嵌入式第三方 iframe 中运行。
 - 脱敏只能降低暴露风险，无法保证清除所有凭据或个人信息。
 - MCP 查询可能将选中的采集数据发送给所连接的 AI Provider 或客户端环境。

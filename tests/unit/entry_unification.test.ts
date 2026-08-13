@@ -11,7 +11,7 @@ function source(path: string): string {
 describe('entry_unification', () => {
     it('all UI export entries use shared download_blob', () => {
         const popup = source('src/extension/popup/popup.ts');
-        const dashboard_shared = source('src/extension/dashboard/dashboard_shared.ts');
+        const dashboard_shared = source('src/extension/dashboard/dashboard_data.ts');
 
         expect(popup).toMatch(/download_blob/);
         expect(dashboard_shared).toMatch(/download_blob/);

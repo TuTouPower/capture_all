@@ -5,7 +5,7 @@
 ## 快速开始
 
 1. 构建产物：`npm run build`
-2. 在 Chrome 加载 `artifacts/dist/` 扩展。扩展后台默认轮询 `http://127.0.0.1:17831`，首次连接凭 chrome-extension origin 直通 enroll，**无需 Token / 配对码**。Bridge 按到达顺序自动给每个浏览器编号（`1 号` / `2 号` / `3 号` …）；如需自定义备注，到扩展设置里改 `browser_label`。
+2. 在 Chrome 加载 `artifacts/dist/` 扩展。扩展后台默认轮询 `http://127.0.0.1:17831`。首次 enroll 需要真正凭据（t169）：Bridge 启动自动生成一次性配对码（或 MCP Bearer token），扩展自动从 `/pair/status` 读取配对码完成登记，**无需人工手填 Token / 配对码**；仅伪造 `chrome-extension://` Origin 而无凭据的请求会被拒绝（401）。Bridge 按到达顺序自动给每个浏览器编号（`1 号` / `2 号` / `3 号` …）；如需自定义备注，到扩展设置里改 `browser_label`。
 3. 启动 Bridge：进入本项目的 Claude Code 会话时 SessionStart hook 自动拉起；手动启动用 `node artifacts/bridge/bridge.mjs --port 17831`（`--port` 必须显式；未设 `CAPTURE_ALL_BRIDGE_TOKEN` 时自动生成并持久化到 `$XDG_RUNTIME_DIR/capture-all/bridge_token`，mode 0600）。
 4. 复制项目配置：`cp .mcp.json.example .mcp.json`。`.mcp.json` 默认**无需填 Token** —— MCP Server 按 `env > Bridge 持久化文件`自动解析，与 Bridge 对齐。`.mcp.json` 仅供本机使用，不提交到 Git。
 5. 重开 Claude Code 会话，确认扩展在线：`get_status`（`extensions[].browser_label` 应见「一」/自定义备注）。
@@ -61,12 +61,12 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 {
   "capture_id": "session-xxx",
   "format": "json",
-  "output_path": "/absolute/path/export.json",
+  "output_path": "exports/session-xxx.json",
   "include_response_body": false
 }
 ```
 
-- `output_path`：Bridge 将导出内容写入本地文件，MCP 只返回 `{ file_path, size_bytes }`
+- `output_path`：导出根目录（`CAPTURE_ALL_EXPORT_DIR`，默认系统临时目录 `capture-all-exports/`）内相对路径/文件名（t176 契约），拒绝绝对路径与 `..`；嵌套父目录自动创建。Bridge 将导出内容写入文件，MCP 只返回 `{ file_path, size_bytes }`（`file_path` 为解析后的绝对路径）
 - `include_response_body: false`：省略 `network_requests[].response_body`（HAR 省略 `entries[].response.content.text`），体积通常从几十 MB 降到 1MB 量级
 - `get_all_capture_data` 也支持 `output_path` / 自动分流，行为同上
 
@@ -86,9 +86,9 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 
 ### timeout_ms
 
-所有工具支持 `timeout_ms` 参数（单位 ms）。
+所有工具支持 `timeout_ms` 参数（单位 ms），上限 300000（`MAX_COMMAND_TIMEOUT_MS`，超出被 Zod 拒绝）。
 
-- 普通命令默认 `command_timeout_ms` = 120s
+- `get_status` / `list_browsers` 默认 30s；其余普通命令默认 `command_timeout_ms` = 120s
 - `export_capture` / `get_all_capture_data` 默认 `full_data_timeout_ms` = 300s
 - 显式传入的 `timeout_ms` 始终优先
 

@@ -1,0 +1,20 @@
+{
+  "tid": "t176",
+  "attempt": 1,
+  "execution_id": "3fd3ad3d21e449b0b71bca65d5f43ca1",
+  "status": "done",
+  "branch": "t176_fix_output_path_contract",
+  "base_sha": "9b9df37746fa4cd3279a1db8c9cb27330e5d348f",
+  "tests": "npm test：1725 passed（新增 output_path_contract 7 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test FAIL（AC-003 判别力）→ Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/output_path_contract.test.ts::AC-001 指南相对路径示例 exports/session-xxx.json，无绝对路径示例"],
+    "AC-002": ["tests/unit/output_path_contract.test.ts::AC-002 base 不存在时 safe_output_path 创建成功（旧实现 ENOENT 红）"],
+    "AC-003": ["tests/unit/output_path_contract.test.ts::AC-003 嵌套父目录创建（stat isDirectory 判别）+ 再校验"],
+    "AC-004": ["tests/unit/output_path_contract.test.ts::AC-004 绝对/../symlink 逃逸/schema 拒绝（含 Windows 根相对）"],
+    "AC-005": ["tests/unit/output_path_contract.test.ts::四类测试（缺 base/相对/嵌套/symlink）"]
+  },
+  "pending": [],
+  "findings": []
+}

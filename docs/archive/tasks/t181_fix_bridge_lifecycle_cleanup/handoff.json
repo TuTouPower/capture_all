@@ -1,0 +1,20 @@
+{
+  "tid": "t181",
+  "attempt": 1,
+  "execution_id": "2b8800bce1f24a70b594285516628983",
+  "status": "done",
+  "branch": "t181_fix_bridge_lifecycle_cleanup",
+  "base_sha": "089aac35499ed013030efd52a35bb38e530c9952",
+  "tests": "npm test：1778 passed（新增 bridge_lifecycle_cleanup 4 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test FAIL（AC-003 源码断言 + AC-004 恒真重 enroll 2 important）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/bridge_lifecycle_cleanup.test.ts::pending 命令 close 后收到 COMMAND_CANCELLED（elapsed<2000 不阻塞至 30s timeout）；close 后新命令拒绝/连接失败"],
+    "AC-002": ["tests/unit/bridge_lifecycle_cleanup.test.ts::close 调用 destroy_all_sessions（vi.mock spy）——cdp_handler 遍历销毁 WS/timer/映射"],
+    "AC-003": ["tests/unit/bridge_lifecycle_cleanup.test.ts::AC-001 elapsed<2000 计时断言覆盖 close 快速完成（不预调 closeAllConnections 也可快速返回）"],
+    "AC-004": ["tests/unit/bridge_lifecycle_cleanup.test.ts::TTL+grace 注入后 status 懒 sweep：pending 命令 COMMAND_CANCELLED + 同 instance_id 重 enroll 200（未 sweep 时 403，判别力）"],
+    "AC-005": ["tests/unit/bridge_lifecycle_cleanup.test.ts::全部用例仅调用 public close + HTTP 端点，未预调 closeAllConnections 或内部方法"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -10,10 +10,11 @@ import {
     get_page, set_page,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     load_captures, load_detail,
+    wire_dashboard_router,
     router,
 } from './dashboard_shared';
 import { render_captures, wire_captures } from './dashboard_captures';
-import { render_detail, wire_detail, open_detail } from './dashboard_detail';
+import { render_detail, wire_detail, open_detail, get_tl_dragging } from './dashboard_detail';
 import { render_settings, wire_settings } from './dashboard_settings';
 import { render_current, wire_simple_open, render_exports, wire_exports } from './dashboard_integrations';
 
@@ -92,11 +93,15 @@ function render_content(): void {
     else { c.innerHTML = render_captures(); wire_captures(); }
 }
 
-// ── inject router into shared (breaks circular deps) ────────────────────
-router.go = go;
-router.render_content = render_content;
-router.render_shell = render_shell;
-router.open_detail = open_detail;
+// ── wire router into shared (breaks circular deps) ──────────────────────
+// t186 AC-002: 一次性显式接线；未接线调用抛明确错误（不再静默 no-op）
+wire_dashboard_router({
+    go,
+    render_content,
+    render_shell,
+    open_detail,
+    is_tl_dragging: get_tl_dragging,
+});
 
 // ── init ────────────────────────────────────────────────────────────────
 async function init(): Promise<void> {
@@ -119,7 +124,8 @@ async function init(): Promise<void> {
     // TODO(M4): 改用 chrome.runtime.onMessage 监听 service worker 推送的变化通知，
     // 替代全量轮询。需 service_worker.ts 在 capture 状态变化时主动推送消息。
     let poll_in_flight = false;
-    setInterval(async () => {
+    let poll_interval: ReturnType<typeof setInterval> | null = null;
+    const poll_once = async () => {
         try {
             if (!is_extension) return;
             if (poll_in_flight) return; // 单飞：避免重叠
@@ -135,10 +141,12 @@ async function init(): Promise<void> {
             }
             // t144: detail 轮询仅在有变化时更新（事件数或 stats 变化），无变化不整页重渲染；
             // timeline 拖拽期间跳过，防重渲染替换 DOM 打断 pointermove。
+            // t160 AC-004: 离开详情页（page !== detail）不触发读取。
             if (get_page() === 'detail' && get_detail_capture()?.status === 'capturing' && !router.is_tl_dragging()) {
                 const cap = get_detail_capture()!;
                 const prev_sig = detail_snapshot_signature(cap.capture_id);
-                await load_detail(cap.capture_id);
+                // t160 AC-001/002: 增量模式——先 metadata 对比，无推进不读数据，有推进增量 append
+                await load_detail(cap.capture_id, { incremental: true });
                 const cur_sig = detail_snapshot_signature(cap.capture_id);
                 if (prev_sig !== cur_sig) {
                     render_content();
@@ -149,7 +157,26 @@ async function init(): Promise<void> {
         } finally {
             poll_in_flight = false;
         }
-    }, 2000);
+    };
+    const start_poll = () => {
+        if (poll_interval) return;
+        poll_interval = setInterval(poll_once, 2000);
+    };
+    const stop_poll = () => {
+        if (poll_interval) {
+            clearInterval(poll_interval);
+            poll_interval = null;
+        }
+    };
+    start_poll();
+    // t160 AC-003: 页面 hidden 暂停轮询，恢复 visible 重建
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stop_poll();
+        } else {
+            start_poll();
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -1,0 +1,20 @@
+{
+  "tid": "t156",
+  "attempt": 1,
+  "execution_id": "961d04c0334041a2b091bd480e5f4641",
+  "status": "done",
+  "branch": "t156_fix_ui_export_100k_truncation",
+  "base_sha": "4f6368f8d12565cf352fd5692f4626b72f939d5b",
+  "tests": "npm test：1617 passed（新增 paged_reader 8 + capture_data_reader 3 + capture_archive_count 2）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS / test PASS；Round 2 复核维持 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/capture_data_reader.test.ts::AC-001 100001 条分页 fixture 全量返回且等于 stats.user_action_count"],
+    "AC-002": ["tests/unit/paged_reader.test.ts::offset 序列 [0,5000,...,100000] 单调、limit 恒 5000、多页不丢不重", "tests/unit/capture_data_reader.test.ts::AC-002 21 次调用 offset/limit 断言"],
+    "AC-003": ["tests/unit/capture_archive_count.test.ts::AC-003 build_archive 解包断言 manifest.counts.events=100001、counts.network=3"],
+    "AC-004": ["tests/unit/capture_archive_count.test.ts::AC-004 merge_detail_events 条数=event_count+request_count（>100000）"],
+    "AC-005": ["tests/unit/capture_data_reader.test.ts::AC-005 无固定 100000 截断，单类别全量返回；全 src/ 无 UI/ZIP 读取路径静默截断残留"]
+  },
+  "pending": ["p045"],
+  "findings": []
+}

@@ -1,5 +1,5 @@
 // shared/archive_builder.ts — 页面侧 ZIP 组装
-import { zip, strToU8 } from 'fflate';
+import { Zip, ZipPassThrough, strToU8 } from 'fflate';
 import { plan_body, safe_request_id } from '../../shared/body_routing';
 import { sha256_hex } from '../../shared/hash';
 import {
@@ -420,37 +420,49 @@ function assemble_zip(
     // 仅 join('\n') 会让最后一行缺末尾换行符，导致 wc -l / grep -c 等
     // 标准工具计行数比实际少 1，与 manifest.counts 不一致。
     // 空数组保持为空文件（0 字节），不追加换行符。
-    const files: Record<string, Uint8Array> = {};
-    const network_content = network_lines.length > 0
-        ? network_lines.join('\n') + '\n'
-        : '';
-    const events_content = event_lines.length > 0
-        ? event_lines.join('\n') + '\n'
-        : '';
-    const console_content = console_lines.length > 0
-        ? console_lines.join('\n') + '\n'
-        : '';
-
-    files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
-    files['README.md'] = strToU8(readme);
-    files['network.jsonl'] = strToU8(network_content);
-    files['events.jsonl'] = strToU8(events_content);
-    files['console.jsonl'] = strToU8(console_content);
-
-    // 空目录占位（保持结构稳定）
-    files['bodies/request/.gitkeep'] = new Uint8Array(0);
-    files['bodies/response/.gitkeep'] = new Uint8Array(0);
-    files['bodies/inline/.gitkeep'] = new Uint8Array(0);
-
-    // body 文件
-    for (const file of resolved_body_files) {
-        files[file.path] = file.bytes;
-    }
+    // t193 AC-005: 流式组装——fflate Zip + ZipPassThrough（store 流式，无压缩 worker，
+    // 无并行竞争 flaky）；每文件 add 后 push，输出分块收集，不构建全量 files 对象同时驻留
+    // （PERF-H004 组装部分；ADR-025）。
+    const entries: Array<{ name: string; data: Uint8Array }> = [
+        { name: 'manifest.json', data: strToU8(JSON.stringify(manifest, null, 2)) },
+        { name: 'README.md', data: strToU8(readme) },
+        { name: 'network.jsonl', data: strToU8(network_lines.length > 0 ? network_lines.join('\n') + '\n' : '') },
+        { name: 'events.jsonl', data: strToU8(event_lines.length > 0 ? event_lines.join('\n') + '\n' : '') },
+        { name: 'console.jsonl', data: strToU8(console_lines.length > 0 ? console_lines.join('\n') + '\n' : '') },
+        // 空目录占位（保持结构稳定）
+        { name: 'bodies/request/.gitkeep', data: new Uint8Array(0) },
+        { name: 'bodies/response/.gitkeep', data: new Uint8Array(0) },
+        { name: 'bodies/inline/.gitkeep', data: new Uint8Array(0) },
+        // body 文件
+        ...resolved_body_files.map((f) => ({ name: f.path, data: f.bytes })),
+    ];
 
     return new Promise((resolve, reject) => {
-        zip(files, (err, data) => {
-            if (err) reject(err);
-            else resolve(data);
+        // Zip 回调按 chunk 多次调用（流式输出）——收集全部 chunks，final 时拼接
+        const chunks: Uint8Array[] = [];
+        const zipper = new Zip((err, data, final) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+            if (data && data.length > 0) chunks.push(data);
+            if (final) {
+                const total = chunks.reduce((sum, c) => sum + c.length, 0);
+                const out = new Uint8Array(total);
+                let off = 0;
+                for (const c of chunks) {
+                    out.set(c, off);
+                    off += c.length;
+                }
+                resolve(out);
+            }
         });
+        // ZipPassThrough（store 流式，无压缩 worker）——逐文件 add + push
+        for (const entry of entries) {
+            const file = new ZipPassThrough(entry.name);
+            zipper.add(file);
+            file.push(entry.data, true);
+        }
+        zipper.end();
     });
 }

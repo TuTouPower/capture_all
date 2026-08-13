@@ -1,0 +1,18 @@
+{
+  "tid": "t179",
+  "attempt": 1,
+  "execution_id": "a7d80d7b2f474b1581e3b969daa131cd",
+  "status": "done",
+  "branch": "t179_fix_mcp_schema_boundaries",
+  "base_sha": "88f0dddd53a62b19a147956a2cdf12180408960e",
+  "tests": "npm test：1763 passed（新增 mcp_schema_boundaries 13 用例；mcp_schema.test.ts fixture 修正）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（4 minor：枚举 STORE_NAMES 派生、源码断言简化、format 一致性锚定）→ 处置全部已修 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/mcp_schema_boundaries.test.ts::list_records/get_record 非法 source、get_timeline sources 含非法值、export_capture 非法 format（csv）均 Zod 层拒绝"],
+    "AC-002": ["tests/unit/mcp_schema_boundaries.test.ts::7 源逐一遍历 list_records 放行、sources 全合法放行、4 format 放行；mcp_schema.test.ts 既有合法用例（fixture 修正为真实枚举）45 全绿"],
+    "AC-003": ["tests/unit/mcp_schema_boundaries.test.ts::deployment.md/decisions.md ADR008/domain.md §8 文档断言与实现一致；resolve_target 源码断言 + 既有 agent_bridge_server.test.ts 行为测试（多实例无 target → TARGET_REQUIRED）"]
+  },
+  "pending": [],
+  "findings": []
+}

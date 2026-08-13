@@ -23,6 +23,13 @@ interface CdpSession {
     // T101: idle TTL 定时器与最后活动时间
     idle_timer: ReturnType<typeof setTimeout> | null;
     last_activity: number;
+    // t157: getResponseBody 命令 seq → request_id 映射（挂 session 供淘汰路径清理）
+    body_seq_to_req_id: Map<number, string>;
+    // t157 AC-005: 事件数淘汰产生的 evicted 终态待返回队列（不占 events 上限）
+    evicted_events: CdpStoredEvent[];
+    // t158: 建连成功后 WS close/error 导致的 terminal 标记（幂等；session 保留供 /cdp/events 返回 410）
+    terminal_reason: string | null;
+    terminal_message: string | null;
 }
 
 interface CdpStoredEvent {
@@ -48,6 +55,7 @@ const MAX_EVENTS_PER_POLL = 100;
 // T101: idle TTL（活动刷新，非固定墙钟）；events 上限防无界增长
 const CDP_SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
 const MAX_SESSION_EVENTS = 5000;
+const MAX_EVICTED_EVENTS = MAX_SESSION_EVENTS; // t157: evicted 待返回队列上限，防无界增长（已终态事件，超限丢最旧）
 // t140: 会话级 body 总字节预算——单条 body 可到 100MB，事件数有界但总内存无聚合上限（最坏 500GB）。
 const MAX_SESSION_BODY_BYTES = 200 * 1024 * 1024; // 200MB 会话聚合
 let _max_session_body_bytes = MAX_SESSION_BODY_BYTES;
@@ -59,31 +67,80 @@ let _max_session_events = MAX_SESSION_EVENTS;
 export function _set_max_session_events_for_test(cap: number): void {
     _max_session_events = cap;
 }
+// t157 测试钩子：evicted 队列上限
+let _max_evicted_events = MAX_EVICTED_EVENTS;
+export function _set_max_evicted_events_for_test(cap: number): void {
+    _max_evicted_events = cap;
+}
+// t157 测试钩子：读 session 内部状态（body_bytes / events）断言账本
+export function _get_session_for_test(session_key: string): CdpSession | null {
+    return sessions.get(session_key) ?? null;
+}
+
+// t157: 事件移除时的账本递减——从 events 移除事件时按实际存储 response_body UTF-8 字节递减 body_bytes。
+// 所有移除路径（poll 返回、事件数淘汰、body 预算淘汰）都必须走这里，禁止多路径各自维护计数。
+// 本函数只递减账本；事件数组的移除由各调用方负责。
+function decrement_body_bytes(session: CdpSession, evt: CdpStoredEvent): void {
+    if (typeof evt.response_body === 'string') {
+        session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(evt.response_body, 'utf-8'));
+    }
+}
+
+// t157: 清理某 request 的 getResponseBody 命令映射，防迟到响应误匹配已淘汰事件
+function clear_body_seq(session: CdpSession, request_id: string): void {
+    for (const [seq, req_id] of session.body_seq_to_req_id) {
+        if (req_id === request_id) {
+            session.body_seq_to_req_id.delete(seq);
+        }
+    }
+}
 
 // T101: events 有界写入，超上限丢最旧（防无界增长 OOM）
 // 淘汰计数（可观测指标；B1-M13 淘汰补结构化日志）
 export const _eviction_count = { value: 0 };
 function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
     session.events.push(event);
-    if (session.events.length > _max_session_events) {
-        const removed = session.events.shift();
-        if (removed && typeof removed.response_body === 'string') {
-            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+    if (session.events.length <= _max_session_events) return;
+    // t157 AC-005: 事件数淘汰若删到 pending，不静默消失——转 evicted 终态进独立待返回队列，
+    // 并清理 command 映射（防迟到 getResponseBody 响应误匹配）；events 数组严格保持 ≤ 上限。
+    const removed = session.events.shift();
+    if (removed && removed.response_body_status === 'pending') {
+        removed.response_body_status = 'evicted';
+        clear_body_seq(session, removed.request_id);
+        session.evicted_events.push(removed);
+        // t157 f005: evicted 队列有界——超限丢最旧已终态事件（不违反 AC-005：已终态无等待语义）
+        if (session.evicted_events.length > _max_evicted_events) {
+            session.evicted_events.shift();
         }
-        _eviction_count.value += 1;
-        bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'event_count_cap', events: session.events.length });
+    } else if (removed) {
+        decrement_body_bytes(session, removed);
     }
+    _eviction_count.value += 1;
+    bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'event_count_cap', events: session.events.length });
 }
 
 // t140: body 总字节预算——单条 body 100MB × 5000 条最坏 500GB，聚合字节超限丢最旧带 body 事件。
 // 在 getResponseBody 回写后调用（body 此时才实际入事件）。
 export const _enforce_body_budget_for_test = enforce_body_budget;
 function enforce_body_budget(session: CdpSession): void {
-    while (session.body_bytes > _max_session_body_bytes && session.events.length > 1) {
-        const removed = session.events.shift();
-        if (removed && typeof removed.response_body === 'string') {
-            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+    while (session.body_bytes > _max_session_body_bytes) {
+        // t157 AC-003: 只淘汰「已终态且确有 response_body」的最旧事件，pending 元数据不得偿还 body 预算
+        const idx = session.events.findIndex(e => typeof e.response_body === 'string');
+        if (idx === -1) break; // 无带 body 事件（全 pending 或 body 已置 null），无可释放
+        const victim = session.events[idx];
+        const bytes = Buffer.byteLength(victim.response_body as string, 'utf-8');
+        // t157 AC-004: 只剩唯一带 body 事件（数组里可有 pending 元数据）——无法通过淘汰降到预算内，
+        // 保留请求元数据，body 置 null 标 too_large，事件仍可被 /cdp/events 返回。
+        const has_other_body = session.events.some((e, i) => i !== idx && typeof e.response_body === 'string');
+        if (!has_other_body) {
+            victim.response_body = null;
+            victim.response_body_status = 'too_large';
+            session.body_bytes = Math.max(0, session.body_bytes - bytes);
+            bridge_warn('cdp_body_too_large', { session_key: session.session_key, request_id: victim.request_id, body_bytes: bytes });
+            break;
         }
+        session.events.splice(idx, 1);
+        session.body_bytes = Math.max(0, session.body_bytes - bytes);
         _eviction_count.value += 1;
         bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'body_budget_cap', body_bytes: session.body_bytes });
     }
@@ -97,6 +154,40 @@ function destroy_session(session_key: string): void {
     }
     if (s.idle_timer) clearTimeout(s.idle_timer);
     sessions.delete(session_key);
+}
+
+// t181 AC-002: Bridge close 时销毁全部 CDP sessions（WS/timer/映射），不阻止进程退出
+export function destroy_all_sessions(): void {
+    for (const key of [...sessions.keys()]) {
+        destroy_session(key);
+    }
+}
+
+// t158: 建连成功后 WS 异常关闭/错误 → 终态化 session（幂等）。
+// 终态化所有 pending 事件、关闭 WS；session 保留在 map 中供 /cdp/events 返回 410（terminal 可观察），
+// 并设 terminal TTL（5 分钟）自动销毁——即使调用方不主动 stop，内存也被回收（t158 f001）。
+function terminate_session(session: CdpSession, reason: string, message: string): void {
+    if (session.terminal_reason) return; // 幂等
+    session.terminal_reason = reason;
+    session.terminal_message = message;
+    // 终态化 pending 事件（不再永久 pending）
+    for (const evt of session.events) {
+        if (evt.response_body_status === 'pending') {
+            evt.response_body_status = 'cdp_failed';
+        }
+    }
+    // getResponseBody 命令不会再有响应，清理映射
+    session.body_seq_to_req_id.clear();
+    // 关闭 WS
+    if (session.cdp_ws) {
+        try { session.cdp_ws.close(); } catch {}
+        session.cdp_ws = null;
+    }
+    // terminal TTL：保留供 410 观察后自动销毁（destroy_session 幂等，stop 提前销毁也无害）
+    if (session.idle_timer) clearTimeout(session.idle_timer);
+    session.idle_timer = setTimeout(() => {
+        destroy_session(session.session_key);
+    }, CDP_SESSION_IDLE_TTL_MS);
 }
 
 // T101: 活动事件刷新 idle TTL
@@ -203,6 +294,23 @@ export async function handle_cdp_start(
             return { status: 200, body: { ok: false, error: { code: 'cdp_target_not_found', message: 'Target has no WebSocket URL' } } };
         }
 
+        // t170 SEC-002: discovery 返回的 WebSocket URL 不可信（占用 loopback 端口的恶意服务可返回
+        // 远端 wss:// 目标）。校验 scheme/host/port/credentials 后，用 target ID 自行构造
+        // 已知 loopback URL（ws://127.0.0.1:{port}/devtools/page/{id}），不信任 discovery authority。
+        const ws_url = safe_cdp_ws_url(target, port);
+        if (!ws_url) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: {
+                        code: 'cdp_invalid_ws_url',
+                        message: 'CDP WebSocket URL must be ws:// on loopback with the requested port',
+                    },
+                },
+            };
+        }
+
         const session_key = `cdp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         const session: CdpSession = {
             session_key,
@@ -219,12 +327,16 @@ export async function handle_cdp_start(
             connect_error: null,
             idle_timer: null,
             last_activity: Date.now(),
+            body_seq_to_req_id: new Map<number, string>(),
+            evicted_events: [],
+            terminal_reason: null,
+            terminal_message: null,
         };
 
-        // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速）
-        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速；t170: 使用校验后的 loopback URL）
+        const ws = new WebSocket(ws_url);
         let seq = 0;
-        const body_seq_to_req_id = new Map<number, string>();
+        const body_seq_to_req_id = session.body_seq_to_req_id;
 
         const ws_connect = await new Promise<'ok' | 'timeout' | 'failed'>((resolve) => {
             const timeout = setTimeout(() => {
@@ -260,6 +372,15 @@ export async function handle_cdp_start(
             bridge_warn('cdp_connect_failed', { session_key, port, connect: ws_connect, reason: session.connect_error });
             return { status: 200, body: { ok: false, error: { code: 'cdp_start_failed', message: msg } } };
         }
+
+        // t158: 建连成功后安装运行态 close/error 处理——WS 中断即终态化 session（
+        // 替代 t101 建连期 handler：后者只 resolve 已 settled promise，不清理、不暴露 failure）。
+        ws.onclose = () => {
+            terminate_session(session, 'ws_closed', 'CDP WebSocket closed');
+        };
+        ws.onerror = () => {
+            // onerror 后通常伴随 onclose；不单独终态，避免双路径竞态
+        };
 
         ws.onmessage = (event) => {
             try {
@@ -387,8 +508,8 @@ export async function handle_cdp_start(
                                         waiting_event.response_body_status = 'captured';
                                     }
                                     // t140: body 回写后更新会话聚合字节并触发预算淘汰（超限丢最旧带 body 事件）。
-                                    // 记账用实际存储长度（截断后），与淘汰减量口径一致。
-                                    session.body_bytes += Math.min(bytes.length, session.max_body_bytes);
+                                    // 记账用实际存储字符串字节（截断后），与淘汰减量口径一致。
+                                    session.body_bytes += new TextEncoder().encode(body).length;
                                     enforce_body_budget(session);
                                 }
                             } else {
@@ -427,7 +548,29 @@ export async function handle_cdp_events(
         return { status: 404, body: { ok: false, events: [] } };
     }
 
+    // t158: terminal session 返回 410 + 终态化后的全部事件（含 evicted 待返回，不静默消失）+ 结构化错误
+    // （d007: 410 Gone 语义；stop 销毁后为 404，与 terminal 区分）。
+    if (session.terminal_reason) {
+        return {
+            status: 410,
+            body: {
+                ok: false,
+                events: [...session.events, ...session.evicted_events].map(serialize_cdp_event),
+                error: {
+                    code: 'cdp_session_terminal',
+                    reason: session.terminal_reason,
+                    message: session.terminal_message,
+                },
+            },
+        };
+    }
+
     // Return completed events and remove only the returned ones from the session
+    // t157 AC-001: 返回时按实际 response_body 字节递减 body_bytes（统一走 decrement_body_bytes），
+    // 预算只统计当前驻留事件字节，不再退化为累计写入量。
+    // t157 AC-005: evicted 待返回队列优先返回（pending 淘汰产生的可观察终态，不占 events 上限）。
+    const evicted_batch = session.evicted_events.splice(0, MAX_EVENTS_PER_POLL);
+
     const completed: CdpStoredEvent[] = [];
     const pending: CdpStoredEvent[] = [];
 
@@ -439,28 +582,41 @@ export async function handle_cdp_events(
         }
     }
 
-    const to_return = completed.slice(0, MAX_EVENTS_PER_POLL);
-    const remaining_completed = completed.slice(MAX_EVENTS_PER_POLL);
+    const completed_slot = MAX_EVENTS_PER_POLL - evicted_batch.length;
+    const to_return_completed = completed.slice(0, completed_slot);
+    const remaining_completed = completed.slice(completed_slot);
     // 未返回的 completed 事件保留到下次轮询
     session.events = pending.concat(remaining_completed);
+    for (const evt of evicted_batch) {
+        decrement_body_bytes(session, evt);
+    }
+    for (const evt of to_return_completed) {
+        decrement_body_bytes(session, evt);
+    }
+    const to_return = evicted_batch.concat(to_return_completed);
 
     return {
         status: 200,
-        body: { ok: true, events: to_return.map(e => ({
-            request_id: e.request_id,
-            tab_id: e.tab_id,
-            url: e.url,
-            method: e.method,
-            status_code: e.status_code,
-            timestamp: e.timestamp,
-            resource_type: e.resource_type,
-            response_body: e.response_body,
-            response_body_status: e.response_body_status,
-            request_body: e.request_body,
-            request_body_status: e.request_body_status,
-            request_headers: e.request_headers,
-            response_headers: e.response_headers
-        })) }
+        body: { ok: true, events: to_return.map(serialize_cdp_event) }
+    };
+}
+
+// t158: 事件序列化（terminal 410 与正常 200 共用同一输出形态）
+function serialize_cdp_event(e: CdpStoredEvent): Record<string, unknown> {
+    return {
+        request_id: e.request_id,
+        tab_id: e.tab_id,
+        url: e.url,
+        method: e.method,
+        status_code: e.status_code,
+        timestamp: e.timestamp,
+        resource_type: e.resource_type,
+        response_body: e.response_body,
+        response_body_status: e.response_body_status,
+        request_body: e.request_body,
+        request_body_status: e.request_body_status,
+        request_headers: e.request_headers,
+        response_headers: e.response_headers
     };
 }
 
@@ -474,4 +630,24 @@ export async function handle_cdp_stop(body: Record<string, unknown>): Promise<{ 
 
 function headers_from_cdp(headers: Record<string, string>): Record<string, string> {
     return { ...headers };
+}
+
+// t170 SEC-002: CDP WebSocket URL allowlist——仅允许 ws: scheme + loopback host + 请求 port；
+// 拒绝 credentials/fragment/wss:/远端 host。校验通过后用 target ID 自行构造 loopback URL
+// （标准 CDP page target 路径 ws://127.0.0.1:{port}/devtools/page/{id}），不信任 discovery authority。
+function safe_cdp_ws_url(target: { id: string; webSocketDebuggerUrl: string }, port: number): string | null {
+    if (!target.id) return null;
+    try {
+        const u = new URL(target.webSocketDebuggerUrl);
+        if (u.protocol !== 'ws:') return null;
+        const host = u.hostname;
+        const is_loopback = host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
+        if (!is_loopback) return null;
+        if (u.port === '' || Number(u.port) !== port) return null;
+        if (u.username || u.password) return null;
+        if (u.hash) return null;
+    } catch {
+        return null;
+    }
+    return `ws://127.0.0.1:${port}/devtools/page/${encodeURIComponent(target.id)}`;
 }

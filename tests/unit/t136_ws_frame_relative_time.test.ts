@@ -45,6 +45,7 @@ describe('ws_frame relative time (t136)', () => {
                 error_events: [],
                 storage_changes: [],
                 cookie_changes: [],
+                capture_lifecycle_events: [], // t180: Agent 数据源 8 源
             },
         };
         const result = get_timeline_from_capture_data(data as never);

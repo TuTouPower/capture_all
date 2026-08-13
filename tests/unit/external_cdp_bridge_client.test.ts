@@ -224,19 +224,10 @@ describe('poll_external_cdp_events', () => {
         expect(init.headers).toEqual({ 'Authorization': 'Bearer <TEST_BRIDGE_TOKEN>' });
     });
 
-    it('returns empty array when response is not ok', async () => {
-        globalThis.fetch = vi.fn().mockResolvedValue({ ok: false });
-
-        const result = await poll_external_cdp_events(MOCK_CONFIG, 'sk-dead');
-        expect(result).toEqual([]);
-    });
-
-    it('returns empty array on network error', async () => {
-        globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNRESET'));
-
-        const result = await poll_external_cdp_events(MOCK_CONFIG, 'sk-err');
-        expect(result).toEqual([]);
-    });
+    // t158 AC-003: 「非 2xx / 网络错误降空数组」旧语义整体移除——新语义为抛分类错误
+    // （cdp_poll_failed / CdpSessionTerminalError），由 coordinator 决定重试或停止。
+    // 原两测试（returns empty array when response is not ok / on network error）删除，
+    // 覆盖见 tests/unit/cdp_client_terminal_error.test.ts 与 coordinator terminal 测试。
 
     it('returns empty array when events field is missing', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({

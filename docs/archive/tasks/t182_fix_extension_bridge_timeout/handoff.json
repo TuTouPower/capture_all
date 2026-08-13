@@ -1,0 +1,19 @@
+{
+  "tid": "t182",
+  "attempt": 1,
+  "execution_id": "1fcb821fbc95460d9a47bc70bf1af3c1",
+  "status": "done",
+  "branch": "t182_fix_extension_bridge_timeout",
+  "base_sha": "eac721d474ebbbfcc7463e6d27b82789d34f4678",
+  "tests": "npm test：1783 passed（新增 bridge_client_fetch_signal 5 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（4 minor：command fetch 用例缺口、Chrome 116 基线、enroll 锚定）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/bridge_client_fetch_signal.test.ts::stop_bridge_client 后 heartbeat fetch signal.aborted=true（mock deferred + fake timers）"],
+    "AC-002": ["tests/unit/bridge_client_fetch_signal.test.ts::enroll/heartbeat/command fetch 三类请求注入 20ms timeout 后 signal.aborted=true（真实 timers——AbortSignal.timeout 内部定时器不受 fake timers 控制）"],
+    "AC-003": ["tests/unit/bridge_client_fetch_signal.test.ts::stop 旧 lifecycle abort 其 fetch；restart 后新 lifecycle fetch signal.aborted=false（新 controller）"],
+    "AC-004": ["tests/unit/bridge_client_fetch_signal.test.ts::5 用例全绿；全量 unit 187 文件 / 1783 测试通过"]
+  },
+  "pending": [],
+  "findings": []
+}

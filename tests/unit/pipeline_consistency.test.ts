@@ -33,7 +33,7 @@ describe('pipeline_consistency', () => {
     it('keeps visible stats consistent with event categories', () => {
         const events = [
             event('mouse_event'),
-            event('page_navigation'),
+            event('route_change'),
             event('storage_change'),
             event('cookie_change'),
             event('runtime_exception'),

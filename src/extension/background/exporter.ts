@@ -4,14 +4,17 @@ import { get_capture, get_events_by_category, get_network_requests, get_console_
 import { get_app_log_transport } from './app_log_storage';
 import { load_user_config } from '../../shared/user_config';
 import { add_absolute_system_time, add_capture_system_times, add_system_times_to_capture_data, format_system_time } from '../../shared/system_time';
+import { fetch_all_records } from '../shared/paged_reader';
 import type { NetworkRequestData, CaptureRecord, UserConfig, LogLevel, CaptureEvent, ConsoleEventData, CategoryKey } from '../../shared/types';
 import type { ExportableCaptureData } from '../../shared/system_time';
 
 export interface ExportOptions {
     include_response_body?: boolean;
+    /** t171 AC-004: 独立剥离 request body */
+    include_request_body?: boolean;
+    /** t171 AC-004: 独立剥离 preview（response_preview） */
+    include_preview?: boolean;
 }
-
-const PAGE_SIZE = 5000;
 
 // T045: HAR body size 用 UTF-8 字节
 function utf8_byte_len(s: string): number {
@@ -26,49 +29,30 @@ function base64_decoded_len(s: string): number {
     return triples + (rem >= 2 ? (rem === 2 ? 1 : 2) : 0);
 }
 
-// T043: 分页读取直到耗尽，替代固定 100000 截断
-async function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
-    const all: CaptureEvent[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_events_by_category(capture_id, category, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+// t156: 统一走 shared/paged_reader 的 fetch_all_records（PAGE_SIZE=5000 分页耗尽），
+// 与 capture_data_reader / agent_data_queries 共享同一分页实现
+function get_all_events_by_category(capture_id: string, category: CategoryKey): Promise<CaptureEvent[]> {
+    return fetch_all_records((offset, limit) => get_events_by_category(capture_id, category, offset, limit));
 }
 
-async function get_all_network_requests(capture_id: string): Promise<NetworkRequestData[]> {
-    const all: NetworkRequestData[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_network_requests(capture_id, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+function get_all_network_requests(capture_id: string): Promise<NetworkRequestData[]> {
+    return fetch_all_records((offset, limit) => get_network_requests(capture_id, offset, limit));
 }
 
-async function get_all_console_events(capture_id: string): Promise<ConsoleEventData[]> {
-    const all: ConsoleEventData[] = [];
-    let offset = 0;
-    while (true) {
-        const batch = await get_console_events(capture_id, offset, PAGE_SIZE);
-        if (batch.length === 0) break;
-        all.push(...batch);
-        if (batch.length < PAGE_SIZE) break;
-        offset += batch.length;
-    }
-    return all;
+function get_all_console_events(capture_id: string): Promise<ConsoleEventData[]> {
+    return fetch_all_records((offset, limit) => get_console_events(capture_id, offset, limit));
 }
 
-function strip_response_body(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {
-    if (options?.include_response_body === false) {
-        return requests.map(({ response_body: _omit, ...rest }) => rest as NetworkRequestData);
+// t171 AC-004: 独立剥离 request body / response body / preview（默认保留；显式 false 剥离）
+function strip_body_parts(requests: NetworkRequestData[], options?: ExportOptions): NetworkRequestData[] {
+    if (options?.include_response_body === false || options?.include_request_body === false || options?.include_preview === false) {
+        return requests.map((r) => {
+            const out = { ...r } as Partial<NetworkRequestData> & Record<string, unknown>;
+            if (options?.include_response_body === false) delete out.response_body;
+            if (options?.include_request_body === false) delete out.request_body;
+            if (options?.include_preview === false) delete out.response_preview;
+            return out as NetworkRequestData;
+        });
     }
     return requests;
 }
@@ -77,18 +61,20 @@ export async function export_json(capture_id: string, options?: ExportOptions): 
     const capture = await get_capture(capture_id);
     if (!capture) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const network_requests = strip_body_parts(network_requests_raw, options);
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
@@ -101,18 +87,20 @@ export async function export_jsonl(capture_id: string, options?: ExportOptions):
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const network_requests = strip_body_parts(network_requests_raw, options);
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
@@ -136,18 +124,20 @@ export async function export_html(capture_id: string, options?: ExportOptions): 
     const session = await get_capture(capture_id);
     if (!session) throw new Error('Capture not found');
 
-    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes] = await Promise.all([
+    const [user_events, nav_events, network_requests_raw, console_logs, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_all_events_by_category(capture_id, 'user_action'),
         get_all_events_by_category(capture_id, 'navigation'),
         get_all_network_requests(capture_id),
         get_all_console_events(capture_id),
         get_all_events_by_category(capture_id, 'error'),
         get_all_events_by_category(capture_id, 'storage'),
-        get_all_events_by_category(capture_id, 'cookie')
+        get_all_events_by_category(capture_id, 'cookie'),
+        // t180: lifecycle 视为完整采集证据，export 事件合并包含
+        get_all_events_by_category(capture_id, 'capture_lifecycle')
     ]);
 
-    const network_requests = strip_response_body(network_requests_raw, options);
-    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes]
+    const network_requests = strip_body_parts(network_requests_raw, options);
+    const all_events = [...user_events, ...nav_events, ...error_events, ...storage_changes, ...cookie_changes, ...lifecycle_events]
         .sort((a, b) => (a.relative_time_ms ?? 0) - (b.relative_time_ms ?? 0));
 
     const user_config = await load_user_config();
@@ -230,7 +220,7 @@ export async function export_har(capture_id: string, options?: ExportOptions): P
     if (!session) throw new Error('Capture not found');
 
     const network_requests_raw = await get_all_network_requests(capture_id);
-    const network_requests = strip_response_body(network_requests_raw, options);
+    const network_requests = strip_body_parts(network_requests_raw, options);
     const user_config = await load_user_config();
     const har = build_har(session, network_requests, user_config);
     return JSON.stringify(har, null, 2);
@@ -449,7 +439,17 @@ export async function export_app_logs(options: ExportAppLogsOptions = {}): Promi
     const transport = get_app_log_transport();
     // Flush pending buffer entries before querying IndexedDB
     await transport.flush();
-    const entries = await transport.get_entries(100000, 0, {
+    // t193 AC-003: 明确导出上限（PERF-L010）——先 count 判定截断，避免固定全量读取后构建
+    // 无界巨型字符串；超限时截断并在尾部标记（与 t156 截断模式一致）
+    const EXPORT_LIMIT = 100000;
+    const total = await transport.count({
+        level: options.level,
+        module: options.module,
+        since: options.since,
+        until: options.until,
+    });
+    const limit = Math.min(total, EXPORT_LIMIT);
+    const entries = await transport.get_entries(limit, 0, {
         level: options.level,
         module: options.module,
         since: options.since,
@@ -457,9 +457,13 @@ export async function export_app_logs(options: ExportAppLogsOptions = {}): Promi
     });
     const user_config = await load_user_config();
 
-    return entries.map(entry => {
+    let out = entries.map(entry => {
         const time = format_system_time(entry.timestamp, user_config);
         const details = entry.details === undefined ? '' : ` ${JSON.stringify(entry.details)}`;
         return `${time} [${entry.level}] [${entry.module}] ${entry.message}${details}`;
     }).join('\n');
+    if (total > EXPORT_LIMIT) {
+        out += `\n[truncated: ${total - EXPORT_LIMIT} entries omitted]`;
+    }
+    return out;
 }

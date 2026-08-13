@@ -1,0 +1,21 @@
+{
+  "tid": "t157",
+  "attempt": 1,
+  "execution_id": "9f43c61f366d4faaa338b447c0522bf8",
+  "status": "done",
+  "branch": "t157_fix_cdp_body_budget_accounting",
+  "base_sha": "e9ac19839ea60e2bd4cd93d10a85d11ecf4417bd",
+  "tests": "npm test：1623 passed（新增 cdp_body_budget_accounting 7 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 FAIL → Round 2 FAIL（f005）→ Round 3 PASS / PASS（3 轮闭环）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cdp_body_budget_accounting.test.ts::AC-001 poll 返回两条带 body 事件后 body_bytes 17→0"],
+    "AC-002": ["tests/unit/cdp_body_budget_accounting.test.ts::AC-002 poll 后新写入 600B 预算内 3 条全返回不误淘汰"],
+    "AC-003": ["tests/unit/cdp_body_budget_accounting.test.ts::AC-003 [pending+两条带 body] 淘汰跳过 pending，迟到响应重建"],
+    "AC-004": ["tests/unit/cdp_body_budget_accounting.test.ts::AC-004/AC-004b 唯一带 body 事件置 null 标 too_large（含含 pending 变体）"],
+    "AC-005": ["tests/unit/cdp_body_budget_accounting.test.ts::AC-005 pending 转 evicted 终态 + body_seq_to_req_id.size===0 映射清理", "tests/unit/cdp_body_budget_accounting.test.ts::AC-005b evicted 队列有界封顶丢最旧"],
+    "AC-006": ["docs/blueprint/domain.md::限制表补 CDP 会话 200MB 聚合 body 预算条目（计数口径 + 超限策略）"]
+  },
+  "pending": [],
+  "findings": []
+}

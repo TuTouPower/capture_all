@@ -5,8 +5,8 @@ import type { AgentCommand } from '../../src/shared/protocol';
 import { DEFAULT_CONFIG } from '../../src/shared/constants';
 import type { CaptureConfig } from '../../src/shared/types';
 import {
-    get_entry_from_capture_data,
-    list_entries_from_capture_data,
+    get_entry_pushdown,
+    list_entries_pushdown,
 } from '../../src/extension/background/agent_data_queries';
 import { export_json } from '../../src/extension/background/exporter';
 
@@ -28,7 +28,12 @@ vi.mock('../../src/extension/background/agent_data_queries', () => ({
     list_entries_from_capture_data: vi.fn(() => ({ total: 0, records: [] })),
     get_entry_from_capture_data: vi.fn(() => ({ record_id: 'r1', source: 'user_action_events', data: {} })),
     get_timeline_from_capture_data: vi.fn(() => ({ total: 0, records: [] })),
-    get_timeline_item_from_capture_data: vi.fn(() => ({ record_id: 'r1', source: 'user_action_events', data: {} }))
+    get_timeline_item_from_capture_data: vi.fn(() => ({ record_id: 'r1', source: 'user_action_events', data: {} })),
+    // t161: dispatcher 改走下推路径，mock 对应新函数
+    get_entry_pushdown: vi.fn(async () => ({ record_id: 'r1', source: 'user_action_events', data: {} })),
+    list_entries_pushdown: vi.fn(async () => ({ total: 0, records: [], next_token: null })),
+    list_sources_pushdown: vi.fn(async () => []),
+    get_timeline_pushdown: vi.fn(async () => ({ total: 0, records: [] })),
 }));
 
 const config: CaptureConfig = {
@@ -124,15 +129,30 @@ describe('agent command dispatcher', () => {
         });
     });
 
-    test('stops capture and maps inactive state', async () => {
+    test('t177: stop 幂等——空闲态返回成功且 capture_id 为 null（NO_ACTIVE_CAPTURE 已删除）', async () => {
         const result = await dispatch_agent_command(command('capture.stop'), {
             ...handlers,
+            get_status: vi.fn(() => ({ active_capture_id: null })),
+            stop_capture: vi.fn(async () => ({ success: true }))
+        });
+
+        expect(result).toMatchObject({
+            ok: true,
+            data: { capture_id: null, status: 'stopped' }
+        });
+    });
+
+    test('t177: stop 失败（success:false）同样成功返回 capture_id null，不抛 NO_ACTIVE_CAPTURE', async () => {
+        // 旧实现此分支 throw NO_ACTIVE_CAPTURE（错误响应）；新实现幂等成功（判别力）
+        const result = await dispatch_agent_command(command('capture.stop'), {
+            ...handlers,
+            get_status: vi.fn(() => ({ active_capture_id: null })),
             stop_capture: vi.fn(async () => ({ success: false }))
         });
 
         expect(result).toMatchObject({
-            ok: false,
-            error: { code: 'NO_ACTIVE_CAPTURE' }
+            ok: true,
+            data: { capture_id: null, status: 'idle' }
         });
     });
 
@@ -255,9 +275,9 @@ describe('agent command dispatcher', () => {
         expect(err?.message).not.toContain('leaked');
     });
 
-    // ── t151 AC-005: 结构化错误码映射补充 ─────────────────────────
+    // ── t151 AC-005: 结构化错误码映射补充（t161: dispatcher 走 pushdown 路径） ───
     test('maps SOURCE_NOT_FOUND from data.list', async () => {
-        vi.mocked(list_entries_from_capture_data).mockImplementationOnce(() => {
+        vi.mocked(list_entries_pushdown).mockImplementationOnce(() => {
             throw new Error('SOURCE_NOT_FOUND');
         });
         const result = await dispatch_agent_command(command('data.list', {
@@ -270,7 +290,7 @@ describe('agent command dispatcher', () => {
     });
 
     test('maps RECORD_NOT_FOUND from data.get', async () => {
-        vi.mocked(get_entry_from_capture_data).mockImplementationOnce(() => {
+        vi.mocked(get_entry_pushdown).mockImplementationOnce(() => {
             throw new Error('RECORD_NOT_FOUND');
         });
         const result = await dispatch_agent_command(command('data.get', {

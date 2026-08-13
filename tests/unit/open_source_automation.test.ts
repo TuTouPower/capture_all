@@ -119,7 +119,10 @@ describe('open-source automation configuration', () => {
         expect(e2e_commands).toEqual([
             'npm ci',
             'npx playwright install --with-deps chromium',
-            'npm run test:e2e',
+            'npm run build',
+            // t194 AC-003: release-gate 全项目集（xvfb-run headed）+ discovery guard
+            'npm run check:e2e-coverage',
+            'xvfb-run -a npm run test:e2e:all',
         ]);
 
         for (const [job_name, job] of Object.entries(workflow.jobs)) {

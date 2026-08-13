@@ -38,6 +38,11 @@ function install_chrome_mock(): void {
     });
     vi.stubGlobal('chrome', {
         debugger: {},
+        alarms: {
+            create: vi.fn().mockResolvedValue(undefined),
+            clear: vi.fn().mockResolvedValue(true),
+            onAlarm: { addListener: vi.fn() },
+        },
         runtime: {
             onInstalled: add_listener(),
             onMessage: add_listener(),
@@ -155,6 +160,8 @@ describe('service worker stale capture cleanup', () => {
             active_capture_start_ms: null,
             active_capture_config: null,
             active_capture_generation: null,
+            // t159: 时长上限截止时间键随 stale 清理一并清除
+            active_capture_deadline_ms: null,
         });
         expect(get_cleanup_errors()).toHaveLength(0);
     });

@@ -36,31 +36,44 @@
 `vitest.config.ts`：
 
 ```typescript
+import { defineConfig } from 'vitest/config';
+
 export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
-        exclude: ['node_modules/**', 'dist/**', 'artifacts/**', '.claude/**', '**/*.spec.ts']
-    }
+        exclude: ['node_modules/**', 'dist/**', 'artifacts/**', '.claude/**', 'tests/e2e/**', 'tests/support/**', '**/*.spec.ts'],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json', 'html'],
+            include: ['src/**/*.ts'],
+        },
+    },
 });
 ```
 
-所有 `*.test.ts` 由 vitest 执行；所有 `*.spec.ts` 排除（归 Playwright）。
+`tests/unit/**/*.test.ts` 由 vitest 执行；`tests/e2e/**`、`tests/support/**`、`**/*.spec.ts` 全部排除（E2E 归 Playwright）。
 
 ### 2.2 测试目录（实际）
 
 ```
 tests/
-├── *.test.ts                # vitest 单元/集成测试（约 80 个文件）
-├── *.spec.ts                # Playwright E2E（约 40 个文件，平铺在 tests/ 根）
-├── __mocks__/
-│   └── chrome_debugger.ts   # Chrome debugger mock
-├── fixtures/
-│   ├── server.ts            # 测试服务器
-│   └── test-page.html       # 测试页面
-├── helpers/
-│   └── wcag_contrast.ts     # WCAG 对比度工具
-└── e2e-helpers.ts           # E2E 公共工具
+├── unit/                    # Vitest 单元/集成测试（约 190+ 个 *.test.ts）
+├── e2e/                     # Playwright E2E（*.spec.ts，平铺 + T 系列子目录）
+│   ├── e2e.spec.ts          #   基础 headless E2E
+│   ├── e2e-*.spec.ts        #   功能场景（states / labels / export / cdp-capture / mcp 等）
+│   ├── e2e-helpers.ts       #   公共工具（launchPersistentContext + --load-extension）
+│   └── T0001/ T0002/ T0003/ #   旧任务专项（zoom-slider / nav-settings 等）
+├── support/
+│   ├── __mocks__/
+│   │   └── chrome_debugger.ts   # Chrome debugger mock
+│   ├── fixtures/
+│   │   ├── server.ts            # E2E 测试服务器（127.0.0.1:17832）
+│   │   └── test-page.html       # 测试页面
+│   └── helpers/
+│       ├── signed_message.ts    # 签名消息 helper
+│       └── wcag_contrast.ts     # WCAG 对比度工具
+└── repo_template/           # repo 工具链测试（python）
 ```
 
 ### 2.3 主要覆盖域
@@ -81,15 +94,18 @@ tests/
 | 命令 | 说明 |
 |---|---|
 | `npm run dev` | Vite dev |
-| `npm run build` | `tsc && vite build && npm run build:bridge && npm run build:mcp`，扩展输出 `artifacts/dist/`，Bridge 输出 `artifacts/bridge/bridge.mjs`，MCP Server 输出 `artifacts/mcp/mcp.mjs` |
+| `npm run build` | `tsc && vite build && npm run copy:locales && npm run build:bridge && npm run build:mcp && npm run build:zip`；扩展输出 `artifacts/dist/` + `artifacts/extension.zip`，Bridge 输出 `artifacts/bridge/bridge.mjs`，MCP Server 输出 `artifacts/mcp/mcp.mjs` |
+| `npm run copy:locales` | 复制 `_locales` 到构建产物（build 链内） |
 | `npm test` | `vitest run`，全量单测 |
 | `npm run test:watch` | vitest watch |
+| `npm run test:coverage` | `vitest run --coverage`（v8，reporter text/json/html） |
 | `npm run test:e2e` | `playwright test --project=e2e`（仅基础 headless 项目） |
 | `npm run test:e2e:all` | `playwright test`（全部项目） |
-| `npm run test:e2e:server` | 启动 E2E 测试服务器（`tests/fixtures/server.ts`） |
+| `npm run test:e2e:server` | 启动 E2E 测试服务器（`tests/support/fixtures/server.ts`，127.0.0.1:17832） |
 | `npm run serve:e2e` | `npm run build && vite preview --host 127.0.0.1 --port 4174` |
-| `npm run build:bridge` | `esbuild src/bridge/main.ts --bundle --platform=node --format=esm --outfile=artifacts/bridge/bridge.mjs` |
-| `npm run build:mcp` | `esbuild src/mcp/main.ts --bundle --platform=node --format=esm --outfile=artifacts/mcp/mcp.mjs` |
+| `npm run build:bridge` | `esbuild src/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs` |
+| `npm run build:mcp` | `esbuild src/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs` |
+| `npm run build:zip` | `cd artifacts/dist && zip -r ../extension.zip .` |
 | `npm run bridge` | `tsx src/bridge/main.ts`（开发）；构建后：`node artifacts/bridge/bridge.mjs` |
 | `npm run mcp` | `tsx src/mcp/main.ts`（开发）；构建后：`node artifacts/mcp/mcp.mjs` |
 
@@ -102,28 +118,34 @@ MCP Server 启动需要环境变量：
 | 变量 | 说明 |
 |------|------|
 | `CAPTURE_ALL_BRIDGE_URL` | Bridge 地址，默认 `http://127.0.0.1:17831` |
-| `CAPTURE_ALL_BRIDGE_TOKEN` | 与扩展设置 → 集成 → Bridge Token 一致 |
+| `CAPTURE_ALL_BRIDGE_TOKEN` | 可选。不设时 MCP 客户端自动从 Bridge 持久化 token 文件（`$XDG_RUNTIME_DIR/capture-all/bridge_token`，mode 0600）读取，与 Bridge 端解析同源 |
+
+> token 模型（`SECURITY.md`）：MCP token 保护 Bridge 的 MCP/CDP 路由，来源优先级 CLI → env → token 文件 → 自动生成并持久化；扩展设置中的 Bridge Token 是独立的 instance_token（enroll 生成，仅保护 `/extension/*` 数据路由），与 MCP token 无关。
 
 ### 3.2 Claude Code MCP 注册
 
-项目 `.claude/settings.json` 已注册 `capture-all` MCP Server：
+复制仓库根 `.mcp.json.example` 为本地 `.mcp.json`（不入库）：
 
 ```json
 {
-  "mcpServers": {
-    "capture-all": {
-      "command": "node",
-      "args": ["artifacts/mcp/mcp.mjs"],
-      "env": {
-        "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831",
-        "CAPTURE_ALL_BRIDGE_TOKEN": "<用户设置的值>"
-      }
+    "mcpServers": {
+        "capture-all": {
+            "command": "node",
+            "args": [
+                "-e",
+                "const { resolve } = require('node:path'); const { pathToFileURL } = require('node:url'); const project_dir = process.env.CLAUDE_PROJECT_DIR || process.cwd(); import(pathToFileURL(resolve(project_dir, 'artifacts/mcp/mcp.mjs')).href);"
+            ],
+            "env": {
+                "CAPTURE_ALL_BRIDGE_URL": "http://127.0.0.1:17831"
+            }
+        }
     }
-  }
 }
 ```
 
-Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude Code 通过 MCP 工具直接调用 `capture.start`、`captures.list`、`data.list` 等 12 个工具。
+`node -e` 用 `import(pathToFileURL(...))` 加载 ESM 构建产物，`CLAUDE_PROJECT_DIR` 缺省回退 `process.cwd()`。token 不在 env 写死：MCP 客户端自动从 Bridge token 文件读取（`CAPTURE_ALL_BRIDGE_TOKEN` env 可覆盖）。
+
+Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude Code 通过 MCP 工具直接调用 `get_status`、`list_browsers`、`start_recording`、`list_captures`、`list_records` 等 **17 个工具**（以 `src/mcp/tools.ts` 的 `MCP_TOOL_NAMES` 为准）。
 
 ## 4. E2E
 
@@ -131,7 +153,7 @@ Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude 
 
 `playwright.config.ts` 关键项：
 
-- `testDir: ./tests/e2e`，`outputDir: artifacts/test-results`。
+- `testDir: ./tests/e2e`，`outputDir: artifacts/test-results`，`trace: on-first-retry`。
 - `timeout: 120_000`，`expect.timeout: 15_000`，`actionTimeout: 15_000`。
 - `webServer` 同时启动扩展预览（`npm run serve:e2e`，`127.0.0.1:4174`）和本地测试站点（`npm run test:e2e:server`，`127.0.0.1:17832`）。
 - config 将 `127.0.0.1`、`localhost` 合入 `NO_PROXY` / `no_proxy`，防止本机代理响应导致 `webServer` 健康检查误判。
@@ -142,16 +164,16 @@ Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude 
 | 项目名 | 模式 | 文件匹配 | workers |
 |---|---|---|---|
 | `e2e` | headless | `e2e.spec.ts` | 默认 |
-| `e2e-ext` | headed | baidu / states / labels / stop / ui-audit / export / realtime-detail / consistency / dashboard-list / detail-tabs / toutiao / qq / sina / logging / 旧 T0001 测试 | 1 |
-| `e2e-t0001` | headed | `e2e/T0001/*.spec.ts` | 1 |
-| `e2e-t0003` | headed | `e2e/T0003/*.spec.ts` | 1 |
+| `e2e-ext` | headed | baidu / states / labels / stop / ui-audit / export / realtime-detail / consistency / dashboard-list / detail-tabs / toutiao / qq / sina / logging / `e2e-T0001-*`（ac3-verify / zoom） | 1 |
+| `e2e-t0001` | headed | `tests/e2e/T0001/*.spec.ts`（zoom-slider） | 1 |
+| `e2e-t0003` | headed | `tests/e2e/T0003/*.spec.ts`（nav-settings） | 1 |
 | `e2e-real` | headed | `e2e-real.spec.ts` | 默认 |
 | `e2e-cdp-capture` | headed | `e2e-cdp-capture.spec.ts` | 默认 |
-| `e2e-mcp` | headed | `e2e-mcp*.spec.ts` | 默认 |
+| `e2e-mcp` | headed | `e2e-mcp.spec.ts` | 默认 |
 | `e2e-p1` | headed | concurrent / network / console-errors / xss / mcp-full / theme-i18n | 1 |
 | `e2e-streaming` | headed | websocket-capture / streaming-capture | 1 |
 
-> **NEEDS CLARIFICATION**：项目根 `CLAUDE.md` 写 `npm run test:e2e -- --project=e2e-p0`（4 workers 并发）和 `--project=e2e-p1`（2 workers），但实际 `playwright.config.ts` 没有 `e2e-p0` 项目，且 `e2e-ext` / `e2e-p1` 实际 `workers: 1`、`fullyParallel: false`。以实际 config 为准；CLAUDE.md 该描述与 config 不一致，待核实是 config 待调整还是 CLAUDE.md 待修正。
+`e2e-ext` / `e2e-p1` / `e2e-streaming` / `e2e-t0001` / `e2e-t0003` 均为 `fullyParallel: false` + `workers: 1`；其余项目使用 Playwright 默认并发。以 `playwright.config.ts` 为准。
 
 ### 4.3 核心 E2E 场景
 
@@ -160,7 +182,7 @@ Bridge 持续运行在后台（`node artifacts/bridge/bridge.mjs &`），Claude 
 - 主面板采集详情（不跳转独立页，`?capture=xxx&page=detail`）（`e2e-dashboard-list` / `e2e-detail-tabs` / `e2e-realtime-detail`）。
 - 实时详情不为空（`e2e-realtime-detail`）。
 - 四网站采集（baidu / toutiao / qq / sina）。
-- CDP body capture + retry（`e2e-cdp-capture` / `e2e-cdp-retry`，注：实际 config 无 `e2e-cdp-retry` 项目，retry 场景归入 `e2e-cdp-capture`）。
+- CDP body capture + retry（`e2e-cdp-capture`；注：`e2e-cdp-retry.spec.ts` 文件存在但未被任何 project 匹配，实际不执行，retry 场景在 `e2e-cdp-capture.spec.ts` 内覆盖）。
 - Agent MCP 闭环（`e2e-mcp` / `e2e-mcp-full`）。
 - 导出（JSON / JSONL / HAR / HTML，HTML 无 XSS）（`e2e-export` / `e2e-export-content` / `e2e-xss`）。
 - 流式 / WebSocket（`e2e-streaming`）。

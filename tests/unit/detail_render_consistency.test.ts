@@ -91,7 +91,7 @@ describe('detail render consistency (t151 AC-002)', () => {
     it('render_dt_list 按事件类别渲染对应行（七类标签覆盖）', () => {
         set_detail_events([
             ev('input_event', 10),
-            ev('page_navigation', 20),
+            ev('route_change', 20),
             ev('network_request', 30),
             ev('console_event', 40),
             ev('runtime_exception', 50),
@@ -105,5 +105,22 @@ describe('detail render consistency (t151 AC-002)', () => {
         for (const label of SEVEN_TAB_LABELS) {
             expect(row_kinds.some((k) => k.includes(label)), `row kind ${label} should be rendered`).toBe(true);
         }
+    });
+
+    it('t193 AC-004: 600 事件渲染行数受窗口预算约束（≤ 窗口 + 省略行）', () => {
+        const events: CaptureEvent[] = [];
+        for (let i = 0; i < 600; i++) {
+            events.push({
+                event_id: `e${i}`, capture_id: 'c', category: 'user_action', type: 'mouse_event',
+                relative_time_ms: i, absolute_time: '', tab_id: 1, frame_id: 0, url: '',
+                source: 'content_script', severity: 'info', created_at: '',
+            } as CaptureEvent);
+        }
+        set_detail_events(events);
+        const html = _render_dt_list_for_test();
+        // 窗口 500 + 省略行 1 + 表头——行数 ≤ 502（不含表头）
+        const row_count = (html.match(/<tr/g) || []).length;
+        expect(row_count).toBeLessThanOrEqual(502);
+        expect(html).toContain('hidden (windowed)');
     });
 });

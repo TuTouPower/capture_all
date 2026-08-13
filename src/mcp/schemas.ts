@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { MAX_COMMAND_TIMEOUT_MS, AGENT_DATA_SOURCES, EXPORT_FORMATS } from '../shared/constants';
 
 const capture_id_schema = z.string().min(1, 'capture_id is required');
-const timeout_ms_schema = z.number().int().positive().optional();
+const timeout_ms_schema = z.number().int().positive().max(MAX_COMMAND_TIMEOUT_MS).optional();
 const offset_schema = z.number().int().min(0).optional();
 const limit_schema = z.number().int().positive().optional();
 const order_schema = z.enum(['asc', 'desc']).optional();
@@ -9,6 +10,19 @@ const start_time_schema = z.number().optional();
 const end_time_schema = z.number().optional();
 const target_instance_id_schema = z.string().min(1).optional();
 const target_label_schema = z.string().min(1).optional();
+// t179: source/sources/format 公开枚举（BC-005/BM-L002）——由共享常量派生，
+// 与 Bridge/dispatcher 实际接受枚举一致；非法值在 MCP Zod 层拒绝，不进入 Bridge。
+const source_schema = z.enum(AGENT_DATA_SOURCES);
+const format_schema = z.enum(EXPORT_FORMATS);
+// t176: output_path 契约——导出根目录内相对路径/文件名；拒绝绝对路径与 ..
+const output_path_schema = z.string().min(1).refine(
+    (p) => {
+        if (p.startsWith('/') || p.startsWith('\\') || /^[a-zA-Z]:/.test(p)) return false;
+        if (p.split(/[\\/]/).includes('..')) return false;
+        return true;
+    },
+    'output_path must be a relative path inside the export dir (no absolute path, no ..)',
+).optional();
 
 const target_schemas = {
     target_instance_id: target_instance_id_schema,
@@ -83,7 +97,7 @@ const list_data_sources_schema = z.object({
 
 const list_records_schema = z.object({
     capture_id: capture_id_schema,
-    source: z.string().min(1, 'source is required'),
+    source: source_schema,
     ...query_range_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
@@ -91,7 +105,7 @@ const list_records_schema = z.object({
 
 const get_record_schema = z.object({
     capture_id: capture_id_schema,
-    source: z.string().min(1, 'source is required'),
+    source: source_schema,
     record_id: z.string().min(1, 'record_id is required'),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
@@ -99,7 +113,7 @@ const get_record_schema = z.object({
 
 const get_timeline_schema = z.object({
     capture_id: capture_id_schema,
-    sources: z.array(z.string()).optional(),
+    sources: z.array(source_schema).optional(),
     ...query_range_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
@@ -114,16 +128,18 @@ const get_timeline_item_schema = z.object({
 
 const get_all_capture_data_schema = z.object({
     capture_id: capture_id_schema,
-    output_path: z.string().min(1).optional(),
+    output_path: output_path_schema,
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).strict();
 
 const export_capture_schema = z.object({
     capture_id: capture_id_schema,
-    format: z.string(),
-    output_path: z.string().min(1).optional(),
+    format: format_schema,
+    output_path: output_path_schema,
     include_response_body: z.boolean().optional(),
+    include_request_body: z.boolean().optional(),
+    include_preview: z.boolean().optional(),
     ...target_schemas,
     timeout_ms: timeout_ms_schema,
 }).strict();

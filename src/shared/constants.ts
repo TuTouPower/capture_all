@@ -2,7 +2,10 @@
 import type { CaptureConfig } from './types';
 
 export const DB_NAME = 'capture_all_db';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
+
+// t175: MCP/Bridge 命令超时共享上限（Bridge 强制校验，MCP Zod 同步 max）
+export const MAX_COMMAND_TIMEOUT_MS = 300000;
 
 export const STORE_NAMES = {
     CAPTURES: 'captures',
@@ -33,8 +36,9 @@ export const DEFAULT_CONFIG: CaptureConfig = {
     capture_network: true,
     keyboard_capture_mode: 'shortcuts',
     capture_input_values: true,
-    capture_request_body: true,
-    capture_response_body: true,
+    // t171 SEC-003: body 采集默认关闭（隐私），UI/MCP 显式 opt-in 开启
+    capture_request_body: false,
+    capture_response_body: false,
     max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
     inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_sensitive_headers: true,
@@ -47,8 +51,9 @@ export const DEFAULT_USER_CONFIG = {
     mouse_precision: 'clicks_scroll_drag' as const,
     keyboard_capture_mode: 'none' as const,
     capture_input_values: true,
-    capture_request_body: true,
-    capture_response_body: true,
+    // t171 SEC-003: body 采集默认关闭（隐私），UI/MCP 显式 opt-in 开启
+    capture_request_body: false,
+    capture_response_body: false,
     max_body_capture_bytes: MAX_BODY_CAPTURE_BYTES,
     inline_text_max_bytes: INLINE_TEXT_MAX_BYTES,
     redact_data: true,
@@ -65,6 +70,23 @@ export const DEFAULT_USER_CONFIG = {
     agent_bridge_token: '',
     agent_bridge_poll_interval_ms: 1000,
     browser_label: '',
-    log_level: 'debug' as const,
+    log_level: 'info' as const,
     log_max_size_mb: 100,
 };
+
+// t179: Agent 数据源与导出格式公开枚举——Bridge/dispatcher 实际接受的唯一来源，
+// MCP Zod schema 由共享常量派生避免漂移（BC-005 / BM-L002）。
+// 数据源值引用 STORE_NAMES（单一事实来源），新增 store 不更新枚举即编译/运行时双暴露。
+export const AGENT_DATA_SOURCES = [
+    STORE_NAMES.USER_ACTION_EVENTS,
+    STORE_NAMES.NAVIGATION_EVENTS,
+    STORE_NAMES.NETWORK_REQUESTS,
+    STORE_NAMES.CONSOLE_EVENTS,
+    STORE_NAMES.ERROR_EVENTS,
+    STORE_NAMES.STORAGE_CHANGES,
+    STORE_NAMES.COOKIE_CHANGES,
+    // t180: capture_lifecycle 视为完整采集证据，加入 Agent source（用户决策 2026-08-13）
+    STORE_NAMES.CAPTURE_LIFECYCLE_EVENTS,
+] as const;
+
+export const EXPORT_FORMATS = ['json', 'jsonl', 'html', 'har'] as const;

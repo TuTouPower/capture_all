@@ -132,7 +132,17 @@ function metric_grid(stats: CaptureStats | null, can_toggle: boolean): string {
         const has = stats != null && src.stat != null;
         const n = has ? fmt_num(stats![src.stat!]) : '';
         const on = toggles[src.key] !== false;
-        return `<div class="mcard ${can_toggle ? 'mcard-toggle' : ''} ${on ? '' : 'mcard-off'}" data-key="${src.key}" data-tone="${src.tone}" data-count="${has ? 1 : 0}">
+        // t190 f003: 仅可切换态渲染 button（Tab 可聚焦）；capturing/saved 态用 div 防键盘死按钮
+        if (can_toggle) {
+            return `<button type="button" class="mcard mcard-toggle ${on ? '' : 'mcard-off'}" data-key="${src.key}" data-tone="${src.tone}" data-count="${has ? 1 : 0}" aria-pressed="${on ? 'true' : 'false'}">
+                <div class="mcard-row">
+                    <span class="mcard-ic">${ICON[src.icon]}</span>
+                    <span class="mcard-lbl">${t(src.i18n as never)}</span>
+                </div>
+                ${has ? `<span class="mcard-n mono">${n}</span>` : ''}
+            </button>`;
+        }
+        return `<div class="mcard ${on ? '' : 'mcard-off'}" data-key="${src.key}" data-tone="${src.tone}" data-count="${has ? 1 : 0}">
             <div class="mcard-row">
                 <span class="mcard-ic">${ICON[src.icon]}</span>
                 <span class="mcard-lbl">${t(src.i18n as never)}</span>
@@ -156,7 +166,7 @@ function recent_list(): string {
             <span class="recent-ic">${ICON.clock}</span>
             <span class="recent-main">
                 <span class="recent-top"><b>${when}</b></span>
-                <span class="recent-sub mono">${dur} · ${events} events</span>
+                <span class="recent-sub mono">${dur} · ${events} ${t('events')}</span>
             </span>
             <span class="recent-go link">${t('viewDetail')} ${ICON.chevron}</span>
         </a>`;
@@ -282,6 +292,8 @@ function wire_view(): void {
                     ...snapshot.error_events,
                     ...snapshot.storage_changes,
                     ...snapshot.cookie_changes,
+                    // t180: lifecycle 视为完整采集证据，archive 导出事件合并包含（与 dashboard 侧一致）
+                    ...snapshot.lifecycle_events,
                 ],
                 network_requests: snapshot.network_requests,
                 console_events: snapshot.console_events,

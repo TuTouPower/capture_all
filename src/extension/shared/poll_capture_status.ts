@@ -13,6 +13,8 @@ export interface CaptureStatusResponse {
     start_time?: number;
     tab_id?: number;
     config?: unknown;
+    /** t172: content log level（SW/user config 下发，重载恢复采集路径应用） */
+    log_level?: string;
 }
 
 export interface PollDeps {
@@ -43,6 +45,9 @@ export function start_status_poll(deps: PollDeps): () => void {
     const check_once = async (): Promise<boolean> => {
         try {
             const resp = await deps.get_status();
+            // t189 AC-005: in-flight 响应到达时已 stopped——不触发 on_active，
+            // 防 stop→restart 竞态下旧响应重启 hooks/listener
+            if (stopped) return false;
             if (resp && resp.is_capturing) {
                 deps.on_active(resp);
                 return true;

@@ -8,6 +8,7 @@ import {
     get_events_by_category,
     get_console_events,
 } from '../background/storage';
+import { fetch_all_records } from './paged_reader';
 import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData } from '../../shared/types';
 
 export interface CaptureSnapshot {
@@ -19,18 +20,31 @@ export interface CaptureSnapshot {
     error_events: CaptureEvent[];
     storage_changes: CaptureEvent[];
     cookie_changes: CaptureEvent[];
+    // t180: lifecycle 视为完整采集证据（用户决策 2026-08-13），快照包含；UI timeline 不展示（merge_detail_events Pick 不含）
+    lifecycle_events: CaptureEvent[];
 }
 
+// t160 已移除的 SourceCounts/source_counts_from_snapshot/read_capture_snapshot_incremental：
+// IDB cursor 按 event_id 随机 UUID 字典序非追加序，offset 增量不可靠（review 实证）；
+// 详情轮询改为「stats 快照全分项增量比较」锚点（dashboard_shared `_detail_loaded_stats`），
+// 无推进不读、有推进全量重建，消除 stats 字段与 store 条数混合口径错位。
+
 export async function read_capture_snapshot(capture_id: string): Promise<CaptureSnapshot> {
-    const [capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
+    // t156: 全量分页读取（PAGE_SIZE=5000 逐类耗尽），替代固定 limit=100000 静默截断
+    const [capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes, lifecycle_events] = await Promise.all([
         get_capture(capture_id),
-        get_events_by_category(capture_id, 'user_action', 0, 100000),
-        get_events_by_category(capture_id, 'navigation', 0, 100000),
-        get_network_requests(capture_id, 0, 100000),
-        get_console_events(capture_id, 0, 100000),
-        get_events_by_category(capture_id, 'error', 0, 100000),
-        get_events_by_category(capture_id, 'storage', 0, 100000),
-        get_events_by_category(capture_id, 'cookie', 0, 100000),
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'user_action', offset, limit)),
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'navigation', offset, limit)),
+        fetch_all_records((offset, limit) => get_network_requests(capture_id, offset, limit)),
+        fetch_all_records((offset, limit) => get_console_events(capture_id, offset, limit)),
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'error', offset, limit)),
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'storage', offset, limit)),
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'cookie', offset, limit)),
+        // t180: lifecycle 视为完整采集证据，快照包含
+        fetch_all_records((offset, limit) => get_events_by_category(capture_id, 'capture_lifecycle', offset, limit)),
     ]);
-    return { capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes };
+    return { capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes, lifecycle_events };
 }
+
+// t160 实施调整：IDB cursor 非追加序（event_id 随机 UUID），offset 增量不可靠（review 实证）。
+// 有推进时全量重建替换（正确性优先）；无推进不读（保留主要性能收益）。

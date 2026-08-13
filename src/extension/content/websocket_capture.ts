@@ -32,7 +32,7 @@ let redact_url_query = false;
 const SIGNAL = '__capture_all_ws__';
 
 // 注入页面脚本字符串（导出便于测试 eval 验证行为）
-// secret 内联进注入脚本闭包（不写 window），页面脚本无法读取，构造不了合法签名。
+// secret 内联进注入脚本闭包（不写 window，普通页面无法读取构造签名）；t174：注入脚本文本可被观察注入过程的对抗页面读取（ADR-020 威胁模型排除，见 content_page_script.ts 注释）。
 export function build_page_script(secret: string): string {
     return `(function() {
     // T121: 重注入先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。

@@ -1,0 +1,20 @@
+{
+  "tid": "t159",
+  "attempt": 1,
+  "execution_id": "61199dd28e5241adb9bc938b7a86b7d9",
+  "status": "done",
+  "branch": "t159_fix_24h_duration_limit",
+  "base_sha": "82f2ae38bc799a20bac6016d56cde9d0000dd6b1",
+  "tests": "npm test：1641 passed（新增 duration_limit 5 + duration_limit_sw_integration 3 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "4 轮闭环：Round 1 code PASS/test FAIL → Round 2 code FAIL（f004）/test PASS → Round 3 code PASS/test FAIL（断言层级）→ Round 4 test PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/duration_limit_sw_integration.test.ts::AC-001 invoke onAlarm → stop_capture(max_duration) → stopped 事件 reason=max_duration"],
+    "AC-002": ["tests/unit/duration_limit.test.ts::AC-002 disarm 取消 alarm + fallback timer 不再触发"],
+    "AC-003": ["tests/unit/duration_limit_sw_integration.test.ts::AC-003 deadline 已过立即终态化（reason max_duration + relative_time_ms 相对时长）并清键"],
+    "AC-004": ["tests/unit/duration_limit_sw_integration.test.ts::AC-004 deadline 未过重建 alarm（when=deadline），不清键"],
+    "AC-005": ["src/extension/background/duration_limit.ts::MAX_SESSION_DURATION_MS 生产引用（compute_deadline_ms）", "tests/unit/duration_limit_sw_integration.test.ts::reason=max_duration 可达断言"]
+  },
+  "pending": [],
+  "findings": []
+}

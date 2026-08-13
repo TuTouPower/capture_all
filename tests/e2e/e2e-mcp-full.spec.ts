@@ -114,7 +114,7 @@ test.describe.serial('MCP Agent 全流程', () => {
     test('extension 上线', async () => {
         const { status, data } = await bridge_get('/mcp/status');
         expect(status).toBe(200);
-        expect(data.extension_online).toBe(true);
+        expect(data.online_count).toBeGreaterThan(0);
     });
 
     test('MCP: recording.start 开始采集', async () => {

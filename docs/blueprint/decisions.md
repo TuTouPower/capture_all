@@ -68,7 +68,7 @@
 
 - 背景：原 `browser_no`（1-99 数字）路由让人填编号、不直观；机器 ID（instance_id）已存在但只作次要路由键。
 - 选项：A）保留 browser_no；B）取消 browser_no，改用 browser_label（人填备注）+ instance_id（机器生成）双键路由。
-- 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_AMBIGUOUS`。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
+- 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_REQUIRED`（t179 修正：实现拆分——未指定 target 多实例返回 `TARGET_REQUIRED`，`TARGET_AMBIGUOUS` 仅用于显式 `target_label` 命中多个在线实例）。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
 - 替代：无
 
 ## 009 CDP 状态按 sessionId+requestId 复合键索引（2026-07-19）
@@ -98,6 +98,7 @@
 - 选项：A）提高固定上限；B）分页循环读取至耗尽。
 - 结论：选 B。PAGE_SIZE=5000，循环 offset 直至 batch.length < PAGE_SIZE。Promise.all 并行 7 类。内存仍全量加载（流式输出留后续）。详见 T043。
 - 替代：无
+- 落地（t156，2026-08-13）：统一分页实现收敛到 `src/extension/shared/paged_reader.ts` 的 `fetch_all_records`（PAGE_SIZE=5000，offset 单调推进至空批，异常原样传播）。`capture_data_reader.ts`（页面快照读取器，修复固定 100000 截断）、`exporter.ts`、`agent_data_queries.ts` 三处共用。读取路径禁止引入固定上限；若未来需内存预算约束，须显式 truncated/失败而非静默裁切。
 
 ## 013 错误码渐进迁移：新码 + 别名兼容至 v2.0（2026-07-19，2026-08-11 已移除）
 
@@ -139,7 +140,7 @@
 - 背景：扩展装上要用户手填 Token 并通过 `/pair` 配对码才能首次 enroll；MCP 客户端 `.mcp.json` 硬编码 Token 又与 SessionStart hook 自生成 Token 对不上，整条链路对普通用户不可用。
 - 选项：A）保持 pairing 硬门槛 + 手填 Token；B）loopback 内凭 chrome-extension origin 直通 enroll，Bridge 自生成 MCP Token，MCP 客户端按 `env > 持久化文件`自动读取，扩展未填 label 时按到达顺序自动编号。
 - 结论：选 B。
-    - **Bridge enroll**：去掉「扩展 origin + 非 dev_mode 必须过 pairing」硬门槛；保留 `is_allowed_extension_origin`（`chrome-extension://<32-char-id>`）防本机非扩展页面伪造。pairing 端点保留为可选增强（扩展显式传 `pairing_code` 才校验；跨机 / 高安全场景）。
+    - **Bridge enroll**：~~去掉「扩展 origin + 非 dev_mode 必须过 pairing」硬门槛~~ **（t169/ADR-023 已推翻：首次登记要求 MCP token 或有效 pairing code，Origin 仅附加校验；重 enroll 保持 origin 绑定校验）**；`is_allowed_extension_origin` 仅作附加一致性校验。pairing 端点保留（跨机 / 高安全场景）。
     - **自动编号**：扩展 enroll 时未传 label，Bridge 调 `next_default_label` 分配默认编号（`1 号` / `2 号` / `3 号` …，跳过自定义 label，取已用最大序号 +1）。自定义 label 顶替逻辑保留；自动编号 label 由 `next_default_label` 保证唯一不触发顶替。heartbeat 未传 label 时保留已分配的默认编号（覆盖 T047 的「显式清空为 null」：清空 = 回到默认编号）。
     - **MCP token 文件回退**：`resolve_client_token(env, file_path)` env 优先，缺省读 `$XDG_RUNTIME_DIR/capture-all/bridge_token`（mode 0600）。`.mcp.json` 默认不再出现明文 Token。
 - 安全不变量：instance_token 与 MCP token 仍分离（硬约束保留）；自登记端点仅签发 instance_token，不暴露 MCP token；保留 127.0.0.1 绑定。
@@ -165,3 +166,46 @@
   - **威胁模型边界**：防御对象是「仅读取 window nonce 的页面脚本」（直接全局访问）；对抗性页面（MutationObserver / DOM hook 拦截注入脚本文本）可窃取内联 secret——扩展与页面 MAIN world 同权，无隐藏共享通道，该暴露面不在本方案防御范围。
   - **断流规避**：注入脚本 guard 语义从「阻止重注入」改为「还原上次 hook 后重装」，保证 stop→start 后注入脚本持最新 secret，采集不断流。
 - 替代：t097 的 window-nonce 门控（保留为第一道防线，未废弃）。
+
+## 021 Dashboard 详情轮询增量机制（2026-08-13）
+
+- 背景：Dashboard 打开进行中 capture 详情时 2s 轮询无条件调用 `load_detail()` 全量重读 8 路 IndexedDB（每路上限 100000），大 capture 下每次轮询付出全量成本；t144 signature 对比在完整重读之后，只避免 DOM 替换。
+- 选项：A）保留全量轮询 + signature 后置对比；B）先轻量 metadata（`get_capture_data` 返回 stats）对比，计数推进才读数据；增量按 per-source offset 拉新增 append，仅排序新增边界；页面 hidden 暂停轮询。
+- 结论：选 B。metadata 版本信号 = `CaptureRecord.stats` 各计数（user_action+nav / request / log / error / storage / cookie，另加 `event_count` 总信号覆盖 ws_frame 等仅增事件数的写入），任一推进才读数据；无推进不读（保留主要性能收益）。
+  - **实施调整（2026-08-13，review 实证）**：原「per-source offset 增量拉取」不可行——`query_by_store` 的 IDB index cursor 按 primary key（`event_id` 随机 UUID）字典序遍历，非写入追加序，offset 增量必然重读/漏读。改为：有推进时全量重建替换（正确性优先，成本仍只在变化时付出）；`SourceCounts` 锚点仅用于「无推进不读」判定。DOM 替换仍由 t144 signature 守卫。
+- 替代：A（基线行为，全量轮询）。t193 承接 UI 虚拟化（本方案不引入）。
+
+## 022 Agent 查询下推：keyset 分页与复合索引（2026-08-13）
+
+- 背景：`query_by_store` offset cursor 分页每页从头 skip（O(N²/PAGE_SIZE)）；MCP data.list/get/timeline/sources 先 Promise.all 加载七源全量再内存过滤，limit=1 也付全量成本。
+- 选项：A）保留全量加载 + 内存过滤；B）storage 层 keyset 分页（复合索引 `[capture_id, relative_time_ms, event_id]` + `IDBKeyRange.bound` 双界），谓词/order/limit 推入 IndexedDB。
+- 结论：选 B（DB_VERSION 3→4 迁移补复合索引，s006 spike + d008 实证）。keyset token = 末条 (relative_time_ms, event_id)，下界闭（cursor 停在「下一条起点」）；页读取量 O(limit)、页间时间序一致、capture 隔离、同刻按 event_id 继续。`data.get`/`timeline.get` 主键点查（store.get）；`sources.list` count/range 用 index.count + first/last cursor（不读记录体），types 为契约字段保留扫描；`captures.list` 用 started_at 索引方向直接排序 + count() total。对外返回契约不变（AC-005 gate）；纯函数路径保留供 get_all_data 与契约对拍。
+- 替代：A（基线）。全量遍历（get_all_data/export）保留，仅内部游标效率改进。
+
+## 023 首次 enroll 认证模型：Origin 不作主凭据（2026-08-13）
+
+- 背景：`/extension/enroll` 首次登记仅凭合法形状 `chrome-extension://[a-p]{32}` Origin 放行——Origin 是客户端可构造 header，本地进程可伪造，不证明请求来自真实扩展（SEC-001）。t137 只防不同扩展 ID 顶替既有绑定，未建立首次登记身份。
+- 选项：A）保留 loopback origin 直通（T091 零配置）；B）首次登记要求真正 secret：MCP Bearer token 或有效 pairing code（/pair/open 持 token 打开后 code 才有效），Origin 仅附加一致性校验。
+- 结论：选 B（supersede 018 的 origin 直通条款）。重 enroll（既有 instance_id）沿用 t137 origin 扩展 ID 绑定校验放行（真实扩展重启不受影响）。零配置体验由安全分发承接：MCP 客户端（读 0600 token 文件）调 /pair/open → 扩展从 /pair/status 自动取 pairing code enroll（无人工手填 token，扩展侧 resolve_pairing_code）。
+  - **零配置落地**：Bridge 启动默认自动 open pairing（`pairing_auto_open`，可关）——真实扩展从 `/pair/status` 自动取 code 完成首次 enroll（扩展侧 `resolve_pairing_code`），无需人工手填；code 一次性消费（enroll 成功后关闭）。威胁模型：伪造者同用户本可读 0600 token 文件，pairing code 不新增暴露面。
+  - **重启恢复**：已绑定实例（token hash + 元数据）持久化到 `instances_file`，bridge 重启后 heartbeat/重 enroll 不中断（instance token 机制保留）。
+- 替代：A（T091 基线，origin 直通已被本 ADR 移除）。pairing 端点保留（跨机/高安全场景；`pairing_auto_open:false` 时需显式 /pair/open）。
+
+## 024 Body 采集隐私默认与 MIME 脱敏（2026-08-13）
+
+- 背景：`DEFAULT_CONFIG`/`DEFAULT_USER_CONFIG` 默认 `capture_request_body=true`/`capture_response_body=true`（单条上限 100MB），CDP postData 与 response body 原样采集，登录表单/OAuth token/API key/PII 可明文进 IndexedDB 与导出；`redact_data=true` 的 body helper 只截断不脱敏，易误以为统一脱敏（SEC-003）。
+- 选项：A）保持默认全开 + 文档警示；B）body 默认关闭（UI/MCP 显式 opt-in）+ 开启后按 MIME 敏感 key 脱敏 + 不可解析降级。
+- 结论：选 B。`capture_request_body`/`capture_response_body` 默认 false；`redact_body`（shared/body_redaction.ts）在 `handle_network_request` 落库前（redact_data 时）对 form-urlencoded/JSON 按敏感 key（password/token/api_key/secret/auth/credential/jwt/cookie 等子串匹配）脱敏为 `[REDACTED]`；multipart 含敏感 name 或不可解析/未知 MIME 降级为 `[body_redacted:len=N,preview=...]`（不落盘完整原始内容）。导出新增 `include_request_body`/`include_preview`（与既有 `include_response_body` 独立剥离）。影响仅新采集与导出边界；不改变已落库历史格式。
+- 替代：A（基线）。body 默认关影响诊断能力——advanced 用户 UI/MCP 显式开启。
+
+
+## 025 性能预算与流式导出（2026-08-14）
+
+- 背景：PERF-L008/L009/L010/H004/I011——app log 实际峰值接近 2× 配置上限、captures.list 全量读取、app log 导出巨型字符串、Dashboard 全量 DOM、ZIP 全量组装、无 bundle 门禁。
+- 决策：
+  - app log trim 后 `_estimated_bytes` 设为保留字节（峰值 ≤ 上限 + 单批容差）。
+  - `captures.list` offset 下推（cursor.advance）+ limit 截断，不再全量读取二次排序。
+  - app log 导出显式上限 100000 + truncated 标记。
+  - Dashboard 详情列表 windowed（`LIST_WINDOW=500` + 超窗省略行）。
+  - ZIP 组装用 fflate `Zip` + `ZipPassThrough` 流式（store 模式，无压缩 worker 无并行竞争；逐文件 add+push、chunk 收集拼接，不构建全量 files 对象同时驻留）。
+  - bundle size 预算门禁 `npm run check:bundle`（bridge.mjs ≤ 200KB、mcp.mjs ≤ 2MB、extension.zip ≤ 500KB、dist/ ≤ 2MB），build 链尾自动执行；预算基于 2026-08-14 实测 + 50% 余量，可放宽但门禁存在。

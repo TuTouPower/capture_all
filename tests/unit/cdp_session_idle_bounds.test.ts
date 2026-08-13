@@ -32,7 +32,7 @@ beforeEach(() => {
     fetch_mock.mockResolvedValue({
         json: async () => [{
             id: 'target-1', url: 'https://example.com', title: 'E',
-            type: 'page', webSocketDebuggerUrl: 'ws://127.0.0.1/page/target-1',
+            type: 'page', webSocketDebuggerUrl: 'ws://127.0.0.1:9222/page/target-1',
         }],
     });
 });

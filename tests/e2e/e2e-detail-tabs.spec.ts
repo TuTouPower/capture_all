@@ -61,13 +61,12 @@ test.describe('详情页 Tab 切换 P4.11', () => {
             await tab_btn.click();
             await detail_page.waitForTimeout(800);
 
-            // tab content 区域（.dt-body 或 .simple-pad）应存在
-            const body = detail_page.locator('.dt-body, .simple-pad, .dt-overview').first();
-            const body_count = await body.count();
-            if (body_count > 0) {
-                const html = await body.innerHTML();
-                expect(html.length, `${name} Tab 内容区域不应为空`).toBeGreaterThan(20);
-            }
+            // t163 AC-005: tab content 区域必须存在且非空（容器缺失即 fail，不静默通过）。
+            // 各 tab 容器形态：overview=dt-overview / timeline/network=dt-body / console=dt-list
+            const body = detail_page.locator('.dt-body, .simple-pad, .dt-overview, .dt-list').first();
+            await expect(body, `${name} Tab 内容容器应存在`).toHaveCount(1, { timeout: 3000 });
+            const html = await body.innerHTML();
+            expect(html.length, `${name} Tab 内容区域不应为空`).toBeGreaterThan(20);
         }
 
         // 验证面包屑可返回

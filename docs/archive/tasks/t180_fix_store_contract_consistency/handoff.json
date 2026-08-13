@@ -1,0 +1,19 @@
+{
+  "tid": "t180",
+  "attempt": 1,
+  "execution_id": "0ba6c19748c74be1ada646763a4b79f9",
+  "status": "done",
+  "branch": "t180_fix_store_contract_consistency",
+  "base_sha": "b81d0ab2113563756b8edeca44eba1e8f0f05764",
+  "tests": "npm test：1774 passed（新增 store_contract_consistency 11 用例；Agent 7→8 源 fixture 传播修正）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL/test PASS（popup 漏合并 important + 文档/测试 5 minor）→ Round 2 处置 + test f005 恒真断言 → Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/store_contract_consistency.test.ts::init_db 后 objectStoreNames=14（10 STORE_NAMES + 4 legacy）；AGENT_DATA_SOURCES 8 源"],
+    "AC-002": ["tests/unit/store_contract_consistency.test.ts::export_json 输出 events 含 capture_lifecycle 事件；load_agent_capture_data 8 源（写→读真实闭环）"],
+    "AC-003": ["tests/unit/store_contract_consistency.test.ts::CaptureSnapshot.lifecycle_events 读取；merge_detail_events 行为断言输出不含 lifecycle；SOURCE_STORE 映射；popup/dashboard archive 导出均含 lifecycle"],
+    "AC-004": ["tests/unit/store_contract_consistency.test.ts::真实 versionchange 路径（DB_VERSION+100 第二连接不被 blocked）+ 源码断言（[deploy] 标注需真实多上下文验证）"]
+  },
+  "pending": [],
+  "findings": []
+}

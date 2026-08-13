@@ -19,8 +19,9 @@ import {
 } from './dashboard_shared';
 
 // t144: timeline 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断 pointermove。
+// t186: 不再反向覆写 router；由 dashboard.ts 入口经 wire_dashboard_router 注入 getter。
 let _tl_dragging = false;
-router.is_tl_dragging = () => _tl_dragging;
+export const get_tl_dragging = () => _tl_dragging;
 
 const DT_TABS: [string, keyof I18nStrings][] = [
     ['overview', 'overview'], ['timeline', 'timeline'], ['user_action', 'capUser'],
@@ -103,8 +104,8 @@ function render_detail_tab(showInsp: boolean): string {
     }
     if (dt_tab === 'console') return `<div class="dt-list" style="flex:1;min-height:0">${render_con_table()}</div>`;
     if (dt_tab === 'user_action') return `<div class="simple-pad scroll">${render_simple_events(['mouse_event', 'keyboard_event', 'scroll_event', 'input_event'], [t('time'), t('type'), t('eventLabel'), t('detail'), t('source')])}</div>`;
-    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['page_navigation', 'route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], [t('time'), t('type'), t('eventLabel'), t('urlSourceDetail'), t('source')])}</div>`;
-    if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'unhandled_rejection', 'resource_error', 'network_failed', 'capture_error'], [t('time'), t('type'), t('errorMessage'), t('stack'), t('source')])}</div>`;
+    if (dt_tab === 'navigation') return `<div class="simple-pad scroll">${render_simple_events(['route_change', 'page_load', 'tab_switch', 'tab_created', 'tab_url_change', 'dom_ready'], [t('time'), t('type'), t('eventLabel'), t('urlSourceDetail'), t('source')])}</div>`;
+    if (dt_tab === 'error') return `<div class="simple-pad scroll">${render_simple_events(['runtime_exception', 'capture_error'], [t('time'), t('type'), t('errorMessage'), t('stack'), t('source')])}</div>`;
     if (dt_tab === 'storage') return `<div class="simple-pad scroll">${render_simple_events(['storage_change'], [t('time'), t('type'), t('keyLabel'), t('detail'), t('source')])}</div>`;
     if (dt_tab === 'cookie') return `<div class="simple-pad scroll">${render_simple_events(['cookie_change'], [t('time'), t('type'), t('nameLabel'), t('detail'), t('source')])}</div>`;
     // timeline
@@ -159,11 +160,15 @@ function render_dt_list(): string {
     const dt_sel = get_dt_sel();
     const detail_events = get_detail_events();
     const list = filtered_events();
+    // t193 AC-004: windowed 渲染预算——大列表仅渲染前 WINDOW 条（PERF-H004 渲染部分），
+    // 超窗省略并提示；DOM 节点数受预算约束，避免全量渲染峰值内存
+    const LIST_WINDOW = 500;
+    const visible = list.slice(0, LIST_WINDOW);
     // t153 AC-004: 预建 idx 映射（对象恒等，与原线性 index 查找的 === 语义严格等价），
     // 消除 list.map 内每次对全量事件数组做线性 index 查找的 O(n²)。
     const idx_map = new Map<CaptureEvent, number>();
     for (let i = 0; i < detail_events.length; i++) idx_map.set(detail_events[i], i);
-    const rows = list.map((e) => {
+    const rows = visible.map((e) => {
         const k = KIND[event_kind(e)];
         const isErr = event_kind(e) === 'error' || (e.type === 'console_event' && (e.data as Record<string, unknown>)?.level === 'error');
         const d = (e.data || {}) as Record<string, unknown>;
@@ -181,6 +186,10 @@ function render_dt_list(): string {
             <td><span class="ev-src">${esc((e.data as Record<string, unknown>)?.source || e.source || '—')}</span></td>
         </tr>`;
     }).join('');
+    // t193 AC-004: 超窗省略提示（DOM 节点预算；窗口内完整数据可经筛选/搜索缩小）
+    const overflow_row = list.length > LIST_WINDOW
+        ? `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:12px">${t('noEvents')} — ${list.length - LIST_WINDOW} ${t('eventsCountSuffix')} hidden (windowed)</td></tr>`
+        : '';
     const empty = `<tr><td colspan="5" style="text-align:center;color:var(--ink-4);padding:36px">${t('noEvents')}</td></tr>`;
     return `<div class="dt-list">
         <div class="dt-list-bar">
@@ -193,7 +202,7 @@ function render_dt_list(): string {
         </div>
         ${dt_view === 'trace'
             ? `<div class="dt-events">${render_trace()}</div>`
-            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>${t('time')}</th><th>${t('type')}</th><th>${t('eventLabel')}</th><th>${t('detail')}</th><th>${t('source')}</th></tr></thead><tbody>${rows || empty}</tbody></table></div>`}
+            : `<div class="dt-events scroll"><table class="dt-ev-table"><thead><tr><th>${t('time')}</th><th>${t('type')}</th><th>${t('eventLabel')}</th><th>${t('detail')}</th><th>${t('source')}</th></tr></thead><tbody>${rows || empty}${overflow_row}</tbody></table></div>`}
     </div>`;
 }
 
@@ -690,31 +699,42 @@ function wire_lane_pointerdown(
             // t144: 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断
             _tl_dragging = true;
             const mv = (ev: PointerEvent) => seek(ev.clientX);
-            const up = (ev: PointerEvent) => {
+            // t189 AC-006: finish 统一处理 pointerup/pointercancel/lostpointercapture/blur——
+            // 任一结束路径都清 _tl_dragging，详情轮询不再永久跳过刷新
+            const finish_marker = (ev: PointerEvent | Event) => {
                 window.removeEventListener('pointermove', mv);
-                window.removeEventListener('pointerup', up);
+                window.removeEventListener('pointerup', finish_marker);
+                window.removeEventListener('pointercancel', finish_marker);
+                window.removeEventListener('lostpointercapture', finish_marker);
+                window.removeEventListener('blur', finish_marker);
                 _tl_dragging = false;
-                const dx = ev.clientX - marker_start_x;
-                const dy = ev.clientY - marker_start_y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= 3 && marker_el) {
-                    const idx_str = marker_el.dataset.eventIdx;
-                    if (idx_str != null) {
-                        const idx = parseInt(idx_str, 10);
-                        const ev = detail_events[idx];
-                        if (ev) {
-                            update_playhead((ev.relative_time_ms / maxT) * 100);
-                            const same_event = get_dt_sel() === idx && get_dt_insp_open();
-                            set_dt_sel(idx);
-                            set_dt_insp_open(true);
-                            if (!same_event) router.render_content();
+                const p_ev = ev as PointerEvent;
+                if (p_ev.clientX !== undefined) {
+                    const dx = p_ev.clientX - marker_start_x;
+                    const dy = p_ev.clientY - marker_start_y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= 3 && marker_el) {
+                        const idx_str = marker_el.dataset.eventIdx;
+                        if (idx_str != null) {
+                            const idx = parseInt(idx_str, 10);
+                            const evt = detail_events[idx];
+                            if (evt) {
+                                update_playhead((evt.relative_time_ms / maxT) * 100);
+                                const same_event = get_dt_sel() === idx && get_dt_insp_open();
+                                set_dt_sel(idx);
+                                set_dt_insp_open(true);
+                                if (!same_event) router.render_content();
+                            }
                         }
                     }
                 }
                 marker_el = null;
             };
             window.addEventListener('pointermove', mv);
-            window.addEventListener('pointerup', up);
+            window.addEventListener('pointerup', finish_marker);
+            window.addEventListener('pointercancel', finish_marker);
+            window.addEventListener('lostpointercapture', finish_marker);
+            window.addEventListener('blur', finish_marker);
             return;
         }
         // Normal lanes drag — non-marker area
@@ -722,9 +742,19 @@ function wire_lane_pointerdown(
         set_dt_insp_open(false);
         router.render_content();
         const mv = (ev: PointerEvent) => seek(ev.clientX);
-        const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+        // t189 AC-006: normal lane 同样统一 pointerup/pointercancel/lostpointercapture/blur 清理
+        const finish_lane = () => {
+            window.removeEventListener('pointermove', mv);
+            window.removeEventListener('pointerup', finish_lane);
+            window.removeEventListener('pointercancel', finish_lane);
+            window.removeEventListener('lostpointercapture', finish_lane);
+            window.removeEventListener('blur', finish_lane);
+        };
         window.addEventListener('pointermove', mv);
-        window.addEventListener('pointerup', up);
+        window.addEventListener('pointerup', finish_lane);
+        window.addEventListener('pointercancel', finish_lane);
+        window.addEventListener('lostpointercapture', finish_lane);
+        window.addEventListener('blur', finish_lane);
     });
 }
 

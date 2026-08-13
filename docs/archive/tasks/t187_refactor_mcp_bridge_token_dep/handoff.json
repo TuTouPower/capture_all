@@ -1,0 +1,19 @@
+{
+  "tid": "t187",
+  "attempt": 1,
+  "execution_id": "0afda8c05d4e4214be8ee51b5fb75685",
+  "status": "done",
+  "branch": "t187_refactor_mcp_bridge_token_dep",
+  "base_sha": "92c143d19fe6790da64c5bf4b132f83de85fb037",
+  "tests": "npm test：1821 passed（新增 import_boundaries 4 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（2+2 minor：动态导入漏检、标题不符、未跟踪文件）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["src/mcp 无任何 bridge 导入；token_resolver.ts 改从 ../node_shared/bridge_token_file 导入（import_boundaries 测试断言）"],
+    "AC-002": ["bridge/config.ts 与 mcp/token_resolver.ts 同向依赖 node_shared；5 符号逐段迁移等价（reviewer 比对）+ config re-export 保持导出面"],
+    "AC-003": ["tests/unit/import_boundaries.test.ts::三产品两两互导拒绝（from/副作用/动态 import/require 全形态）；shared 无 node: import；extension 不引用 node_shared"],
+    "AC-004": ["mcp_token_fallback（5）+ agent_bridge_config（25）+ 全量 unit 192 文件 / 1821 测试通过"]
+  },
+  "pending": [],
+  "findings": []
+}

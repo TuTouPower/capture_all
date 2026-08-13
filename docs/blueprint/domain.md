@@ -48,6 +48,17 @@ MCP 工具名用动词短语（`start_recording` / `list_captures`），底层�
 
 兼容别名：`list_sessions` / `get_session` / `get_all_session_data` / `export_session` 映射到同命令。
 
+### MCP session alias 退出条件（t192）
+
+四个 `session` alias（`list_sessions` / `get_session` / `get_all_session_data` / `export_session`）为用户决策保留的显式兼容面（2026-08-13），不立即删除。退出条件：当任一外部消费者确认不再使用 `session` 命名（迁移到 `captures`/`capture` 工具），或在下一个破坏性版本窗口（v2.0）移除；移除时同步删除 `src/mcp/tools.ts` 的 `TOOL_COMMANDS` 别名项与 `MCP_TOOL_SCHEMAS` 共享 schema 注册。
+
+### MCP 参数枚举（t179）
+
+`source` / `sources` / `format` 参数为公开枚举，由共享常量派生，与 Bridge/dispatcher 实际接受枚举一致（`src/shared/constants.ts` 的 `AGENT_DATA_SOURCES` / `EXPORT_FORMATS`），MCP Zod schema 禁止非法值在输入边界，不进入 Bridge：
+
+- `source` / `sources`：8 个数据源（`user_action_events` / `navigation_events` / `network_requests` / `console_events` / `error_events` / `storage_changes` / `cookie_changes` / `capture_lifecycle_events`，t180 加入）
+- `format`：4 个导出格式（`json` / `jsonl` / `html` / `har`）
+
 ## 3. 内部分类 vs UI 标签
 
 内部分类 9 个：`user_action`、`navigation`、`network`、`console`、`error`、`storage`、`cookie`、`dom_data`、`capture_lifecycle`。
@@ -55,6 +66,10 @@ MCP 工具名用动词短语（`start_recording` / `list_captures`），底层�
 UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / 错误异常 / Storage / Cookie。
 
 `dom_data` 和 `capture_lifecycle` 不在 UI 标签中展示。
+
+### SPA 导航 `route_action` 枚举（t189）
+
+`RouteChangeData.route_action`：`push_state`（`history.pushState` 被 patch 捕获）/ `replace_state`（`history.replaceState`）/ `hash_change`（hash 变化）/ `back_forward`（`popstate`——back/forward，不再误标 `push_state`）。
 
 ## 4. 禁用术语
 
@@ -71,9 +86,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | `session_id` | `capture_id` |
 | `detail.html` 独立详情页 | 合并入 dashboard（`?page=detail`） |
 
-代码内 `Session` / `RecordEvent` 类型保留为 `@deprecated` 兼容层（指向 `CaptureRecord` / `CaptureEvent`），仅为旧数据迁移，禁止在新代码中使用。
-
-`capture_mode` 字段值域保持 `'basic'` / `'advanced'`（减少变更面），但 UI 不暴露此概念。
+`Session` / `RecordEvent` 类型与 `capture_mode` 字段已删除（t191 核实：`src/shared/types.ts` 与全仓源码无 `Session`/`RecordEvent`/`capture_mode` 符号；`body_capture_mode` 与 `keyboard_capture_mode` 为不同字段，勿混淆）。旧数据/旧代码按 `CaptureRecord` / `CaptureEvent` 处理。
 
 ## 5. 业务不变量
 
@@ -110,7 +123,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | 限制 | 值 | 来源 |
 |---|---|---|
 | 单采集大小 | 500 MB | `MAX_SESSION_SIZE_BYTES`；字节数持久化到 `CaptureRecord.storage_bytes_written`（持久化基数 + 内存增量，SW 重启后从 IndexedDB 重建基数，t148） |
-| 单采集时长 | 24 小时 | `MAX_SESSION_DURATION_MS` |
+| 单采集时长 | 24 小时 | `MAX_SESSION_DURATION_MS`；执行机制（t159）：start 时持久化截止时间 `active_capture_deadline_ms` 并注册 `chrome.alarms`（MV3，跨 SW 重启持久，到期调 `stop_capture('max_duration')`）；SW 重启后截止已过立即终态化（reason `max_duration`），未过重建 alarm；stop/失败清 alarm |
 | 单条 body 截断 | 100 MB | `MAX_BODY_CAPTURE_BYTES` |
 | 单条 inline_text | 32 KB | `INLINE_TEXT_MAX_BYTES` |
 | 单条 console arg | 1 KB | `MAX_CONSOLE_ARG_BYTES` |
@@ -119,25 +132,33 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | flush 间隔 | 1000 ms | `FLUSH_INTERVAL_MS`（周期 flush 兜底用） |
 | 导出分页 | 5000 条/页 | `PAGE_SIZE`（循环至耗尽） |
 | CDP events 单次轮询 | 100 条 | `MAX_EVENTS_PER_POLL` |
+| CDP events 驻留上限 | 5000 条 | `MAX_SESSION_EVENTS`；超限丢最旧，pending 转 `evicted` 终态（t157） |
+| CDP 会话聚合 body 预算 | 200 MB | `MAX_SESSION_BODY_BYTES`；计数口径=当前驻留事件实际存储 body UTF-8 字节（poll 返回与淘汰时递减，t157）；超限策略：仅淘汰最旧已终态且确有 body 的事件，pending 元数据不偿还预算；只剩单个超大 body 时保留元数据、body 置 null 标 `too_large` |
 | 命令 timeout 上限 | 300000 ms | `validate_command_request` |
 | Bridge body 上限 | 1 MiB | `read_json` |
 | 扩展结果回传上限 | 64 MiB | `MAX_EXTENSION_RESULT_BODY_BYTES` |
 
-数据库 `capture_all_db`，`DB_VERSION = 3`，10 stores。详见 `docs/archive/specs/storage.md`。
+数据库 `capture_all_db`，`DB_VERSION = 4`。实际 store 数 = **14**：`STORE_NAMES` 10 个当前 store（captures、7 事件源、capture_lifecycle_events、app_logs）+ 4 个 legacy stores（`sessions` / `events` / `console_logs` / `error_log`，旧版本保留、仅兼容不再写入；upgradeneeded 里若存在则保留不删）。t180 对齐：文档不再宣称 10 stores 为全量。详见 `docs/archive/specs/storage.md`。
+
+### capture_lifecycle_events 可见性（t180）
+
+`capture_lifecycle_events` store 视为完整采集证据（用户决策 2026-08-13）：已持久化事件可经公开查询/归档恢复——包含于 `CaptureSnapshot`（`capture_data_reader.ts`）、export 事件合并（json/jsonl/html/archive zip）与 Agent 数据源（`AGENT_DATA_SOURCES`，8 源）。UI 详情 timeline 仍不展示 lifecycle（`merge_detail_events` 显式 Pick 不含）。
 
 ## 7. 超时策略（Bridge）
 
 | 命令类 | 超时 |
 |---|---|
-| 查询类（list/get/timeline/sources） | 30 s |
-| 全量类（get_all_data） | 120 s |
-| 导出类（export） | 120 s |
-| start / stop | 15 s |
+| 查询类（list/get/timeline/sources） | 30 s（含 status；client `get_status` 缺省 30s，`timeout_ms` 显式优先，t175） |
+| 全量类（get_all_data） | 300 s（`full_data_timeout_ms` 缺省，t175 对齐） |
+| 导出类（export） | 300 s（`full_data_timeout_ms` 缺省，t175 对齐） |
+| 普通命令类 | 120 s（`command_timeout_ms` 缺省） |
+| start / stop | 120 s（`command_timeout_ms` 缺省，t175 对齐） |
+| 上限 | 300000 ms（`MAX_COMMAND_TIMEOUT_MS`，Bridge 校验 + MCP Zod max 同步，t175） |
 
 超时只返回错误码，不自动降级。
 
 ## 8. 错误码
 
-**Bridge 层**：`BRIDGE_UNAVAILABLE`、`EXTENSION_OFFLINE`、`COMMAND_TIMEOUT`、`TOKEN_INVALID`、`ORIGIN_NOT_ALLOWED`、`PAYLOAD_TOO_LARGE`、`COMMAND_CANCELLED`、`TARGET_REQUIRED`、`TARGET_NOT_FOUND`、`PAIRING_REQUIRED`。
+**Bridge 层**：`BRIDGE_UNAVAILABLE`、`EXTENSION_OFFLINE`、`COMMAND_TIMEOUT`、`TOKEN_INVALID`、`ORIGIN_NOT_ALLOWED`、`PAYLOAD_TOO_LARGE`、`COMMAND_CANCELLED`、`TARGET_REQUIRED`（多实例未指定目标）、`TARGET_AMBIGUOUS`（显式 `target_label` 命中多个在线实例）、`TARGET_NOT_FOUND`、`PAIRING_REQUIRED`。
 
-**扩展层**：`CAPTURE_NOT_FOUND`、`SOURCE_NOT_FOUND`、`RECORD_NOT_FOUND`、`INVALID_QUERY`、`CAPTURE_ALREADY_RUNNING`、`NO_ACTIVE_CAPTURE`、`EXPORT_FAILED`、`STORAGE_READ_FAILED`、`PAYLOAD_TOO_LARGE`。
+**扩展层**：`CAPTURE_NOT_FOUND`、`SOURCE_NOT_FOUND`、`RECORD_NOT_FOUND`、`INVALID_QUERY`、`CAPTURE_ALREADY_RUNNING`、`EXPORT_FAILED`、`STORAGE_READ_FAILED`、`PAYLOAD_TOO_LARGE`。（t177：`NO_ACTIVE_CAPTURE` 已删除——stop 幂等，空闲态返回成功且 `capture_id: null`）

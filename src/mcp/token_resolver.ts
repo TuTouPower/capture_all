@@ -1,5 +1,5 @@
-import { default_token_file_path, load_bridge_token_file } from '../bridge/config';
-import type { TokenFileLoadResult } from '../bridge/config';
+import { default_token_file_path, load_bridge_token_file } from '../node_shared/bridge_token_file';
+import type { TokenFileLoadResult } from '../node_shared/bridge_token_file';
 
 /**
  * T091: MCP 客户端 token 解析。env 优先，缺省时从 Bridge 持久化文件读。

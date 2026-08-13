@@ -794,8 +794,20 @@ export function get_locale(): Locale {
 
 // t152: 单一事实来源 = user_config.locale（持久化由调用方经 save_user_config 落盘）。
 // set_locale 只切内存语言，不再写独立 'locale' storage key。
+function apply_locale_to_dom(locale: Locale): void {
+    // t190 AC-003: 同步 document.lang（辅助技术/浏览器语言提示）；非 DOM 环境忽略
+    try {
+        if (typeof document !== 'undefined' && document.documentElement) {
+            document.documentElement.lang = locale;
+        }
+    } catch {
+        // ignore
+    }
+}
+
 export function set_locale(locale: Locale): void {
     current_locale = locale;
+    apply_locale_to_dom(locale);
 }
 
 export async function init_locale(): Promise<void> {
@@ -805,12 +817,16 @@ export async function init_locale(): Promise<void> {
         const stored = (result.user_config as Record<string, unknown> | undefined) ?? null;
         if (stored && (stored.locale === 'en' || stored.locale === 'zh')) {
             current_locale = stored.locale as Locale;
+            // t190 AC-003: init 路径同样同步 document.lang（重载后切换效果不失效）
+            apply_locale_to_dom(current_locale);
             return;
         }
     } catch {
         // fall through to detect
     }
     current_locale = detect_locale();
+    // t190 AC-003: 自动检测路径同步 document.lang
+    apply_locale_to_dom(current_locale);
 }
 
 export function t(key: keyof I18nStrings): string {

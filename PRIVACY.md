@@ -16,7 +16,7 @@ Capture All can collect seven data groups during a capture:
 
 Capture All can collect from the top-level page and embedded frames, including third-party iframes, because its declared content script runs with `all_frames: true`. Embedded payment, authentication, chat, advertising, and other third-party frames may therefore contribute user actions or page metadata during a capture.
 
-Input values, request bodies, and response bodies are enabled by default. These data can contain credentials, tokens, private messages, personal information, or other sensitive content. Review the capture defaults before the first capture and disable data not needed for the investigation.
+Input values are enabled by default. Request and response body capture is **disabled by default** and must be explicitly enabled; body data can contain credentials, tokens, private messages, personal information, or other sensitive content. Review the capture defaults before the first capture and disable data not needed for the investigation.
 
 Password input values are never captured. Storage values and Cookie values are not captured; their changes and metadata may still be stored.
 
@@ -24,7 +24,7 @@ Password input values are never captured. Storage values and Cookie values are n
 
 Redaction is enabled by default. It masks known sensitive headers, selected URL query parameters, password inputs, and configured text previews.
 
-Redaction is rule-based and cannot guarantee removal of every secret or personal value. In particular, request and response bodies are not content-scanned for credentials or personal information; they are limited by size only. Disabling redaction can expose headers, URL queries, and input values without these protections.
+Redaction is rule-based and cannot guarantee removal of every secret or personal value. When body capture is enabled, form-urlencoded and JSON bodies are redacted per MIME for sensitive keys (password, token, api_key, secret, and similar); bodies that cannot be safely parsed are stored as a length summary rather than full content. Disabling redaction can expose headers, URL queries, input values, and body content without these protections.
 
 Redaction happens when data is captured. Export and MCP queries do not apply a second redaction pass to data already stored.
 
@@ -38,11 +38,11 @@ A capture is limited to 500 MB and 24 hours. An individual request or response b
 
 ## Bridge, MCP, and AI agents
 
-The optional Bridge binds to `127.0.0.1` and requires a user-provided Bearer token. It transfers commands and results between the extension and authenticated local clients.
+The optional Bridge binds to `127.0.0.1` and is authenticated with a zero-config two-token model: the MCP client reads an auto-generated token (env or Bridge-persisted file, mode 0600), and the extension enrolls with its own instance token. See `SECURITY.md`.
 
 The MCP server can query captured data and return it to a connected AI agent. MCP does not automatically redact or summarize stored results. Data returned through MCP is then subject to the privacy and retention practices of the selected AI service or agent environment.
 
-Keep the project-local `.mcp.json` file private. Never commit a real Bridge token.
+Keep the project-local `.mcp.json` / `.mcp.json.example` file private. Never commit a real Bridge token.
 
 ## Exports
 
@@ -60,7 +60,7 @@ MCP does not expose capture deletion or database clearing commands.
 
 ## Browser permissions
 
-Capture All requires broad permissions, including `<all_urls>`, `debugger`, `tabs`, and `cookies`, to implement the current capture model. Use it only in browser profiles and sites authorized for inspection. See [README.md](README.md#permissions-and-data) for the permission list.
+Capture All requires broad permissions, including `<all_urls>`, `debugger`, `tabs`, and `cookies`, to implement the current capture model. Use it only in browser profiles and sites authorized for inspection. See [README.en.md](README.en.md#permissions-privacy-and-security) for the permission list.
 
 ## Changes
 

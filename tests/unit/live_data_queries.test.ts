@@ -71,7 +71,7 @@ function mock_get_events_by_category(
             capture_id: _capture_id,
             category,
             type: category === 'user_action' ? 'mouse_event'
-                : category === 'navigation' ? 'page_navigation'
+                : category === 'navigation' ? 'route_change'
                 : category === 'error' ? 'runtime_exception'
                 : category === 'storage' ? 'storage_change'
                 : 'cookie_change',

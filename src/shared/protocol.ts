@@ -14,27 +14,30 @@ export const AGENT_COMMAND_TYPES = [
 
 export type AgentCommandType = (typeof AGENT_COMMAND_TYPES)[number];
 
-export type AgentErrorCode =
-    | 'BRIDGE_UNAVAILABLE'
-    | 'EXTENSION_OFFLINE'
-    | 'COMMAND_TIMEOUT'
-    | 'TOKEN_INVALID'
-    | 'COMMAND_CANCELLED'
-    | 'CAPTURE_NOT_FOUND'
-    | 'CAPTURE_ALREADY_RUNNING'
-    | 'NO_ACTIVE_CAPTURE'
-    | 'SOURCE_NOT_FOUND'
-    | 'RECORD_NOT_FOUND'
-    | 'INVALID_QUERY'
-    | 'EXPORT_FAILED'
-    | 'STORAGE_READ_FAILED'
-    | 'PAYLOAD_TOO_LARGE'
-    | 'ORIGIN_NOT_ALLOWED'
-    | 'TARGET_REQUIRED'
-    | 'TARGET_NOT_FOUND'
-    | 'TARGET_AMBIGUOUS'
-    | 'LABEL_DUPLICATE'
-    | 'PAIRING_REQUIRED';
+// t177: AgentErrorCode 运行时值列表（/extension/result 校验用，与类型 union 同步维护）
+export const AGENT_ERROR_CODES = [
+    'BRIDGE_UNAVAILABLE',
+    'EXTENSION_OFFLINE',
+    'COMMAND_TIMEOUT',
+    'TOKEN_INVALID',
+    'COMMAND_CANCELLED',
+    'CAPTURE_NOT_FOUND',
+    'CAPTURE_ALREADY_RUNNING',
+    'SOURCE_NOT_FOUND',
+    'RECORD_NOT_FOUND',
+    'INVALID_QUERY',
+    'EXPORT_FAILED',
+    'STORAGE_READ_FAILED',
+    'PAYLOAD_TOO_LARGE',
+    'ORIGIN_NOT_ALLOWED',
+    'TARGET_REQUIRED',
+    'TARGET_NOT_FOUND',
+    'TARGET_AMBIGUOUS',
+    'LABEL_DUPLICATE',
+    'PAIRING_REQUIRED',
+] as const;
+
+export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
 
 export interface AgentError {
     code: AgentErrorCode;

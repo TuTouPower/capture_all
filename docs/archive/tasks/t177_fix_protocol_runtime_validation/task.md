@@ -2,11 +2,11 @@
 tid: "t177"
 slug: "fix_protocol_runtime_validation"
 title: "AgentCommandResult 运行时校验与 stop 语义"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t177_fix_protocol_runtime_validation"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "79e6f7075ec1e3509704c7b9cd39cf97e544faa5"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 20:45 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t177_code_f001|important|已修|AC-002 恒真断言（AGENT_ERROR_CODES.toContain 冒充）→ 补 AC-002b：ok:false + 合法 error code 真实 POST → 200|tests/unit/result_runtime_validation.test.ts::AC-002b|
+|t177_code_f002|minor|遗留|dispatcher success:false 分支 status:'idle' 谎报——真实 handler 恒 success:true（run_stop_step 吞错），分支不可达|p049|
+|t177_code_f003|minor|已修|enqueue_command 固定 50ms sleep → 轮询取命令（防慢机 flaky）|tests/unit/result_runtime_validation.test.ts::enqueue_command|
+|t177_test_f001|important|已修|stop 幂等测试补 success:false 判别（旧实现 throw NO_ACTIVE_CAPTURE 红）|tests/unit/agent_command_dispatcher.test.ts::t177 stop 失败|
+|t177_test_f002|minor|已修|恒真断言改 AC-002b 行为验证|tests/unit/result_runtime_validation.test.ts::AC-002b|
+|t177_test_f003|minor|已修|enqueue 轮询替代 sleep|tests/unit/result_runtime_validation.test.ts::enqueue_command|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +71,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 四类畸形 result → 400 INVALID_QUERY + pending 未丢（同 command_id 合法 result 仍 200）；AC-002 合法 result/合法 error code 投递；AC-003 stop 幂等（空闲成功 capture_id null，NO_ACTIVE_CAPTURE 删除）；AC-004 测试
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL（1 important + 2 minor）/ test：FAIL（1 important + 2 minor）
+- Round 2 code：PASS / test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+/extension/result 运行时校验落地（validate_result_body：plain object/command_id/ok boolean/合法 AgentErrorCode/ok:true 无 error/ok:false 必 error，失败 400 不 resolve）；AGENT_ERROR_CODES 值数组与类型 union 同步；stop 幂等（空闲态成功 + capture_id null，NO_ACTIVE_CAPTURE 契约删除，domain.md 同步）；登记 p049（stop success:false 分支不可达）。

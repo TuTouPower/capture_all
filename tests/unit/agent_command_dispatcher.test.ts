@@ -129,15 +129,30 @@ describe('agent command dispatcher', () => {
         });
     });
 
-    test('stops capture and maps inactive state', async () => {
+    test('t177: stop 幂等——空闲态返回成功且 capture_id 为 null（NO_ACTIVE_CAPTURE 已删除）', async () => {
         const result = await dispatch_agent_command(command('capture.stop'), {
             ...handlers,
+            get_status: vi.fn(() => ({ active_capture_id: null })),
+            stop_capture: vi.fn(async () => ({ success: true }))
+        });
+
+        expect(result).toMatchObject({
+            ok: true,
+            data: { capture_id: null, status: 'stopped' }
+        });
+    });
+
+    test('t177: stop 失败（success:false）同样成功返回 capture_id null，不抛 NO_ACTIVE_CAPTURE', async () => {
+        // 旧实现此分支 throw NO_ACTIVE_CAPTURE（错误响应）；新实现幂等成功（判别力）
+        const result = await dispatch_agent_command(command('capture.stop'), {
+            ...handlers,
+            get_status: vi.fn(() => ({ active_capture_id: null })),
             stop_capture: vi.fn(async () => ({ success: false }))
         });
 
         expect(result).toMatchObject({
-            ok: false,
-            error: { code: 'NO_ACTIVE_CAPTURE' }
+            ok: true,
+            data: { capture_id: null, status: 'idle' }
         });
     });
 

@@ -4,7 +4,7 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
+import { AGENT_COMMAND_TYPES, AGENT_ERROR_CODES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import { AgentCommandQueue } from './command_queue';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
@@ -517,6 +517,15 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
                     request,
                     MAX_EXTENSION_RESULT_BODY_BYTES,
                 ) as AgentCommandResult;
+                // t177: 运行时 schema 校验——畸形 result 拒绝且不 resolve/delete pending command
+                const validation_error = validate_result_body(body);
+                if (validation_error) {
+                    bridge_warn('result_invalid', { reason: validation_error });
+                    return send_json(response, 400, {
+                        ok: false,
+                        error: { code: 'INVALID_QUERY', message: `Invalid result: ${validation_error}` },
+                    });
+                }
                 const owner = command_owners.get(body.command_id);
                 if (owner && owner !== instance_id) {
                     return send_json(response, 400, {
@@ -1047,4 +1056,35 @@ async function read_json(
 function send_json(response: http.ServerResponse, status: number, body: unknown): void {
     response.writeHead(status, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify(body));
+}
+
+// t177: /extension/result 运行时校验——plain object、非空 command_id、boolean ok、
+// 合法 AgentErrorCode、ok:true 不带 error、ok:false 必须带 error。返回错误消息或 null。
+function validate_result_body(body: unknown): string | null {
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+        return 'result must be a plain object';
+    }
+    const b = body as Record<string, unknown>;
+    if (typeof b.command_id !== 'string' || b.command_id.length === 0) {
+        return 'command_id must be a non-empty string';
+    }
+    if (typeof b.ok !== 'boolean') {
+        return 'ok must be a boolean';
+    }
+    if (b.ok === true) {
+        if (b.error !== undefined) return 'ok:true must not carry error';
+        return null;
+    }
+    // ok:false
+    const err = b.error as Record<string, unknown> | undefined;
+    if (!err || typeof err !== 'object') {
+        return 'ok:false must carry an error object';
+    }
+    if (typeof err.code !== 'string' || !(AGENT_ERROR_CODES as readonly string[]).includes(err.code)) {
+        return `unknown error code: ${String(err.code)}`;
+    }
+    if (typeof err.message !== 'string') {
+        return 'error.message must be a string';
+    }
+    return null;
 }

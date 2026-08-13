@@ -128,14 +128,12 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
 }
 
 async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
+    // t177: stop 幂等——空闲态 stop_capture 返回 success:true，capture_id 允许 null；
+    // NO_ACTIVE_CAPTURE 错误码契约已删除（协议与文档同步）。
     const active_capture_id = handlers.get_status().active_capture_id;
     const result = await handlers.stop_capture();
 
-    if (!result.success) {
-        throw new AgentCommandError('NO_ACTIVE_CAPTURE', 'No active capture');
-    }
-
-    return { capture_id: active_capture_id, status: 'stopped' };
+    return { capture_id: result.success ? active_capture_id : null, status: result.success ? 'stopped' : 'idle' };
 }
 
 async function list_captures(payload: Record<string, unknown>): Promise<unknown> {

@@ -2,11 +2,11 @@
 tid: "t179"
 slug: "fix_mcp_schema_boundaries"
 title: "MCP schema 边界与错误码一致性"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t179_fix_mcp_schema_boundaries"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "88f0dddd53a62b19a147956a2cdf12180408960e"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,15 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t179_code_f001 | minor | 建议修复 | 已修 | `AGENT_DATA_SOURCES` 改为引用 `STORE_NAMES.*` 构造（单一事实来源，新增 store 不更新枚举即双暴露） |
+| t179_code_f002 | minor | 建议修复 | 已修 | resolve_target 源码断言去掉脆的 `message: hint` 与顺序假设，简化为存在性 + AMBIGUOUS 锚定 `matches.length > 1`；行为级覆盖引用既有 `agent_bridge_server.test.ts` |
+| t179_test_f001 | minor | 记录 | 已修 | 同 code f002——实现侧断言简化并引既有行为测试；静态检查方式 spec 已批准 |
+| t179_test_f002 | minor | 记录 | 已修 | 新增「dispatcher export_capture switch case 与 EXPORT_FORMATS 一致」断言，锚定实现实际接受集合 |
 
 ### Round 1 场景说明
 

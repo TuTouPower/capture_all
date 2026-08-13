@@ -73,3 +73,18 @@ export const DEFAULT_USER_CONFIG = {
     log_level: 'info' as const,
     log_max_size_mb: 100,
 };
+
+// t179: Agent 数据源与导出格式公开枚举——Bridge/dispatcher 实际接受的唯一来源，
+// MCP Zod schema 由共享常量派生避免漂移（BC-005 / BM-L002）。
+// 数据源值引用 STORE_NAMES（单一事实来源），新增 store 不更新枚举即编译/运行时双暴露。
+export const AGENT_DATA_SOURCES = [
+    STORE_NAMES.USER_ACTION_EVENTS,
+    STORE_NAMES.NAVIGATION_EVENTS,
+    STORE_NAMES.NETWORK_REQUESTS,
+    STORE_NAMES.CONSOLE_EVENTS,
+    STORE_NAMES.ERROR_EVENTS,
+    STORE_NAMES.STORAGE_CHANGES,
+    STORE_NAMES.COOKIE_CHANGES,
+] as const;
+
+export const EXPORT_FORMATS = ['json', 'jsonl', 'html', 'har'] as const;

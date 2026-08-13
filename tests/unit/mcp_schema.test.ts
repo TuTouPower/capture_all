@@ -133,14 +133,14 @@ describe('MCP tool schemas', () => {
 
     // --- list_records ---
     it('list_records: requires capture_id + source', () => {
-        const result = pass('list_records', { capture_id: 'cap-001', source: 'network' });
-        expect(result.source).toBe('network');
+        const result = pass('list_records', { capture_id: 'cap-001', source: 'network_requests' });
+        expect(result.source).toBe('network_requests');
     });
 
     it('list_records: accepts optional range params', () => {
         const result = pass('list_records', {
             capture_id: 'cap-001',
-            source: 'network',
+            source: 'network_requests',
             offset: 5,
             limit: 20,
             start_time: 1000,
@@ -156,17 +156,17 @@ describe('MCP tool schemas', () => {
     });
 
     it('list_records: rejects missing capture_id', () => {
-        fail('list_records', { source: 'network' });
+        fail('list_records', { source: 'network_requests' });
     });
 
     // --- get_record ---
     it('get_record: requires capture_id + source + record_id', () => {
-        const result = pass('get_record', { capture_id: 'cap-001', source: 'network', record_id: 'network:evt-1' });
-        expect(result.record_id).toBe('network:evt-1');
+        const result = pass('get_record', { capture_id: 'cap-001', source: 'network_requests', record_id: 'network_requests:evt-1' });
+        expect(result.record_id).toBe('network_requests:evt-1');
     });
 
     it('get_record: rejects missing record_id', () => {
-        fail('get_record', { capture_id: 'cap-001', source: 'network' });
+        fail('get_record', { capture_id: 'cap-001', source: 'network_requests' });
     });
 
     // --- get_timeline ---
@@ -177,12 +177,12 @@ describe('MCP tool schemas', () => {
     it('get_timeline: accepts optional sources + range', () => {
         const result = pass('get_timeline', {
             capture_id: 'cap-001',
-            sources: ['network', 'console'],
+            sources: ['network_requests', 'console_events'],
             offset: 0,
             limit: 100,
             order: 'asc',
         });
-        expect(result.sources).toEqual(['network', 'console']);
+        expect(result.sources).toEqual(['network_requests', 'console_events']);
     });
 
     it('get_timeline: rejects non-string sources', () => {
@@ -220,9 +220,8 @@ describe('MCP tool schemas', () => {
         }
     });
 
-    it('export_capture: allows any format string (passthrough)', () => {
-        expect(pass('export_capture', { capture_id: 'cap-001', format: 'csv' }).format).toBe('csv');
-    });
+    // t179: 任意 format 透传语义已废除（AC-001）——非法 format 在 Zod 层拒绝，
+    // 不进入 Bridge。拒绝用例见 tests/unit/mcp_schema_boundaries.test.ts。
 
     it('export_capture: rejects missing format', () => {
         fail('export_capture', { capture_id: 'cap-001' });
@@ -263,9 +262,9 @@ describe('MCP tool schemas', () => {
             const base_input = tools_without_capture_id.includes(tool)
                 ? {}
                 : tool === 'list_records'
-                    ? { capture_id: 'cap-001', source: 'network' }
+                    ? { capture_id: 'cap-001', source: 'network_requests' }
                     : tool === 'get_record'
-                        ? { capture_id: 'cap-001', source: 'network', record_id: 'r1' }
+                        ? { capture_id: 'cap-001', source: 'network_requests', record_id: 'r1' }
                         : tool === 'get_timeline_item'
                             ? { capture_id: 'cap-001', item_id: 'tl1' }
                             : tool === 'export_capture' || tool === 'export_session'
@@ -284,9 +283,9 @@ describe('MCP tool schemas', () => {
     it('all tools reject unknown top-level fields (t152 AC-008 strict)', () => {
         for (const tool of Object.keys(MCP_TOOL_SCHEMAS)) {
             const base_input = tool === 'list_records'
-                ? { capture_id: 'cap-001', source: 'network' }
+                ? { capture_id: 'cap-001', source: 'network_requests' }
                 : tool === 'get_record'
-                    ? { capture_id: 'cap-001', source: 'network', record_id: 'r1' }
+                    ? { capture_id: 'cap-001', source: 'network_requests', record_id: 'r1' }
                     : tool === 'get_timeline_item'
                         ? { capture_id: 'cap-001', item_id: 'tl1' }
                         : tool === 'export_capture' || tool === 'export_session'
@@ -308,9 +307,9 @@ describe('MCP tool schemas', () => {
                     : tool === 'get_capture' || tool === 'get_session' || tool === 'list_data_sources' || tool === 'get_all_capture_data' || tool === 'get_all_session_data'
                         ? { capture_id: 'cap-001' }
                         : tool === 'list_records'
-                            ? { capture_id: 'cap-001', source: 'network' }
+                            ? { capture_id: 'cap-001', source: 'network_requests' }
                             : tool === 'get_record'
-                                ? { capture_id: 'cap-001', source: 'network', record_id: 'r1' }
+                                ? { capture_id: 'cap-001', source: 'network_requests', record_id: 'r1' }
                                 : tool === 'get_timeline'
                                     ? { capture_id: 'cap-001' }
                                     : tool === 'get_timeline_item'

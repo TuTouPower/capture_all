@@ -68,7 +68,7 @@
 
 - 背景：原 `browser_no`（1-99 数字）路由让人填编号、不直观；机器 ID（instance_id）已存在但只作次要路由键。
 - 选项：A）保留 browser_no；B）取消 browser_no，改用 browser_label（人填备注）+ instance_id（机器生成）双键路由。
-- 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_AMBIGUOUS`。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
+- 结论：选 B。条件强制 label：单实例零配置（默认路由）；多实例时若存在匿名实例，Bridge 在响应里加 warning，AI 调用未 specify target 时返回 `TARGET_REQUIRED`（t179 修正：实现拆分——未指定 target 多实例返回 `TARGET_REQUIRED`，`TARGET_AMBIGUOUS` 仅用于显式 `target_label` 命中多个在线实例）。同 label enroll 顶替旧实例（防堆积，扩展重启路径）。MCP 工具参数 `target_instance_id` + `target_label`；二者都给时 `target_instance_id` 优先。详见 T008。
 - 替代：无
 
 ## 009 CDP 状态按 sessionId+requestId 复合键索引（2026-07-19）

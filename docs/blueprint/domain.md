@@ -48,6 +48,13 @@ MCP 工具名用动词短语（`start_recording` / `list_captures`），底层�
 
 兼容别名：`list_sessions` / `get_session` / `get_all_session_data` / `export_session` 映射到同命令。
 
+### MCP 参数枚举（t179）
+
+`source` / `sources` / `format` 参数为公开枚举，由共享常量派生，与 Bridge/dispatcher 实际接受枚举一致（`src/shared/constants.ts` 的 `AGENT_DATA_SOURCES` / `EXPORT_FORMATS`），MCP Zod schema 禁止非法值在输入边界，不进入 Bridge：
+
+- `source` / `sources`：7 个数据源（`user_action_events` / `navigation_events` / `network_requests` / `console_events` / `error_events` / `storage_changes` / `cookie_changes`）
+- `format`：4 个导出格式（`json` / `jsonl` / `html` / `har`）
+
 ## 3. 内部分类 vs UI 标签
 
 内部分类 9 个：`user_action`、`navigation`、`network`、`console`、`error`、`storage`、`cookie`、`dom_data`、`capture_lifecycle`。
@@ -142,6 +149,6 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 
 ## 8. 错误码
 
-**Bridge 层**：`BRIDGE_UNAVAILABLE`、`EXTENSION_OFFLINE`、`COMMAND_TIMEOUT`、`TOKEN_INVALID`、`ORIGIN_NOT_ALLOWED`、`PAYLOAD_TOO_LARGE`、`COMMAND_CANCELLED`、`TARGET_REQUIRED`、`TARGET_NOT_FOUND`、`PAIRING_REQUIRED`。
+**Bridge 层**：`BRIDGE_UNAVAILABLE`、`EXTENSION_OFFLINE`、`COMMAND_TIMEOUT`、`TOKEN_INVALID`、`ORIGIN_NOT_ALLOWED`、`PAYLOAD_TOO_LARGE`、`COMMAND_CANCELLED`、`TARGET_REQUIRED`（多实例未指定目标）、`TARGET_AMBIGUOUS`（显式 `target_label` 命中多个在线实例）、`TARGET_NOT_FOUND`、`PAIRING_REQUIRED`。
 
 **扩展层**：`CAPTURE_NOT_FOUND`、`SOURCE_NOT_FOUND`、`RECORD_NOT_FOUND`、`INVALID_QUERY`、`CAPTURE_ALREADY_RUNNING`、`EXPORT_FAILED`、`STORAGE_READ_FAILED`、`PAYLOAD_TOO_LARGE`。（t177：`NO_ACTIVE_CAPTURE` 已删除——stop 幂等，空闲态返回成功且 `capture_id: null`）

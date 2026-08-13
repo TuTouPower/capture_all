@@ -1,4 +1,5 @@
 import { build_record_id, parse_record_id, type AgentDataSourceSummary, type AgentRecordDetail, type AgentRecordPreview, type AgentQueryRange } from '../../shared/protocol';
+import { AGENT_DATA_SOURCES } from '../../shared/constants';
 import { stable_fingerprint } from '../../shared/id';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../shared/types';
 import {
@@ -19,14 +20,8 @@ import {
 import { fetch_all_records } from '../shared/paged_reader';
 import type { KeysetPage } from './storage';
 
-export type AgentDataSource =
-    | 'user_action_events'
-    | 'navigation_events'
-    | 'network_requests'
-    | 'console_events'
-    | 'error_events'
-    | 'storage_changes'
-    | 'cookie_changes';
+// t179: 数据源枚举唯一来源 = shared/constants.AGENT_DATA_SOURCES（MCP Zod 同步派生，防漂移）
+export type AgentDataSource = typeof AGENT_DATA_SOURCES[number];
 
 type AgentRecord = CaptureEvent | NetworkRequestData | ConsoleEventData | RuntimeExceptionData | StorageChangeData | CookieChangeData;
 
@@ -48,15 +43,7 @@ interface AgentRecordListResult {
     records: AgentRecordPreview[];
 }
 
-const ALL_SOURCES: AgentDataSource[] = [
-    'user_action_events',
-    'navigation_events',
-    'network_requests',
-    'console_events',
-    'error_events',
-    'storage_changes',
-    'cookie_changes'
-];
+const ALL_SOURCES: AgentDataSource[] = [...AGENT_DATA_SOURCES];
 
 export async function load_agent_capture_data(capture_id: string): Promise<AgentCaptureData> {
     const capture = await get_capture(capture_id);

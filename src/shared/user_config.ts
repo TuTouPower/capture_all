@@ -384,7 +384,14 @@ function is_valid_poll_interval(v: unknown): v is number {
         && v <= MAX_POLL_INTERVAL_MS;
 }
 
-function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
+// t178: log_level 单一事实来源（types.ts LogLevel 定义同值，此处供 sanitize 与 set_log_level guard 共用）
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'silent'] as const;
+
+export function is_valid_log_level(value: unknown): value is typeof LOG_LEVELS[number] {
+    return typeof value === 'string' && (LOG_LEVELS as readonly string[]).includes(value);
+}
+
+export function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
     const cfg = { ...DEFAULT_USER_CONFIG };
     const src = raw || {};
     const c = cfg as Record<string, unknown>;
@@ -400,7 +407,7 @@ function sanitize_user_config(raw: Record<string, unknown>): UserConfig {
         ['theme', ['light', 'dark', 'follow-system']],
         ['locale', ['en', 'zh']],
         ['detail_time_display_mode', ['system', 'relative']],
-        ['log_level', ['debug', 'info', 'warn', 'error', 'silent']],
+        ['log_level', LOG_LEVELS],
     ];
     for (const [key, allowed] of enum_rules) {
         if (allowed.includes(src[key] as string)) c[key] = src[key];
@@ -458,7 +465,9 @@ export async function load_user_config(): Promise<UserConfig> {
 }
 
 export async function save_user_config(patch: Partial<UserConfig>): Promise<void> {
+    // t178: 落库前经 sanitize_user_config 白名单校验（load/save 对称），非法 patch 字段被滤不落库
     const current = await load_user_config();
     const next: UserConfig = { ...current, ...patch };
-    await chrome.storage.local.set({ [STORAGE_KEY]: next });
+    const sanitized = sanitize_user_config({ ...next });
+    await chrome.storage.local.set({ [STORAGE_KEY]: sanitized });
 }

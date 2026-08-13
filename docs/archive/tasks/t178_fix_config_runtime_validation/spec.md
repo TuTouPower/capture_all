@@ -71,7 +71,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- body/inline 上限的硬上限取值：`UNVERIFIED-SPIKE`，执行期按既有常量/协议上限核实。
+- body/inline 上限的硬上限取值：结论=`max_body_capture_bytes ≤ MAX_BODY_CAPTURE_BYTES`（100MB）、`inline_text_max_bytes ≤ INLINE_TEXT_MAX_BYTES`（32KB）（s008 spike，2026-08-13 已核实，复用既有常量无新魔数）。
 
 ### 风险与回退
 

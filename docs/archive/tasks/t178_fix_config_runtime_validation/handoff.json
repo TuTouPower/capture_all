@@ -1,0 +1,20 @@
+{
+  "tid": "t178",
+  "attempt": 1,
+  "execution_id": "74f5d52ab0f34cb9a6fb7b5769ef9f8e",
+  "status": "done",
+  "branch": "t178_fix_config_runtime_validation",
+  "base_sha": "9e34c29bdd8747837ca21b85490a25fceca1a2b0",
+  "tests": "npm test：1751 passed（新增 config_runtime_validation 19 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test FAIL（AC-002 guard 无行为测试等 5 finding）→ 处置全部已修 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/config_runtime_validation.test.ts::非法 theme/browser_label/log_level/负数 max_body_capture_bytes patch 不落库（storage 断言 + load 回退默认）；合法 patch 正常落库"],
+    "AC-002": ["tests/unit/config_runtime_validation.test.ts::is_valid_log_level helper 行为测试（非法 verbose/WARN/42/undefined 拒绝、5 枚举放行）+ 源码接线断言（分支调 helper 且 INVALID_QUERY）"],
+    "AC-003": ["tests/unit/config_runtime_validation.test.ts::parse_bridge_config 对非正整数/0/1.5/300001/999999/字符串型拒绝；默认值、合法显式值、=MAX 边界放行"],
+    "AC-004": ["tests/unit/config_runtime_validation.test.ts::dispatch capture.start 对 MAX_BODY_CAPTURE_BYTES+1 / INLINE_TEXT_MAX_BYTES+1 拒绝（start 不触发）；等于上限放行"],
+    "AC-005": ["tests/unit/config_runtime_validation.test.ts::19 用例全绿；全量 unit 183 文件 / 1751 测试通过"]
+  },
+  "pending": [],
+  "findings": []
+}

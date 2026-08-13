@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import type { AgentBridgeConfig } from '../shared/protocol';
 
 interface RawBridgeConfig {
@@ -30,12 +31,22 @@ export function parse_bridge_config(raw: RawBridgeConfig): AgentBridgeConfig {
         throw new Error('Bridge token is required');
     }
 
+    // t178: timeout 配置运行时 parse 校验（正整数且 ≤ MAX_COMMAND_TIMEOUT_MS）
+    const command_timeout_ms = raw.command_timeout_ms ?? 120000;
+    const full_data_timeout_ms = raw.full_data_timeout_ms ?? 300000;
+    if (!Number.isInteger(command_timeout_ms) || command_timeout_ms <= 0 || command_timeout_ms > MAX_COMMAND_TIMEOUT_MS) {
+        throw new Error('Invalid command_timeout_ms');
+    }
+    if (!Number.isInteger(full_data_timeout_ms) || full_data_timeout_ms <= 0 || full_data_timeout_ms > MAX_COMMAND_TIMEOUT_MS) {
+        throw new Error('Invalid full_data_timeout_ms');
+    }
+
     return {
         host,
         port,
         token: raw.token,
-        command_timeout_ms: raw.command_timeout_ms ?? 120000,
-        full_data_timeout_ms: raw.full_data_timeout_ms ?? 300000,
+        command_timeout_ms,
+        full_data_timeout_ms,
         pairing_auto_open: raw.pairing_auto_open ?? true,
         instances_file: raw.instances_file,
     };

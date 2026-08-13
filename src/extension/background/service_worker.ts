@@ -29,7 +29,7 @@ import { category_for_event_type } from '../../shared/event_category';
 import { Logger } from '../../shared/logger';
 import { build_network_data } from '../../shared/network_builder';
 import { get_app_log_transport } from './app_log_storage';
-import { load_user_config } from '../../shared/user_config';
+import { load_user_config, save_user_config, is_valid_log_level } from '../../shared/user_config';
 import { normalize_agent_bridge_config, is_allowed_local_bridge_url } from '../../shared/agent_bridge_config';
 import type {
     UserConfig, CaptureConfig, CaptureEvent, CaptureRecord, AppLogEntry,
@@ -373,10 +373,13 @@ async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: 
             return wrap_result({ size_bytes });
         }
         case 'set_log_level': {
-            if (payload?.level) {
-                Logger.set_level(payload.level as Parameters<typeof Logger.set_level>[0]);
-                await chrome.storage.local.set({ user_config: { ...(await load_user_config()), log_level: payload.level } });
+            // t178: enum guard（单一事实来源 is_valid_log_level）——非法 level 显式拒绝，不写入非法 logger level
+            const level = payload?.level;
+            if (!is_valid_log_level(level)) {
+                return wrap_result({ success: false, error: 'INVALID_QUERY' });
             }
+            Logger.set_level(level);
+            await save_user_config({ log_level: level });
             return wrap_result({ success: true });
         }
         case 'flush_app_logs': {

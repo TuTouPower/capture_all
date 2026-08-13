@@ -9,7 +9,7 @@ import {
     get_timeline_pushdown,
     type AgentDataSource
 } from './agent_data_queries';
-import { DEFAULT_CONFIG } from '../../shared/constants';
+import { DEFAULT_CONFIG, MAX_BODY_CAPTURE_BYTES, INLINE_TEXT_MAX_BYTES } from '../../shared/constants';
 import { generate_capture_id } from '../../shared/id';
 import type { CaptureConfig } from '../../shared/types';
 import { Logger } from '../../shared/logger';
@@ -279,6 +279,14 @@ function get_capture_config(value: unknown): CaptureConfig {
     return merged as CaptureConfig;
 }
 
+function is_within_body_cap(v: unknown): boolean {
+    return is_non_negative_integer(v) && Number(v) <= MAX_BODY_CAPTURE_BYTES;
+}
+
+function is_within_inline_cap(v: unknown): boolean {
+    return is_non_negative_integer(v) && Number(v) <= INLINE_TEXT_MAX_BYTES;
+}
+
 function has_valid_capture_config_values(value: Record<string, unknown>): boolean {
     return (
         ['clicks', 'clicks_scroll_drag', 'full_trajectory'].includes(String(value.mouse_precision))
@@ -288,8 +296,9 @@ function has_valid_capture_config_values(value: Record<string, unknown>): boolea
         && typeof value.capture_input_values === 'boolean'
         && typeof value.capture_request_body === 'boolean'
         && typeof value.capture_response_body === 'boolean'
-        && is_non_negative_integer(value.max_body_capture_bytes)
-        && is_non_negative_integer(value.inline_text_max_bytes)
+        // t178: body/inline 硬上限（spike s008 结论，复用既有常量）
+        && is_within_body_cap(value.max_body_capture_bytes)
+        && is_within_inline_cap(value.inline_text_max_bytes)
         && typeof value.redact_sensitive_headers === 'boolean'
         && typeof value.redact_url_query === 'boolean'
         && typeof value.redact_data === 'boolean'

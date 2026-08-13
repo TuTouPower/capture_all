@@ -2,11 +2,11 @@
 tid: "t178"
 slug: "fix_config_runtime_validation"
 title: "配置边界运行时校验"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t178_fix_config_runtime_validation"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "9e34c29bdd8747837ca21b85490a25fceca1a2b0"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,16 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t178_code_f001 | minor | 待处置 | 已修 | 抽 `LOG_LEVELS` 常量 + `is_valid_log_level` helper 至 `src/shared/user_config.ts`（导出），set_log_level guard 与 sanitize 白名单共用单一事实来源 |
+| t178_code_f002 | minor | 待处置 | 已修 | 抽 `is_within_body_cap` / `is_within_inline_cap` 命名谓词，去掉 `Number()` 冗余，链长降回 13 |
+| t178_test_f001 | important | 待处置 | 已修 | guard 逻辑提取为 `is_valid_log_level` helper 并加行为测试（非法/合法双向），源码扫描断言改为断言分支调用 helper；拒绝路径语义由 helper 行为测试钉住 |
+| t178_test_f002 | minor | 待处置 | 已修 | 补 `=MAX_COMMAND_TIMEOUT_MS`(300000) 合法边界放行用例 + 字符串型非法 type 拒绝用例 |
+| t178_test_f003 | minor | 待处置 | 已修 | AC-001 负数 `max_body_capture_bytes` 用例补 storage 落库断言（`stored.max_body_capture_bytes` 非 -1） |
 
 ### Round 1 场景说明
 

@@ -38,11 +38,11 @@ A capture is limited to 500 MB and 24 hours. An individual request or response b
 
 ## Bridge, MCP, and AI agents
 
-The optional Bridge binds to `127.0.0.1` and requires a user-provided Bearer token. It transfers commands and results between the extension and authenticated local clients.
+The optional Bridge binds to `127.0.0.1` and is authenticated with a zero-config two-token model: the MCP client reads an auto-generated token (env or Bridge-persisted file, mode 0600), and the extension enrolls with its own instance token. See `SECURITY.md`.
 
 The MCP server can query captured data and return it to a connected AI agent. MCP does not automatically redact or summarize stored results. Data returned through MCP is then subject to the privacy and retention practices of the selected AI service or agent environment.
 
-Keep the project-local `.mcp.json` file private. Never commit a real Bridge token.
+Keep the project-local `.mcp.json` / `.mcp.json.example` file private. Never commit a real Bridge token.
 
 ## Exports
 
@@ -60,7 +60,7 @@ MCP does not expose capture deletion or database clearing commands.
 
 ## Browser permissions
 
-Capture All requires broad permissions, including `<all_urls>`, `debugger`, `tabs`, and `cookies`, to implement the current capture model. Use it only in browser profiles and sites authorized for inspection. See [README.md](README.md#permissions-and-data) for the permission list.
+Capture All requires broad permissions, including `<all_urls>`, `debugger`, `tabs`, and `cookies`, to implement the current capture model. Use it only in browser profiles and sites authorized for inspection. See [README.en.md](README.en.md#permissions-privacy-and-security) for the permission list.
 
 ## Changes
 

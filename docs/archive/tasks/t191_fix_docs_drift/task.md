@@ -2,11 +2,11 @@
 tid: "t191"
 slug: "fix_docs_drift"
 title: "文档漂移重写"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t191_fix_docs_drift"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "3e73f159fb531884166c49f6f3ea38abcf7f9de3"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,12 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t191_gen_f001 | minor | 待处置 | 已修 | contributing_dev.md/test.md 测试文件计数「约 194 个」→「约 190+ 个」（避免随新增测试再漂移） |
 
 ### Round 1 场景说明
 

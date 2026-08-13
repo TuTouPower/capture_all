@@ -82,9 +82,7 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | `session_id` | `capture_id` |
 | `detail.html` 独立详情页 | 合并入 dashboard（`?page=detail`） |
 
-代码内 `Session` / `RecordEvent` 类型保留为 `@deprecated` 兼容层（指向 `CaptureRecord` / `CaptureEvent`），仅为旧数据迁移，禁止在新代码中使用。
-
-`capture_mode` 字段值域保持 `'basic'` / `'advanced'`（减少变更面），但 UI 不暴露此概念。
+`Session` / `RecordEvent` 类型与 `capture_mode` 字段已删除（t191 核实：`src/shared/types.ts` 与全仓源码无 `Session`/`RecordEvent`/`capture_mode` 符号；`body_capture_mode` 与 `keyboard_capture_mode` 为不同字段，勿混淆）。旧数据/旧代码按 `CaptureRecord` / `CaptureEvent` 处理。
 
 ## 5. 业务不变量
 

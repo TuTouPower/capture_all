@@ -4,6 +4,9 @@ import type { CaptureConfig } from './types';
 export const DB_NAME = 'capture_all_db';
 export const DB_VERSION = 4;
 
+// t175: MCP/Bridge 命令超时共享上限（Bridge 强制校验，MCP Zod 同步 max）
+export const MAX_COMMAND_TIMEOUT_MS = 300000;
+
 export const STORE_NAMES = {
     CAPTURES: 'captures',
     USER_ACTION_EVENTS: 'user_action_events',

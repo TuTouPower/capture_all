@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
+import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import { AgentCommandQueue } from './command_queue';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop } from './cdp_handler';
 import { next_default_label } from './label';
@@ -983,9 +984,9 @@ function validate_command_request(value: unknown): CommandRequest {
     }
 
     if (value.timeout_ms !== undefined) {
-        // T063: timeout_ms 必须是正整数且有合理上限（300000ms=5min）
-        if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0 || value.timeout_ms > 300000) {
-            throw new BridgeHttpError(400, 'INVALID_QUERY', 'Command timeout must be a positive integer <= 300000');
+        // T063: timeout_ms 必须是正整数且有合理上限（MAX_COMMAND_TIMEOUT_MS=5min）
+        if (typeof value.timeout_ms !== 'number' || !Number.isInteger(value.timeout_ms) || value.timeout_ms <= 0 || value.timeout_ms > MAX_COMMAND_TIMEOUT_MS) {
+            throw new BridgeHttpError(400, 'INVALID_QUERY', `Command timeout must be a positive integer <= ${MAX_COMMAND_TIMEOUT_MS}`);
         }
     }
 

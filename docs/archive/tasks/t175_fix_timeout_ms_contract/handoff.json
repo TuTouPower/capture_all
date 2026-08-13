@@ -1,0 +1,19 @@
+{
+  "tid": "t175",
+  "attempt": 1,
+  "execution_id": "77894772a14940599a66ac9b328c3a22",
+  "status": "done",
+  "branch": "t175_fix_timeout_ms_contract",
+  "base_sha": "b2e8a14495abd15835a10ac7b6917d63ac71ffe9",
+  "tests": "npm test：1718 passed（新增 timeout_ms_contract 5 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "Round 1 code PASS（3 minor）/ test PASS（2 minor），minor 全处置",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/timeout_ms_contract.test.ts::AC-001 Zod 300001 拒绝、300000 通过、MAX_COMMAND_TIMEOUT_MS=300000"],
+    "AC-002": ["tests/unit/timeout_ms_contract.test.ts::AC-002a/b/c get_status/list_browsers timeout_ms=1 → AbortSignal.timeout(1) spy"],
+    "AC-003": ["docs/blueprint/domain.md::超时表统一（查询 30s 含 status/全量导出 300s/普通 120s/start-stop 120s/上限行）", "docs/guides/mcp_usage.md::timeout_ms 段补 get_status 默认 30s"],
+    "AC-004": ["tests/unit/timeout_ms_contract.test.ts::schema→tool→client 参数链路 + agent_mcp_client 10s→30s 更新"]
+  },
+  "pending": [],
+  "findings": []
+}

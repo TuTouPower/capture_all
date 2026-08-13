@@ -86,9 +86,9 @@ Bridge 对 `export_capture` / `get_all_capture_data` 自动分流：
 
 ### timeout_ms
 
-所有工具支持 `timeout_ms` 参数（单位 ms）。
+所有工具支持 `timeout_ms` 参数（单位 ms），上限 300000（`MAX_COMMAND_TIMEOUT_MS`，超出被 Zod 拒绝）。
 
-- 普通命令默认 `command_timeout_ms` = 120s
+- `get_status` / `list_browsers` 默认 30s；其余普通命令默认 `command_timeout_ms` = 120s
 - `export_capture` / `get_all_capture_data` 默认 `full_data_timeout_ms` = 300s
 - 显式传入的 `timeout_ms` 始终优先
 

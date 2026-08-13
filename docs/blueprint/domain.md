@@ -131,10 +131,12 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 
 | 命令类 | 超时 |
 |---|---|
-| 查询类（list/get/timeline/sources） | 30 s |
-| 全量类（get_all_data） | 120 s |
-| 导出类（export） | 120 s |
-| start / stop | 15 s |
+| 查询类（list/get/timeline/sources） | 30 s（含 status；client `get_status` 缺省 30s，`timeout_ms` 显式优先，t175） |
+| 全量类（get_all_data） | 300 s（`full_data_timeout_ms` 缺省，t175 对齐） |
+| 导出类（export） | 300 s（`full_data_timeout_ms` 缺省，t175 对齐） |
+| 普通命令类 | 120 s（`command_timeout_ms` 缺省） |
+| start / stop | 120 s（`command_timeout_ms` 缺省，t175 对齐） |
+| 上限 | 300000 ms（`MAX_COMMAND_TIMEOUT_MS`，Bridge 校验 + MCP Zod max 同步，t175） |
 
 超时只返回错误码，不自动降级。
 

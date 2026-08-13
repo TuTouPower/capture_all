@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 
 const capture_id_schema = z.string().min(1, 'capture_id is required');
-const timeout_ms_schema = z.number().int().positive().optional();
+const timeout_ms_schema = z.number().int().positive().max(MAX_COMMAND_TIMEOUT_MS).optional();
 const offset_schema = z.number().int().min(0).optional();
 const limit_schema = z.number().int().positive().optional();
 const order_schema = z.enum(['asc', 'desc']).optional();

@@ -101,14 +101,14 @@ describe('BridgeMcpClient', () => {
 });
 
 describe('BridgeMcpClient timeouts (B1-M3)', () => {
-    it('get_status uses a fixed 10s AbortSignal timeout', async () => {
+    it('get_status uses 30s default AbortSignal timeout (t175)', async () => {
         const timeout_spy = vi.spyOn(AbortSignal, 'timeout');
         const server = await start_test_server();
         const client = new BridgeMcpClient(server.url, token);
 
         await client.get_status();
 
-        expect(timeout_spy).toHaveBeenCalledWith(10 * 1000);
+        expect(timeout_spy).toHaveBeenCalledWith(30 * 1000);
     });
 
     it('send_command uses timeout_ms + 5s grace for AbortSignal', async () => {
@@ -139,7 +139,7 @@ describe('BridgeMcpClient timeouts (B1-M3)', () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' })));
         const client = new BridgeMcpClient('http://127.0.0.1:9', token);
 
-        await expect(client.get_status()).rejects.toThrow('Bridge request timed out after 10000ms');
+        await expect(client.get_status()).rejects.toThrow('Bridge request timed out after 30000ms');
     });
 
     it('full_data 命令（capture.export）缺省用 300s+5s 对齐 bridge full_data_timeout（t150-f001）', async () => {

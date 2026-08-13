@@ -2,11 +2,11 @@
 tid: "t157"
 slug: "fix_cdp_body_budget_accounting"
 title: "修复 CDP body 预算记账与淘汰语义"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t157_fix_cdp_body_budget_accounting"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "e9ac19839ea60e2bd4cd93d10a85d11ecf4417bd"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 14:08 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t157_code_f001|important|已修|enforce_body_budget 改「剩余带 body 事件唯一」判定（has_other_body），数组含 pending 时唯一带 body 事件置 null 标 too_large 而非删除|src/bridge/cdp_handler.ts:117|
+|t157_code_f002|important|已修|事件数淘汰改 evicted_events 独立待返回队列：pending 全部转 evicted + 清映射，events 严格 ≤ 上限，无静默丢弃路径|src/bridge/cdp_handler.ts:87|
+|t157_code_f003|minor|已修|remove_event 改名 decrement_body_bytes，注释声明只递减账本不移除事件|src/bridge/cdp_handler.ts:66|
+|t157_code_f004|minor|已修|写入记账改按实际存储字符串字节（new TextEncoder().encode(body).length），与淘汰减量口径一致|src/bridge/cdp_handler.ts:434|
+|t157_test_f001|important|已修|AC-005 测试构造「pending 已发 getResponseBody 后遭淘汰」场景，断言 body_seq_to_req_id.size===0 触达 clear_body_seq；删除恒假 if 死代码|tests/unit/cdp_body_budget_accounting.test.ts:246|
+|t157_test_f002|minor|已修|AC-005 尾部范围断言改为精确断言（迟到响应无新终态）|tests/unit/cdp_body_budget_accounting.test.ts:270|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +71,20 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001~005 由 `cdp_body_budget_accounting.test.ts` 7 用例（MockWebSocket 生产路径：poll 递减账本、预算内不误淘汰、pending 不偿还预算、唯一带 body 置 null 标 too_large、pending 转 evicted 终态 + 映射清理 + 队列有界）；AC-006 由 `docs/blueprint/domain.md` 限制表条目
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL（2 important + 2 minor）
+- Round 1 test：FAIL（1 important + 1 minor）
+- Round 2 code：FAIL（f005 新发现 1 important；前轮 4 条已消除）
+- Round 2 test：PASS
+- Round 3 code：PASS（f005 已修）
+- Round 3 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+CDP 会话 body 预算账本统一移除递减（poll 返回/淘汰同口径），淘汰只选已终态带 body 事件、pending 转 evicted 可观察终态且映射清理、唯一带 body 置 null 标 too_large、evicted 队列有界；domain.md 限制表补 200MB 聚合预算条目。

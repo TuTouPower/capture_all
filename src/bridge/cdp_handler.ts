@@ -23,6 +23,10 @@ interface CdpSession {
     // T101: idle TTL 定时器与最后活动时间
     idle_timer: ReturnType<typeof setTimeout> | null;
     last_activity: number;
+    // t157: getResponseBody 命令 seq → request_id 映射（挂 session 供淘汰路径清理）
+    body_seq_to_req_id: Map<number, string>;
+    // t157 AC-005: 事件数淘汰产生的 evicted 终态待返回队列（不占 events 上限）
+    evicted_events: CdpStoredEvent[];
 }
 
 interface CdpStoredEvent {
@@ -48,6 +52,7 @@ const MAX_EVENTS_PER_POLL = 100;
 // T101: idle TTL（活动刷新，非固定墙钟）；events 上限防无界增长
 const CDP_SESSION_IDLE_TTL_MS = 5 * 60 * 1000;
 const MAX_SESSION_EVENTS = 5000;
+const MAX_EVICTED_EVENTS = MAX_SESSION_EVENTS; // t157: evicted 待返回队列上限，防无界增长（已终态事件，超限丢最旧）
 // t140: 会话级 body 总字节预算——单条 body 可到 100MB，事件数有界但总内存无聚合上限（最坏 500GB）。
 const MAX_SESSION_BODY_BYTES = 200 * 1024 * 1024; // 200MB 会话聚合
 let _max_session_body_bytes = MAX_SESSION_BODY_BYTES;
@@ -59,31 +64,80 @@ let _max_session_events = MAX_SESSION_EVENTS;
 export function _set_max_session_events_for_test(cap: number): void {
     _max_session_events = cap;
 }
+// t157 测试钩子：evicted 队列上限
+let _max_evicted_events = MAX_EVICTED_EVENTS;
+export function _set_max_evicted_events_for_test(cap: number): void {
+    _max_evicted_events = cap;
+}
+// t157 测试钩子：读 session 内部状态（body_bytes / events）断言账本
+export function _get_session_for_test(session_key: string): CdpSession | null {
+    return sessions.get(session_key) ?? null;
+}
+
+// t157: 事件移除时的账本递减——从 events 移除事件时按实际存储 response_body UTF-8 字节递减 body_bytes。
+// 所有移除路径（poll 返回、事件数淘汰、body 预算淘汰）都必须走这里，禁止多路径各自维护计数。
+// 本函数只递减账本；事件数组的移除由各调用方负责。
+function decrement_body_bytes(session: CdpSession, evt: CdpStoredEvent): void {
+    if (typeof evt.response_body === 'string') {
+        session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(evt.response_body, 'utf-8'));
+    }
+}
+
+// t157: 清理某 request 的 getResponseBody 命令映射，防迟到响应误匹配已淘汰事件
+function clear_body_seq(session: CdpSession, request_id: string): void {
+    for (const [seq, req_id] of session.body_seq_to_req_id) {
+        if (req_id === request_id) {
+            session.body_seq_to_req_id.delete(seq);
+        }
+    }
+}
 
 // T101: events 有界写入，超上限丢最旧（防无界增长 OOM）
 // 淘汰计数（可观测指标；B1-M13 淘汰补结构化日志）
 export const _eviction_count = { value: 0 };
 function push_bounded(session: CdpSession, event: CdpStoredEvent): void {
     session.events.push(event);
-    if (session.events.length > _max_session_events) {
-        const removed = session.events.shift();
-        if (removed && typeof removed.response_body === 'string') {
-            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+    if (session.events.length <= _max_session_events) return;
+    // t157 AC-005: 事件数淘汰若删到 pending，不静默消失——转 evicted 终态进独立待返回队列，
+    // 并清理 command 映射（防迟到 getResponseBody 响应误匹配）；events 数组严格保持 ≤ 上限。
+    const removed = session.events.shift();
+    if (removed && removed.response_body_status === 'pending') {
+        removed.response_body_status = 'evicted';
+        clear_body_seq(session, removed.request_id);
+        session.evicted_events.push(removed);
+        // t157 f005: evicted 队列有界——超限丢最旧已终态事件（不违反 AC-005：已终态无等待语义）
+        if (session.evicted_events.length > _max_evicted_events) {
+            session.evicted_events.shift();
         }
-        _eviction_count.value += 1;
-        bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'event_count_cap', events: session.events.length });
+    } else if (removed) {
+        decrement_body_bytes(session, removed);
     }
+    _eviction_count.value += 1;
+    bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'event_count_cap', events: session.events.length });
 }
 
 // t140: body 总字节预算——单条 body 100MB × 5000 条最坏 500GB，聚合字节超限丢最旧带 body 事件。
 // 在 getResponseBody 回写后调用（body 此时才实际入事件）。
 export const _enforce_body_budget_for_test = enforce_body_budget;
 function enforce_body_budget(session: CdpSession): void {
-    while (session.body_bytes > _max_session_body_bytes && session.events.length > 1) {
-        const removed = session.events.shift();
-        if (removed && typeof removed.response_body === 'string') {
-            session.body_bytes = Math.max(0, session.body_bytes - Buffer.byteLength(removed.response_body, 'utf-8'));
+    while (session.body_bytes > _max_session_body_bytes) {
+        // t157 AC-003: 只淘汰「已终态且确有 response_body」的最旧事件，pending 元数据不得偿还 body 预算
+        const idx = session.events.findIndex(e => typeof e.response_body === 'string');
+        if (idx === -1) break; // 无带 body 事件（全 pending 或 body 已置 null），无可释放
+        const victim = session.events[idx];
+        const bytes = Buffer.byteLength(victim.response_body as string, 'utf-8');
+        // t157 AC-004: 只剩唯一带 body 事件（数组里可有 pending 元数据）——无法通过淘汰降到预算内，
+        // 保留请求元数据，body 置 null 标 too_large，事件仍可被 /cdp/events 返回。
+        const has_other_body = session.events.some((e, i) => i !== idx && typeof e.response_body === 'string');
+        if (!has_other_body) {
+            victim.response_body = null;
+            victim.response_body_status = 'too_large';
+            session.body_bytes = Math.max(0, session.body_bytes - bytes);
+            bridge_warn('cdp_body_too_large', { session_key: session.session_key, request_id: victim.request_id, body_bytes: bytes });
+            break;
         }
+        session.events.splice(idx, 1);
+        session.body_bytes = Math.max(0, session.body_bytes - bytes);
         _eviction_count.value += 1;
         bridge_warn('cdp_event_evicted', { session_key: session.session_key, reason: 'body_budget_cap', body_bytes: session.body_bytes });
     }
@@ -219,12 +273,14 @@ export async function handle_cdp_start(
             connect_error: null,
             idle_timer: null,
             last_activity: Date.now(),
+            body_seq_to_req_id: new Map<number, string>(),
+            evicted_events: [],
         };
 
         // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速）
         const ws = new WebSocket(target.webSocketDebuggerUrl);
         let seq = 0;
-        const body_seq_to_req_id = new Map<number, string>();
+        const body_seq_to_req_id = session.body_seq_to_req_id;
 
         const ws_connect = await new Promise<'ok' | 'timeout' | 'failed'>((resolve) => {
             const timeout = setTimeout(() => {
@@ -387,8 +443,8 @@ export async function handle_cdp_start(
                                         waiting_event.response_body_status = 'captured';
                                     }
                                     // t140: body 回写后更新会话聚合字节并触发预算淘汰（超限丢最旧带 body 事件）。
-                                    // 记账用实际存储长度（截断后），与淘汰减量口径一致。
-                                    session.body_bytes += Math.min(bytes.length, session.max_body_bytes);
+                                    // 记账用实际存储字符串字节（截断后），与淘汰减量口径一致。
+                                    session.body_bytes += new TextEncoder().encode(body).length;
                                     enforce_body_budget(session);
                                 }
                             } else {
@@ -428,6 +484,11 @@ export async function handle_cdp_events(
     }
 
     // Return completed events and remove only the returned ones from the session
+    // t157 AC-001: 返回时按实际 response_body 字节递减 body_bytes（统一走 decrement_body_bytes），
+    // 预算只统计当前驻留事件字节，不再退化为累计写入量。
+    // t157 AC-005: evicted 待返回队列优先返回（pending 淘汰产生的可观察终态，不占 events 上限）。
+    const evicted_batch = session.evicted_events.splice(0, MAX_EVENTS_PER_POLL);
+
     const completed: CdpStoredEvent[] = [];
     const pending: CdpStoredEvent[] = [];
 
@@ -439,10 +500,18 @@ export async function handle_cdp_events(
         }
     }
 
-    const to_return = completed.slice(0, MAX_EVENTS_PER_POLL);
-    const remaining_completed = completed.slice(MAX_EVENTS_PER_POLL);
+    const completed_slot = MAX_EVENTS_PER_POLL - evicted_batch.length;
+    const to_return_completed = completed.slice(0, completed_slot);
+    const remaining_completed = completed.slice(completed_slot);
     // 未返回的 completed 事件保留到下次轮询
     session.events = pending.concat(remaining_completed);
+    for (const evt of evicted_batch) {
+        decrement_body_bytes(session, evt);
+    }
+    for (const evt of to_return_completed) {
+        decrement_body_bytes(session, evt);
+    }
+    const to_return = evicted_batch.concat(to_return_completed);
 
     return {
         status: 200,

@@ -119,6 +119,8 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 | flush 间隔 | 1000 ms | `FLUSH_INTERVAL_MS`（周期 flush 兜底用） |
 | 导出分页 | 5000 条/页 | `PAGE_SIZE`（循环至耗尽） |
 | CDP events 单次轮询 | 100 条 | `MAX_EVENTS_PER_POLL` |
+| CDP events 驻留上限 | 5000 条 | `MAX_SESSION_EVENTS`；超限丢最旧，pending 转 `evicted` 终态（t157） |
+| CDP 会话聚合 body 预算 | 200 MB | `MAX_SESSION_BODY_BYTES`；计数口径=当前驻留事件实际存储 body UTF-8 字节（poll 返回与淘汰时递减，t157）；超限策略：仅淘汰最旧已终态且确有 body 的事件，pending 元数据不偿还预算；只剩单个超大 body 时保留元数据、body 置 null 标 `too_large` |
 | 命令 timeout 上限 | 300000 ms | `validate_command_request` |
 | Bridge body 上限 | 1 MiB | `read_json` |
 | 扩展结果回传上限 | 64 MiB | `MAX_EXTENSION_RESULT_BODY_BYTES` |

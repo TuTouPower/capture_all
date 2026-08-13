@@ -263,4 +263,8 @@ Agent → MCP 工具调用
 - 测试输出：`artifacts/test-results/`。
 
 Bridge/MCP 产物为 esbuild bundled ESM，不依赖 tsx 和 node_modules，可直接 `node bridge.mjs` 运行。
+
+### /health 识别契约（t183）
+
+`GET /health` 返回 `{ok:true, service:"capture-all-bridge", bridge_version:"<version>"}`（始终 200）。Bridge 启动判定与 SessionStart hook 复用 `probe_bridge_health`（`src/bridge/config.ts`）：校验 status + Content-Type + 完整标识；任意 2xx 非本服务 → `occupied`（端口冲突，main 明确报错并非零退出，不打印「already listening」）；非 2xx/连接失败/超时 → `unreachable`（正常启动）。版本号仅展示，识别字段为 `service` 名，防误判。`--probe <url>` 子命令输出三态文本 + exit code（healthy=0 / occupied=2 / unreachable=3），SessionStart hook 与自动化脚本复用。
 MCP Server 通过 Claude Code 的 `.claude/settings.json` `mcpServers` 注册，启动后自动加载 17 个 MCP 工具（15 主工具 + 2 别名对）。

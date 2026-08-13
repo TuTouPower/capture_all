@@ -2,11 +2,11 @@
 tid: "t183"
 slug: "fix_bridge_health_probe"
 title: "Bridge 健康探测身份校验"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t183_fix_bridge_health_probe"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "c274da4d06ad162bdec1cd9acc9e0f45fa8f549e"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,18 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t183_code_f001 | important | 需修 | 已修 | `.claude/settings.json` SessionStart hook 改为调 `bridge.mjs --probe`：healthy 跳过启动、occupied 输出明确警告、否则启动；移除 `curl \| grep -q 200` 独立判定 |
+| t183_code_f002 | minor | 建议修 | 已修 | main.ts 源码文本接线用例删除，改为 hook 文本断言（--probe/healthy/occupied + 无 grep -q 200） |
+| t183_code_f003 | minor | 建议修 | 已修 | architecture.md 补 --probe 输出文本与 exit code（0/2/3）契约 |
+| t183_code_f004 | minor | 建议修 | 已修 | `import pathToFileURL` 移至 main.ts 文件顶部（is_main 判定处保留注释） |
+| t183_test_f001 | important | 阻断 | 已修 | 同 code f001——hook 复用 --probe，新增 hook 文本断言测试（settings.json SessionStart 含 --probe、无 grep -q 200） |
+| t183_test_f002 | minor | 不阻断 | 已修 | occupied 用例补入口 glue `process.exit(1)` 源码断言（非零退出路径） |
+| t183_test_f003 | minor | 不阻断 | 已修 | 导出 `BRIDGE_SERVICE_ID` 单一来源，server /health 引用常量；一致性测试断言 server 用常量 + 值正确 |
 
 ### Round 1 场景说明
 

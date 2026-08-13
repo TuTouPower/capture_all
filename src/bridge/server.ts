@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { AGENT_COMMAND_TYPES, AGENT_ERROR_CODES, type AgentBridgeConfig, type AgentCommandResult, type AgentCommandType, type AgentStatus } from '../shared/protocol';
 import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import { AgentCommandQueue } from './command_queue';
+import { BRIDGE_SERVICE_ID } from './config';
 import { handle_cdp_detect, handle_cdp_start, handle_cdp_events, handle_cdp_stop, destroy_all_sessions } from './cdp_handler';
 import { next_default_label } from './label';
 import { bridge_warn } from './logger';
@@ -260,7 +261,8 @@ export async function create_bridge_server(config: AgentBridgeConfig): Promise<{
             }
 
             if (request.method === 'GET' && request.url === '/health') {
-                return send_json(response, 200, { ok: true });
+                // t183 AC-001: 稳定产品标识 + 版本（is_bridge_healthy 据此识别本服务，防端口被任意 200 服务误判）
+                return send_json(response, 200, { ok: true, service: BRIDGE_SERVICE_ID, bridge_version: BRIDGE_VERSION });
             }
 
             if (request.method === 'GET' && request.url === '/extension/discover') {

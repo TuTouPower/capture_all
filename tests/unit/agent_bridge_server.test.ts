@@ -180,7 +180,12 @@ describe('bridge server', () => {
         const response = await fetch(`${server.url}/health`);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({ ok: true });
+        // t183 AC-001: /health 返回稳定产品标识 + 版本（is_bridge_healthy 据此识别本服务）
+        await expect(response.json()).resolves.toMatchObject({
+            ok: true,
+            service: 'capture-all-bridge',
+            bridge_version: expect.any(String),
+        });
     });
 
     it('rejects command without token', async () => {

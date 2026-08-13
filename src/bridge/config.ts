@@ -176,14 +176,43 @@ export async function resolve_bridge_token(
 
 // B1-L7: 健康检查带超时，bridge 挂起时不无限阻塞
 const BRIDGE_HEALTH_TIMEOUT_MS = 3000;
+// t183: 产品标识单一事实来源（server /health 与 probe 识别共用；测试防漂移）
+export const BRIDGE_SERVICE_ID = 'capture-all-bridge';
 
-export async function is_bridge_healthy(bridge_url: string): Promise<boolean> {
+// t183: 健康探测三态——main 启动判定与 SessionStart hook（--probe）共用同一逻辑
+export type BridgeHealthStatus = 'healthy' | 'occupied' | 'unreachable';
+
+/**
+ * t183 AC-002: 校验 status + Content-Type + 完整产品标识（service + ok + version 字段）。
+ * 任意 2xx 服务（非本产品）→ occupied（端口冲突，不视为已运行）；解析失败同样视为 occupied；
+ * 非 2xx / 连接失败 / 超时 → unreachable。
+ */
+export async function probe_bridge_health(bridge_url: string): Promise<BridgeHealthStatus> {
     try {
         const response = await fetch(`${bridge_url}/health`, {
             signal: AbortSignal.timeout(BRIDGE_HEALTH_TIMEOUT_MS),
         });
-        return response.ok;
+        if (!response.ok) return 'unreachable';
+        const content_type = response.headers.get('content-type') ?? '';
+        if (!content_type.includes('application/json')) return 'occupied';
+        let body: unknown;
+        try {
+            body = await response.json();
+        } catch {
+            return 'occupied'; // 2xx 但非 JSON → 非本服务
+        }
+        const record = body as { ok?: unknown; service?: unknown; bridge_version?: unknown } | null;
+        const is_self = record !== null
+            && record.ok === true
+            && record.service === BRIDGE_SERVICE_ID
+            && typeof record.bridge_version === 'string'
+            && record.bridge_version.length > 0;
+        return is_self ? 'healthy' : 'occupied';
     } catch {
-        return false;
+        return 'unreachable';
     }
+}
+
+export async function is_bridge_healthy(bridge_url: string): Promise<boolean> {
+    return (await probe_bridge_health(bridge_url)) === 'healthy';
 }

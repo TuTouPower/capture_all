@@ -2,11 +2,11 @@
 tid: "t196"
 slug: "bridge_auth_logs_pairing"
 title: "Bridge 认证/日志/配对路径补全"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t196_bridge_auth_logs_pairing"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "67fa474fbd8ef0f89066cf4d3da5a760693dcac1"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,13 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t196_code_f001 | minor | 待处置 | 已修 | `handle_cdp_start({} as never)` 改 `{} as http.IncomingMessage`（类型规范） |
+| t196_test_f001 | minor | 待处置 | 已修 | AC-004 断言改宽松（匹配「## 026 pairing 窗口过期不自动续期」不含日期） |
 
 ### Round 1 场景说明
 

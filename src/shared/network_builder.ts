@@ -105,6 +105,7 @@ export function build_network_data(input: NetworkDataInput): NetworkRequestData 
         body_capture_mode: input.body_capture_mode,
         tab_id: input.tab_id,
         relative_time: input.relative_time,
+        relative_time_ms: input.relative_time,
         absolute_time: input.absolute_time,
         correlation_status: input.correlation_status,
         cdp_request_id: input.cdp_request_id,

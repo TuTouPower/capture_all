@@ -1,0 +1,20 @@
+{
+  "tid": "t161",
+  "attempt": 1,
+  "execution_id": "2ed3e1e793bb4589acf5e38b592f6a9a",
+  "status": "done",
+  "branch": "t161_fix_agent_query_pushdown",
+  "base_sha": "c4d1a729f9b01032648372262b7ef976cf49039a",
+  "tests": "npm test：1663 passed（新增 storage_keyset 7 + agent_query_pushdown 7 + storage_v4_migration 1）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL（2 critical + 1 minor）/ test FAIL（3 important）→ Round 2（f005/f004）→ Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/agent_query_pushdown.test.ts::AC-001 point_reads=1 / keyset_cursor_reads=0 点查只访问对应 store"],
+    "AC-002": ["tests/unit/agent_query_pushdown.test.ts::AC-002 limit=1 cursor_reads=1 + token 续页三页 50 条不重不漏总读取 50"],
+    "AC-003": ["tests/unit/agent_query_pushdown.test.ts::AC-003 count_reads=7 索引级 + AC-003b 生产形态 network 可查"],
+    "AC-004": ["tests/unit/storage_keyset.test.ts::三页 cursor 读取=23（退化 53 红）+ token 续页/时间窗口/desc/隔离", "tests/unit/storage_v4_migration.test.ts::legacy backfill 入索引"],
+    "AC-005": ["tests/unit/agent_query_pushdown.test.ts::AC-005a/b/c 下推 vs 纯函数对拍等价（记录/排序/offset/total/timeline）"]
+  },
+  "pending": [],
+  "findings": ["d008"]
+}

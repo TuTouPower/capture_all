@@ -359,6 +359,9 @@ export interface NetworkRequestData {
     body_capture_mode: BodyCaptureMode;
     tab_id?: number;
     relative_time?: number;
+    // t161: 复合索引 [capture_id, relative_time_ms, event_id] 的排序键——web_request 路径由
+    // build_network_data 复制 relative_time；legacy 记录由 DB v4 迁移补齐（见 storage.ts）
+    relative_time_ms?: number;
     absolute_time?: number;
     correlation_status?: NetworkCorrelationStatus;
     cdp_request_id?: string;

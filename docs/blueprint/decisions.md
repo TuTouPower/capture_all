@@ -174,3 +174,10 @@
 - 结论：选 B。metadata 版本信号 = `CaptureRecord.stats` 各计数（user_action+nav / request / log / error / storage / cookie，另加 `event_count` 总信号覆盖 ws_frame 等仅增事件数的写入），任一推进才读数据；无推进不读（保留主要性能收益）。
   - **实施调整（2026-08-13，review 实证）**：原「per-source offset 增量拉取」不可行——`query_by_store` 的 IDB index cursor 按 primary key（`event_id` 随机 UUID）字典序遍历，非写入追加序，offset 增量必然重读/漏读。改为：有推进时全量重建替换（正确性优先，成本仍只在变化时付出）；`SourceCounts` 锚点仅用于「无推进不读」判定。DOM 替换仍由 t144 signature 守卫。
 - 替代：A（基线行为，全量轮询）。t193 承接 UI 虚拟化（本方案不引入）。
+
+## 022 Agent 查询下推：keyset 分页与复合索引（2026-08-13）
+
+- 背景：`query_by_store` offset cursor 分页每页从头 skip（O(N²/PAGE_SIZE)）；MCP data.list/get/timeline/sources 先 Promise.all 加载七源全量再内存过滤，limit=1 也付全量成本。
+- 选项：A）保留全量加载 + 内存过滤；B）storage 层 keyset 分页（复合索引 `[capture_id, relative_time_ms, event_id]` + `IDBKeyRange.bound` 双界），谓词/order/limit 推入 IndexedDB。
+- 结论：选 B（DB_VERSION 3→4 迁移补复合索引，s006 spike + d008 实证）。keyset token = 末条 (relative_time_ms, event_id)，下界闭（cursor 停在「下一条起点」）；页读取量 O(limit)、页间时间序一致、capture 隔离、同刻按 event_id 继续。`data.get`/`timeline.get` 主键点查（store.get）；`sources.list` count/range 用 index.count + first/last cursor（不读记录体），types 为契约字段保留扫描；`captures.list` 用 started_at 索引方向直接排序 + count() total。对外返回契约不变（AC-005 gate）；纯函数路径保留供 get_all_data 与契约对拍。
+- 替代：A（基线）。全量遍历（get_all_data/export）保留，仅内部游标效率改进。

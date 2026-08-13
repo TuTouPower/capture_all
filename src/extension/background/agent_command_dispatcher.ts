@@ -1,13 +1,12 @@
 import type { AgentCommand, AgentCommandResult, AgentError, AgentErrorCode } from '../../shared/protocol';
-import { list_captures as storage_list_captures, get_capture } from './storage';
+import { list_captures as storage_list_captures, count_captures, get_capture } from './storage';
 import { export_har, export_html, export_json, export_jsonl } from './exporter';
 import {
-    get_entry_from_capture_data,
-    get_timeline_from_capture_data,
-    get_timeline_item_from_capture_data,
-    list_data_sources_from_capture_data,
-    list_entries_from_capture_data,
     load_agent_capture_data,
+    get_entry_pushdown,
+    list_entries_pushdown,
+    list_sources_pushdown,
+    get_timeline_pushdown,
     type AgentDataSource
 } from './agent_data_queries';
 import { DEFAULT_CONFIG } from '../../shared/constants';
@@ -53,24 +52,29 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
         case 'captures.get':
             return get_capture_metadata(get_required_capture_id(payload));
         case 'sources.list':
-            return list_data_sources_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)));
+            // t161 AC-003: 下推——count/range 用索引，不读记录体
+            return list_sources_pushdown(get_required_capture_id(payload));
         case 'data.list':
-            return list_entries_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
+            // t161 AC-002/004: 下推——读取量受 limit 约束，返回 next_token
+            return list_entries_pushdown(get_required_capture_id(payload), {
                 source: get_required_string(payload, 'source') as AgentDataSource,
                 offset: get_optional_non_negative_int(payload, 'offset'),
                 limit: get_optional_non_negative_int(payload, 'limit', 100000),
                 start_time: get_optional_number(payload, 'start_time'),
                 end_time: get_optional_number(payload, 'end_time'),
-                order: get_order(payload)
+                order: get_order(payload),
+                after: payload.after as { relative_time_ms: number; event_id: string } | undefined | null,
             });
         case 'data.get':
-            return get_entry_from_capture_data(
-                await load_agent_capture_data(get_required_capture_id(payload)),
+            // t161 AC-001: 点查——主键直查对应 store
+            return get_entry_pushdown(
+                get_required_capture_id(payload),
                 get_required_string(payload, 'source') as AgentDataSource,
                 get_required_string(payload, 'record_id')
             );
         case 'timeline.list':
-            return get_timeline_from_capture_data(await load_agent_capture_data(get_required_capture_id(payload)), {
+            // t161 AC-002: 下推——per-source keyset 有界读取后合并
+            return get_timeline_pushdown(get_required_capture_id(payload), {
                 sources: get_optional_sources(payload),
                 offset: get_optional_non_negative_int(payload, 'offset'),
                 limit: get_optional_non_negative_int(payload, 'limit', 100000),
@@ -79,8 +83,10 @@ async function execute_agent_command(command: AgentCommand, handlers: AgentRunti
                 order: get_order(payload)
             });
         case 'timeline.get':
-            return get_timeline_item_from_capture_data(
-                await load_agent_capture_data(get_required_capture_id(payload)),
+            // t161 AC-001: 点查（item_id 带 source 前缀）
+            return get_entry_pushdown(
+                get_required_capture_id(payload),
+                get_required_string(payload, 'item_id').split(':')[0] as AgentDataSource,
                 get_required_string(payload, 'item_id')
             );
         case 'capture.get_all_data':
@@ -134,14 +140,14 @@ async function list_captures(payload: Record<string, unknown>): Promise<unknown>
     const offset = get_optional_non_negative_int(payload, 'offset') ?? 0;
     const limit = get_optional_non_negative_int(payload, 'limit', 100000) ?? 100;
     const order = get_order(payload) ?? 'desc';
-    const captures = await storage_list_captures();
-    const sorted = [...captures].sort((a, b) => order === 'asc'
-        ? new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-        : new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+    // t161: 索引方向直接给出排序序（started_at prev=desc/next=asc），limit 截断读取量，
+    // 不再全量读取后二次排序再 slice；total 用 count() 轻量查询。
+    const direction = order === 'asc' ? 'next' : 'prev';
+    const captures = await storage_list_captures(offset + limit, direction);
 
     return {
-        total: sorted.length,
-        captures: sorted.slice(offset, offset + limit)
+        total: await count_captures(),
+        captures: captures.slice(offset, offset + limit)
     };
 }
 

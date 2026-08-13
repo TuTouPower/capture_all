@@ -72,7 +72,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- IndexedDB 复合索引与 keyset `lowerBound(last_key, true)` 在目标浏览器的行为：`UNVERIFIED-SPIKE`，执行期用最小 fixture 验证。
+- IndexedDB 复合索引与 keyset `lowerBound(last_key, true)` 在目标浏览器的行为：结论=复合索引 `[capture_id, relative_time_ms, event_id]` + 双界 `bound([c1,last_t,last_e],[c1,+Inf,+Inf],true,true)` 可行（s006 spike + d008 findings，2026-08-13 已实测）；单 lowerBound 会混入其他 capture，须双界；continuePrimaryKey 定位含自身且按 event_id 序破坏时间排序契约。
 
 ### 风险与回退
 

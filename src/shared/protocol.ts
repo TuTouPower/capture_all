@@ -77,6 +77,8 @@ export interface AgentQueryRange {
     start_time?: number;
     end_time?: number;
     order?: 'asc' | 'desc';
+    /** t161: keyset continuation token（data.list 响应 next_token 回传，续页从 last key 继续） */
+    after?: { relative_time_ms: number; event_id: string } | null;
 }
 
 export interface AgentDataSourceSummary {

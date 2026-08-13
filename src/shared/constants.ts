@@ -2,7 +2,7 @@
 import type { CaptureConfig } from './types';
 
 export const DB_NAME = 'capture_all_db';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const STORE_NAMES = {
     CAPTURES: 'captures',

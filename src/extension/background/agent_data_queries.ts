@@ -8,9 +8,16 @@ import {
     get_events_by_category,
     get_network_requests,
     get_storage_changes,
-    get_capture
+    get_capture,
+    query_by_store_keyset,
+    count_by_store_keyset,
+    first_last_keys_by_store,
+    get_store_record_by_id,
+    STORE_NAMES,
+    type KeysetToken,
 } from './storage';
 import { fetch_all_records } from '../shared/paged_reader';
+import type { KeysetPage } from './storage';
 
 export type AgentDataSource =
     | 'user_action_events'
@@ -325,4 +332,137 @@ function get_record_preview(source: AgentDataSource, record: AgentRecord): Recor
             return { name: cookie_change.name, domain: cookie_change.domain, removed: cookie_change.removed };
         }
     }
+}
+
+// ============================================================
+// t161: 下推查询路径——谓词/order/limit 推入 IndexedDB（keyset 分页，d008），
+// 不再先 Promise.all 加载七源全量再内存过滤。对外返回契约与纯函数路径等价（AC-005）。
+// ============================================================
+
+const SOURCE_STORE: Record<AgentDataSource, string> = {
+    user_action_events: STORE_NAMES.USER_ACTION_EVENTS,
+    navigation_events: STORE_NAMES.NAVIGATION_EVENTS,
+    network_requests: STORE_NAMES.NETWORK_REQUESTS,
+    console_events: STORE_NAMES.CONSOLE_EVENTS,
+    error_events: STORE_NAMES.ERROR_EVENTS,
+    storage_changes: STORE_NAMES.STORAGE_CHANGES,
+    cookie_changes: STORE_NAMES.COOKIE_CHANGES,
+};
+
+export interface AgentRecordListResultWithToken extends AgentRecordListResult {
+    next_token?: KeysetToken | null;
+}
+
+/** t161 AC-001: 点查——主键 store.get，只访问对应 store 对应记录（不触及其他六源）。 */
+export async function get_entry_pushdown(
+    capture_id: string,
+    source: AgentDataSource,
+    record_id: string,
+): Promise<AgentRecordDetail<AgentRecord>> {
+    const parsed = parse_record_id(record_id);
+    if (parsed.source !== source) {
+        throw new Error('RECORD_NOT_FOUND');
+    }
+    const record = await get_store_record_by_id<AgentRecord>(SOURCE_STORE[source], parsed.native_id);
+    // 主键为全局 event_id，校验归属 capture 防跨采集误查
+    if (!record || !record_belongs_to_capture(record, capture_id)) {
+        throw new Error('RECORD_NOT_FOUND');
+    }
+    return { record_id, source, data: record };
+}
+
+/** t161 AC-002/004: 单源 keyset 分页——读取量受 offset+limit 约束，不加载七源全量；
+ * 谓词（start/end）与 order 推入索引；返回 next_token 供下一页从 last key 继续。 */
+export async function list_entries_pushdown(
+    capture_id: string,
+    query: ListRecordsQuery,
+): Promise<AgentRecordListResultWithToken> {
+    const source = query.source;
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 100000;
+    const take = Math.max(1, offset + limit);
+    const page = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, {
+        limit: take,
+        start_time: query.start_time,
+        end_time: query.end_time,
+        direction: query.order === 'desc' ? 'prev' : 'next',
+        after: query.after,
+    });
+    // prev cursor 已降序（新→旧），next cursor 已升序——与纯函数 sort 语义一致，无需重排
+    const records = page.records.slice(offset, offset + limit);
+    const total = await count_by_store_keyset(SOURCE_STORE[source], capture_id, {
+        start_time: query.start_time,
+        end_time: query.end_time,
+    });
+    return {
+        total,
+        records: records.map((record, index) => to_record_preview(source, record, offset + index + 1)),
+        next_token: page.next_token,
+    };
+}
+
+/** t161 AC-003: sources.list 下推——count/range 用索引 count 与 first/last cursor（不读记录体）；
+ * types 为契约字段需扫描记录 type（见 spec 风险与回退标注）。 */
+export async function list_sources_pushdown(capture_id: string): Promise<AgentDataSourceSummary[]> {
+    const summaries = await Promise.all(ALL_SOURCES.map(async (source) => {
+        const store = SOURCE_STORE[source];
+        const count = await count_by_store_keyset(store, capture_id);
+        const { first, last } = await first_last_keys_by_store(store, capture_id);
+        const types = count > 0 ? await collect_source_types(source, capture_id) : [];
+        return { source, count, time_range: { start: first, end: last }, types };
+    }));
+    return summaries.filter(s => s.count > 0);
+}
+
+/** t161: timeline.list 下推——per-source keyset 各取前 (offset+limit) 条（读取量有界），
+ * 内存合并跨源排序后 slice；契约语义与纯函数等价。 */
+export async function get_timeline_pushdown(
+    capture_id: string,
+    query: TimelineQuery = {},
+): Promise<AgentRecordListResult> {
+    const sources = query.sources ?? ALL_SOURCES;
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 100000;
+    const take = Math.max(1, offset + limit);
+    const direction = query.order === 'desc' ? 'prev' : 'next';
+    const per_source = await Promise.all(sources.map(async (source) => {
+        const page = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, {
+            limit: take,
+            start_time: query.start_time,
+            end_time: query.end_time,
+            direction,
+        });
+        return page.records.map(record => ({ source, record }));
+    }));
+    const merged = per_source.flat()
+        .sort((a, b) => sort_records(a.record, b.record, query.order))
+        .slice(offset, offset + limit);
+    const total = (await Promise.all(sources.map(s => count_by_store_keyset(SOURCE_STORE[s], capture_id, {
+        start_time: query.start_time,
+        end_time: query.end_time,
+    })))).reduce((a, b) => a + b, 0);
+    return {
+        total,
+        records: merged.map((item, index) => to_record_preview(item.source, item.record, offset + index + 1)),
+    };
+}
+
+/** 点查归属校验（CaptureEvent 必有 capture_id；NetworkRequestData 可选） */
+function record_belongs_to_capture(record: AgentRecord, capture_id: string): boolean {
+    const cid = (record as { capture_id?: string }).capture_id;
+    return cid === undefined || cid === capture_id;
+}
+
+async function collect_source_types(source: AgentDataSource, capture_id: string): Promise<string[]> {
+    const types = new Set<string>();
+    let after: KeysetToken | null = null;
+    while (true) {
+        const page: KeysetPage<AgentRecord> = await query_by_store_keyset<AgentRecord>(SOURCE_STORE[source], capture_id, { limit: 5000, after });
+        for (const record of page.records) {
+            types.add(get_record_type(source, record));
+        }
+        if (!page.next_token) break;
+        after = page.next_token;
+    }
+    return Array.from(types).sort();
 }

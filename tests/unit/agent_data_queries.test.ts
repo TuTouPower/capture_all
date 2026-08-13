@@ -11,7 +11,8 @@ import {
 } from '../../src/extension/background/agent_data_queries';
 import type { CaptureEvent, CaptureRecord, ConsoleEventData, CookieChangeData, NetworkRequestData, RuntimeExceptionData, StorageChangeData } from '../../src/shared/types';
 
-vi.mock('../../src/extension/background/storage', () => ({
+vi.mock('../../src/extension/background/storage', async (import_original) => ({
+    ...await import_original<typeof import('../../src/extension/background/storage')>(),
     get_capture: vi.fn(),
     get_events_by_category: vi.fn(),
     get_network_requests: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../src/extension/background/storage', () => ({
     get_error_events: vi.fn(),
     get_storage_changes: vi.fn(),
     get_cookie_changes: vi.fn(),
+    // t161: 下推路径用到的 storage API——importOriginal 保留真实实现，测试覆盖旧路径用例不受影响
 }));
 
 import {

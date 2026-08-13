@@ -60,6 +60,21 @@ const DETECT_TIMEOUT_MS = 3000;
 // t150-f002: 轮询失败 warn 节流（500ms 轮询 → 每 10s 一条，防刷屏）
 let last_poll_fail_warn_ts = 0;
 
+// t158: CDP 会话 terminal 分类错误（410）。携带最后一次可观察事件与终止原因，
+// coordinator 据此停止 poll 并降级；`code` 供鸭子类型分类（不依赖 instanceof 跨 mock）。
+export class CdpSessionTerminalError extends Error {
+    readonly code = 'cdp_session_terminal';
+    readonly events: BridgeBodyEvent[];
+    readonly reason: string;
+
+    constructor(events: BridgeBodyEvent[], reason: string) {
+        super(`cdp_session_terminal:${reason}`);
+        this.name = 'CdpSessionTerminalError';
+        this.events = events;
+        this.reason = reason;
+    }
+}
+
 export async function detect_external_cdp(
     config: ExternalCdpBridgeConfig
 ): Promise<BridgeDetectResult> {
@@ -151,10 +166,21 @@ export async function poll_external_cdp_events(
             }
         );
 
-        if (!res.ok) return [];
+        // t158 AC-003: 404/410 不再统一降空数组——410 抛 CdpSessionTerminalError（带终态事件），
+        // 其他非 2xx 抛分类错误 cdp_poll_failed，由 coordinator 决定重试或停止。
+        if (res.status === 410) {
+            const data = await res.json().catch(() => null) as { events?: BridgeBodyEvent[]; error?: { reason?: string } } | null;
+            throw new CdpSessionTerminalError(data?.events ?? [], data?.error?.reason ?? 'ws_closed');
+        }
+        if (!res.ok) {
+            throw new Error(`cdp_poll_failed:${res.status}`);
+        }
         const data = await res.json();
         return data.events || [];
     } catch (err) {
+        if (err instanceof CdpSessionTerminalError) {
+            throw err; // terminal 分类错误原样上抛，不节流吞掉
+        }
         // B2-M14: 空 catch 补 warn（轮询失败返回空，下次重试）。t150-f002: 500ms 轮询失败
         // 会刷屏，节流到每 10s 一条。
         const now = Date.now();
@@ -162,7 +188,7 @@ export async function poll_external_cdp_events(
             logger.warn('External CDP poll fetch failed', { session_key, error: String(err) });
             last_poll_fail_warn_ts = now;
         }
-        return [];
+        throw err; // t158: 非 2xx 与网络错误不再静默降空数组，上抛供 coordinator 分类
     }
 }
 

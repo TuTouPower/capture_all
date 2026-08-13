@@ -27,6 +27,9 @@ interface CdpSession {
     body_seq_to_req_id: Map<number, string>;
     // t157 AC-005: 事件数淘汰产生的 evicted 终态待返回队列（不占 events 上限）
     evicted_events: CdpStoredEvent[];
+    // t158: 建连成功后 WS close/error 导致的 terminal 标记（幂等；session 保留供 /cdp/events 返回 410）
+    terminal_reason: string | null;
+    terminal_message: string | null;
 }
 
 interface CdpStoredEvent {
@@ -153,6 +156,33 @@ function destroy_session(session_key: string): void {
     sessions.delete(session_key);
 }
 
+// t158: 建连成功后 WS 异常关闭/错误 → 终态化 session（幂等）。
+// 终态化所有 pending 事件、关闭 WS；session 保留在 map 中供 /cdp/events 返回 410（terminal 可观察），
+// 并设 terminal TTL（5 分钟）自动销毁——即使调用方不主动 stop，内存也被回收（t158 f001）。
+function terminate_session(session: CdpSession, reason: string, message: string): void {
+    if (session.terminal_reason) return; // 幂等
+    session.terminal_reason = reason;
+    session.terminal_message = message;
+    // 终态化 pending 事件（不再永久 pending）
+    for (const evt of session.events) {
+        if (evt.response_body_status === 'pending') {
+            evt.response_body_status = 'cdp_failed';
+        }
+    }
+    // getResponseBody 命令不会再有响应，清理映射
+    session.body_seq_to_req_id.clear();
+    // 关闭 WS
+    if (session.cdp_ws) {
+        try { session.cdp_ws.close(); } catch {}
+        session.cdp_ws = null;
+    }
+    // terminal TTL：保留供 410 观察后自动销毁（destroy_session 幂等，stop 提前销毁也无害）
+    if (session.idle_timer) clearTimeout(session.idle_timer);
+    session.idle_timer = setTimeout(() => {
+        destroy_session(session.session_key);
+    }, CDP_SESSION_IDLE_TTL_MS);
+}
+
 // T101: 活动事件刷新 idle TTL
 function touch_session(session: CdpSession): void {
     session.last_activity = Date.now();
@@ -275,6 +305,8 @@ export async function handle_cdp_start(
             last_activity: Date.now(),
             body_seq_to_req_id: new Map<number, string>(),
             evicted_events: [],
+            terminal_reason: null,
+            terminal_message: null,
         };
 
         // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速）
@@ -316,6 +348,15 @@ export async function handle_cdp_start(
             bridge_warn('cdp_connect_failed', { session_key, port, connect: ws_connect, reason: session.connect_error });
             return { status: 200, body: { ok: false, error: { code: 'cdp_start_failed', message: msg } } };
         }
+
+        // t158: 建连成功后安装运行态 close/error 处理——WS 中断即终态化 session（
+        // 替代 t101 建连期 handler：后者只 resolve 已 settled promise，不清理、不暴露 failure）。
+        ws.onclose = () => {
+            terminate_session(session, 'ws_closed', 'CDP WebSocket closed');
+        };
+        ws.onerror = () => {
+            // onerror 后通常伴随 onclose；不单独终态，避免双路径竞态
+        };
 
         ws.onmessage = (event) => {
             try {
@@ -483,6 +524,23 @@ export async function handle_cdp_events(
         return { status: 404, body: { ok: false, events: [] } };
     }
 
+    // t158: terminal session 返回 410 + 终态化后的全部事件（含 evicted 待返回，不静默消失）+ 结构化错误
+    // （d007: 410 Gone 语义；stop 销毁后为 404，与 terminal 区分）。
+    if (session.terminal_reason) {
+        return {
+            status: 410,
+            body: {
+                ok: false,
+                events: [...session.events, ...session.evicted_events].map(serialize_cdp_event),
+                error: {
+                    code: 'cdp_session_terminal',
+                    reason: session.terminal_reason,
+                    message: session.terminal_message,
+                },
+            },
+        };
+    }
+
     // Return completed events and remove only the returned ones from the session
     // t157 AC-001: 返回时按实际 response_body 字节递减 body_bytes（统一走 decrement_body_bytes），
     // 预算只统计当前驻留事件字节，不再退化为累计写入量。
@@ -515,21 +573,26 @@ export async function handle_cdp_events(
 
     return {
         status: 200,
-        body: { ok: true, events: to_return.map(e => ({
-            request_id: e.request_id,
-            tab_id: e.tab_id,
-            url: e.url,
-            method: e.method,
-            status_code: e.status_code,
-            timestamp: e.timestamp,
-            resource_type: e.resource_type,
-            response_body: e.response_body,
-            response_body_status: e.response_body_status,
-            request_body: e.request_body,
-            request_body_status: e.request_body_status,
-            request_headers: e.request_headers,
-            response_headers: e.response_headers
-        })) }
+        body: { ok: true, events: to_return.map(serialize_cdp_event) }
+    };
+}
+
+// t158: 事件序列化（terminal 410 与正常 200 共用同一输出形态）
+function serialize_cdp_event(e: CdpStoredEvent): Record<string, unknown> {
+    return {
+        request_id: e.request_id,
+        tab_id: e.tab_id,
+        url: e.url,
+        method: e.method,
+        status_code: e.status_code,
+        timestamp: e.timestamp,
+        resource_type: e.resource_type,
+        response_body: e.response_body,
+        response_body_status: e.response_body_status,
+        request_body: e.request_body,
+        request_body_status: e.request_body_status,
+        request_headers: e.request_headers,
+        response_headers: e.response_headers
     };
 }
 

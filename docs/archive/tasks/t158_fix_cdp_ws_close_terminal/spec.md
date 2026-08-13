@@ -72,7 +72,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- terminal 状态 HTTP 码选择（410 vs 结构化 200）：`UNVERIFIED-SPIKE`，执行期按 `src/bridge` 现有错误码与 `/cdp/events` 调用方约束核实后定。
+- terminal 状态 HTTP 码选择：结论=410 + `{ ok:false, error:{ code:'cdp_session_terminal' } }`（s005 spike + d007 findings，2026-08-13 已实测核实调用方约束）；404 保留表示未知 session。
 
 ### 风险与回退
 

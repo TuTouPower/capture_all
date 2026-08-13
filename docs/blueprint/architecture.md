@@ -187,6 +187,12 @@ src/shared ──✗── 任何产品目录
 
 Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
+#### /cdp/events 终态契约（t158）
+
+- `200 { ok:true, events:[...] }`：正常返回 completed 事件（含 evicted 终态）；`404 { ok:false, events:[] }`：未知 session（未创建或已 stop 销毁）。
+- `410 { ok:false, events:[终态化后的全部事件], error:{ code:'cdp_session_terminal', reason, message } }`：session 因建连后 WS close/error 终止——pending 事件已终态化为 `cdp_failed`，调用方可读最后一批事件后停止轮询。
+- 扩展 client：410 抛 `CdpSessionTerminalError`（带 events + reason）；其他非 2xx 抛 `cdp_poll_failed`；不再静默降空数组。coordinator 对 terminal 停止 poll 并将状态置 `failed`（fallback hook 为既有降级路径）。
+
 ## 5. 数据流
 
 ### 5.1 采集流程

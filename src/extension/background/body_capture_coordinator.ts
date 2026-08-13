@@ -29,6 +29,9 @@ import { get_app_log_transport } from './app_log_storage';
 
 const logger = new Logger('background/body_capture', get_app_log_transport());
 
+// t158: 非 terminal 轮询失败 warn 节流（500ms 轮询 → 每 10s 一条，防刷屏，与 client 侧同口径）
+let last_poll_fail_warn_ts = 0;
+
 export interface CoordinatorDeps {
     get_active_tab_url: () => Promise<string | null>;
     get_bridge_config: () => Promise<ExternalCdpBridgeConfig>;
@@ -256,8 +259,41 @@ async function try_external_cdp_bridge(
                     deps.on_network_request(req);
                 }
             } catch (err) {
-                // best-effort：单次失败不终止轮询，下次重试（B2-M14: 空 catch 补 warn）
-                logger.warn('External CDP poll failed', { session_key, error: String(err) });
+                // t158 AC-004: terminal failure 停止 poll + 更新失败状态 + 主动 stop bridge session
+                // （释放内存，防 terminal session 驻留）；最后一批终态事件先写入。
+                // 其他错误 best-effort：单次失败不终止轮询，下次重试（warn 10s 节流）。
+                if (err && (err as { code?: string }).code === 'cdp_session_terminal') {
+                    const term = err as { events?: Array<unknown> };
+                    if (!poll_stopped) {
+                        for (const evt of term.events ?? []) {
+                            const req = convert_bridge_event_to_request(evt as BridgeBodyEvent, capture_id, start_time);
+                            deps.on_network_request(req);
+                        }
+                    }
+                    poll_stopped = true;
+                    if (coordinator_state) {
+                        coordinator_state = {
+                            ...coordinator_state,
+                            status: 'failed',
+                            message: 'External CDP bridge session terminated, body capture failed',
+                            poll_timer: undefined,
+                        };
+                    }
+                    logger.warn('External CDP session terminal', { session_key, error: String(err) });
+                    // t158 f001: 主动通知 bridge 销毁 terminal session（best-effort；TTL 兜底）
+                    try {
+                        const bridge_config = await deps.get_bridge_config();
+                        await stop_external_cdp(bridge_config, session_key);
+                    } catch {
+                        // best-effort，bridge 侧 terminal TTL 会兜底回收
+                    }
+                } else {
+                    const now = Date.now();
+                    if (now - last_poll_fail_warn_ts > 10_000) {
+                        logger.warn('External CDP poll failed', { session_key, error: String(err) });
+                        last_poll_fail_warn_ts = now;
+                    }
+                }
             } finally {
                 poll_in_flight = false;
                 if (!poll_stopped) {

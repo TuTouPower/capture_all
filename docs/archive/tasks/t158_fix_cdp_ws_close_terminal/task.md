@@ -2,11 +2,11 @@
 tid: "t158"
 slug: "fix_cdp_ws_close_terminal"
 title: "CDP WebSocket 关闭后终态化 session"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t158_fix_cdp_ws_close_terminal"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "4b5716a652ffcaee6a00a94fcceea5db909b4750"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 14:34 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t158_code_f001|important|已修|terminal session 泄漏：terminate_session 设 terminal TTL（5 分钟）自动 destroy 兜底；coordinator terminal 分支主动调 stop_external_cdp|src/bridge/cdp_handler.ts:117; src/extension/background/body_capture_coordinator.ts:278|
+|t158_code_f002|minor|已修|coordinator 非 terminal 失败 warn 加 10s 节流（与 client 侧同口径）|src/extension/background/body_capture_coordinator.ts:300|
+|t158_code_f003|minor|已修|terminal 保留 evicted_events 不清空，410 合并返回（不静默消失）|src/bridge/cdp_handler.ts:410 分支|
+|t158_test_f001|important|已修|client 网络错误回归补测试：fetch reject → 上抛（AC-003d）|tests/unit/cdp_client_terminal_error.test.ts:61|
+|t158_test_f002|minor|已修|补 401 鉴权失败 case（AC-003c）|tests/unit/cdp_client_terminal_error.test.ts:53|
+|t158_test_f003|minor|已修|AC-005 断言 socket.close 调用 + terminal TTL 自动回收（advance 5min → 404）|tests/unit/cdp_ws_close_terminal.test.ts:88|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +71,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/005 由 `cdp_ws_close_terminal.test.ts`（MockWebSocket：410 + error.code、pending→cdp_failed 可观察、WS/timer/映射清理 + TTL 回收）；AC-003 由 `cdp_client_terminal_error.test.ts`（410/404/401/网络错误分类）；AC-004 由 `body_capture_terminal_fallback.test.ts`（停 poll + 状态 failed + stop_external_cdp 释放 + 非 terminal 重试不回归）
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL（1 important + 2 minor）
+- Round 1 test：FAIL（1 important + 2 minor）
+- Round 2 code：PASS
+- Round 2 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+CDP WS post-open close 不再静默：建连后安装运行态 onclose 终态化 pending（cdp_failed）+ terminal TTL 自动回收；/cdp/events 410 + 结构化错误（d007）；client 404/410/网络错误抛分类错误不再降空数组；coordinator terminal 停 poll + 状态 failed + 主动释放 session，非 terminal 维持重试。

@@ -1,0 +1,20 @@
+{
+  "tid": "t173",
+  "attempt": 1,
+  "execution_id": "4dcac5d232f445569d27131911019159",
+  "status": "done",
+  "branch": "t173_fix_url_fragment_redaction",
+  "base_sha": "0a5442480a4d64aed8e4e70d1e55e01c4f6043dd",
+  "tests": "npm test：1709 passed（新增 url_fragment_redaction 13 用例）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code PASS/test FAIL（f001 critical 未触达）→ Round 2 code FAIL（f003 词表）→ Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/url_fragment_redaction.test.ts::AC-001 #access_token=SECRET 脱敏不保留 secret"],
+    "AC-002": ["tests/unit/url_fragment_redaction.test.ts::AC-002 #/route?token=SECRET 脱敏"],
+    "AC-003": ["tests/unit/url_fragment_redaction.test.ts::AC-003 普通锚点/无敏感 hash route 全串保形"],
+    "AC-004": ["tests/unit/url_fragment_redaction.test.ts::AC-004a/b/d 值泄漏形+编码 decode 失败整体 #[REDACTED]；AC-004c 路由名保形"],
+    "AC-005": ["tests/unit/url_fragment_redaction.test.ts::AC-005 encoded hash/query+hash 组合/相对 URL 回归"]
+  },
+  "pending": [],
+  "findings": []
+}

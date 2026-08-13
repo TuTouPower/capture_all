@@ -9,6 +9,8 @@ const SENSITIVE_HEADER_KEYS = [
 const SENSITIVE_HEADER_PATTERNS = ['token', 'key', 'secret', 'bearer'];
 
 const SENSITIVE_URL_PARAM_PATTERNS = ['token', 'key', 'secret', 'password', 'passwd', 'auth', 'credential', 'jwt'];
+// t173: fragment fail-closed 判定模式（解析失败/不可解析但含凭据 → 整体替换）
+const CREDENTIAL_HASH_PATTERNS = ['token', 'secret', 'password', 'passwd', 'api_key', 'apikey', 'credential', 'jwt', 'access_token', 'id_token', 'refresh_token'];
 
 // t114: 嵌套 query 递归脱敏深度上限，防深层嵌套链无限递归
 const NESTED_QUERY_MAX_DEPTH = 5;
@@ -161,47 +163,141 @@ export function redact_url(url: string, redact_query: boolean, _depth = 0, _allo
                 redacted = true;
             }
         }
+        // t173 SEC-006: fragment 结构感知脱敏——hash 可解析为 key=value/route query 时按
+        // query 敏感 key 规则脱敏；普通锚点与无敏感 hash 保形；解析失败命中 credential 模式
+        // fail-closed 替换整个 fragment。
+        if (parsed.hash) {
+            const redacted_hash = redact_hash(parsed.hash.slice(1), _depth, false);
+            if (redacted_hash !== null) {
+                parsed.hash = `#${redacted_hash}`;
+                redacted = true;
+            }
+        }
         // H3: 无敏感参数且无嵌套 query 改写时返回原串，不因 new URL 规范化破坏原始 URL 形态
         // （追加尾斜杠/降 host/参数重排会破坏回放与精确匹配）。
         return { url: redacted ? parsed.toString() : url, url_status: redacted ? 'redacted' : 'captured' };
     } catch {
-        // 相对 URL 或无法 parse：拆分 path、query、fragment 手动脱敏
+        return redact_relative_url(url, _depth, _allow_encoded);
+    }
+}
+
+// t173 f002: 相对 URL / 无法 parse 分支（拆分 path、query、fragment 手动脱敏）
+function redact_relative_url(url: string, depth: number, allow_encoded: boolean): RedactUrlResult {
         const hash_marker = url.indexOf('#');
         const without_hash = hash_marker === -1 ? url : url.slice(0, hash_marker);
         const hash_part = hash_marker === -1 ? '' : url.slice(hash_marker);
         const query_marker = without_hash.indexOf('?');
-        if (query_marker === -1) return { url, url_status: 'captured' };
+        if (query_marker === -1) {
+            // 无 query：hash 仍可能含凭据（相对路径 #token=SECRET 形式）
+            if (hash_part) {
+                const redacted_hash = redact_hash(hash_part.slice(1), depth, allow_encoded);
+                if (redacted_hash !== null) {
+                    return { url: `${without_hash}#${redacted_hash}`, url_status: 'redacted' };
+                }
+            }
+            return { url, url_status: 'captured' };
+        }
         const path_part = without_hash.slice(0, query_marker);
         const query_part = without_hash.slice(query_marker + 1);
-        const params = query_part.split('&');
-        let redacted = false;
-        const out_params = params.map((param) => {
-            const eq = param.indexOf('=');
-            const raw_key = eq === -1 ? param : param.slice(0, eq);
-            const value = eq === -1 ? '' : param.slice(eq + 1);
-            // T100: key 先 decode 再匹配（编码 key 场景）；param 值内嵌绝对 URL 时递归脱敏
-            let key: string;
-            try {
-                key = decodeURIComponent(raw_key);
-            } catch {
-                key = raw_key;
-            }
-            const lower_key = key.toLowerCase();
-            if (SENSITIVE_URL_PARAM_PATTERNS.some(pattern => lower_key.includes(pattern))) {
+        const redacted_query = redact_query_string(query_part, depth, allow_encoded);
+        let redacted = redacted_query !== null;
+        let final_hash = hash_part;
+        if (hash_part) {
+            const redacted_hash = redact_hash(hash_part.slice(1), depth, allow_encoded);
+            if (redacted_hash !== null) {
+                final_hash = `#${redacted_hash}`;
                 redacted = true;
-                return `${raw_key}=[REDACTED]`;
             }
-            // t114: 非敏感 key 的 value 内嵌 query 递归（plain 与 %3F/%3D 编码均覆盖）。
-            // allow_encoded 继承调用方语义：absolute 递归下来的嵌套已解码，不得再允许编码解码。
-            const nested_value = redact_nested_value(value, _depth, _allow_encoded);
-            if (nested_value !== null) {
-                redacted = true;
-                return `${raw_key}=${nested_value}`;
-            }
-            return param;
-        });
-        return { url: `${path_part}?${out_params.join('&')}${hash_part}`, url_status: redacted ? 'redacted' : 'captured' };
+        }
+        return { url: `${path_part}?${redacted_query ?? query_part}${final_hash}`, url_status: redacted ? 'redacted' : 'captured' };
+}
+
+// t173: query 字符串脱敏（相对分支与 fragment 共用）——返回 null 表示无敏感（保形）。
+function redact_query_string(query: string, depth: number, allow_encoded: boolean): string | null {
+    const params = query.split('&');
+    let redacted = false;
+    const out_params = params.map((param) => {
+        const eq = param.indexOf('=');
+        const raw_key = eq === -1 ? param : param.slice(0, eq);
+        const value = eq === -1 ? '' : param.slice(eq + 1);
+        // T100: key 先 decode 再匹配（编码 key 场景）；param 值内嵌绝对 URL 时递归脱敏
+        let key: string;
+        try {
+            key = decodeURIComponent(raw_key);
+        } catch {
+            key = raw_key;
+        }
+        const lower_key = key.toLowerCase();
+        if (SENSITIVE_URL_PARAM_PATTERNS.some(pattern => lower_key.includes(pattern))) {
+            redacted = true;
+            return `${raw_key}=[REDACTED]`;
+        }
+        // t114: 非敏感 key 的 value 内嵌 query 递归（plain 与 %3F/%3D 编码均覆盖）。
+        // allow_encoded 继承调用方语义：absolute 递归下来的嵌套已解码，不得再允许编码解码。
+        const nested_value = redact_nested_value(value, depth, allow_encoded);
+        if (nested_value !== null) {
+            redacted = true;
+            return `${raw_key}=${nested_value}`;
+        }
+        return param;
+    });
+    return redacted ? out_params.join('&') : null;
+}
+
+// t173 SEC-006: fragment 结构感知脱敏。返回 null 表示无敏感（保形）。
+// - hash 含 '?'（#/route?token=...）→ 拆 route 与 query，query 按规则脱敏
+// - hash 含 '='（#access_token=SECRET...）→ 直接按 query 规则脱敏
+// - 普通锚点 / 无敏感 hash route → 保形
+// - 无 query 但命中 credential 模式（解析失败/不可解析）→ fail-closed 替换整个 fragment
+function redact_hash(hash_body: string, depth: number, allow_encoded: boolean): string | null {
+    if (!hash_body) return null;
+    // AC-005: 编码的 hash 参数（%3D/%3F）——解码后按结构处理，再编码回写
+    if (hash_body.includes('%3D') || hash_body.includes('%3F')) {
+        let decoded: string;
+        try {
+            decoded = decodeURIComponent(hash_body);
+        } catch {
+            return hash_has_credential(hash_body) ? '[REDACTED]' : null;
+        }
+        const inner = redact_hash(decoded, depth, allow_encoded);
+        if (inner === null) {
+            return hash_has_credential(hash_body) ? '[REDACTED]' : null;
+        }
+        return encodeURIComponent(inner);
     }
+    const q_idx = hash_body.indexOf('?');
+    if (q_idx !== -1) {
+        const route = hash_body.slice(0, q_idx);
+        const query = hash_body.slice(q_idx + 1);
+        const redacted_query = redact_query_string(query, depth, allow_encoded);
+        if (redacted_query === null) {
+            // query 无敏感——route 仅「值泄漏形」（/token/SECRET 等）才 fail-closed；
+            // 普通路由名 /oauth/token 保形（f001）
+            return route_has_credential_value(route) ? '[REDACTED]' : null;
+        }
+        return `${route}?${redacted_query}`;
+    }
+    if (hash_body.includes('=')) {
+        // OAuth implicit / key=value 参数形式
+        const redacted_query = redact_query_string(hash_body, depth, allow_encoded);
+        if (redacted_query === null) {
+            return hash_has_credential(hash_body) ? '[REDACTED]' : null;
+        }
+        return redacted_query;
+    }
+    // 普通锚点 / 无 query hash route → 保形
+    return null;
+}
+
+function hash_has_credential(hash_body: string): boolean {
+    const lower = hash_body.toLowerCase();
+    return CREDENTIAL_HASH_PATTERNS.some(p => lower.includes(p));
+}
+
+// f001: route 值泄漏形判定——#/token/SECRET、#/password/xxx 等（路由段后跟值），
+// 普通路由名（#/oauth/token、#/settings/tokens）不触发 fail-closed
+function route_has_credential_value(route: string): boolean {
+    return /\/(token|password|passwd|secret|api[-_]?key|jwt|credential|access_token|id_token|refresh_token)\/[^\/?#]+/.test(route.toLowerCase());
 }
 
 export function truncate(str: string, max_bytes: number, enabled: boolean = true): string {

@@ -16,7 +16,7 @@
 - 大小写变体：Token / AUTH / API_KEY
 - 重复参数：全部保留并替换为 `[REDACTED]`
 
-不处理：URL fragment（产品语义未定）。
+处理：URL fragment（t173 结构感知脱敏）——hash 可解析为 key=value/`#/route?query` 时按 query 敏感 key 规则脱敏；普通锚点与无敏感 hash 保形；解析失败命中 credential 模式时替换整个 fragment（fail-closed）。
 
 ### Header 脱敏（`redact_headers`）
 

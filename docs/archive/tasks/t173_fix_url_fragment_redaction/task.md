@@ -2,11 +2,11 @@
 tid: "t173"
 slug: "fix_url_fragment_redaction"
 title: "URL fragment 脱敏"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t173_fix_url_fragment_redaction"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "0a5442480a4d64aed8e4e70d1e55e01c4f6043dd"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 19:38 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t173_code_f001|minor|已修|fail-closed 判定细化：route 仅「值泄漏形」（/token/SECRET）触发整体替换，普通路由名 /oauth/token 保形|src/shared/redaction.ts::route_has_credential_value|
+|t173_code_f002|minor|已修|redact_url 圈复杂度——抽 redact_relative_url 私有函数|src/shared/redaction.ts:185|
+|t173_test_f001|critical|已修|AC-004 未触达 fail-closed——改真实输入（#/token/SECRET?state=x、编码 decode 失败）断言整体 #[REDACTED]；新增 AC-004c 路由名保形|tests/unit/url_fragment_redaction.test.ts::AC-004a/b/c|
+|t173_test_f002|minor|已修|AC-003c 补 url_status + 全串相等断言|tests/unit/url_fragment_redaction.test.ts::AC-003c|
+|t173_test_f003|minor|已修|AC-005a 补 [REDACTED] 出现断言|tests/unit/url_fragment_redaction.test.ts::AC-005a|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +70,17 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 OAuth implicit #access_token 脱敏；AC-002 #/route?token 脱敏；AC-003 普通锚点/无敏感 hash route 保形；AC-004 值泄漏形 fail-closed（整体 #[REDACTED]）+ 路由名保形；AC-005 encoded hash/组合/相对 URL
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS（2 minor）/ test：FAIL（1 critical + 2 minor）
+- Round 2 code：FAIL（f003 important 新发现）/ test：PASS
+- Round 3 code：PASS / test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+URL fragment 结构感知脱敏：hash 可解析为 key=value/`#/route?query` 时按 query 敏感 key 规则脱敏（redact_query_string 复用）；普通锚点与无敏感 hash route 保形；route 值泄漏形（/token/SECRET、/access_token/abc 等）与编码 decode 失败 fail-closed 整体替换；encoded hash（%3D/%3F）解码递归。privacy_redaction.md 语义更新。

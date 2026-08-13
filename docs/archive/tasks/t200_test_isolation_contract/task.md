@@ -2,11 +2,11 @@
 tid: "t200"
 slug: "test_isolation_contract"
 title: "测试隔离与契约确认"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t200_test_isolation_contract"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "c04c71da3340b990555c1ea866e37f4bc98aaada"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -22,7 +22,9 @@ note: ""
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- AC-001：keepalive.test.ts 隔离加固——每用例 `vi.resetModules()` + 动态 import，模块级 `listener_registered` 幂等标志随重载回到初始态；chrome mock 每用例重建、`on_alarm_listener` 闭包重新捕获。验证：4 用例全量绿 + 逐个 `-t` 单跑绿 + `--sequence.shuffle` 重排绿。
+- AC-002：p049 核实——`stop_capture`（service_worker.ts:792）空闲态直接 `{success:true}`；`stop_capture_inner` 全路径恒 success:true（所有 step 经 run_stop_step catch 仅 log）；异常 rethrow 经 `to_agent_error` 转错误响应。dispatcher 的 success:false 分支实际不可达，结论：**保留防御**（接口类型允许 success:false，移除会与接口语义脱节）+ 语义注释，行为已有 t177 用例覆盖（success:false → idle）。
+- AC-003：全量 vitest 1921 通过 + tsc 干净，无回归。
 
 ## Review 处置
 
@@ -37,6 +39,10 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+### Round 1（review_level=full）
+
+零 finding（code PASS / test PASS）。
 
 ### Round 1 场景说明
 
@@ -60,24 +66,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 keepalive 隔离重构（resetModules + 动态 import，单用例/重排均绿）；AC-002 p049 结论落定（保留防御 + 注释，t177 用例覆盖）；AC-003 全量 vitest 1921 + tsc 干净；详见 `handoff.json` `ac_evidence`
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS
+- Round 1 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+测试隔离加固 + stop 分支契约确认，round 1 全 PASS 收官。

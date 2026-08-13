@@ -2,11 +2,11 @@
 tid: "t170"
 slug: "fix_cdp_ws_url_allowlist"
 title: "CDP WebSocket URL 限制到请求 loopback 端口"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t170_fix_cdp_ws_url_allowlist"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "053eb1d8a9f9755b2f1fef827c3857ca2c9e4cf3"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 18:45 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t170_code_f001|minor|已修|端口校验严格化：port 空（默认 80）也拒绝（须等于请求 port）|src/bridge/cdp_handler.ts:639|
+|t170_test_f001|important|已修|AC-001b 改非标准路径 fixture + 断言构造为 127.0.0.1 标准 URL（判别「构造 vs 信任 discovery」）|tests/unit/cdp_ws_url_allowlist.test.ts:69|
+|t170_test_f002|minor|已修|补 fragment 拒绝测试（AC-003d）+ 默认端口拒绝（AC-003e）|tests/unit/cdp_ws_url_allowlist.test.ts:143|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +68,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/001b 放行 + 构造 URL 断言（判别不信任 discovery）；AC-002 远端 host 拒绝；AC-003a/b/c/d/e 不同端口/wss/userinfo/fragment/默认端口拒绝；AC-004 畸形 URL/空 id 拒绝
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS（1 minor）/ test：FAIL（1 important + 1 minor）
+- Round 2 code：PASS / test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+CDP WebSocket URL allowlist 落地：`safe_cdp_ws_url` 校验 ws: + loopback host + 端口等于请求 port + 拒 credentials/fragment/畸形 URL，校验后用 target ID 自行构造 `ws://127.0.0.1:{port}/devtools/page/{id}`（不信任 discovery authority）；拒绝路径 400 `cdp_invalid_ws_url` 不建 session/WS。architecture.md 记录契约。

@@ -287,6 +287,23 @@ export async function handle_cdp_start(
             return { status: 200, body: { ok: false, error: { code: 'cdp_target_not_found', message: 'Target has no WebSocket URL' } } };
         }
 
+        // t170 SEC-002: discovery 返回的 WebSocket URL 不可信（占用 loopback 端口的恶意服务可返回
+        // 远端 wss:// 目标）。校验 scheme/host/port/credentials 后，用 target ID 自行构造
+        // 已知 loopback URL（ws://127.0.0.1:{port}/devtools/page/{id}），不信任 discovery authority。
+        const ws_url = safe_cdp_ws_url(target, port);
+        if (!ws_url) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: {
+                        code: 'cdp_invalid_ws_url',
+                        message: 'CDP WebSocket URL must be ws:// on loopback with the requested port',
+                    },
+                },
+            };
+        }
+
         const session_key = `cdp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         const session: CdpSession = {
             session_key,
@@ -309,8 +326,8 @@ export async function handle_cdp_start(
             terminal_message: null,
         };
 
-        // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速）
-        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        // Connect to CDP WebSocket（T101: 建立超时，onopen/超时竞速；t170: 使用校验后的 loopback URL）
+        const ws = new WebSocket(ws_url);
         let seq = 0;
         const body_seq_to_req_id = session.body_seq_to_req_id;
 
@@ -606,4 +623,24 @@ export async function handle_cdp_stop(body: Record<string, unknown>): Promise<{ 
 
 function headers_from_cdp(headers: Record<string, string>): Record<string, string> {
     return { ...headers };
+}
+
+// t170 SEC-002: CDP WebSocket URL allowlist——仅允许 ws: scheme + loopback host + 请求 port；
+// 拒绝 credentials/fragment/wss:/远端 host。校验通过后用 target ID 自行构造 loopback URL
+// （标准 CDP page target 路径 ws://127.0.0.1:{port}/devtools/page/{id}），不信任 discovery authority。
+function safe_cdp_ws_url(target: { id: string; webSocketDebuggerUrl: string }, port: number): string | null {
+    if (!target.id) return null;
+    try {
+        const u = new URL(target.webSocketDebuggerUrl);
+        if (u.protocol !== 'ws:') return null;
+        const host = u.hostname;
+        const is_loopback = host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
+        if (!is_loopback) return null;
+        if (u.port === '' || Number(u.port) !== port) return null;
+        if (u.username || u.password) return null;
+        if (u.hash) return null;
+    } catch {
+        return null;
+    }
+    return `ws://127.0.0.1:${port}/devtools/page/${encodeURIComponent(target.id)}`;
 }

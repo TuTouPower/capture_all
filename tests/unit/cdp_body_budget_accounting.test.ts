@@ -106,7 +106,7 @@ beforeEach(() => {
             url: 'https://example.com',
             title: 'Example',
             type: 'page',
-            webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/target-1',
+            webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/page/target-1',
         }],
     }));
     MockWebSocket.instance = null;

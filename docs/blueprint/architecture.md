@@ -187,6 +187,10 @@ src/shared ──✗── 任何产品目录
 
 Extension CDP → External CDP Bridge → Fallback Hook。详见 `docs/archive/specs/extension_capture.md` "网络采集路径"。
 
+#### CDP WebSocket authority allowlist（t170）
+
+`/cdp/start` 对 discovery 返回的 `webSocketDebuggerUrl` 做 URL 校验后，用 target ID 自行构造 loopback URL 连接（`ws://127.0.0.1:{port}/devtools/page/{id}`），不信任 discovery authority。允许条件：`ws:` scheme、hostname ∈ {127.0.0.1, localhost, [::1]}、端口等于请求 port；拒绝 `wss:`、远端 host、credentials、fragment、畸形 URL。
+
 #### /cdp/events 终态契约（t158）
 
 - `200 { ok:true, events:[...] }`：正常返回 completed 事件（含 evicted 终态）；`404 { ok:false, events:[] }`：未知 session（未创建或已 stop 销毁）。

@@ -166,3 +166,11 @@
   - **威胁模型边界**：防御对象是「仅读取 window nonce 的页面脚本」（直接全局访问）；对抗性页面（MutationObserver / DOM hook 拦截注入脚本文本）可窃取内联 secret——扩展与页面 MAIN world 同权，无隐藏共享通道，该暴露面不在本方案防御范围。
   - **断流规避**：注入脚本 guard 语义从「阻止重注入」改为「还原上次 hook 后重装」，保证 stop→start 后注入脚本持最新 secret，采集不断流。
 - 替代：t097 的 window-nonce 门控（保留为第一道防线，未废弃）。
+
+## 021 Dashboard 详情轮询增量机制（2026-08-13）
+
+- 背景：Dashboard 打开进行中 capture 详情时 2s 轮询无条件调用 `load_detail()` 全量重读 8 路 IndexedDB（每路上限 100000），大 capture 下每次轮询付出全量成本；t144 signature 对比在完整重读之后，只避免 DOM 替换。
+- 选项：A）保留全量轮询 + signature 后置对比；B）先轻量 metadata（`get_capture_data` 返回 stats）对比，计数推进才读数据；增量按 per-source offset 拉新增 append，仅排序新增边界；页面 hidden 暂停轮询。
+- 结论：选 B。metadata 版本信号 = `CaptureRecord.stats` 各计数（user_action+nav / request / log / error / storage / cookie，另加 `event_count` 总信号覆盖 ws_frame 等仅增事件数的写入），任一推进才读数据；无推进不读（保留主要性能收益）。
+  - **实施调整（2026-08-13，review 实证）**：原「per-source offset 增量拉取」不可行——`query_by_store` 的 IDB index cursor 按 primary key（`event_id` 随机 UUID）字典序遍历，非写入追加序，offset 增量必然重读/漏读。改为：有推进时全量重建替换（正确性优先，成本仍只在变化时付出）；`SourceCounts` 锚点仅用于「无推进不读」判定。DOM 替换仍由 t144 signature 守卫。
+- 替代：A（基线行为，全量轮询）。t193 承接 UI 虚拟化（本方案不引入）。

@@ -22,6 +22,11 @@ export interface CaptureSnapshot {
     cookie_changes: CaptureEvent[];
 }
 
+// t160 已移除的 SourceCounts/source_counts_from_snapshot/read_capture_snapshot_incremental：
+// IDB cursor 按 event_id 随机 UUID 字典序非追加序，offset 增量不可靠（review 实证）；
+// 详情轮询改为「stats 快照全分项增量比较」锚点（dashboard_shared `_detail_loaded_stats`），
+// 无推进不读、有推进全量重建，消除 stats 字段与 store 条数混合口径错位。
+
 export async function read_capture_snapshot(capture_id: string): Promise<CaptureSnapshot> {
     // t156: 全量分页读取（PAGE_SIZE=5000 逐类耗尽），替代固定 limit=100000 静默截断
     const [capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes] = await Promise.all([
@@ -36,3 +41,6 @@ export async function read_capture_snapshot(capture_id: string): Promise<Capture
     ]);
     return { capture, user_events, nav_events, network_requests, console_events, error_events, storage_changes, cookie_changes };
 }
+
+// t160 实施调整：IDB cursor 非追加序（event_id 随机 UUID），offset 增量不可靠（review 实证）。
+// 有推进时全量重建替换（正确性优先）；无推进不读（保留主要性能收益）。

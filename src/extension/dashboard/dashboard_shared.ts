@@ -1,5 +1,5 @@
 // dashboard/dashboard_shared.ts — 共享工具函数和常量
-import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig } from '../../shared/types';
+import type { CaptureRecord, CaptureEvent, NetworkRequestData, ConsoleEventData, UserConfig, CaptureStats } from '../../shared/types';
 import { DEFAULT_USER_CONFIG } from '../../shared/constants';
 import { escape_html as esc } from '../../shared/escape';
 import { format_system_time } from '../../shared/system_time';
@@ -285,22 +285,74 @@ export function merge_detail_events(
     ].slice().sort((a: CaptureEvent, b: CaptureEvent) => a.relative_time_ms - b.relative_time_ms);
 }
 
-export async function load_detail(id: string): Promise<void> {
-    set_detail_capture(null); set_detail_events([]); set_detail_network([]); set_detail_console([]);
+// t160: 详情轮询锚点——当前详情 capture 与上轮 stats 快照（f005/f006：stats 全分项增量比较，
+// 消除「stats 字段 vs store 条数」混合口径错位；ws_frame 等仅增 event_count 的写入无累计偏差）。
+let _detail_id: string | null = null;
+let _detail_loaded_stats: CaptureStats | null = null;
+export const _reset_detail_poll_state_for_test = () => { _detail_id = null; _detail_loaded_stats = null; };
+
+export async function load_detail(id: string, opts: { incremental?: boolean } = {}): Promise<void> {
     if (!is_extension) return;
+    // 全量模式（首次打开/切换 capture）清空内存态并重置锚点；增量模式保留
+    if (!opts.incremental) {
+        set_detail_capture(null); set_detail_events([]); set_detail_network([]); set_detail_console([]);
+        _detail_id = null;
+        _detail_loaded_stats = null;
+    }
     try {
         const r = await send_ui_message('get_capture_data', { capture_id: id });
         if (!r?.success) return;
-        set_detail_capture(r.data ?? null);
+        const capture = r.data ?? null;
+        set_detail_capture(capture);
+        if (!capture) {
+            set_detail_events([]); set_detail_network([]); set_detail_console([]);
+            _detail_id = null;
+            _detail_loaded_stats = null;
+            return;
+        }
+
+        const use_incremental = opts.incremental === true && _detail_id === id && _detail_loaded_stats !== null;
+        if (use_incremental) {
+            // t160 AC-001: metadata 计数未推进 → 不读数据（仅更新 capture record/状态）
+            if (!detail_counts_advanced(capture.stats, _detail_loaded_stats!)) {
+                logger.debug('Detail poll: metadata unchanged, skip data read', { capture_id: id });
+                return;
+            }
+            // t160 AC-002（实施调整）：有推进时全量重建替换——IDB cursor 非追加序（event_id 随机
+            // UUID），offset 增量不可靠（review 实证），正确性优先；成本仍只在变化时付出。
+            const snapshot = await read_capture_snapshot(id);
+            const events = merge_detail_events(id, snapshot);
+            set_detail_events(events);
+            set_detail_network(snapshot.network_requests);
+            set_detail_console(snapshot.console_events);
+            _detail_loaded_stats = { ...capture.stats };
+            logger.debug('Detail loaded (refresh)', { capture_id: id, events: events.length });
+            return;
+        }
 
         const snapshot = await read_capture_snapshot(id);
         const events = merge_detail_events(id, snapshot);
         set_detail_events(events);
         set_detail_network(snapshot.network_requests);
         set_detail_console(snapshot.console_events);
+        _detail_id = id;
+        _detail_loaded_stats = { ...capture.stats };
 
         logger.debug('Detail loaded', { capture_id: id, events: events.length });
     } catch { /* best effort */ }
+}
+
+// t160: stats 全分项增量比较——任一计数超过上轮快照即视为有新数据（口径统一为 stats 对 stats，
+// 覆盖 user/nav/request/log/error/storage/cookie/event_count 全部推进信号，含 ws_frame 只增 event_count）
+function detail_counts_advanced(s: CaptureStats, prev: CaptureStats): boolean {
+    return s.event_count > prev.event_count
+        || s.user_action_count > prev.user_action_count
+        || s.nav_count > prev.nav_count
+        || s.request_count > prev.request_count
+        || s.log_count > prev.log_count
+        || s.error_count > prev.error_count
+        || s.storage_change_count > prev.storage_change_count
+        || s.cookie_change_count > prev.cookie_change_count;
 }
 
 // p027: 导出 in-flight 标记（按 id+format key），防同一导出的重复触发并行执行；

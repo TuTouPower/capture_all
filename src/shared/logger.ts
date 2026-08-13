@@ -15,7 +15,7 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = {
     debug: 0, info: 1, warn: 2, error: 3, silent: 4,
 };
 
-let _global_level: LogLevel = 'debug';
+let _global_level: LogLevel = 'info';
 
 function truncate_bytes_safe(s: string, max_bytes: number): string {
     if (s.length * 3 <= max_bytes) return s; // 快速路径：UTF-8 上界每字符 3 字节

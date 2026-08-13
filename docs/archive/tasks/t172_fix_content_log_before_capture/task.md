@@ -2,11 +2,11 @@
 tid: "t172"
 slug: "fix_content_log_before_capture"
 title: "未采集时不记录页面 URL 到 app log"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t172_fix_content_log_before_capture"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "12a00f4a0934c529fc13e2871515ff8068df0119"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,14 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 19:20 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t172_code_f001|important|已修|重载恢复采集路径（status poll on_active）未应用 log_level——SW get_status 响应带 log_level，content on_active 应用|src/extension/background/service_worker.ts:337; src/extension/content/content_script.ts:81; src/extension/shared/poll_capture_status.ts:10|
+|t172_code_f002|important|已修|DEFAULT_USER_CONFIG.log_level 仍 debug（静态默认惰性）——改 info|src/shared/constants.ts:70|
+|t172_test_f001|minor|已修|补 AC-002c：on_active 应用 resp.log_level 静态断言|tests/unit/content_log_privacy.test.ts:AC-002c|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +68,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 content 模块级无 URL 日志（静态扫描）；AC-002 start 消息 + status poll 双路径应用 log_level（silent/warn 行为）；AC-003 默认 info（logger + user_config 一致）；AC-004 测试通过
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：FAIL（2 important）/ test：PASS（3 minor）
+- Round 2 code：PASS / test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+Content 加载 URL 日志泄漏修复：删除模块级 `Content script loaded` URL 日志；log level 由 SW/user config 下发（start 消息 + get_status 双路径，含重载恢复采集 on_active），silent/warn 时 content 不写 info；默认日志级别改 info（logger 静态默认 + DEFAULT_USER_CONFIG 一致）。decisions 无新增（spec Finalization 无 blueprint 项）。

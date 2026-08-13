@@ -13,6 +13,8 @@ export interface CaptureStatusResponse {
     start_time?: number;
     tab_id?: number;
     config?: unknown;
+    /** t172: content log level（SW/user config 下发，重载恢复采集路径应用） */
+    log_level?: string;
 }
 
 export interface PollDeps {

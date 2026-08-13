@@ -1,5 +1,5 @@
 // content/content_script.ts
-import type { CaptureConfig, CaptureEvent, EventType, RouteChangeData, DomReadyData, PageLoadData } from '../../shared/types';
+import type { CaptureConfig, CaptureEvent, EventType, RouteChangeData, DomReadyData, PageLoadData, LogLevel } from '../../shared/types';
 import { create_content_event, get_relative_time } from './content_event_utils';
 import { start_mouse_capture, stop_mouse_capture } from './mouse_capture';
 import { start_keyboard_capture, stop_keyboard_capture } from './keyboard_capture';
@@ -38,11 +38,16 @@ if (window !== window.top) {
     frame_id = Math.floor(Math.random() * 1000000);
 }
 
-logger.info('Content script loaded', { url: window.location.href });
+// t172 SEC-004: 删除模块加载时的 URL 日志（未开始 capture 访问页面不得产生含页面 URL 的
+// app log 条目；含 iframe/hash/fragment credential）。URL 相关日志仅 active capture 后记录。
 
 chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: any) => void) => {
     logger.debug('Content received message', { action: message.action });
     if (message.action === 'start') {
+        // t172 AC-002: log level 由 SW/user config 下发，Logger 创建后应用（silent/warn 时不写 info）
+        if (typeof message.log_level === 'string') {
+            Logger.set_level(message.log_level as LogLevel);
+        }
         capture_id = message.capture_id ?? '';
         capture_start_epoch_ms = message.capture_start_epoch_ms ?? Date.now();
         tab_id = message.tab_id ?? 0;
@@ -75,6 +80,10 @@ const stop_status_poll = start_status_poll({
             .catch(() => null),
     on_active: (resp: CaptureStatusResponse): void => {
         if (is_capturing) return;
+        // t172 f001: 重载恢复采集路径同样应用 user config 下发的 log level
+        if (typeof resp.log_level === 'string') {
+            Logger.set_level(resp.log_level as LogLevel);
+        }
         capture_id = resp.capture_id ?? '';
         capture_start_epoch_ms = resp.start_time ?? Date.now();
         tab_id = resp.tab_id ?? 0;

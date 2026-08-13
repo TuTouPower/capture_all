@@ -67,6 +67,6 @@ export const DEFAULT_USER_CONFIG = {
     agent_bridge_token: '',
     agent_bridge_poll_interval_ms: 1000,
     browser_label: '',
-    log_level: 'debug' as const,
+    log_level: 'info' as const,
     log_max_size_mb: 100,
 };

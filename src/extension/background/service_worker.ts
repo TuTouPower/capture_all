@@ -333,7 +333,9 @@ async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: 
                 config: current_config,
                 start_time,
                 tab_id: sender?.tab?.id ?? current_capture?.tab_id ?? 0,
-                body_capture: get_body_capture_result()
+                body_capture: get_body_capture_result(),
+                // t172 f001: content 重载恢复采集路径（status poll on_active）应用 log level
+                log_level: (await load_user_config()).log_level,
             });
         case 'get_capture_data':
             return wrap_result(await get_capture_data(payload?.capture_id as string));
@@ -742,6 +744,8 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
             capture_id: capture_id,
             capture_start_epoch_ms: start_time,
             tab_id: tab.id,
+            // t172 AC-002: content log level 由 user config 下发（silent/warn 时 content 不写 info）
+            log_level: (await load_user_config()).log_level,
         }, { label: 'start' });
         if (ok) {
             logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
@@ -1190,6 +1194,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
         capture_id: cap_id,
         capture_start_epoch_ms: cap_start,
         tab_id: activeInfo.tabId,
+        // t172 AC-002: content log level 由 user config 下发
+        log_level: (await load_user_config()).log_level,
     }, { label: 'start-on-activate' });
     if (!capture_state.is_active_generation(gen)) return;
     if (start_ok) {

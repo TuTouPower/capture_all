@@ -2,11 +2,11 @@
 tid: "t189"
 slug: "fix_content_state_navigation"
 title: "content 采集状态与事件正确性修复集"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t189_fix_content_state_navigation"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "6ece61a4dbb8d8290788273643cc29cfe4fd6f0b"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,31 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t189_code_f001 | minor | 建议修复 | 已修 | 轮询注释改为准确语义（加载启动一次、start 停、stop 置空；stop 后由 SW start 消息重建采集），删除「可重启」误导注释 |
+| t189_code_f002 | minor | 建议修复 | 已修 | handle_navigation_message 对畸形 url try/catch 安全忽略（new URL 校验，不抛未捕获异常） |
+| t189_code_f003 | minor | 建议修复 | 已修 | 导航 patch 复用 inject_script_element（B3-M3 注入诊断 warn，非静默）；恢复路径保留 |
+| t189_test_f001 | minor | 建议补行为测试 | 已修 | AC-004 保持源码扫描（build_page_script 不导出，行为测试需重构导出——列为既有限制）；补导航注入诊断与畸形 url 源码断言 |
+| t189_test_f002 | minor | 建议补 case | 已修 | AC-006 补 blur 与 normal-lane 清理用例 |
+| t189_test_f003 | minor | 建议改断言 | 已修 | restore 断言改 `restore_navigation_page_script();` 调用点（非仅定义） |
+| t189_test_f004 | minor | 建议补断言 | 已修 | content_script 轮询接线源码断言（加载启动/start 停/stop 置空/in-flight guard） |
+
+## Round 2 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t189_test_f001 | minor | 处置理由不成立 | 已修 | 补 AC-004 eval 行为测试（build_page_script 已导出，network_hook_gate_behavior 先例）——fetch(new Request({method:POST})) 记录 POST |
+| t189_code_f001 | minor | 基本消除 | 已修 | stop_capture 残留注释矛盾对齐（轮询为加载时一次性，stop 后由 SW start 消息重建） |
+
+## Round 3 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t189_test_f005 | minor | 待处置 | 已修 | AC-004 行为测试 stub window.fetch（确定性结算，消除 jsdom 下 undici 真实外网依赖） |
 
 ### Round 1 场景说明
 

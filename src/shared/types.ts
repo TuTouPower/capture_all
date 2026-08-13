@@ -266,7 +266,8 @@ export interface PageNavigationData {
 export interface RouteChangeData {
     from_url: string;
     to_url: string;
-    route_action: 'push_state' | 'replace_state' | 'hash_change';
+    // t189 AC-001: 扩展 back_forward——popstate（back/forward）不再标为 push_state
+    route_action: 'push_state' | 'replace_state' | 'hash_change' | 'back_forward';
     from_path: string | null;
     to_path: string | null;
     title: string | null;

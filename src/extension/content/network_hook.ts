@@ -238,7 +238,11 @@ export function build_page_script(
         send: XMLHttpRequest.prototype.send,
     };
     window.fetch = function(input, init) {
-        var method = (init && init.method) || 'GET';
+        // t189 AC-004: fetch(new Request('/api', {method:'POST'})) 的 method 取 Request.method，
+        // 原实现只看 init.method 误记 GET
+        var method = (init && init.method)
+            || (typeof input !== 'string' && input instanceof Request ? input.method : null)
+            || 'GET';
         var url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
         var start = performance.now();
 

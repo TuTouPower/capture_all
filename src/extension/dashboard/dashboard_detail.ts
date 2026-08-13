@@ -691,31 +691,42 @@ function wire_lane_pointerdown(
             // t144: 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断
             _tl_dragging = true;
             const mv = (ev: PointerEvent) => seek(ev.clientX);
-            const up = (ev: PointerEvent) => {
+            // t189 AC-006: finish 统一处理 pointerup/pointercancel/lostpointercapture/blur——
+            // 任一结束路径都清 _tl_dragging，详情轮询不再永久跳过刷新
+            const finish_marker = (ev: PointerEvent | Event) => {
                 window.removeEventListener('pointermove', mv);
-                window.removeEventListener('pointerup', up);
+                window.removeEventListener('pointerup', finish_marker);
+                window.removeEventListener('pointercancel', finish_marker);
+                window.removeEventListener('lostpointercapture', finish_marker);
+                window.removeEventListener('blur', finish_marker);
                 _tl_dragging = false;
-                const dx = ev.clientX - marker_start_x;
-                const dy = ev.clientY - marker_start_y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist <= 3 && marker_el) {
-                    const idx_str = marker_el.dataset.eventIdx;
-                    if (idx_str != null) {
-                        const idx = parseInt(idx_str, 10);
-                        const ev = detail_events[idx];
-                        if (ev) {
-                            update_playhead((ev.relative_time_ms / maxT) * 100);
-                            const same_event = get_dt_sel() === idx && get_dt_insp_open();
-                            set_dt_sel(idx);
-                            set_dt_insp_open(true);
-                            if (!same_event) router.render_content();
+                const p_ev = ev as PointerEvent;
+                if (p_ev.clientX !== undefined) {
+                    const dx = p_ev.clientX - marker_start_x;
+                    const dy = p_ev.clientY - marker_start_y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist <= 3 && marker_el) {
+                        const idx_str = marker_el.dataset.eventIdx;
+                        if (idx_str != null) {
+                            const idx = parseInt(idx_str, 10);
+                            const evt = detail_events[idx];
+                            if (evt) {
+                                update_playhead((evt.relative_time_ms / maxT) * 100);
+                                const same_event = get_dt_sel() === idx && get_dt_insp_open();
+                                set_dt_sel(idx);
+                                set_dt_insp_open(true);
+                                if (!same_event) router.render_content();
+                            }
                         }
                     }
                 }
                 marker_el = null;
             };
             window.addEventListener('pointermove', mv);
-            window.addEventListener('pointerup', up);
+            window.addEventListener('pointerup', finish_marker);
+            window.addEventListener('pointercancel', finish_marker);
+            window.addEventListener('lostpointercapture', finish_marker);
+            window.addEventListener('blur', finish_marker);
             return;
         }
         // Normal lanes drag — non-marker area
@@ -723,9 +734,19 @@ function wire_lane_pointerdown(
         set_dt_insp_open(false);
         router.render_content();
         const mv = (ev: PointerEvent) => seek(ev.clientX);
-        const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+        // t189 AC-006: normal lane 同样统一 pointerup/pointercancel/lostpointercapture/blur 清理
+        const finish_lane = () => {
+            window.removeEventListener('pointermove', mv);
+            window.removeEventListener('pointerup', finish_lane);
+            window.removeEventListener('pointercancel', finish_lane);
+            window.removeEventListener('lostpointercapture', finish_lane);
+            window.removeEventListener('blur', finish_lane);
+        };
         window.addEventListener('pointermove', mv);
-        window.addEventListener('pointerup', up);
+        window.addEventListener('pointerup', finish_lane);
+        window.addEventListener('pointercancel', finish_lane);
+        window.addEventListener('lostpointercapture', finish_lane);
+        window.addEventListener('blur', finish_lane);
     });
 }
 

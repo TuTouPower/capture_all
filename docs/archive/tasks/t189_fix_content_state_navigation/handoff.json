@@ -1,0 +1,21 @@
+{
+  "tid": "t189",
+  "attempt": 1,
+  "execution_id": "febe5626408c4faa999406db7ba76291",
+  "status": "done",
+  "branch": "t189_fix_content_state_navigation",
+  "base_sha": "6ece61a4dbb8d8290788273643cc29cfe4fd6f0b",
+  "tests": "npm test：1838 passed（新增 content_state_navigation_fixes 15 + timeline_marker AC-006 2 用例）",
+  "blackbox": "npm test（退出码 0）&& npx tsc --noEmit 通过",
+  "review": "4 轮闭环：Round 1 code PASS/test PASS（3+4 minor）→ Round 2（AC-004 行为测试补足 + 注释对齐）→ Round 3（+f005 stub fetch 去外网）→ Round 4 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["content_state_navigation_fixes.test.ts::popstate 标 back_forward、pushState/replaceState patch postMessage、restore 调用点、inject_script_element 注入诊断、畸形 url 安全忽略、route_action 枚举"],
+    "AC-002": ["content_state_navigation_fixes.test.ts::start 消息 sender.frameId 更新 frame_id（源码断言）"],
+    "AC-003": ["content_state_navigation_fixes.test.ts::jsdom round-trip：特殊字符 id/class + nth-of-type 场景 querySelector === target（_build_css_path_for_test）"],
+    "AC-004": ["content_state_navigation_fixes.test.ts::eval(build_page_script) 行为测试：fetch(new Request({method:POST})) 记录 POST（stub fetch 确定性）"],
+    "AC-005": ["content_state_navigation_fixes.test.ts::in-flight guard（stop 后响应不触发 on_active）+ 可重启新实例 + content_script 接线源码断言"],
+    "AC-006": ["dashboard_timeline_marker.test.ts::marker 拖拽 pointercancel/lostpointercapture/blur 清理 _tl_dragging + normal-lane 清理"]
+  },
+  "pending": [],
+  "findings": []
+}

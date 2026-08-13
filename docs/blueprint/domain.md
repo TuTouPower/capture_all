@@ -63,6 +63,10 @@ UI 层 7 个标签：用户行为 / 页面导航 / 网络请求 / 控制台 / �
 
 `dom_data` 和 `capture_lifecycle` 不在 UI 标签中展示。
 
+### SPA 导航 `route_action` 枚举（t189）
+
+`RouteChangeData.route_action`：`push_state`（`history.pushState` 被 patch 捕获）/ `replace_state`（`history.replaceState`）/ `hash_change`（hash 变化）/ `back_forward`（`popstate`——back/forward，不再误标 `push_state`）。
+
 ## 4. 禁用术语
 
 以下历史概念已从 UI 与文档完全移除，禁止在产品代码、用户文案、文档中使用：

@@ -75,7 +75,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- `sender.frameId` 在各 target 类型下的可用性：`UNVERIFIED-SPIKE`，执行期最小扩展复现验证。
+- `sender.frameId` 在各 target 类型下的可用性：结论=content script 经 `chrome.runtime.onMessage` 发送消息时 `sender.frameId` 恒可用（MV3 平台保证，`MessageSender.frameId: number`，主 frame=0，子 frame>0；2026-08-13 按 chrome.runtime API 文档核实——onMessage sender 携带发送 frame 的 frameId，非跨域 iframe 也适用）。background 侧 listener 直接读取；content 内部事件以 start 消息的 sender.frameId 替代现随机数。
 
 ### 风险与回退
 

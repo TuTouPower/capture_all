@@ -105,7 +105,11 @@ src/
 │   ├── dashboard/                # 主面板
 │   │   ├── dashboard.html / dashboard.ts
 │   │   ├── dashboard_captures.ts / dashboard_detail.ts / dashboard_settings.ts
-│   │   ├── dashboard_integrations.ts / dashboard_shared.ts
+│   │   ├── dashboard_integrations.ts
+│   │   ├── dashboard_shared.ts    # façade + router 接线（t186）
+│   │   ├── dashboard_state.ts     # 显式 DashboardState + factory/reset（t186）
+│   │   ├── dashboard_data.ts      # load/export 数据服务（t186）
+│   │   └── dashboard_format.ts    # 纯函数（格式化/KIND/merge_detail_events）（t186）
 │   │   ├── sidebar_resize.ts / icons.ts
 │   │   └── *.css                 # Shell / pages / detail / views 样式
 │   ├── devtools/                 # DevTools 面板（轻量入口）
@@ -179,6 +183,10 @@ src/shared ──✗── 任何产品目录
 ### 4.3 Popup / Dashboard / DevTools
 
 见 `docs/archive/specs/dashboard.md`。
+
+### Dashboard 分层（t186）
+
+`dashboard_shared.ts` 拆为：`dashboard_state.ts`（显式 `DashboardState` + `create_dashboard_state`/`reset_dashboard_state` factory，模块默认实例承载既有 getter/setter）、`dashboard_data.ts`（load_captures/load_detail/export_capture）、`dashboard_format.ts`（纯函数）。router 由入口 `wire_dashboard_router()` 一次性显式接线，未接线调用抛明确错误（不再静默 no-op）；`is_tl_dragging` 由 dashboard.ts 注入 detail 的 getter，detail 不再反向覆写 router。
 
 ### 4.4 Agent / MCP 系统
 

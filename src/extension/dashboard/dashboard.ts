@@ -10,10 +10,11 @@ import {
     get_page, set_page,
     get_detail_capture, get_detail_events, get_detail_network, get_detail_console,
     load_captures, load_detail,
+    wire_dashboard_router,
     router,
 } from './dashboard_shared';
 import { render_captures, wire_captures } from './dashboard_captures';
-import { render_detail, wire_detail, open_detail } from './dashboard_detail';
+import { render_detail, wire_detail, open_detail, get_tl_dragging } from './dashboard_detail';
 import { render_settings, wire_settings } from './dashboard_settings';
 import { render_current, wire_simple_open, render_exports, wire_exports } from './dashboard_integrations';
 
@@ -92,11 +93,15 @@ function render_content(): void {
     else { c.innerHTML = render_captures(); wire_captures(); }
 }
 
-// ── inject router into shared (breaks circular deps) ────────────────────
-router.go = go;
-router.render_content = render_content;
-router.render_shell = render_shell;
-router.open_detail = open_detail;
+// ── wire router into shared (breaks circular deps) ──────────────────────
+// t186 AC-002: 一次性显式接线；未接线调用抛明确错误（不再静默 no-op）
+wire_dashboard_router({
+    go,
+    render_content,
+    render_shell,
+    open_detail,
+    is_tl_dragging: get_tl_dragging,
+});
 
 // ── init ────────────────────────────────────────────────────────────────
 async function init(): Promise<void> {

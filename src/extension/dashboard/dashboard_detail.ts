@@ -19,8 +19,9 @@ import {
 } from './dashboard_shared';
 
 // t144: timeline 拖拽标记——轮询 render 检查，拖拽期间不整页重渲染打断 pointermove。
+// t186: 不再反向覆写 router；由 dashboard.ts 入口经 wire_dashboard_router 注入 getter。
 let _tl_dragging = false;
-router.is_tl_dragging = () => _tl_dragging;
+export const get_tl_dragging = () => _tl_dragging;
 
 const DT_TABS: [string, keyof I18nStrings][] = [
     ['overview', 'overview'], ['timeline', 'timeline'], ['user_action', 'capUser'],

@@ -2,11 +2,11 @@
 tid: "t186"
 slug: "refactor_dashboard_shared"
 title: "Dashboard shared 状态与依赖重构"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t186_refactor_dashboard_shared"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "dcbf2b75f714be2249504c29a53f3cc6e699047e"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,19 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t186_code_f001 | important | 待处置 | 已修 | `dashboard_timeline_marker.test.ts` beforeEach 补 `wire_dashboard_router`（pointerdown handler 调 router.render_content，未接线抛错导致 vitest Errors 退出码 1）——同 t154 做法 |
+| t186_test_f001 | important | 待处置 | 已修 | 同 code f001——timeline_marker 测试显式 wire router；全量 `npm test` 退出码 0（191 文件 1817 用例，无 Errors） |
+
+## Round 2 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t186_code_f002 | minor | 待处置 | 已修 | wire 提升至 dashboard_timeline_marker.test.ts 文件级 beforeEach（覆盖全部 7 个 describe，不依赖跨 describe 状态残留） |
 
 ### Round 1 场景说明
 

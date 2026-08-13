@@ -1,0 +1,19 @@
+{
+  "tid": "t186",
+  "attempt": 1,
+  "execution_id": "1408d76f2dd749efad73f68803fbe400",
+  "status": "done",
+  "branch": "t186_refactor_dashboard_shared",
+  "base_sha": "dcbf2b75f714be2249504c29a53f3cc6e699047e",
+  "tests": "npm test：1817 passed（新增 dashboard_shared_split 8 用例；既有 dashboard 测试全绿 exit 0）",
+  "blackbox": "npm test（退出码 0，无 Errors）&& npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code FAIL/test FAIL（timeline_marker 未 wire 致退出码 1 important）→ Round 2 双 PASS（+code f002 minor wire 落点）→ Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["既有 dashboard 相关测试全绿（dashboard_timeline_marker 33 / t154 16 / detail_zoom 等），npm test 退出码 0——行为与页面表现不变"],
+    "AC-002": ["tests/unit/dashboard_shared_split.test.ts::router 未 wire 时 go/render_content/is_tl_dragging 抛 /router not wired/；wire 后转发到注入 callbacks"],
+    "AC-003": ["tests/unit/dashboard_shared_split.test.ts::create_dashboard_state 独立实例互不影响 + reset_dashboard_state 恢复初始；t154/timeline_marker 每例显式 wire（文件级 beforeEach）"],
+    "AC-004": ["tests/unit/dashboard_shared_split.test.ts::state/data/format 三模块存在、shared 为 façade（无 export_capture/load_detail 定义）、state 无 send_ui_message、data 无渲染、format 无模块级可变状态"]
+  },
+  "pending": [],
+  "findings": []
+}

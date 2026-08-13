@@ -5,6 +5,7 @@ import {
     set_detail_events, set_dt_quick, set_dt_play, set_dt_zoom,
     set_dt_view, set_dt_sel, set_dt_insp_open,
     get_dt_play, get_dt_sel, get_dt_insp_open,
+    wire_dashboard_router,
 } from '../../src/extension/dashboard/dashboard_shared';
 import type { CaptureEvent } from '../../src/shared/types';
 
@@ -39,6 +40,13 @@ async function load_module() {
     render_trace = mod.render_trace as unknown as () => string;
     wire_detail = mod.wire_detail as unknown as () => void;
 }
+
+// t186 AC-002/003: 文件级 beforeEach 显式 wire router——覆盖全部 describe（不依赖跨 describe 状态残留）
+beforeEach(() => {
+    wire_dashboard_router({
+        go: () => {}, render_content: () => {}, render_shell: () => {}, open_detail: () => {}, is_tl_dragging: () => false,
+    });
+});
 
 // ── data-event-idx attribute ──
 

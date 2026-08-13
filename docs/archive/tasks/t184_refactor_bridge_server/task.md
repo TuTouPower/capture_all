@@ -2,11 +2,11 @@
 tid: "t184"
 slug: "refactor_bridge_server"
 title: "Bridge server 路由拆分"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t184_refactor_bridge_server"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "0375202077e2b59ad857ab5b287a8240ce5db84f"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,22 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t184_code_f001 | minor | 待处置 | 已修 | 路由分发恢复旧严格 URL 匹配语义（原样 request.url：pair 4 端点精确、command 兼容 `?` 前缀、mcp/cdp 前缀 + handler 内精确匹配），边界输入状态码/认证行为与重构前一致（AC-004） |
+| t184_code_f002 | minor | 待处置 | 已修 | 删除 registry.ts 死代码 `export type { AgentCommandType }` 及对应 import |
+| t184_code_f003 | minor | 待处置 | 已修 | `BRIDGE_VERSION` 移入 config.ts 单一来源（server /health 与 registry build_status 共用），消除双份 |
+| t184_test_f001 | minor | 待处置 | 已修 | remove_instance 断言改函数体作用域（replace/sweep 体内 `this.remove_instance(id)`）+ 标题修正（cancel_all 直接 clear 不经过） |
+
+## Round 2 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t184_code_f001 | minor | 修不彻底 | 已修 | 分发改 method+URL 联合匹配（pair 4 端点 / extension 4 端点带 method），错误 method 请求落入 else 认证兜底 → 未认证 401（与重构前一致） |
+| t184_test_f002 | minor | 待处置 | 已修 | sweep 作用域断言后边界改 `\n    remove_instance`（get_or_create_queue 锚点位于目标之前导致退化） |
 
 ### Round 1 场景说明
 

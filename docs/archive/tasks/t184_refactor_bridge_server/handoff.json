@@ -1,0 +1,19 @@
+{
+  "tid": "t184",
+  "attempt": 1,
+  "execution_id": "913db092c07c46fbb01f11c78a3b3379",
+  "status": "done",
+  "branch": "t184_refactor_bridge_server",
+  "base_sha": "0375202077e2b59ad857ab5b287a8240ce5db84f",
+  "tests": "npm test：1804 passed（新增 bridge_registry_refactor 7 用例；既有 server 测试全绿 gate）",
+  "blackbox": "npm test && npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code PASS/test PASS（3+1 minor：分发边界、死代码、版本双份、断言锚点）→ Round 2 f001 残留 + test f002 → Round 3 双 PASS（method+URL 联合分发实证 401 恢复）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/agent_bridge_server.test.ts（87）+ t137_bridge_security.test.ts（11）全绿——行为等价重构 gate"],
+    "AC-002": ["tests/unit/bridge_registry_refactor.test.ts::replace_instance_by_label 行为（顶替删旧 + queue cancel + owner 清）；enroll/heartbeat 调用点恰 2 处；remove_instance 为 sweep/replace 唯一删除路径（函数体作用域断言）"],
+    "AC-003": ["tests/unit/bridge_registry_refactor.test.ts::create_route_handlers 4 handler + RouteResult {status,body}；send_json 不在 handler 内（server 层发送）"],
+    "AC-004": ["agent_bridge_server/t137 全绿 + reviewer 边界实证：method+URL 联合分发下错误 method/query 变体状态码与重构前一致（GET /pair/open 401、/mcp/status?x=1 404、/extension/command? 401 等 15 组）"]
+  },
+  "pending": [],
+  "findings": []
+}

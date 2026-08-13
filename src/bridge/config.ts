@@ -178,6 +178,8 @@ export async function resolve_bridge_token(
 const BRIDGE_HEALTH_TIMEOUT_MS = 3000;
 // t183: 产品标识单一事实来源（server /health 与 probe 识别共用；测试防漂移）
 export const BRIDGE_SERVICE_ID = 'capture-all-bridge';
+// t184: Bridge 产品版本单一来源（server /health 与 registry build_status 共用，防双份漂移）
+export const BRIDGE_VERSION = '0.1.0';
 
 // t183: 健康探测三态——main 启动判定与 SessionStart hook（--probe）共用同一逻辑
 export type BridgeHealthStatus = 'healthy' | 'occupied' | 'unreachable';

@@ -123,6 +123,7 @@ src/
 ├── bridge/                       # Bridge 产品（HTTP 服务器 + 命令队列 + CDP）
 │   ├── main.ts                   # 入口（`npm run bridge`）
 │   ├── server.ts                 # HTTP 服务器（/health, /mcp/command, /extension/command …）
+│   ├── registry.ts               # BridgeRegistry：instances/queues/owners + 顶替/移除/sweep（t184）
 │   ├── command_queue.ts          # 命令队列
 │   ├── config.ts                 # Bridge CLI/环境变量配置
 │   └── cdp_handler.ts            # 外部 CDP 检测/启动/停止/事件
@@ -263,6 +264,10 @@ Agent → MCP 工具调用
 - 测试输出：`artifacts/test-results/`。
 
 Bridge/MCP 产物为 esbuild bundled ESM，不依赖 tsx 和 node_modules，可直接 `node bridge.mjs` 运行。
+
+### Bridge server 路由分层（t184）
+
+`create_bridge_server` 为薄壳（registry/pairing 状态构造 + `http.createServer` + CORS/异常映射/发送）；4 个 route handler（`handle_pair_route` / `handle_extension_route` / `handle_mcp_route` / `handle_cdp_route`）各自返回统一 `{status, body}`。实例注册表集中到 `BridgeRegistry`（`registry.ts`）：`replace_instance_by_label` 统一 enroll/heartbeat 的 label 顶替清理，`remove_instance` 为唯一删除路径（sweep/顶替/close 复用）。
 
 ### /health 识别契约（t183）
 

@@ -88,8 +88,9 @@ describe('t179 AC-003: TARGET_REQUIRED/TARGET_AMBIGUOUS 文档与实现一致', 
     });
 
     it('实现 resolve_target：未指定 target 多实例返回 TARGET_REQUIRED，AMBIGUOUS 仅 label 多匹配', () => {
-        const src = readFileSync(resolve(root, 'src/bridge/server.ts'), 'utf8');
-        const fn = src.split('function resolve_target')[1] ?? '';
+        // t184: resolve_target 随 BridgeRegistry 移至 registry.ts
+        const src = readFileSync(resolve(root, 'src/bridge/registry.ts'), 'utf8');
+        const fn = src.split('resolve_target(payload')[1] ?? '';
         // 无 target 多实例的 else 兜底分支返回 TARGET_REQUIRED
         expect(fn).toMatch(/code: 'TARGET_REQUIRED'/);
         // AMBIGUOUS 只在显式 label 命中多实例分支（matches.length > 1）返回

@@ -2,11 +2,11 @@
 tid: "t159"
 slug: "fix_24h_duration_limit"
 title: "执行 24 小时采集上限"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t159_fix_24h_duration_limit"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "82f2ae38bc799a20bac6016d56cde9d0000dd6b1"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 15:05 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t159_code_f001|minor|已修|arm 检测 runtime.lastError 回退 timer；disarm clear rejection 处理|src/extension/background/duration_limit.ts:36|
+|t159_code_f002|minor|已修|cleanup 恢复分支加 rec.status==='capturing' 守卫，防 completed 采集复活|src/extension/background/service_worker.ts:150|
+|t159_code_f003|minor|已修|抽 build_capture_stopped_event 共用（stop 主路径 + 过期终态化）|src/extension/background/service_worker.ts:270|
+|t159_test_f001|important|已修|集成测试补 reason 断言：AC-003 write_events reason=max_duration；新增 AC-001 alarm 到期主链（invoke onAlarm → stop reason max_duration）|tests/unit/duration_limit_sw_integration.test.ts:120,163|
+|t159_test_f002|minor|已修|AC-005 单测改名 AC-001d，删除先装后卸死代码|tests/unit/duration_limit.test.ts:72|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +70,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/002/005 由 `duration_limit.test.ts`（arm when=now+24h、disarm、fallback timer）+ 集成 AC-001（onAlarm → stop reason max_duration）；AC-003/004 由 `duration_limit_sw_integration.test.ts`（deadline 已过终态化 reason + 清键 / 未过重建 alarm）；AC-005 由 MAX_SESSION_DURATION_MS 生产引用 + reason 可达断言
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS（3 minor）
+- Round 1 test：FAIL（1 important + 1 minor）
+- Round 2 code：FAIL（f004 新发现 1 important）
+- Round 2 test：PASS
+- Round 3 code：PASS
+- Round 3 test：FAIL（test_f003 断言层级假绿 1 important）
+- Round 4 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+24h 时长上限落地执行：start 持久化截止时间 + 注册 chrome.alarms（MV3），到期 stop_capture('max_duration')；SW 重启截止已过立即终态化（reason max_duration）、未过恢复运行态重建 alarm；stop 清 alarm 与 deadline 键；domain.md 同步执行机制。

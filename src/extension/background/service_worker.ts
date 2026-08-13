@@ -18,6 +18,7 @@ import { set_self_origin_excludes } from './cdp_handler';
 import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
 import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
 import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
+import { arm_duration_limit, disarm_duration_limit, is_duration_alarm, compute_deadline_ms } from './duration_limit';
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
 import { redact_url } from '../../shared/redaction';
 import { create_base_event, get_relative_time } from '../../shared/event_utils';
@@ -37,7 +38,7 @@ import type {
     BodyCaptureStartResult,
 } from '../../shared/types';
 import { type UiAction, type UiResponse } from '../../shared/message_contract';
-import { DEFAULT_CONFIG, DEFAULT_USER_CONFIG } from '../../shared/constants';
+import { DEFAULT_CONFIG, DEFAULT_USER_CONFIG, MAX_SESSION_DURATION_MS } from '../../shared/constants';
 
 const logger = new Logger('background/sw', get_app_log_transport());
 
@@ -135,10 +136,35 @@ export async function cleanup_stale_capture_state(): Promise<void> {
         const result = await chrome.storage.local.get([
             'is_capturing', 'current_capture',
             'active_capture_id', 'active_capture_start_ms', 'active_capture_config', 'active_capture_generation',
+            'active_capture_deadline_ms',
         ]);
         const stale_capture_id = result.active_capture_id as string | undefined;
         const legacy_active = result.is_capturing || stale_capture_id;
         if (legacy_active) {
+            const deadline_ms = result.active_capture_deadline_ms as number | undefined;
+
+            // t159 AC-004: 截止时间未过——恢复运行态并重建 alarm，剩余时间内到期仍能停止。
+            // 采集子系统（网络/console 等）不恢复（t159 范围仅时长限制），到期 stop 正常终态化。
+            // f002: 仅当采集确为进行中才恢复（stop 中途 SW 终止的窄窗口下 record 已 completed，不复活）。
+            if (typeof deadline_ms === 'number' && Date.now() < deadline_ms) {
+                const rec = (result.current_capture as CaptureRecord | null)
+                    ?? (stale_capture_id ? await get_capture(stale_capture_id).catch(() => null) : null);
+                if (rec && rec.status === 'capturing') {
+                    current_capture = rec;
+                    current_capture_id = rec.capture_id;
+                    start_time = deadline_ms - MAX_SESSION_DURATION_MS;
+                    is_capturing = true;
+                    current_config = (result.active_capture_config as CaptureConfig | undefined) ?? DEFAULT_CONFIG;
+                    await arm_duration_limit(deadline_ms, () => {
+                        stop_capture('max_duration').catch((err: unknown) => {
+                            logger.error('Duration limit stop failed after restore', serialize_error(err));
+                        });
+                    });
+                    logger.info('Restored active capture with duration limit', { capture_id: rec.capture_id });
+                    return;
+                }
+            }
+
             logger.warn('Detected stale capturing state, cleaning up', { stale_capture_id });
             // t148: 终态化前 flush 剩余缓冲事件，保证已落库数据不丢
             // （t038 每次写入已立即落库，此处防御性兜底；flush 失败不阻断清键，storage 损坏时至少清键不卡死）
@@ -148,6 +174,8 @@ export async function cleanup_stale_capture_state(): Promise<void> {
                 logger.warn('Stale cleanup flush failed, continuing finalize', { error: String(flush_err).slice(0, 80) });
             }
             const stale_capture = (result.current_capture as CaptureRecord | null) ?? null;
+            // t159 AC-003: 截止时间已过——终态化 reason 记 max_duration
+            const deadline_expired = typeof deadline_ms === 'number' && Date.now() >= deadline_ms;
             if (stale_capture?.capture_id) {
                 await update_capture({
                     ...stale_capture,
@@ -157,6 +185,9 @@ export async function cleanup_stale_capture_state(): Promise<void> {
                         ? Date.now() - new Date(stale_capture.started_at).getTime()
                         : 0,
                 });
+                if (deadline_expired) {
+                    await write_duration_expired_event(stale_capture);
+                }
             } else if (stale_capture_id) {
                 // 仅有 active_capture_id 无完整 record：按 id 加载并终态化
                 try {
@@ -170,6 +201,9 @@ export async function cleanup_stale_capture_state(): Promise<void> {
                                 ? Date.now() - new Date(rec.started_at).getTime()
                                 : 0,
                         });
+                        if (deadline_expired) {
+                            await write_duration_expired_event(rec);
+                        }
                     }
                 } catch (err) {
                     logger.warn('Failed to load stale capture by id', { stale_capture_id, err: String(err).slice(0, 80) });
@@ -182,10 +216,48 @@ export async function cleanup_stale_capture_state(): Promise<void> {
                 active_capture_start_ms: null,
                 active_capture_config: null,
                 active_capture_generation: null,
+                active_capture_deadline_ms: null,
             });
             logger.info('Stale capture state cleaned up');
         }
     });
+}
+
+// t159 AC-003: 时长上限过期终态化时写 capture_stopped 事件（reason=max_duration）
+async function write_duration_expired_event(rec: CaptureRecord): Promise<void> {
+    try {
+        const started_ms = rec.started_at ? new Date(rec.started_at).getTime() : Date.now();
+        const duration_ms = rec.started_at ? Date.now() - started_ms : 0;
+        // f004: start_time 传采集开始（非 0），get_relative_time 产出相对时长而非绝对 epoch
+        await write_events([build_capture_stopped_event(rec, 'max_duration', duration_ms, started_ms)]);
+    } catch (err) {
+        logger.warn('Failed to write duration expired event', { error: String(err).slice(0, 80) });
+    }
+}
+
+// t159 f003: capture_stopped 事件构造唯一入口（stop 主路径与过期终态化共用）
+function build_capture_stopped_event(
+    rec: CaptureRecord,
+    reason: CaptureStoppedData['reason'],
+    duration_ms: number,
+    start_time: number,
+): CaptureEvent {
+    const stopped_event = create_base_event({
+        capture_id: rec.capture_id,
+        category: 'capture_lifecycle',
+        type: 'capture_stopped',
+        relative_time_ms: get_relative_time(start_time),
+        tab_id: rec.tab_id,
+        url: rec.start_url,
+        source: 'background',
+    });
+    const stopped_data: CaptureStoppedData = {
+        capture_id: rec.capture_id,
+        reason,
+        duration_ms,
+        stats: rec.stats,
+    };
+    return { ...stopped_event, data: stopped_data };
 }
 
 setTimeout(() => {
@@ -196,6 +268,16 @@ setTimeout(() => {
 
 // Setup keepalive listener
 setup_keepalive_listener();
+
+// t159: 采集时长上限 alarm——到期 stop_capture('max_duration')（stop_capture 经 run_exclusive 串行，安全）。
+// chrome.alarms 由 MV3 manifest 保证存在；`?.` 防御非扩展环境（测试/未知宿主）。
+chrome.alarms?.onAlarm?.addListener((alarm) => {
+    if (is_duration_alarm(alarm.name)) {
+        stop_capture('max_duration').catch((err: unknown) => {
+            logger.error('Duration limit stop failed', serialize_error(err));
+        });
+    }
+});
 
 // Message handler
 // 三端消息契约：请求 { action, payload? }，响应 { success, data?, error? }（shared/message_contract.ts）。
@@ -683,6 +765,18 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     }
 
     logger.info('Capture started');
+    // t159: 注册 24h 时长上限——先持久化截止时间（SW 重启恢复读取），再注册 alarm
+    try {
+        const deadline_ms = compute_deadline_ms(start_time);
+        await chrome.storage.local.set({ active_capture_deadline_ms: deadline_ms });
+        await arm_duration_limit(deadline_ms, () => {
+            stop_capture('max_duration').catch((err: unknown) => {
+                logger.error('Duration limit timer expired but stop failed', serialize_error(err));
+            });
+        });
+    } catch (err) {
+        logger.warn('Failed to arm duration limit', { error: String(err).slice(0, 80) });
+    }
     return { success: true };
 }
 
@@ -763,24 +857,12 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
     });
 
     // 4. 写 stopped lifecycle event + 更新 CaptureRecord（含 drain 后的最终 stats）
-    if (current_capture && current_capture_id) {
+    const cap = current_capture;
+    if (cap && current_capture_id) {
         const duration_ms = Date.now() - start_time;
-        const stopped_event = create_base_event({
-            capture_id: current_capture_id,
-            category: 'capture_lifecycle',
-            type: 'capture_stopped',
-            relative_time_ms: get_relative_time(start_time),
-            tab_id: current_capture.tab_id,
-            url: current_capture.start_url,
-            source: 'background',
-        });
-        const stopped_data: CaptureStoppedData = {
-            capture_id: current_capture_id,
-            reason,
-            duration_ms,
-            stats: current_capture.stats,
-        };
-        await run_stop_step('write_stopped_event', () => write_events([{ ...stopped_event, data: stopped_data }]));
+        await run_stop_step('write_stopped_event', () => write_events([
+            build_capture_stopped_event(cap, reason, duration_ms, start_time),
+        ]));
 
         await run_stop_step('update_capture', async () => {
             const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -798,7 +880,8 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
         await run_stop_step('flush_stopped_event', () => flush_all());
     }
 
-    // 5. 清空持久化活跃采集状态
+    // 5. 清空持久化活跃采集状态 + t159: 取消时长上限 alarm
+    await run_stop_step('disarm_duration_limit', () => disarm_duration_limit());
     await run_stop_step('clear_active_capture_state', async () => {
         try {
             await chrome.storage.local.set({
@@ -806,6 +889,7 @@ async function stop_capture_inner(reason: CaptureStoppedData['reason'] = 'user_s
                 active_capture_start_ms: null,
                 active_capture_config: null,
                 active_capture_generation: null,
+                active_capture_deadline_ms: null,
             });
         } catch (err) {
             logger.warn('Failed to clear active capture state', { error: String(err).slice(0, 80) });

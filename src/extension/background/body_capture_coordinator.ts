@@ -322,7 +322,8 @@ async function try_external_cdp_bridge(
     }
 }
 
-function convert_bridge_event_to_request(
+// t198 AC-003: 导出供相对时间 clamp 单测（evt.timestamp 绝对 epoch → relative 相对采集起点）
+export function convert_bridge_event_to_request(
     evt: BridgeBodyEvent,
     capture_id: string,
     start_time: number,

@@ -10,6 +10,7 @@ import {
     count_by_store_keyset,
     first_last_keys_by_store,
     get_store_record_by_id,
+    get_events_by_category,
     STORE_NAMES,
     _storage_stats_for_test,
     _reset_storage_stats_for_test,
@@ -38,11 +39,11 @@ beforeEach(async () => {
     _reset_storage_stats_for_test();
 });
 
-function make_event(i: number, capture_id = 'c1', relative_time_ms = i * 10): CaptureEvent {
+function make_event(i: number, capture_id = 'c1', relative_time_ms = i * 10, category: CaptureEvent['category'] = 'user_action'): CaptureEvent {
     return {
         event_id: `evt_${String(i).padStart(4, '0')}`,
         capture_id,
-        category: 'user_action',
+        category,
         type: 'mouse_event',
         relative_time_ms,
         absolute_time: '2026-01-01T00:00:00Z',
@@ -140,5 +141,17 @@ describe('storage keyset 分页', () => {
         const rec = await get_store_record_by_id<CaptureEvent>('user_action_events', 'evt_0007');
         expect(rec?.event_id).toBe('evt_0007');
         expect(await get_store_record_by_id<CaptureEvent>('user_action_events', 'evt_missing')).toBeNull();
+    });
+
+    it('t198 AC-004: dom_data 类别事件落 USER_ACTION_EVENTS store（路由断言）', async () => {
+        // dom_data 无专属 store（DD-007 已删 dom_mutation 事件），CATEGORY_STORE_MAP 映射回 fallback
+        await write_events([make_event(9, 'c1', 100, 'dom_data')]);
+        const by_category = await get_events_by_category('c1', 'dom_data');
+        expect(by_category.length).toBe(1);
+        expect(by_category[0].event_id).toBe('evt_0009');
+        expect(by_category[0].category).toBe('dom_data');
+        // 与 user_action 同 store：按 store 名查询可见
+        const by_store = await get_store_record_by_id<CaptureEvent>('user_action_events', 'evt_0009');
+        expect(by_store?.event_id).toBe('evt_0009');
     });
 });

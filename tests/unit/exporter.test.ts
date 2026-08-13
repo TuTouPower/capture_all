@@ -226,6 +226,20 @@ describe('exporter', () => {
             const parsed = extract_embedded_json(result) as { events: Array<{ data: { text: string } }> };
             expect(parsed.events[0].data.text).toBe('</script><script>alert(1)</script>');
         });
+
+        it('t198 AC-002: total_size_kb 为实际序列化字节数（>0 且与内嵌 JSON 相符）', async () => {
+            // fixture 含非 ASCII（多字节）字符——锁定「字节数」语义：若生产回归为字符计数口径，
+            // 期望值（TextEncoder 字节数）与展示值（字符数 round）不一致，用例变红
+            (get_capture as any).mockResolvedValue({ ...mock_capture, capture_id: '测试采集' });
+            (get_events_by_category as any).mockResolvedValue([{ type: 'user_action', data: { text: '中文标题 & <em>强调</em>' } }]);
+            const result = await export_html('测试采集');
+            const parsed = extract_embedded_json(result) as { capture: { capture_id: string } };
+            expect(parsed.capture.capture_id).toBe('测试采集');
+            // total_size_kb 是内嵌完整采集数据的实际字节数（B2-L1 改版后不再用虚构系数估算）
+            const actual_bytes = new TextEncoder().encode(JSON.stringify(parsed)).length;
+            const expected_kb = Math.round(actual_bytes / 1024);
+            expect(result).toContain(`<span>${expected_kb} KB</span>`);
+        });
     });
 
     describe('export_har', () => {

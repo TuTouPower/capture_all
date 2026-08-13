@@ -2,11 +2,11 @@
 tid: "t163"
 slug: "strengthen_e2e_assertions"
 title: "E2E 断言质量补强"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t163_strengthen_e2e_assertions"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "a3d617317ea15f4021c7bf6efc892849f7b9ddae"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -44,6 +44,15 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
+### Round 1 (2026-08-13 17:30 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|------|------|------|------|------|
+|t163_gen_f001|important|已修|error tab key 由 events 改 error（DT_TABS 实际 key）|tests/e2e/e2e-console-errors.spec.ts:70|
+|t163_gen_f002|important|已修|error tab 不渲染异常消息——改断言 runtime_exception 分类（event_title 对 error 显示 type）|tests/e2e/e2e-console-errors.spec.ts:74|
+|t163_gen_f003|important|已修|console tab 容器为 .dt-list——选择器补充|tests/e2e/e2e-detail-tabs.spec.ts:67|
+|t163_gen_f004|minor|已修|console level 分类改断言 .lvl-tag[data-lvl="error"]（不被消息子串稀释）|tests/e2e/e2e-console-errors.spec.ts:62|
+
 ### Round N (YYYY-MM-DD HH:MM UTC+8)
 
 有 finding 时用本表；每条 finding 一行。
@@ -60,24 +69,16 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 cdp-retry 唯一 marker/body captured/非 fallback_hook；AC-002 HAR entry body 含 E2E_API_MARKER；AC-003 确定性新事件严格增长 + marker；AC-004 marker 分类隔离 + lvl-tag；AC-005 容器缺失 fail；AC-006 颜色值断言 + 删占位
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
-`full`：
-
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
 `single`：
 
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 general：FAIL（3 important + 1 minor）
+- Round 2 general：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+6 个 E2E 文件弱断言强化为数据-backed 断言：CDP retry 用本地 fixture 唯一 marker（E2E_LOG_MARKER/E2E_API_MARKER）验证 console/body 恢复且非 fallback_hook；HAR 断言 /api/test entry body；realtime 增长改确定性事件严格增长；console/error 按 tab key error + runtime_exception 分类隔离 + lvl-tag level；detail-tabs 容器缺失 fail；theme/i18n 颜色值与文案真实断言、删除永久 true 占位。E2E 本地运行受 playwright 项目匹配/launch 环境限制，语法级验证 + 代码级审阅；t162 接入后 CI 生效。

@@ -58,11 +58,11 @@ test.describe.serial('主题 + i18n', () => {
         );
         expect(theme_attr).toBe('light');
 
-        // 验证 --canvas 存在
+        // 验证 --canvas 存在且为颜色值（t163 AC-006: 真实断言而非 toBeTruthy）
         const canvas_var = await dashboard.evaluate(() =>
             getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim(),
         );
-        expect(canvas_var).toBeTruthy();
+        expect(canvas_var, '--canvas 应为颜色值').toMatch(/^(#|rgb|hsl)/);
 
         await dashboard.close();
     });
@@ -224,8 +224,9 @@ test.describe.serial('主题 + i18n', () => {
             getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim(),
         );
 
-        expect(canvas_light).toBeTruthy();
-        expect(canvas_dark).toBeTruthy();
+        // t163 AC-006: 两主题 --canvas 均为颜色值且不同（真实断言）
+        expect(canvas_light, '浅色 --canvas 应为颜色值').toMatch(/^(#|rgb|hsl)/);
+        expect(canvas_dark, '深色 --canvas 应为颜色值').toMatch(/^(#|rgb|hsl)/);
         expect(canvas_light).not.toBe(canvas_dark);
 
         await dashboard.close();
@@ -251,8 +252,7 @@ test.describe.serial('主题 + i18n', () => {
 
         // 验证设置页加载正常，语言选择器存在
         const body_text = await dashboard.evaluate(() => document.body.innerText || '');
-        expect(body_text).toBeTruthy();
-        // 中文界面应有中文字符
+        // 中文界面应有中文字符（t163: 真实断言，删除 toBeTruthy 占位）
         expect(body_text).toMatch(/设置|主题|语言|采集/);
 
         await dashboard.close();
@@ -278,8 +278,7 @@ test.describe.serial('主题 + i18n', () => {
 
         // 验证页面包含英文文本
         const body_text = await dashboard.evaluate(() => document.body.innerText || '');
-        expect(body_text).toBeTruthy();
-        // 验证始终为英文的品牌名存在
+        // 验证始终为英文的品牌名存在（t163: 真实断言，删除 toBeTruthy 占位）
         expect(body_text).toContain('Capture All');
         // 验证语言选择器中 "English" 选项存在
         expect(body_text).toContain('English');
@@ -345,10 +344,9 @@ test.describe.serial('主题 + i18n', () => {
         await popup.close();
     });
 
-    test('详情页 — 语言切换后标签更新（已删除：detail.html 死代码）', async () => {
-        // detail.html 是历史死代码（产品代码全部用 dashboard ?page=detail）。
-        // dashboard 当前未接 i18n（DT_TABS 中文硬编码），独立问题。
-        // 该测试标记跳过，待 dashboard i18n 完善后基于 dashboard 路由重建。
-        expect(true).toBe(true);
-    });
+    // t163 AC-006: 移除永久 true 占位——该测试主题（detail.html 死代码）已删除，
+    // 占位断言无验证价值，删除；dashboard i18n 待完善后基于 dashboard 路由重建。
+    // test('详情页 — 语言切换后标签更新（已删除：detail.html 死代码）', async () => {
+    //     expect(true).toBe(true);
+    // });
 });

@@ -47,8 +47,7 @@ test.describe('采集中实时详情 P4.8 — 验证内容实时增长', () => {
         expect(live_text.length).toBeGreaterThan(100);
 
         // dashboard.ts:1262 已实现 setInterval(2s) 在采集中调 load_detail 刷新。
-        // 验证 t1 → t2 实时增长：让 SW 多个 flush 周期 + dashboard 多次 interval tick
-        // 切到 timeline tab，t1 读取事件数
+        // t163 AC-003: 触发确定性新事件后断言严格增长——切到 timeline tab，t1 读取事件数
         const timeline_btn = live_page.locator('[data-tab="timeline"]');
         await timeline_btn.click();
         await live_page.waitForTimeout(1500);
@@ -56,8 +55,13 @@ test.describe('采集中实时详情 P4.8 — 验证内容实时增长', () => {
             return document.querySelectorAll('tr[data-ev]').length;
         });
 
-        // 等待足够时间（dashboard interval 2s + SW flush ~2s + 容差）
-        // dashboard 不切 tab 时自己会 setInterval 刷新 timeline
+        // 触发确定性新事件：点击按钮产唯一 console marker（E2E_BTN_CLICKED）
+        const test_site = await fix.context.newPage();
+        await test_site.goto('http://localhost:17832/test-page.html', { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await test_site.locator('#btn-click').click();
+        await test_site.close();
+
+        // 等待 dashboard interval 刷新 + SW flush
         await live_page.waitForTimeout(6000);
 
         // 重新点 timeline 强制 render_content（保留 tab）
@@ -66,12 +70,13 @@ test.describe('采集中实时详情 P4.8 — 验证内容实时增长', () => {
         const ev_count_t2 = await live_page.evaluate(() => {
             return document.querySelectorAll('tr[data-ev]').length;
         });
+        const marker_visible = await live_page.evaluate(() => {
+            return (document.body.textContent || '').includes('E2E_BTN_CLICKED');
+        });
 
-        // dashboard 已有 setInterval 实时刷新，t2 应 >= t1
-        // （百度持续后台 activity: cookie 过期/keepalive 等会产出 events；
-        //  即使无活动，dashboard 也会刷新到 SW buffer 中已 flush 的最新数据）
-        expect(ev_count_t2, 't2 时间线事件数应 >= t1').toBeGreaterThanOrEqual(ev_count_t1);
-        // events: t1 → t2 数量变化已通过上方断言验证
+        // t163 AC-003: 确定性新事件被采集 → marker 出现 + 事件数严格大于 t1
+        expect(marker_visible, '确定性 marker E2E_BTN_CLICKED 应出现在实时详情').toBe(true);
+        expect(ev_count_t2, 't2 时间线事件数应严格大于 t1（确定性新事件触发）').toBeGreaterThan(ev_count_t1);
 
         await live_page.close();
 

@@ -93,19 +93,29 @@ test.describe.serial('CDP 重试验证', () => {
         expect(export_result.success, 'JSON 导出应成功').toBe(true);
         const data = JSON.parse(export_result.json!);
 
-        // CDP may not be available in headless E2E — check if console capture recovered
-        // If CDP worked, console_events should have entries
-        // If CDP didn't work (headless restriction), console_events may be empty — not a test failure
-        if (data.console_events.length > 0) {
-            // CDP console capture succeeded — verify structure
-            for (const evt of data.console_events) {
-                expect(typeof evt.level, 'console level 应为 string').toBe('string');
-            }
-        }
+        // t163 AC-001: 唯一 console marker 必须被采集（CDP console capture 恢复的确定性证据）
+        const console_msgs = (data.console_events as Array<{ args_preview?: string[]; level?: string }>)
+            .map(e => JSON.stringify(e.args_preview ?? e));
+        expect(
+            console_msgs.some(m => m.includes('E2E_LOG_MARKER')),
+            'console_events 应含唯一 marker E2E_LOG_MARKER（CDP 恢复后 console 采集生效）',
+        ).toBe(true);
+
+        // body capture 恢复：/api/test 请求 body 被 captured 且内容匹配
+        const api_requests = (data.network_requests as Array<{ url?: string; response_body_status?: string; response_body?: string }>)
+            .filter(r => (r.url || '').includes('/api/test'));
+        expect(api_requests.length, '应有 /api/test 请求').toBeGreaterThan(0);
+        const captured = api_requests.filter(r => r.response_body_status === 'captured');
+        expect(captured.length, '/api/test 请求 body 状态应为 captured').toBeGreaterThan(0);
+        expect(
+            captured.some(r => String(r.response_body || '').includes('E2E_API_MARKER')),
+            'captured body 应含 E2E_API_MARKER',
+        ).toBe(true);
 
         // Check body capture mode in the capture record
         const body_mode = data.capture?.body_capture_mode;
-        expect(['extension_cdp', 'fallback_hook', 'external_cdp_bridge']).toContain(body_mode);
+        // t163 AC-001: CDP retry 恢复成功 → body 模式不得为 fallback_hook
+        expect(body_mode, 'body capture 模式应为 CDP（非 fallback_hook）').not.toBe('fallback_hook');
     });
 
     test('场景B — 同标签 URL 跳转后 CDP 恢复', async () => {

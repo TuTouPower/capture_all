@@ -71,7 +71,7 @@ mock 边界、fixture 来源、断言目标。无特殊约定写「按项目默�
 尚未核实的外部 endpoint、API 形态、数据结构、第三方行为须分类标记；核实后删除标记，改为结论并注明验证方式。无则写「无」。
 <!-- /规范 -->
 
-- `src/shared` 是否允许 Node API：`UNVERIFIED-SPIKE`，执行期按 blueprint 依赖约束核实（若不希望 shared 含 Node API，建 `src/node_shared/` 层并记录）。
+- `src/shared` 是否允许 Node API：结论=不允许。`src/shared` 被 extension 浏览器 bundle 引用（Vite 打包），含 `node:` import 会破坏 MV3 构建；且架构依赖表规定 shared 中立。中立 token 文件模块建 `src/node_shared/bridge_token_file.ts`（Node-only，2026-08-13 按 architecture.md 依赖表与 extension 打包路径核实）。
 
 ### 风险与回退
 

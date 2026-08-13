@@ -157,7 +157,10 @@ extension ──✗── bridge / mcp
 bridge    ──✗── extension / mcp
 mcp       ──✗── extension / bridge（运行时只走 HTTP）
 src/shared ──✗── 任何产品目录
+src/node_shared ──► 中立 Node-only 层（t187）：bridge/mcp 同向依赖；extension 禁止引用（不进浏览器 bundle）
 ```
+
+t187：`src/shared` 禁 Node API（extension 浏览器 bundle 引用）；Bridge token 文件契约（类型/路径/读写）移入 `src/node_shared/bridge_token_file.ts`，Bridge config 与 MCP resolver 同向依赖。产品间 import 边界由 `tests/unit/import_boundaries.test.ts` 钉住。
 
 ## 4. 模块职责
 

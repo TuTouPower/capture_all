@@ -2,11 +2,11 @@
 tid: "t187"
 slug: "refactor_mcp_bridge_token_dep"
 title: "MCP 与 Bridge 共享 token 依赖拆分"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t187_refactor_mcp_bridge_token_dep"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "92c143d19fe6790da64c5bf4b132f83de85fb037"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -37,6 +37,15 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+## Round 1 处置
+
+| finding_id | severity | verdict | status | 处置说明 |
+| --- | --- | --- | --- | --- |
+| t187_code_f001 | minor | 待处置 | 已修 | `src/node_shared/bridge_token_file.ts` 随 finish 后 `git add -A` 提交（commit 覆盖跟踪，无构建断裂） |
+| t187_code_f002 | minor | 待处置 | 已修 | import-boundary 扫描扩展至全部导入形态：副作用 `import '../x'`、动态 `import('x')`、`require('x')` |
+| t187_test_f001 | minor | 待处置 | 已修 | 同 code f002——扫描正则覆盖动态/副作用/require 形态（未来回归防护） |
+| t187_test_f002 | minor | 待处置 | 已修 | 标题改为「src/shared 不含 Node API（node_shared 为 Node-only 层允许）」，与断言面一致 |
 
 ### Round 1 场景说明
 

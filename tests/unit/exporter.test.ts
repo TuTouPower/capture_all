@@ -229,9 +229,11 @@ describe('exporter', () => {
 
         it('t198 AC-002: total_size_kb 为实际序列化字节数（>0 且与内嵌 JSON 相符）', async () => {
             // fixture 含非 ASCII（多字节）字符——锁定「字节数」语义：若生产回归为字符计数口径，
-            // 期望值（TextEncoder 字节数）与展示值（字符数 round）不一致，用例变红
+            // 期望值（TextEncoder 字节数）与展示值（字符数 round）不一致，用例变红。
+            // 中文 300 字 ≈ 900B 字节差 > 512B，Math.round 边界必然分叉（t198_test_f001 修复）
+            const cn_text = '中'.repeat(300);
             (get_capture as any).mockResolvedValue({ ...mock_capture, capture_id: '测试采集' });
-            (get_events_by_category as any).mockResolvedValue([{ type: 'user_action', data: { text: '中文标题 & <em>强调</em>' } }]);
+            (get_events_by_category as any).mockResolvedValue([{ type: 'user_action', data: { text: cn_text } }]);
             const result = await export_html('测试采集');
             const parsed = extract_embedded_json(result) as { capture: { capture_id: string } };
             expect(parsed.capture.capture_id).toBe('测试采集');

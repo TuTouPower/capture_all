@@ -180,14 +180,15 @@ describe('t197 AC-003: resize 拖拽清理测试', () => {
         body.style.gridTemplateColumns = '200px 1fr';
         handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 100 }));
         expect(handle.classList.contains('active')).toBe(true);
-        // 拖拽中 mousemove 生效（宽度更新）
-        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 150 }));
-        expect(body.style.gridTemplateColumns).not.toBe('200px 1fr');
-        // pointercancel 清理：active 移除 + mousemove listener 解绑（再 move 不再变宽）
+        // 拖拽中 mousemove 生效（宽度更新）——dx=300 落在 MIN_W(160)..MAX_W(480) 内，不受钳制
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400 }));
+        expect(body.style.gridTemplateColumns).toBe('300px 1fr');
+        // pointercancel 清理：active 移除 + mousemove listener 解绑（再 move 不再变宽；
+        // 若未解绑，dx=400 → 400px 与 300px 可区分）
         window.dispatchEvent(new PointerEvent('pointercancel'));
         expect(handle.classList.contains('active')).toBe(false);
         const after_cancel = body.style.gridTemplateColumns;
-        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 200 }));
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: 500 }));
         expect(body.style.gridTemplateColumns).toBe(after_cancel);
     });
 

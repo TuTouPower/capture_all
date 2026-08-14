@@ -1,0 +1,19 @@
+{
+  "tid": "t199",
+  "attempt": 1,
+  "execution_id": "4303e36254434f41875e7e8c8117c1e2",
+  "status": "done",
+  "branch": "t199_cdp_network_integration",
+  "base_sha": "a71525cb14ab623b07bb3da5e7720057e4c37bd8",
+  "tests": "vitest：1921 passed（204 files，含 t199 新增 5 用例）",
+  "blackbox": "npm test（1921 passed）&& npx tsc --noEmit 通过",
+  "review": "第 2 轮 PASS（code PASS / test PASS；Round 1 code 1 minor spec 措辞过时已改 spec）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/cdp_body_budget_accounting.test.ts「t199 AC-001: body 预算超限淘汰生产链路闭环」通过（MockWebSocket 注入 + getResponseBody 回写 → body_bytes 累加 → 两次 body_budget_cap 淘汰 splice → 幸存 r3 账本归零）"],
+    "AC-002": ["tests/unit/cdp_network_redaction_integration.test.ts「错误路径不抛未捕获异常」通过（check_storage_limit spy reject 触发 production .catch，错误日志经 transport 写出；反向性验证：删 .catch 必红 + unhandled rejection）", "「正常路径：CDP body 事件落库为网络请求」通过"],
+    "AC-003": ["tests/unit/cdp_network_redaction_integration.test.ts「redact_data=true 时带敏感 body 的请求落库为脱敏值」通过（password/token 替换、alice 保留；反向性验证：删 redact_body 必红）", "「redact_data=false 时 body 原样落库」通过"],
+    "AC-004": ["npm test 全量 1921 passed（新增 5 用例 + 既有 1916 无回归）", "npx tsc --noEmit 干净"]
+  },
+  "pending": [],
+  "findings": []
+}

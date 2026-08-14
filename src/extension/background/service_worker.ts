@@ -9,6 +9,7 @@ import {
     start_periodic_flush, stop_periodic_flush,
 } from './storage';
 import { setup_keepalive_listener, start_keepalive, stop_keepalive } from './keepalive';
+import { notify_tabs_in_parallel } from './notify_tabs';
 import { start_network_capture, stop_network_capture, set_cdp_body_event_handler } from './network_capture';
 import { start_console_capture, stop_console_capture, is_console_active } from './console_capture';
 import { start_exception_capture, stop_exception_capture, is_exception_active } from './exception_capture';
@@ -739,21 +740,21 @@ async function start_capture_inner_impl(capture_id: string, config: CaptureConfi
     const capturable_tabs = all_tabs.filter(t => /^https?:\/\//.test(t.url || ''));
     logger.info(`Notifying ${capturable_tabs.length} tabs to start (of ${all_tabs.length} total)`);
     // B2-M6: 多 tab 并行通知，避免串行重试阻塞 start（最坏 N×(200+400+600)ms 卡在 run_exclusive 内）
-    await Promise.all(capturable_tabs.map(async (tab) => {
-        if (!tab.id) return;
-        const ok = await tabs_send_message_retry(tab.id, {
+    // t195 AC-004: 经 notify_tabs_in_parallel 统一（Promise.all 语义行为级可测）
+    await notify_tabs_in_parallel(capturable_tabs, async (tab_id) => {
+        const ok = await tabs_send_message_retry(tab_id, {
             action: 'start',
             config,
             capture_id: capture_id,
             capture_start_epoch_ms: start_time,
-            tab_id: tab.id,
+            tab_id,
             // t172 AC-002: content log level 由 user config 下发（silent/warn 时 content 不写 info）
             log_level: (await load_user_config()).log_level,
         }, { label: 'start' });
         if (ok) {
-            logger.debug(`Sent start to tab ${tab.id}`, { url: tab.url });
+            logger.debug(`Sent start to tab ${tab_id}`, { url: capturable_tabs.find((t) => t.id === tab_id)?.url });
         }
-    }));
+    });
 
     // Track initial active tab
     if (active_tab?.id) {
@@ -1046,6 +1047,8 @@ async function check_limit_and_stop(): Promise<boolean> {
 
 // p025 测试钩子导出：AC-014 直连断言 absolute_time 接线守卫（按 _for_test 命名约定）。
 export { handle_network_request as _handle_network_request_for_test };
+// t199 AC-002: 导出供 .catch 位点测试（fire-and-forget 错误路径不抛未捕获异常）
+export { handle_cdp_body_event as _handle_cdp_body_event_for_test };
 async function handle_network_request(payload: { event: CaptureEvent; data: NetworkRequestData | WsFrameData } | NetworkRequestData): Promise<void> {
     if (!is_capturing || !current_capture) return;
     // B2-M12: generation 守卫——await 后 current_capture 可能已切换，防跨采集串写 stats

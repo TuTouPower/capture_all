@@ -1,12 +1,12 @@
 ---
-tid: "t196"
-slug: "bridge_auth_logs_pairing"
-title: "Bridge 认证/日志/配对路径补全"
-status: "backlog"
-branch: ""
+tid: "t199"
+slug: "cdp_network_integration"
+title: "CDP/网络集成测试补全"
+status: "done"
+branch: "t199_cdp_network_integration"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "a71525cb14ab623b07bb3da5e7720057e4c37bd8"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -22,7 +22,11 @@ note: ""
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- AC-001：cdp_body_budget_accounting.test.ts 补「超限淘汰生产链路闭环」组合用例——三条 200B 事件连发触发两次 body_budget_cap 淘汰（splice），幸存 r3 账本 200 → poll 归零。
+- AC-002：service_worker.ts 导出 `_handle_cdp_body_event_for_test`；SW 集成测试用 check_storage_limit spy reject 触发 production .catch，断言 limit_spy 被调 + 错误日志写出。反向性验证：临时删 .catch → vitest 报 unhandled rejection 且 4 用例全红，恢复复绿。
+- AC-003：SW 集成测试验证 handle_network_request 落库前 redact_body 脱敏（password/token 值替换、alice 非敏感保留）+ redact_data=false 原样落库。反向性验证：临时移除 redact_body 调用 → 用例红。
+- 踩坑：SW 集成测试 chrome mock 缺 webRequest.onCompleted（start_network_capture 崩溃）；capture_response_body:true 触发 body capture 启动失败改 false；AC-002 fixture 缺 response_headers（extract_mime_type 崩溃）。
+- Review Round 1：code 1 minor（AC-001「含 evicted 终态」措辞与实现不符，reviewer 标注 spec 过时）→ 改 spec；test 0 finding。Round 2 两路 PASS。
 
 ## Review 处置
 
@@ -37,6 +41,12 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+### Round 1（review_level=full）
+
+| finding_id | 严重度 | 处置 | 说明 |
+|---|---|---|---|
+| t199_code_f001 | minor | 已修 | reviewer 标注 spec 过时：AC-001「含 evicted 终态」与实现不符（body 预算淘汰 splice 删除无 evicted；evicted 仅属事件数淘汰，t157 已覆盖）。已改 spec AC-001 措辞 + 上下文区说明 |
 
 ### Round 1 场景说明
 
@@ -60,24 +70,18 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001 MockWebSocket 生产链路组合用例；AC-002 .catch 位点反向性实测（删 .catch 必红）；AC-003 脱敏接入反向性实测 + redact_data=false 反例；AC-004 全量 vitest 1921 通过 + tsc 干净；详见 `handoff.json` `ac_evidence`
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
-
-`single`：
-
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Round 1 code：PASS（1 minor spec 措辞过时 → 已改 spec）
+- Round 1 test：PASS
+- Round 2 code：PASS
+- Round 2 test：PASS
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+CDP body 预算记账链路 + .catch 位点 + 落库脱敏接入集成测试补全，round 2 全 PASS 收官。

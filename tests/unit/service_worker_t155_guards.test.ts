@@ -16,7 +16,7 @@ async function read_sw_source(): Promise<string> {
 describe('t155 service_worker guards', () => {
     it('B2-M6: start 对全部 tab 并行通知（Promise.all）', async () => {
         const src = await read_sw_source();
-        expect(src).toMatch(/Promise\.all\(\s*capturable_tabs\.map/);
+        expect(src).toMatch(/notify_tabs_in_parallel\(capturable_tabs/);
     });
 
     it('B2-M12: handle_event 含 generation 守卫（await 后校验再写 stats）', async () => {

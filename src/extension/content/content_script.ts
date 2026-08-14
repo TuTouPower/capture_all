@@ -20,6 +20,7 @@ import { Logger, MessageLogTransport } from '../../shared/logger';
 import { start_status_poll, type CaptureStatusResponse } from '../shared/poll_capture_status';
 // t189 f003: 复用公共注入诊断（B3-M3）——CSP 拦截/注入失败不再静默
 import { inject_script_element } from './content_page_script';
+import { unknown_action_response } from './content_message';
 
 /** Unified sender type accepted by all content capture modules. */
 type ContentSender = (event: CaptureEvent, data?: unknown) => void;
@@ -67,8 +68,9 @@ chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: (
         sendResponse({ is_capturing, frame_id });
     } else {
         // B3-M8: 未知 action 显式回错误响应，避免 return true 后通道永不 resolve 挂起发送端
+        // t195 AC-003: 响应构造抽为纯函数（行为级可测）
         logger.warn('Content received unknown action', { action: message?.action });
-        sendResponse({ success: false, error: 'unknown_action' });
+        sendResponse(unknown_action_response());
     }
     return true;
 });

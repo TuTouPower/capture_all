@@ -1,0 +1,20 @@
+{
+  "tid": "t196",
+  "attempt": 1,
+  "execution_id": "d98a1de9225f44a08a3fa36b5b5bc898",
+  "status": "done",
+  "branch": "t196_bridge_auth_logs_pairing",
+  "base_sha": "67fa474fbd8ef0f89066cf4d3da5a760693dcac1",
+  "tests": "npm test：1901 passed（新增 bridge_auth_logs_pairing 4 用例）",
+  "blackbox": "npm test（退出码 0）&& npx tsc --noEmit 通过",
+  "review": "2 轮闭环：Round 1 code PASS/test PASS（2 minor：never 强转、文档断言耦合）→ 处置 → Round 2 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["bridge_auth_logs_pairing.test.ts::命令真实 50ms 超时 → command_timeout JSON 行（level/command_id/type/timeout_ms 字段断言）"],
+    "AC-002": ["bridge_auth_logs_pairing.test.ts::MockWebSocket 注入 3 事件 + cap=2 → cdp_event_evicted（reason=event_count_cap）"],
+    "AC-003": ["bridge_auth_logs_pairing.test.ts::pairing code enroll（无 MCP token）拿 instance_token → heartbeat 200（resolve_extension_auth 哈希认证）"],
+    "AC-004": ["bridge_auth_logs_pairing.test.ts::decisions.md ADR-026 记录保持不自动续期（安全默认）+ 断言"],
+    "AC-005": ["bridge_auth_logs_pairing.test.ts（4 用例）全绿；全量 unit 200 文件 / 1901 测试通过（diff 零 src 改动）"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -24,8 +24,12 @@ vi.stubGlobal('window', { location: { href: 'https://example.com' } });
 
 import { start_clipboard_capture, stop_clipboard_capture } from '../../src/extension/content/clipboard_capture';
 
-function emit_doc(event_name: string) {
-    (doc_listeners[event_name] || []).forEach(fn => fn(new Event(event_name)));
+function emit_doc(event_name: string, clipboard_text?: string) {
+    const ev = new Event(event_name);
+    if (clipboard_text !== undefined) {
+        Object.defineProperty(ev, 'clipboardData', { value: { getData: () => clipboard_text } });
+    }
+    (doc_listeners[event_name] || []).forEach(fn => fn(ev));
 }
 
 describe('clipboard_capture', () => {
@@ -105,14 +109,42 @@ describe('clipboard_capture', () => {
         expect(copy_calls).toHaveLength(1);
     });
 
-    // B3-L7: 双路径（copy 事件 + navigator.clipboard.writeText）对同一操作窗口期去重
-    it('copy 事件后紧接 writeText 不双报（B3-L7 去重）', async () => {
+    // B3-L7 + t195 AC-002: 同一操作（copy 事件 + writeText，内容一致）窗口期去重不双报
+    it('copy 事件后紧接同内容 writeText 不双报（B3-L7 去重）', async () => {
         start_clipboard_capture(sender, 'cap1', Date.now(), 1);
-        emit_doc('copy');
+        emit_doc('copy', 'hello');
         await navigator.clipboard.writeText('hello');
         expect(sender).toHaveBeenCalledTimes(1);
         const [evt, data] = sender.mock.calls[0];
         expect(data.method).toBe('execCommand');
         expect(evt.type).toBe('clipboard_write');
+    });
+
+    // t195 AC-002: 窗口内不同内容的两次独立 writeText 均产生事件（原纯时间窗丢第二条，p043）
+    it('窗口内不同内容两次 writeText 均上报（p043）', async () => {
+        start_clipboard_capture(sender, 'cap1', Date.now(), 1);
+        await navigator.clipboard.writeText('first');
+        await navigator.clipboard.writeText('second');
+        expect(sender).toHaveBeenCalledTimes(2);
+    });
+
+    // t195 AC-002: 窗口内同内容重复 writeText 仍去重
+    it('窗口内同内容重复 writeText 去重', async () => {
+        start_clipboard_capture(sender, 'cap1', Date.now(), 1);
+        await navigator.clipboard.writeText('same');
+        await navigator.clipboard.writeText('same');
+        expect(sender).toHaveBeenCalledTimes(1);
+    });
+
+    // t195 AC-002（f003）: read 路径内容去重——paste 事件同内容 + readText 不双报
+    it('read 路径：paste 事件同内容 + readText 不双报（内容去重）', async () => {
+        mock_navigator.clipboard.readText.mockImplementation(async () => 'pasted');
+        start_clipboard_capture(sender, 'cap1', Date.now(), 1);
+        emit_doc('paste', 'pasted');
+        await navigator.clipboard.readText();
+        expect(sender).toHaveBeenCalledTimes(1);
+        const [evt, data] = sender.mock.calls[0];
+        expect(data.method).toBe('execCommand');
+        expect(evt.type).toBe('clipboard_read');
     });
 });

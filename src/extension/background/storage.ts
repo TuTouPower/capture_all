@@ -208,6 +208,11 @@ export async function get_capture(capture_id: string): Promise<CaptureRecord | n
 }
 
 export async function list_captures(limit?: number, direction: 'next' | 'prev' = 'prev', offset = 0): Promise<CaptureRecord[]> {
+    // t198 AC-001: limit 入参归一化——负数/0 clamp 到 1（不静默返回空数组）、小数向下取整、
+    // 非有限（NaN/±Infinity）视为未指定（全量）；undefined 保持全量
+    const safe_limit = limit === undefined || !Number.isFinite(limit)
+        ? undefined
+        : Math.max(1, Math.floor(limit));
     const database = await init_db();
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAMES.CAPTURES, 'readonly');
@@ -227,7 +232,7 @@ export async function list_captures(limit?: number, direction: 'next' | 'prev' =
             }
             // t153 AC-007: limit 截断（最旧优先倒序的前 N 条）；undefined = 全量
             // t161: direction 支持 asc/desc，避免调用方全量读取后二次排序
-            if (cursor && captures.length < (limit ?? Infinity)) {
+            if (cursor && captures.length < (safe_limit ?? Infinity)) {
                 captures.push(cursor.value);
                 cursor.continue();
             } else {

@@ -2,8 +2,8 @@
 import type { CaptureEvent, StorageChangeData } from '../../shared/types';
 import { create_content_event, get_relative_time, create_capture_state } from './content_event_utils';
 import { generate_nonce } from './content_nonce';
-import { generate_secret, verify_payload, SYNC_HMAC_JS } from './content_hmac';
-import { inject_script_element, page_script_restore, report_injection_failure } from './content_page_script';
+import { generate_secret, verify_payload } from './content_hmac';
+import { inject_script_element, page_script_reinstall_guard, page_script_preamble, page_script_restore, report_injection_failure } from './content_page_script';
 import { Logger, MessageLogTransport } from '../../shared/logger';
 
 const logger = new Logger('content/storage', new MessageLogTransport());
@@ -38,22 +38,9 @@ function redact_storage_key(key: string | null): string | null {
 // 导出便于测试 eval 验证注入脚本级重注入（与 websocket_capture 一致）。
 export function build_page_script(secret: string): string {
     return `(function() {
-    // T121: 重注入时先还原上次 hook 再重装（持最新 SECRET），stop→start 采集不断流。
-    if (window.__capture_all_storage_installed__) {
-        var prev_hook = window.__capture_all_storage_prev__;
-        if (prev_hook) {
-            window.localStorage.setItem = prev_hook.local_setItem;
-            window.localStorage.removeItem = prev_hook.local_removeItem;
-            window.localStorage.clear = prev_hook.local_clear;
-            window.sessionStorage.setItem = prev_hook.session_setItem;
-            window.sessionStorage.removeItem = prev_hook.session_removeItem;
-            window.sessionStorage.clear = prev_hook.session_clear;
-        }
-    }
-    window.__capture_all_storage_installed__ = true;
-    var SIGNAL = '${SIGNAL}';
-    var SECRET = '${secret}';
-${SYNC_HMAC_JS}
+    // t195 AC-001: 迁移共享模板——重注入还原守卫 + SIGNAL/SECRET/SYNC_HMAC_JS（与 network_hook/websocket 同构，消除内联双份维护）
+    ${page_script_reinstall_guard('storage', '            window.localStorage.setItem = prev_hook.local_setItem;\n            window.localStorage.removeItem = prev_hook.local_removeItem;\n            window.localStorage.clear = prev_hook.local_clear;\n            window.sessionStorage.setItem = prev_hook.session_setItem;\n            window.sessionStorage.removeItem = prev_hook.session_removeItem;\n            window.sessionStorage.clear = prev_hook.session_clear;')}
+    ${page_script_preamble('storage', secret)}
     function post(storage_type, action, key, value_length) {
         try {
             var payload = {

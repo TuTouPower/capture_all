@@ -130,6 +130,9 @@ async function start_capture(payload: Record<string, unknown>, handlers: AgentRu
 async function stop_capture(handlers: AgentRuntimeHandlers): Promise<unknown> {
     // t177: stop 幂等——空闲态 stop_capture 返回 success:true，capture_id 允许 null；
     // NO_ACTIVE_CAPTURE 错误码契约已删除（协议与文档同步）。
+    // p049: success:false 分支保留为防御——service_worker stop_capture 恒 success:true
+    // （空闲态直接返回，异常 rethrow 经 to_agent_error 转错误响应），该分支实际不可达；
+    // 保留以承受未来 handler 语义变化，行为已有 dispatcher 测试覆盖（success:false → idle）。
     const active_capture_id = handlers.get_status().active_capture_id;
     const result = await handlers.stop_capture();
 

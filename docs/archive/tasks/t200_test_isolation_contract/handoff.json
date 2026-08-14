@@ -1,0 +1,18 @@
+{
+  "tid": "t200",
+  "attempt": 1,
+  "execution_id": "add52c63ad8c48b7baf3ca8e1f869f1b",
+  "status": "done",
+  "branch": "t200_test_isolation_contract",
+  "base_sha": "c04c71da3340b990555c1ea866e37f4bc98aaada",
+  "tests": "vitest：1921 passed（204 files；keepalive 4 用例隔离重构后全绿，单用例/重排亦绿）",
+  "blackbox": "npm test（1921 passed）&& npx tsc --noEmit 通过",
+  "review": "第 1 轮 PASS（code PASS / test PASS，零 finding）",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/keepalive.test.ts 4 用例全绿 + 逐个 -t 单跑绿 + --sequence.shuffle 重排绿（每用例 vi.resetModules + 动态 import 隔离）"],
+    "AC-002": ["agent_command_dispatcher.ts stop_capture 补防御注释（p049 结论：service_worker stop_capture 恒 success:true、异常 rethrow 经 to_agent_error 转错误响应；分支保留防御）", "tests/unit/agent_command_dispatcher.test.ts t177 用例覆盖 success:false → idle 分支行为"],
+    "AC-003": ["npm test 全量 1921 passed（keepalive/dispatcher 相关无回归）", "npx tsc --noEmit 干净"]
+  },
+  "pending": [],
+  "findings": []
+}

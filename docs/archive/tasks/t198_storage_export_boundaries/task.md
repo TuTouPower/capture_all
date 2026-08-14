@@ -1,12 +1,12 @@
 ---
-tid: "t200"
-slug: "test_isolation_contract"
-title: "测试隔离与契约确认"
-status: "backlog"
-branch: ""
+tid: "t198"
+slug: "storage_export_boundaries"
+title: "存储/导出边界校验与断言补全"
+status: "done"
+branch: "t198_storage_export_boundaries"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "87ad5a883819d82dfa48a8b7de7dba7f70941b18"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -22,7 +22,11 @@ note: ""
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- AC-001：`list_captures` limit 归一化——`!Number.isFinite(limit)` → 全量（NaN/±Infinity 不静默空）、`Math.max(1, Math.floor(limit))`（负数/0 → 1、小数向下取整）。测试 4 用例（undefined/正整数、负数/0、小数、NaN）。
+- AC-002：exporter 补 total_size_kb 断言——回灌内嵌 JSON 后 TextEncoder 字节数与展示值一致（fixture 含中文锁定字节语义）。
+- AC-003：`convert_bridge_event_to_request` 加 export，3 用例（正常 1500、回拨 clamp 0、相等边界 0）。
+- AC-004：storage_keyset 补 dom_data 路由断言——写 dom_data 事件后按类别与 store 名双查锚定 USER_ACTION_EVENTS。
+- Review Round 1 两路 PASS、3 minor（AC-002 toBeGreaterThan(0) 脆弱、NaN 用例区分度、fixture 全 ASCII）；修前两项，第三项修不彻底（字节差 20B 不足）转遗留 p051。Round 2 两路 PASS。
 
 ## Review 处置
 
@@ -37,6 +41,20 @@ note: ""
 本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
 
 reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+
+### Round 1（review_level=full）
+
+| finding_id | 严重度 | 处置 | 说明 |
+|---|---|---|---|
+| t198_code_f001 | minor | 已修 | AC-002 去掉 `toBeGreaterThan(0)`（依赖 mock ≥512B 脆弱），保留 `<span>${expected_kb} KB</span>` 一致性断言 |
+| t198_code_f002 | minor | 已修 | NaN 用例造 2 条记录断言 length=2，区分「全量」与「clamp 到 1」 |
+| t198_test_f001 | minor | 遗留 | fixture 加中文但字节差仅 20B，round 后仍同值，字符计数口径回归不红。登记 p051（有效修复需 >512B 字节差） |
+
+### Round 2（review_level=full）
+
+| finding_id | 严重度 | 处置 | 说明 |
+|---|---|---|---|
+| t198_test_f001 | minor | 遗留 | Round 2 test reviewer 复核「修不彻底」：中文 fixture 字节差 20B 不足，round 后同值。overall 已 PASS，登记 p051 |
 
 ### Round 1 场景说明
 
@@ -60,23 +78,21 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 结果：全部满足
+- 证据：AC-001/003/004 行为测试（fake-indexeddb/转换单测），AC-002 exporter 回灌断言；AC-005 全量 vitest 1916 通过 + tsc 干净；详见 `handoff.json` `ac_evidence`
 
 ### Reviewer verdict
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
-
 `full`：
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+- Round 1 code：PASS
+- Round 1 test：PASS
+- Round 2 code：PASS
+- Round 2 test：PASS
 
-`single`：
+### 结果摘要
 
-- Round 1 general：PASS / FAIL
-
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+存储/导出边界校验与断言补全，round 2 全 PASS 收官。
 
 ### 结果摘要
 

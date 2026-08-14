@@ -1,0 +1,20 @@
+{
+  "tid": "t195",
+  "attempt": 1,
+  "execution_id": "99033074b22d445d83fcd076bdd20cbc",
+  "status": "done",
+  "branch": "t195_content_guard_tests_fixes",
+  "base_sha": "d27f39080c667c03a863c7886d83e8b4424d80e7",
+  "tests": "npm test：1897 passed（新增 content_guard_tests 8 + clipboard p043 2/read 1 + capture_state 守卫 1 用例）",
+  "blackbox": "npm test（退出码 0）&& npx tsc --noEmit 通过",
+  "review": "3 轮闭环：Round 1 code PASS/test FAIL（generation 守卫恒真断言 important + 3 minor）→ Round 2 双 PASS（+f005 残留清理）→ Round 3 双 PASS",
+  "ac_evidence": {
+    "AC-001": ["content_guard_tests.test.ts::storage_capture build_page_script 经 page_script_reinstall_guard/page_script_preamble（无内联 SIGNAL 字面/SYNC_HMAC_JS 展开）；storage_capture.test.ts 注入行为未变（10 用例）"],
+    "AC-002": ["clipboard_capture.test.ts::copy 同内容 + writeText 不双报（B3-L7 更新）；窗口内不同内容两次 writeText 均上报（p043）；同内容重复去重；read 路径 paste 同内容 + readText 不双报"],
+    "AC-003": ["content_guard_tests.test.ts::unknown_action_response 纯函数返回 {success:false, error:'unknown_action'}；content_script else 分支 sendResponse(unknown_action_response()) 接线断言"],
+    "AC-004": ["content_guard_tests.test.ts::notify_tabs_in_parallel Promise.all 并行 + http 过滤 + 无 id 跳过行为；SW 接线断言；capture_state.test.ts 新 start 后旧 gen 失活（守卫核心）"],
+    "AC-005": ["content_guard_tests.test.ts（8）+ clipboard 3 + capture_state 1 全绿；全量 unit 199 文件 / 1897 测试通过"]
+  },
+  "pending": [],
+  "findings": []
+}

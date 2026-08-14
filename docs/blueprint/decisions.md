@@ -209,3 +209,10 @@
   - Dashboard 详情列表 windowed（`LIST_WINDOW=500` + 超窗省略行）。
   - ZIP 组装用 fflate `Zip` + `ZipPassThrough` 流式（store 模式，无压缩 worker 无并行竞争；逐文件 add+push、chunk 收集拼接，不构建全量 files 对象同时驻留）。
   - bundle size 预算门禁 `npm run check:bundle`（bridge.mjs ≤ 200KB、mcp.mjs ≤ 2MB、extension.zip ≤ 500KB、dist/ ≤ 2MB），build 链尾自动执行；预算基于 2026-08-14 实测 + 50% 余量，可放宽但门禁存在。
+
+
+## 026 pairing 窗口过期不自动续期（2026-08-14）
+
+- 背景：Bridge 启动自动 open pairing 窗口（5 分钟，`PAIRING_DEFAULT_DURATION_MS`）过期后不自动续期（p047）。窗口过期时扩展 `resolve_pairing_code` 拿不到 code → enroll 401 → 扩展轮询重试；MCP 客户端可再次 `/pair/open` 续窗。
+- 决策：保持不自动续期（安全默认——自动续窗会无限期开放配对面，削弱配对窗口的安全价值）。多实例/晚到浏览器体验改善由扩展轮询重试与 MCP 手动续窗承担，不引入自动续期。
+- 替代：A（基线，已采纳）；B（未消费时到期自动续窗——配对面无限开放，不采纳）。

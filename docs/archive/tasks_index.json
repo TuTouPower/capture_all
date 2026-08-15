@@ -2897,6 +2897,21 @@
             "schedule_status": "",
             "note": "",
             "dir": "docs/archive/tasks/t200_test_isolation_contract"
+        },
+        {
+            "tid": "t201",
+            "slug": "bridge_instance_persistence",
+            "title": "Bridge 实例状态持久化,重启不丢浏览器识别",
+            "status": "done",
+            "branch": "t201_bridge_instance_persistence",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "2773813bed85a06347775688033769095051232a",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t201_bridge_instance_persistence"
         }
     ]
 }

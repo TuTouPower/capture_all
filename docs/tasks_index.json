@@ -2,21 +2,5 @@
     "generated_by": "scripts/repo_template/task.py",
     "authority": "docs/tasks/{tid}_{slug}/task.md front matter",
     "workspace": ".",
-    "tasks": [
-        {
-            "tid": "t201",
-            "slug": "bridge_instance_persistence",
-            "title": "Bridge 实例状态持久化,重启不丢浏览器识别",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "full",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "",
-            "dir": "docs/tasks/t201_bridge_instance_persistence"
-        }
-    ]
+    "tasks": []
 }

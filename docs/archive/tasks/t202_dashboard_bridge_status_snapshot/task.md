@@ -2,11 +2,11 @@
 tid: "t202"
 slug: "dashboard_bridge_status_snapshot"
 title: "Dashboard 设置页 bridge 连接状态与快照刷新"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t202_dashboard_bridge_status_snapshot"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "d3b7ceb371440f3bc3996f2ec3eb24d2c1aabe30"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -48,10 +48,23 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 有 finding 时用本表；每条 finding 一行。
 
+### Round 1 (2026-08-16 02:01 UTC+8)
+
 |finding_id|severity|status|rationale|fix_ref|
 |---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t202_test_f001|important|已修|补 SW get_bridge_status handler 行为级测试(独立测试文件完整 stub chrome)|tests/unit/service_worker_bridge_status.test.ts|
+|t202_test_f002|minor|已修|补查询失败路径断言(sendMessage reject/success:false 保持未连接)|tests/unit/settings_ui.test.ts|
+|t202_test_f003|minor|已修|on_changed_listener 索引改遍历所有监听器,去脆弱耦合|tests/unit/settings_ui.test.ts|
+|t202_code_f001|minor|遗留|storage.onChanged 监听器随导航累积无 removeListener,记 pending|p054|
+|t202_code_f002|minor|已修|running&&enrolled 判连接是 spec 已批准状态界定;spec 上下文区补宕机窗口说明,实现忠实 spec|docs/tasks/t202_dashboard_bridge_status_snapshot/spec.md|
+|t202_code_f003|minor|已修|bridge 状态契约单一化:复用 BridgeConnectionState 类型,去冗余 as 强转|src/shared/message_contract.ts, src/extension/dashboard/dashboard_settings.ts|
+
+### Round 2 (2026-08-16 02:12 UTC+8)
+
+Round 2 双 PASS(code + test),0 新 blocking finding。
+
+- test f003 复核:find 遍历与 [0] 等价,耦合隐患仍在但 minor,维持已修(已用 find 辨识函数监听器)。
+- code f003 残余:producer get_bridge_connection_state 仍返回内联匿名类型未引 BridgeConnectionState,消费侧已定型无缺陷,维持 minor。
 
 ## 收尾报告
 

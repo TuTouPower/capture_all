@@ -221,7 +221,36 @@ function wire_settings(): void {
             toggle.textContent = (expanded ? '\u25b8 ' : '\u25be ') + t('agentBridgeLegacy');
         }
     });
+    wire_bridge_status(c);
     wire_diagnostics_settings(c);
+}
+
+// t202: bridge \u8fde\u63a5\u6001\u771f\u5b9e\u663e\u793a\u2014\u2014\u542f\u52a8\u65f6\u67e5 SW,\u540e\u7eed\u7ecf storage.onChanged \u540c\u6b65\u5feb\u7167\u4e0e\u8f93\u5165\u6846\u3002
+function wire_bridge_status(c: HTMLElement): void {
+    const update_status = (state: { running: boolean; enrolled: boolean } | null): void => {
+        const el = c.querySelector('#bridgeStatus') as HTMLElement | null;
+        if (!el) return;
+        el.textContent = state?.running && state.enrolled
+            ? t('agentBridgeEnrolled')
+            : t('agentBridgeNotConnected');
+    };
+    // \u542f\u52a8\u65f6\u67e5\u8be2 SW bridge \u72b6\u6001(\u8fd0\u884c\u65f6\u68c0\u67e5 chrome \u5b58\u5728,\u4e0d\u4f9d\u8d56\u6a21\u5757\u7ea7 is_extension \u7f13\u5b58)
+    if (typeof chrome !== 'undefined') {
+        send_ui_message('get_bridge_status', {}).then((res) => {
+            update_status(res.success ? (res.data ?? null) : null);
+        }).catch(() => { /* \u67e5\u8be2\u5931\u8d25\u4fdd\u6301\u9ed8\u8ba4\u672a\u8fde\u63a5 */ });
+    }
+    // \u5916\u90e8\u56de\u586b(storage \u53d8\u66f4,\u5982 bridge \u5fc3\u8df3\u5199 browser_label)\u540c\u6b65\u5185\u5b58\u5feb\u7167\u4e0e\u8f93\u5165\u6846
+    if (typeof chrome !== 'undefined') {
+        chrome.storage?.onChanged?.addListener((changes, area) => {
+            if (area !== 'local' || !changes.user_config) return;
+            set_user_config({ ...get_user_config(), ...(changes.user_config.newValue ?? {}) });
+            const label_input = c.querySelector('[data-cfg="browser_label"]') as HTMLInputElement | null;
+            if (label_input) {
+                label_input.value = get_user_config().browser_label || '';
+            }
+        });
+    }
 }
 
 async function wire_diagnostics_settings(c: HTMLElement): Promise<void> {

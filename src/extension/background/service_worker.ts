@@ -17,7 +17,7 @@ import { start_cookie_capture, stop_cookie_capture } from './cookie_capture';
 import * as capture_state from './capture_state';
 import { set_self_origin_excludes } from './cdp_handler';
 import { export_json, export_jsonl, export_html, export_har, export_app_logs } from './exporter';
-import { start_bridge_client, stop_bridge_client, type AgentBridgeClientDeps } from './agent_bridge_client';
+import { start_bridge_client, stop_bridge_client, get_bridge_connection_state, type AgentBridgeClientDeps } from './agent_bridge_client';
 import { start_body_capture, stop_body_capture_with_cleanup, get_body_capture_result } from './body_capture_coordinator';
 import { arm_duration_limit, disarm_duration_limit, is_duration_alarm, compute_deadline_ms } from './duration_limit';
 import { build_cdp_only_request, type CdpBodyEvent } from './network_correlator';
@@ -338,6 +338,9 @@ async function handle_message(message: IncomingMessage, sender?: { tab?: { id?: 
                 // t172 f001: content 重载恢复采集路径（status poll on_active）应用 log level
                 log_level: (await load_user_config()).log_level,
             });
+        case 'get_bridge_status':
+            // t202: dashboard 查询 bridge client 连接态,「状态」字段据此显示真实连接
+            return wrap_result(get_bridge_connection_state());
         case 'get_capture_data':
             return wrap_result(await get_capture_data(payload?.capture_id as string));
         case 'list_captures':

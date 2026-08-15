@@ -891,6 +891,105 @@ describe('T0006: auto-enroll and session management', () => {
 
         expect(save).toHaveBeenCalledWith({ browser_label: '1 号' });
     });
+
+    // ─── 心跳回填:已 enroll 实例(复用 session 不再 enroll)经心跳回带编号回填本地配置 ───
+
+    test('AC: 心跳回带编号且本地未设 label 时回填', async () => {
+        // 已有持久化 session → resolve_token 复用,不 enroll,只走心跳
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_test_session',
+                instance_token: 'ext_test_session_token',
+            },
+        });
+        const save = vi.fn(async () => {});
+        vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/heartbeat') && init?.method === 'POST') {
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: { browser_label: '1 号' },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps(undefined, save));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).toHaveBeenCalledWith({ browser_label: '1 号' });
+    });
+
+    test('AC: 心跳回带编号但本地已设 label 时不回填', async () => {
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_test_session',
+                instance_token: 'ext_test_session_token',
+            },
+        });
+        const save = vi.fn(async () => {});
+        vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/heartbeat') && init?.method === 'POST') {
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: { browser_label: '1 号' },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps(
+            vi.fn(async () => ({ ...browser_enrolled_config, browser_label: '我的浏览器' })),
+            save,
+        ));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    test('AC: 心跳回带 null 编号时不回填', async () => {
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_test_session',
+                instance_token: 'ext_test_session_token',
+            },
+        });
+        const save = vi.fn(async () => {});
+        vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                if (url.endsWith('/extension/heartbeat') && init?.method === 'POST') {
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: { browser_label: null },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps(undefined, save));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).not.toHaveBeenCalled();
+    });
 });
 
 

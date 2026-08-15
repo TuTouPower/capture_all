@@ -1088,7 +1088,10 @@ describe('bridge server', () => {
             }),
         });
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({ ok: true });
+        // 心跳回带当前 label:扩展据此回填默认编号(见 agent_bridge_client send_heartbeat)
+        const body = await response.json() as { ok: boolean; data?: { browser_label?: string | null } };
+        expect(body.ok).toBe(true);
+        expect(body.data?.browser_label).toBe('work');
     });
 
     it('AC-2: command poll succeeds with instance_token', async () => {

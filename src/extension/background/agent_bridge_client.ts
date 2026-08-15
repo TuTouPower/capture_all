@@ -335,6 +335,14 @@ async function send_heartbeat(url: string, token: string, deps: AgentBridgeClien
     });
 
     if (!response.ok) throw new BridgeHttpError(response.status);
+
+    // 默认编号回填:本地未设 label 时,将 bridge 心跳回带的编号写入本地配置。
+    // 兼容 body 无 ok 字段的响应(如 `{}`),仅显式 ok:false 视为失败。
+    const body = await response.json() as { ok?: boolean; data?: { browser_label?: string | null } };
+    if (body.ok === false) throw new BridgeHttpError(response.status);
+    if (!browser_label && body.data?.browser_label) {
+        await deps.save_user_config({ browser_label: body.data.browser_label });
+    }
 }
 
 async function fetch_command(url: string, token: string): Promise<PendingCommand | null> {

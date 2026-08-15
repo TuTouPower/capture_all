@@ -254,7 +254,8 @@ export function create_route_handlers(ctx: BridgeRouteContext): {
             });
             registry.get_or_create_queue(body.instance_id);
             registry.persist();
-            return { status: 200, body: { ok: true } };
+            // 回带当前 label:扩展本地未设编号时据此回填(见 agent_bridge_client send_heartbeat)
+            return { status: 200, body: { ok: true, data: { browser_label: new_label } } };
         }
 
         if (method === 'GET' && (path === '/extension/command' || path.startsWith('/extension/command?'))) {

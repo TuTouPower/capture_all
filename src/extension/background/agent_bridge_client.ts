@@ -51,6 +51,7 @@ export function set_bridge_session_for_tests(token: string | null): void {
 
 export interface AgentBridgeClientDeps {
     get_user_config: () => Promise<AgentBridgeUserConfig>;
+    save_user_config: (patch: { browser_label: string }) => Promise<void>;
     start_capture: (capture_id: string, config: CaptureConfig) => Promise<{ success: boolean; error?: string }>;
     stop_capture: () => Promise<{ success: boolean }>;
     get_status: () => { active_capture_id: string | null };
@@ -234,6 +235,10 @@ async function resolve_token(config: AgentBridgeUserConfig, deps: AgentBridgeCli
         session_token = result.instance_token;
         enrolled = true;
         await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
+        // 默认编号回填:本地未设 label 时,将 Bridge 分配的编号写入本地配置(界面可见、可编辑)
+        if (!config.browser_label && result.browser_label) {
+            await deps.save_user_config({ browser_label: result.browser_label });
+        }
         logger.info('Bridge enrolled', { instance_id: result.instance_id, browser_label: config.browser_label || null });
         return session_token;
     } catch (error) {
@@ -261,6 +266,10 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
         session_token = result.instance_token;
         enrolled = true;
         await save_bridge_session({ instance_id: result.instance_id, instance_token: result.instance_token });
+        // 与 resolve_token 一致:重 enroll 后本地未设 label 也回填 Bridge 分配编号
+        if (!config.browser_label && result.browser_label) {
+            await deps.save_user_config({ browser_label: result.browser_label });
+        }
         logger.info('Bridge re-enrolled after 401', { instance_id: result.instance_id });
     } catch (error) {
         log_bridge_error(
@@ -271,7 +280,7 @@ async function handle_401(config: AgentBridgeUserConfig, deps: AgentBridgeClient
     }
 }
 
-async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token?: string): Promise<{ instance_id: string; instance_token: string }> {
+async function enroll(url: string, browser_label: string, extension_version: string, instance_id: string, bridge_token?: string): Promise<{ instance_id: string; instance_token: string; browser_label: string | null }> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (bridge_token) {
         headers.Authorization = `Bearer ${bridge_token}`;

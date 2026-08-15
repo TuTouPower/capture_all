@@ -1382,6 +1382,7 @@ async function get_user_config_for_bridge(): Promise<Pick<UserConfig, 'agent_bri
 function start_agent_bridge(): void {
     const bridge_deps: AgentBridgeClientDeps = {
         get_user_config: get_user_config_for_bridge,
+        save_user_config: (patch) => save_user_config(patch),
         start_capture: (capture_id, config) => start_capture(capture_id, config),
         stop_capture: () => stop_capture(),
         get_status: () => ({ active_capture_id: is_capturing ? current_capture_id : null }),

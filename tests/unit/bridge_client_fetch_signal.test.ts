@@ -50,6 +50,7 @@ const enabled_config = {
 function create_deps(): AgentBridgeClientDeps {
     return {
         get_user_config: vi.fn(async () => enabled_config),
+        save_user_config: vi.fn(async () => {}),
         start_capture: vi.fn(async () => ({ success: true })),
         stop_capture: vi.fn(async () => ({ success: true })),
         get_status: vi.fn(() => ({ active_capture_id: null })),

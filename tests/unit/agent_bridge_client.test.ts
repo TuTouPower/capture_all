@@ -73,6 +73,7 @@ function create_deps(
 ): AgentBridgeClientDeps {
     return {
         get_user_config,
+        save_user_config: vi.fn(async () => {}),
         start_capture: vi.fn(async () => ({ success: true })),
         stop_capture: vi.fn(async () => ({ success: true })),
         get_status: vi.fn(() => ({ active_capture_id: null })),
@@ -610,9 +611,11 @@ describe('T0006: auto-enroll and session management', () => {
         get_user_config: AgentBridgeClientDeps['get_user_config'] = vi.fn(
             async () => browser_enrolled_config,
         ),
+        save_user_config: AgentBridgeClientDeps['save_user_config'] = vi.fn(async () => {}),
     ): AgentBridgeClientDeps {
         return {
             get_user_config,
+            save_user_config,
             start_capture: vi.fn(async () => ({ success: true })),
             stop_capture: vi.fn(async () => ({ success: true })),
             get_status: vi.fn(() => ({ active_capture_id: null })),
@@ -620,7 +623,7 @@ describe('T0006: auto-enroll and session management', () => {
         };
     }
 
-    function mock_enroll_response(ok: boolean): ReturnType<typeof vi.spyOn> {
+    function mock_enroll_response(ok: boolean, browser_label: string | null = null): ReturnType<typeof vi.spyOn> {
         return vi.spyOn(global, 'fetch').mockImplementation(
             async (input: string | URL | Request, init?: RequestInit) => {
                 const url = input.toString();
@@ -638,7 +641,7 @@ describe('T0006: auto-enroll and session management', () => {
                         data: {
                             instance_id: 'inst_test_uuid_001',
                             instance_token: 'ext_test_token_001',
-                            browser_label: null,
+                            browser_label,
                         },
                     }), { status: 200 });
                 }
@@ -808,6 +811,85 @@ describe('T0006: auto-enroll and session management', () => {
                 }),
             }),
         );
+    });
+
+    // ─── 默认编号回填:本地未设 label 时,enroll/重 enroll 将 Bridge 分配编号写入本地配置 ───
+
+    test('AC: enroll 返回默认编号且本地未设 label 时回填到本地配置', async () => {
+        const save = vi.fn(async () => {});
+        mock_enroll_response(true, '1 号');
+
+        start_bridge_client(create_enroll_deps(undefined, save));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).toHaveBeenCalledWith({ browser_label: '1 号' });
+    });
+
+    test('AC: 本地已设 label 时不回填', async () => {
+        const save = vi.fn(async () => {});
+        mock_enroll_response(true, '默认编号');
+
+        start_bridge_client(create_enroll_deps(
+            vi.fn(async () => ({ ...browser_enrolled_config, browser_label: '我的浏览器' })),
+            save,
+        ));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    test('AC: bridge 未返回编号时不回填', async () => {
+        const save = vi.fn(async () => {});
+        mock_enroll_response(true, null);
+
+        start_bridge_client(create_enroll_deps(undefined, save));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    test('AC: 401 重 enroll 返回编号且本地未设 label 时回填', async () => {
+        const save = vi.fn(async () => {});
+        storage_get.mockResolvedValue({
+            agent_bridge_session: {
+                instance_id: 'inst_old_001',
+                instance_token: 'ext_old_token_001',
+            },
+        });
+
+        let call_count = 0;
+        vi.spyOn(global, 'fetch').mockImplementation(
+            async (input: string | URL | Request, init?: RequestInit) => {
+                const url = input.toString();
+                call_count += 1;
+                if (url.endsWith('/extension/enroll') && init?.method === 'POST') {
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        data: {
+                            instance_id: 'inst_new_001',
+                            instance_token: 'ext_new_token_001',
+                            browser_label: '1 号',
+                        },
+                    }), { status: 200 });
+                }
+                if (url.endsWith('/extension/command')) {
+                    return new Response(null, { status: 204 });
+                }
+                if (call_count === 1) {
+                    return new Response('{}', { status: 401 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+        );
+
+        start_bridge_client(create_enroll_deps(undefined, save));
+        await run_initial_poll();
+        stop_bridge_client();
+
+        expect(save).toHaveBeenCalledWith({ browser_label: '1 号' });
     });
 });
 

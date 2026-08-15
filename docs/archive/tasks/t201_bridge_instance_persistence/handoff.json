@@ -1,0 +1,21 @@
+{
+  "tid": "t201",
+  "attempt": 1,
+  "execution_id": "dc0796c88f094778b4b8aac6c8ffdfbc",
+  "status": "done",
+  "branch": "t201_bridge_instance_persistence",
+  "base_sha": "2773813bed85a06347775688033769095051232a",
+  "tests": "vitest run: 204 文件 1936 passed",
+  "blackbox": "npm run build 通过, bundle 预算全 PASS",
+  "review": "第 4 轮 PASS (code + test)",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/bridge_registry_refactor.test.ts::AC-001 两实例(零配置+标号)persist/load 后 size=2 label 保留"],
+    "AC-002": ["tests/unit/t137_bridge_security.test.ts t169 AC-003b 重启后 heartbeat 200;registry.ts load_persisted 保留 token_hash 走认证"],
+    "AC-003": ["tests/unit/bridge_registry_refactor.test.ts::AC-003 读回文件断言含 token_hash 无明文 token + stat mode 0600"],
+    "AC-004": ["tests/unit/bridge_registry_refactor.test.ts::AC-004 损坏 JSON 与缺失文件(ENOENT)load 均 instances.size===0 不抛错"],
+    "AC-005": ["tests/unit/agent_bridge_config.test.ts::default_instances_file_path XDG/.local 路径断言 + parse_bridge_cli_args 读 CAPTURE_ALL_INSTANCES_FILE env"],
+    "AC-006": ["tests/unit/bridge_registry_refactor.test.ts::AC-006 60s 旧 seen_at load 后重置为启动时刻,未被 sweep, build_status 含恢复实例"]
+  },
+  "pending": ["p053"],
+  "findings": []
+}

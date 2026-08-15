@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+    default_instances_file_path,
     default_token_file_path,
     generate_bridge_token,
     load_bridge_token_file,
@@ -71,6 +72,7 @@ describe('parse_bridge_config', () => {
         )).toEqual({
             port: 17831,
             token: '<TEST_ENV_BRIDGE_TOKEN>',
+            instances_file: default_instances_file_path(),
         });
     });
 
@@ -81,6 +83,7 @@ describe('parse_bridge_config', () => {
         )).toEqual({
             port: 17831,
             token: '<TEST_CLI_BRIDGE_TOKEN>',
+            instances_file: default_instances_file_path(),
         });
     });
 
@@ -143,6 +146,38 @@ describe('default_token_file_path', () => {
 
         expect(path).toContain('.local/bridge_token');
         expect(path.endsWith('bridge_token')).toBe(true);
+    });
+});
+
+describe('default_instances_file_path', () => {
+    it('returns instances.json in same dir as token file under XDG', () => {
+        process.env.XDG_RUNTIME_DIR = '/run/user/1000';
+        delete process.env.CAPTURE_ALL_BRIDGE_TOKEN_FILE;
+
+        expect(default_instances_file_path()).toBe('/run/user/1000/capture-all/instances.json');
+
+        delete process.env.XDG_RUNTIME_DIR;
+    });
+
+    it('falls back to project .local instances.json when no env vars', () => {
+        delete process.env.CAPTURE_ALL_BRIDGE_TOKEN_FILE;
+        delete process.env.XDG_RUNTIME_DIR;
+
+        const path = default_instances_file_path();
+
+        expect(path).toContain('.local/instances.json');
+        expect(path.endsWith('instances.json')).toBe(true);
+    });
+
+    it('parse_bridge_cli_args reads CAPTURE_ALL_INSTANCES_FILE env', () => {
+        expect(parse_bridge_cli_args(
+            ['--port', '17831'],
+            { CAPTURE_ALL_BRIDGE_TOKEN: 'tok', CAPTURE_ALL_INSTANCES_FILE: '/custom/inst.json' },
+        )).toEqual({
+            port: 17831,
+            token: 'tok',
+            instances_file: '/custom/inst.json',
+        });
     });
 });
 

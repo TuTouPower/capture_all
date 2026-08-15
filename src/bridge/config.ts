@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { dirname, join } from 'node:path';
 import { MAX_COMMAND_TIMEOUT_MS } from '../shared/constants';
 import type { AgentBridgeConfig } from '../shared/protocol';
 // t187: token 文件契约（类型/路径/读写）移入 node_shared 中立模块；re-export 保持既有导出面
@@ -14,6 +15,11 @@ export {
     type TokenFileFailureReason,
     type TokenFileLoadResult,
 } from '../node_shared/bridge_token_file';
+
+// t201: 实例 registry 默认落盘路径——与 token 文件同目录,四条启动路径共享单一位置。
+export function default_instances_file_path(): string {
+    return join(dirname(default_token_file_path()), 'instances.json');
+}
 
 interface RawBridgeConfig {
     host?: string;
@@ -69,7 +75,7 @@ export function parse_bridge_cli_args(
 ): RawBridgeConfig {
     const raw: RawBridgeConfig = {
         token: env.CAPTURE_ALL_BRIDGE_TOKEN || undefined,
-        instances_file: env.CAPTURE_ALL_INSTANCES_FILE || undefined,
+        instances_file: env.CAPTURE_ALL_INSTANCES_FILE || default_instances_file_path(),
         pairing_auto_open: env.CAPTURE_ALL_PAIRING_AUTO_OPEN === '0' || env.CAPTURE_ALL_PAIRING_AUTO_OPEN === 'false' ? false : undefined,
     };
 

@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { BridgeRegistry, generate_instance_id, type ExtensionInstance } from '../../src/bridge/registry';
 
 const root = resolve(__dirname, '..', '..');
@@ -99,5 +101,128 @@ describe('t184 AC-003: route handler 统一 {status, body}，server 层只做发
 
     it('generate_instance_id 从 registry 导出（enroll 未提供 instance_id 时复用）', () => {
         expect(generate_instance_id()).toMatch(/^inst_[0-9a-f]{16}$/);
+    });
+});
+
+describe('t201 AC-003/004/006: 实例持久化——persist/load 往返、seen_at 重置、损坏/缺失文件', () => {
+    // t201_test_f005/f006: persist 为 fire-and-forget,轮询等待落盘文件内容可解析,
+    // 避免固定 sleep flake 与 create/truncate 间隙读到空串
+    async function wait_for_file(file: string): Promise<void> {
+        for (let i = 0; i < 50; i += 1) {
+            try {
+                const content = await readFile(file, 'utf8');
+                if (content.trim()) {
+                    JSON.parse(content);
+                    return;
+                }
+            } catch {
+                // 未出现/未写完/半截 JSON,重试
+            }
+            await new Promise((res) => setTimeout(res, 10));
+        }
+        throw new Error(`file never became parseable: ${file}`);
+    }
+
+    it('AC-003: persist 产物含 token_hash 无明文,文件 mode 0600,load 恢复字段', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't201-registry-'));
+        try {
+            const file = join(dir, 'instances.json');
+            const r1 = new BridgeRegistry(file);
+            r1.instances.set('inst_a', { ...make_instance('inst_a', 'work'), token_hash: 'deadbeef' });
+            r1.persist();
+            await wait_for_file(file);
+
+            // AC-003: 文件内容含 token_hash 而非明文 token
+            const raw = JSON.parse(await readFile(file, 'utf8')) as Array<Record<string, unknown>>;
+            expect(raw).toHaveLength(1);
+            expect(raw[0].token_hash).toBe('deadbeef');
+            expect(raw[0].token).toBeUndefined();
+            expect(raw[0].instance_token).toBeUndefined();
+            // AC-003: 文件权限 0600
+            expect((await stat(file)).mode & 0o777).toBe(0o600);
+
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            const inst = r2.instances.get('inst_a');
+            expect(inst).toBeDefined();
+            expect(inst?.browser_label).toBe('work');
+            expect(inst?.token_hash).toBe('deadbeef');
+            expect(inst?.origin_extension_id).toBe('a'.repeat(32));
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-001: 两实例(零配置+标号)persist/load 后 size 与 label 保留', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't201-multi-'));
+        try {
+            const file = join(dir, 'instances.json');
+            const r1 = new BridgeRegistry(file);
+            // 零配置实例 label=null,模拟未设浏览器编号的扩展
+            r1.instances.set('inst_zero', { ...make_instance('inst_zero', null) });
+            r1.instances.set('inst_labelled', { ...make_instance('inst_labelled', 'work') });
+            r1.persist();
+            await wait_for_file(file);
+
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(2);
+            const status = r2.build_status('127.0.0.1', 17831);
+            const ids = status.extensions.map((e) => e.instance_id).sort();
+            expect(ids).toEqual(['inst_labelled', 'inst_zero']);
+            expect(status.extensions.find((e) => e.instance_id === 'inst_zero')?.browser_label).toBeNull();
+            expect(status.extensions.find((e) => e.instance_id === 'inst_labelled')?.browser_label).toBe('work');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-006: load 后 seen_at 重置为启动时刻,不因旧时间戳被 sweep', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't201-seen-'));
+        try {
+            const file = join(dir, 'instances.json');
+            const r1 = new BridgeRegistry(file);
+            r1.instances.set('inst_a', { ...make_instance('inst_a', 'work'), seen_at: Date.now() - 60000 });
+            r1.persist();
+            await wait_for_file(file);
+
+            const before = Date.now();
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            const inst = r2.instances.get('inst_a');
+            // seen_at 被重置为 load 时刻附近,而非保留 60s 前旧值
+            expect(inst?.seen_at).toBeGreaterThanOrEqual(before - 1000);
+            expect(inst?.seen_at).toBeLessThanOrEqual(Date.now() + 1000);
+            // 重置后实例不被 sweep 删除
+            expect(r2.instances.has('inst_a')).toBe(true);
+            expect(r2.build_status('127.0.0.1', 17831).extensions.some((e) => e.instance_id === 'inst_a')).toBe(true);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-004: 损坏文件 load 从空开始,不抛错', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't201-corrupt-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, '{not valid json', 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(0);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-004: 缺失文件(ENOENT)load 从空开始,不抛错', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't201-missing-'));
+        try {
+            const file = join(dir, 'instances.json');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(0);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
     });
 });

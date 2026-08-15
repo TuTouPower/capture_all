@@ -52,6 +52,8 @@ Type=simple
 User=your-user
 WorkingDirectory=/path/to/capture_all
 # Token 从 EnvironmentFile 注入（不要在 unit 文件中硬编码）
+# 实例 registry 默认落盘 $XDG_RUNTIME_DIR/capture-all/instances.json;
+# 若需自定义路径,可在 EnvironmentFile 里加 CAPTURE_ALL_INSTANCES_FILE=/path/to/instances.json
 EnvironmentFile=/etc/capture-all-bridge.env
 ExecStart=/usr/bin/node artifacts/bridge/bridge.mjs --port 17831
 Restart=on-failure

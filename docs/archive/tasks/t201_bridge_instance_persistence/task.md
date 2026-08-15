@@ -2,11 +2,11 @@
 tid: "t201"
 slug: "bridge_instance_persistence"
 title: "Bridge 实例状态持久化,重启不丢浏览器识别"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t201_bridge_instance_persistence"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "2773813bed85a06347775688033769095051232a"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -48,10 +48,25 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 有 finding 时用本表；每条 finding 一行。
 
+### Round 1 (2026-08-16 01:06 UTC+8)
+
 |finding_id|severity|status|rationale|fix_ref|
 |---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t201_test_f001|important|已修|补 persist 产物文件级断言:读回文件断言含 token_hash 无明文 + stat mode 0600|tests/unit/bridge_registry_refactor.test.ts|
+|t201_test_f002|important|已修|补 default_instances_file_path 具体路径断言(XDG) + parse_bridge_cli_args env 读取断言,去自证式期望|tests/unit/agent_bridge_config.test.ts|
+|t201_test_f003|minor|已修|补双实例(零配置+标号)组合恢复断言 size/label|tests/unit/bridge_registry_refactor.test.ts|
+|t201_test_f004|minor|已修|补缺失文件(ENOENT)load 分支断言 instances.size===0|tests/unit/bridge_registry_refactor.test.ts|
+|t201_test_f005|minor|已修|persist 等待改轮询文件存在,去固定 sleep flake|tests/unit/bridge_registry_refactor.test.ts|
+|t201_code_f001|minor|已修|7a 收尾阶段补 mcp_usage/deployment 文档|docs/guides/mcp_usage.md, docs/guides/deployment.md|
+|t201_code_f002|minor|遗留|load_persisted 畸形条目无字段守卫,pre-existing 非本 diff 引入|p053|
+
+### Round 2 (2026-08-16 01:12 UTC+8)
+
+|finding_id|severity|status|rationale|fix_ref|
+|---|---|---|---|---|
+|t201_code_f003|minor|已修|处置表 f002 fix_ref 改指 p053,畸形条目 follow-up 已有跟踪载体|docs/pending/todo/p053_instances_file_load_no_field_guard.md|
+|t201_code_f004|minor|已修|处置表 f001 状态改「遗留/Finalization」,与实际相符|task.md 处置表|
+|t201_test_f006|minor|已修|wait_for_file 轮询改「内容可解析/非空」,避免 create/truncate 间隙读到空串|tests/unit/bridge_registry_refactor.test.ts|
 
 ## 收尾报告
 

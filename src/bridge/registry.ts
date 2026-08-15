@@ -60,6 +60,7 @@ export class BridgeRegistry {
         try {
             const raw = await readFile(this.instances_file, 'utf8');
             const loaded = JSON.parse(raw) as Array<ExtensionInstance & { id: string }>;
+            const seen_at = Date.now(); // t201 AC-006: 恢复即视为在线,避免旧时间戳被 sweep 删除
             for (const item of loaded) {
                 this.instances.set(item.id, {
                     instance_id: item.instance_id,
@@ -67,7 +68,7 @@ export class BridgeRegistry {
                     active_capture_id: item.active_capture_id,
                     browser_label: item.browser_label,
                     token_hash: item.token_hash,
-                    seen_at: item.seen_at,
+                    seen_at,
                     origin_extension_id: item.origin_extension_id,
                 });
             }

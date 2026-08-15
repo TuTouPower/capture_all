@@ -36,6 +36,9 @@ __pycache__/
 docs/reviews/review_*/_meta/
 docs/archive/reviews/review_*/_meta/
 
+# Playwright MCP 会话产物（截图/快照，调试用）
+.playwright-mcp/
+
 # merge guard hook 运行时状态（token 一次性，不入库）
 .claude/state/
 

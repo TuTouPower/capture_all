@@ -92,7 +92,6 @@ export interface I18nStrings {
     agentBridgeToken: string;
     agentBridgePollInterval: string;
     agentBridgeDesc: string;
-    agentBridgeBrowserNo: string;
     agentBridgeBrowserLabel: string;
     agentBridgeBrowserLabelPlaceholder: string;
     agentBridgeStatus: string;
@@ -347,7 +346,6 @@ const en: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: 'Poll Interval (ms)',
     agentBridgeDesc: 'Local bridge only; token is required before connecting',
-    agentBridgeBrowserNo: 'Browser No.',
     agentBridgeBrowserLabel: 'Label (optional)',
     agentBridgeBrowserLabelPlaceholder: 'e.g. Mac Chrome Dev',
     agentBridgeStatus: 'Status',
@@ -606,7 +604,6 @@ const zh: I18nStrings = {
     agentBridgeToken: 'Bridge Token',
     agentBridgePollInterval: '轮询间隔（毫秒）',
     agentBridgeDesc: '仅连接本地 bridge；必须填写 token 才会连接',
-    agentBridgeBrowserNo: '浏览器编号',
     agentBridgeBrowserLabel: '备注名（可选）',
     agentBridgeBrowserLabelPlaceholder: '如：Mac Chrome Dev',
     agentBridgeStatus: '状态',

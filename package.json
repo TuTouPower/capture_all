@@ -36,7 +36,7 @@
     "test:e2e:server": "npx tsx tests/support/fixtures/server.ts",
     "build:bridge": "esbuild src/bridge/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/bridge/bridge.mjs",
     "build:mcp": "esbuild src/mcp/main.ts --bundle --platform=node --format=esm --external:ws --outfile=artifacts/mcp/mcp.mjs",
-    "build:zip": "cd artifacts/dist && zip -r ../extension.zip .",
+    "build:zip": "rm -f artifacts/extension.zip && cd artifacts/dist && zip -r ../extension.zip .",
     "check:bundle": "node scripts/check_bundle_budget.mjs",
     "check:e2e-coverage": "node scripts/check_e2e_coverage.mjs"
   },

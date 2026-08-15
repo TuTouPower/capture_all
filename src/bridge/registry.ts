@@ -62,6 +62,8 @@ export class BridgeRegistry {
             const loaded = JSON.parse(raw) as Array<ExtensionInstance & { id: string }>;
             const seen_at = Date.now(); // t201 AC-006: 恢复即视为在线,避免旧时间戳被 sweep 删除
             for (const item of loaded) {
+                // t203: 逐字段校验,畸形条目(缺字段/类型错)跳过,不产生垃圾实例
+                if (!is_valid_persisted_instance(item)) continue;
                 this.instances.set(item.id, {
                     instance_id: item.instance_id,
                     extension_version: item.extension_version,
@@ -235,4 +237,17 @@ export class BridgeRegistry {
 /** t184: 迁移自 server.ts——新 instance_id 生成（enroll 未提供时）。 */
 export function generate_instance_id(): string {
     return `inst_${randomBytes(8).toString('hex')}`;
+}
+
+/** t203: 持久化条目字段校验——畸形/缺字段条目跳过,不产生垃圾实例。 */
+function is_valid_persisted_instance(item: ExtensionInstance & { id: string }): boolean {
+    if (item === null || typeof item !== 'object') return false;
+    if (typeof item.id !== 'string' || item.id.length === 0) return false;
+    if (typeof item.instance_id !== 'string' || item.instance_id.length === 0) return false;
+    if (typeof item.extension_version !== 'string') return false;
+    if (item.active_capture_id !== null && typeof item.active_capture_id !== 'string') return false;
+    if (item.browser_label !== null && typeof item.browser_label !== 'string') return false;
+    if (item.token_hash !== null && typeof item.token_hash !== 'string') return false;
+    if (item.origin_extension_id !== null && typeof item.origin_extension_id !== 'string') return false;
+    return true;
 }

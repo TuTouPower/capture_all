@@ -2,11 +2,11 @@
 tid: "t203"
 slug: "registry_load_field_guard"
 title: "registry 畸形实例条目字段守卫"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t203_registry_load_field_guard"
 worktree: ""
 review_level: "full"
-diff_anchor: ""
+diff_anchor: "fdfeb323e17a241d863909cdc607dc07a954b99b"
 depends_on: ""
 conflicts_with: ""
 note: ""
@@ -48,10 +48,22 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 有 finding 时用本表；每条 finding 一行。
 
+### Round 1 (2026-08-16 02:18 UTC+8)
+
 |finding_id|severity|status|rationale|fix_ref|
 |---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t203_code_f001|important|已修|is_valid_persisted_instance 首行加 null/非对象守卫,避免 null 元素抛错中止循环,合法条目不丢失|src/bridge/registry.ts|
+|t203_code_f002|minor|已修|spec 契约区范围移除 seen_at 校验要求(被 t201 Date.now() 覆盖,死数据)|docs/tasks/t203_registry_load_field_guard/spec.md|
+|t203_test_f001|minor|已修|补 null 数组元素用例,锁定 AC-002 部分损坏恢复|tests/unit/bridge_registry_refactor.test.ts|
+|t203_test_f002|minor|已修|补字段类型错误(非 null 非 string)用例|tests/unit/bridge_registry_refactor.test.ts|
+
+### Round 2 (2026-08-16 02:26 UTC+8)
+
+Round 2 双 PASS(code 0 finding,test 1 minor)。
+
+|finding_id|severity|status|rationale|fix_ref|
+|---|---|---|---|---|
+|t203_test_f003|minor|已修|it 标题去 finding ID 前缀,去命名噪音|tests/unit/bridge_registry_refactor.test.ts|
 
 ## 收尾报告
 

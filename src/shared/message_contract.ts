@@ -27,6 +27,7 @@ export const UI_ACTIONS = [
     'flush_app_logs',
     'restart_bridge',
     'test_bridge_fetch',
+    'get_bridge_status',
 ] as const;
 
 export type UiAction = (typeof UI_ACTIONS)[number];
@@ -52,6 +53,7 @@ export interface UiPayloadMap {
     flush_app_logs: Record<string, never>;
     restart_bridge: Record<string, never>;
     test_bridge_fetch: Record<string, never>;
+    get_bridge_status: Record<string, never>;
 }
 
 /** get_status 响应 data：状态对象（含 sender.tab.id 权威回填的 tab_id）。 */
@@ -63,6 +65,12 @@ export interface CaptureStatusData {
     start_time: number;
     tab_id: number;
     body_capture: unknown;
+}
+
+/** get_bridge_status 响应 data:bridge client 连接态。 */
+export interface BridgeConnectionState {
+    running: boolean;
+    enrolled: boolean;
 }
 
 /** 各 action 的响应 data 形状。 */
@@ -85,6 +93,7 @@ export interface UiDataMap {
     flush_app_logs: { success: boolean };
     restart_bridge: { success: boolean };
     test_bridge_fetch: { success: boolean; bridge_url?: string; health?: unknown };
+    get_bridge_status: BridgeConnectionState;
 }
 
 export type UiPayload<A extends UiAction> = UiPayloadMap[A];

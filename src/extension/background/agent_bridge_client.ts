@@ -90,6 +90,11 @@ export function is_bridge_client_running(): boolean {
     return running;
 }
 
+/** t202: dashboard 查询 bridge 连接态(running=轮询循环存活,enrolled=已获 session token)。 */
+export function get_bridge_connection_state(): { running: boolean; enrolled: boolean } {
+    return { running, enrolled };
+}
+
 export function start_bridge_client(deps: AgentBridgeClientDeps): void {
     if (running) return;
     running = true;

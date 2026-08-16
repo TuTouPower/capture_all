@@ -10,10 +10,20 @@ import {
 import { set_locale } from '../../src/extension/shared/i18n'
 
 // set_locale 会写 chrome.storage.local；wire_settings 会走 runtime.sendMessage（get_app_log_size），提供最小 mock
-const runtime_send_message = vi.fn(async () => ({ success: true, data: { size_bytes: 0 } }))
+// vi.hoisted: 在 import dashboard 模块前 stub chrome,使 is_extension 求值为 true
+const { runtime_send_message, on_changed_listener } = vi.hoisted(() => ({
+    runtime_send_message: vi.fn(async (msg: { action?: string }) => {
+        if (msg?.action === 'get_bridge_status') return { success: true, data: { running: true, enrolled: true } };
+        return { success: true, data: { size_bytes: 0 } };
+    }),
+    on_changed_listener: vi.fn(),
+}))
 vi.stubGlobal('chrome', {
     runtime: { id: 'test-ext', sendMessage: runtime_send_message },
-    storage: { local: { set: vi.fn(), get: vi.fn(async () => ({})) } },
+    storage: {
+        local: { set: vi.fn(), get: vi.fn(async () => ({})) },
+        onChanged: { addListener: on_changed_listener },
+    },
 })
 
 // 默认 en；需要断言中文渲染的用例内切到 zh
@@ -184,5 +194,82 @@ describe('browser_label settings UI', () => {
         const adv_toggle = integrations?.querySelector('#bridgeAdvToggle')
         expect(adv_toggle).not.toBeNull()
         expect(adv_toggle?.textContent).toContain('Legacy')
+    })
+})
+
+describe('t202: bridge 状态与快照刷新', () => {
+    beforeEach(() => {
+        on_changed_listener.mockClear()
+        runtime_send_message.mockClear()
+    })
+
+    it('AC-002: bridge 在线时状态显示已连接,离线时未连接', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        // get_bridge_status 返回在线
+        runtime_send_message.mockResolvedValue({ success: true, data: { running: true, enrolled: true } })
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+        const status = document.getElementById('bridgeStatus') as HTMLElement
+        expect(runtime_send_message).toHaveBeenCalledWith(expect.objectContaining({ action: 'get_bridge_status' }))
+        expect(status).not.toBeNull()
+        expect(status.textContent).toContain('已连接')
+        document.body.innerHTML = ''
+    })
+
+    it('AC-002: bridge 离线时显示未连接', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockResolvedValue({ success: true, data: { running: false, enrolled: false } })
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+        const status = document.getElementById('bridgeStatus') as HTMLElement
+        expect(status.textContent).toContain('未连接')
+        document.body.innerHTML = ''
+    })
+
+    it('AC-001: storage.onChanged 外部回填 browser_label 后输入框即时更新', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockResolvedValue({ success: true, data: { running: true, enrolled: true } })
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+
+        const label_input = content.querySelector('[data-cfg="browser_label"]') as HTMLInputElement
+        expect(label_input.value).toBe('')
+
+        // 模拟 SW 心跳回填写 storage
+        const listener = on_changed_listener.mock.calls.find((call) => typeof call[0] === 'function')?.[0]
+        expect(listener).toBeDefined()
+        ;(listener as (changes: unknown, area: string) => void)(
+            { user_config: { newValue: { ...DEFAULT_USER_CONFIG, browser_label: '1 号' } } },
+            'local',
+        )
+
+        expect(label_input.value).toBe('1 号')
+        document.body.innerHTML = ''
+    })
+
+    it('AC-002: 查询失败(sendMessage reject)时保持未连接', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockRejectedValue(new Error('bridge unreachable'))
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+        const status = document.getElementById('bridgeStatus') as HTMLElement
+        expect(status.textContent).toContain('未连接')
+        document.body.innerHTML = ''
     })
 })

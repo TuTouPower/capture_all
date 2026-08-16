@@ -226,3 +226,92 @@ describe('t201 AC-003/004/006: 实例持久化——persist/load 往返、seen_a
         }
     });
 });
+
+describe('t203: load_persisted 畸形条目字段守卫', () => {
+    it('AC-001: 缺 token_hash 的畸形条目被跳过', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't203-malformed-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, JSON.stringify([
+                { id: 'inst_bad', instance_id: 'inst_bad', extension_version: '1.0.0', active_capture_id: null, browser_label: 'bad', token_hash: undefined, origin_extension_id: 'a'.repeat(32) },
+            ]), 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(0);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-002: 畸形条目跳过,合法条目保留', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't203-mixed-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, JSON.stringify([
+                { id: 'inst_bad', instance_id: 'inst_bad', extension_version: '1.0.0', active_capture_id: null, browser_label: 'bad', token_hash: undefined, origin_extension_id: 'a'.repeat(32) },
+                { id: 'inst_ok', instance_id: 'inst_ok', extension_version: '1.0.0', active_capture_id: null, browser_label: 'work', token_hash: 'deadbeef', origin_extension_id: 'a'.repeat(32) },
+            ]), 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(1);
+            expect(r2.instances.get('inst_ok')?.browser_label).toBe('work');
+            expect(r2.instances.get('inst_bad')).toBeUndefined();
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('AC-003: 全畸形文件不抛错,registry 从空开始', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't203-allbad-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, JSON.stringify([
+                { id: '', instance_id: '', token_hash: null },
+                { foo: 'bar' },
+            ]), 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(0);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('t203 Round 2: null 元素与类型错误条目守卫', () => {
+    it('null 数组元素不中止循环,后续合法条目恢复', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't203-null-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, JSON.stringify([
+                { id: 'inst_ok1', instance_id: 'inst_ok1', extension_version: '1.0.0', active_capture_id: null, browser_label: 'one', token_hash: 'a', origin_extension_id: 'a'.repeat(32) },
+                null,
+                { id: 'inst_ok2', instance_id: 'inst_ok2', extension_version: '1.0.0', active_capture_id: null, browser_label: 'two', token_hash: 'b', origin_extension_id: 'a'.repeat(32) },
+            ]), 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(2);
+            expect(r2.instances.get('inst_ok1')?.browser_label).toBe('one');
+            expect(r2.instances.get('inst_ok2')?.browser_label).toBe('two');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('字段类型错误(非 null 非 string)条目被跳过', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 't203-type-'));
+        try {
+            const file = join(dir, 'instances.json');
+            await writeFile(file, JSON.stringify([
+                { id: 'inst_bad', instance_id: 'inst_bad', extension_version: 42, active_capture_id: null, browser_label: 'bad', token_hash: 'a', origin_extension_id: 'a'.repeat(32) },
+                { id: 'inst_ok', instance_id: 'inst_ok', extension_version: '1.0.0', active_capture_id: null, browser_label: 'work', token_hash: 'b', origin_extension_id: 'a'.repeat(32) },
+            ]), 'utf8');
+            const r2 = new BridgeRegistry(file);
+            await r2.load_persisted();
+            expect(r2.instances.size).toBe(1);
+            expect(r2.instances.get('inst_ok')?.browser_label).toBe('work');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+});

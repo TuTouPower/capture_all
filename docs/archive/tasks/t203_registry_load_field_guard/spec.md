@@ -8,8 +8,8 @@ p053:`load_persisted()` 对 `JSON.parse` 后数组元素无逐字段校验。实
 
 ### 范围
 
-- `load_persisted()` 对每个载入条目做字段校验:instance_id 非空字符串、token_hash 为 string 或 null、browser_label 为 string 或 null、seen_at 为数字、origin_extension_id 为 string 或 null、extension_version 为 string、active_capture_id 为 string 或 null。
-- 畸形条目跳过(不装载),不影响其余合法条目与 bridge 启动。
+- `load_persisted()` 对每个载入条目做字段校验:instance_id 非空字符串、token_hash 为 string 或 null、browser_label 为 string 或 null、origin_extension_id 为 string 或 null、extension_version 为 string、active_capture_id 为 string 或 null。seen_at 不校验(载入时由 t201 统一重置为启动时刻,属死数据)。
+- 畸形条目(含 null 元素、字段缺/类型错)跳过(不装载),不影响其余合法条目与 bridge 启动。
 
 ### 非范围
 

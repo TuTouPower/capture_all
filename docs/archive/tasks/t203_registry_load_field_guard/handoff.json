@@ -1,0 +1,18 @@
+{
+  "tid": "t203",
+  "attempt": 1,
+  "execution_id": "82f792db70fe4651b96f096b8a8b8885",
+  "status": "done",
+  "branch": "t203_registry_load_field_guard",
+  "base_sha": "fdfeb323e17a241d863909cdc607dc07a954b99b",
+  "tests": "vitest run: 205 文件 1948 passed",
+  "blackbox": "npm run build 通过, bundle 预算全 PASS",
+  "review": "第 3 轮 PASS (code + test)",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/bridge_registry_refactor.test.ts::缺 token_hash 畸形条目跳过, instances.size===0"],
+    "AC-002": ["tests/unit/bridge_registry_refactor.test.ts::畸形条目跳过合法条目保留 size=1; null 元素不中止循环后续合法恢复"],
+    "AC-003": ["tests/unit/bridge_registry_refactor.test.ts::全畸形/null/类型错误文件不抛错, registry 从空开始"]
+  },
+  "pending": [],
+  "findings": []
+}

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+    get_bridge_connection_state,
     is_bridge_client_running,
     start_bridge_client,
     stop_bridge_client,
@@ -159,6 +160,16 @@ describe('agent bridge client', () => {
         expect(is_bridge_client_running()).toBe(true);
         stop_bridge_client();
         expect(is_bridge_client_running()).toBe(false);
+    });
+
+    test('t202: get_bridge_connection_state 反映 running/enrolled', () => {
+        const deps = create_deps();
+        // beforeEach 已设 session → enrolled=true;未启动 running=false
+        expect(get_bridge_connection_state()).toEqual({ running: false, enrolled: true });
+        start_bridge_client(deps);
+        expect(get_bridge_connection_state().running).toBe(true);
+        expect(get_bridge_connection_state().enrolled).toBe(true);
+        stop_bridge_client();
     });
 
     test('double start is no-op', () => {

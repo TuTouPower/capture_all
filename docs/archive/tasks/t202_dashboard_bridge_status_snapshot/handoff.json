@@ -1,0 +1,18 @@
+{
+  "tid": "t202",
+  "attempt": 1,
+  "execution_id": "4edef02ef6b64fc2964663b9810a88d2",
+  "status": "done",
+  "branch": "t202_dashboard_bridge_status_snapshot",
+  "base_sha": "d3b7ceb371440f3bc3996f2ec3eb24d2c1aabe30",
+  "tests": "vitest run: 205 文件 1943 passed",
+  "blackbox": "npm run build 通过, bundle 预算全 PASS",
+  "review": "第 2 轮 PASS (code + test)",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/settings_ui.test.ts::storage.onChanged 外部回填 browser_label 后输入框即时更新; [deploy] 端到端子项 trust_prior"],
+    "AC-002": ["tests/unit/settings_ui.test.ts::bridge 在线显示已连接/离线显示未连接/查询失败保持未连接"],
+    "AC-003": ["tests/unit/service_worker_bridge_status.test.ts::get_bridge_status handler 返回 running/enrolled"]
+  },
+  "pending": ["p054"],
+  "findings": []
+}

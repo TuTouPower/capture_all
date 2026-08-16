@@ -1,0 +1,17 @@
+{
+  "tid": "t204",
+  "attempt": 1,
+  "execution_id": "28321aa3db014556a70a81bad8e65f08",
+  "status": "done",
+  "branch": "t204_dashboard_settings_onchanged_singleton",
+  "base_sha": "3f129f29fcd05b1c96b7149a1f2991d7766f2a5f",
+  "tests": "vitest run: 205 文件 1950 passed",
+  "blackbox": "npm test && npx tsc --noEmit && npm run build 通过, bundle 预算全 PASS",
+  "review": "第 1 轮 PASS (general)",
+  "ac_evidence": {
+    "AC-001": ["tests/unit/settings_ui.test.ts::多次 wire_settings 后 addListener 仅注册一次"],
+    "AC-002": ["tests/unit/settings_ui.test.ts::单例监听器仍可回填 browser_label"]
+  },
+  "pending": [],
+  "findings": []
+}

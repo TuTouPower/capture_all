@@ -2,11 +2,11 @@
 tid: "t204"
 slug: "dashboard_settings_onchanged_singleton"
 title: "dashboard settings onChanged 监听器单例"
-status: "backlog"
-branch: ""
+status: "done"
+branch: "t204_dashboard_settings_onchanged_singleton"
 worktree: ""
 review_level: "single"
-diff_anchor: ""
+diff_anchor: "3f129f29fcd05b1c96b7149a1f2991d7766f2a5f"
 depends_on: ""
 conflicts_with: ""
 note: "p054: wire_bridge_status 每次 wire 重复注册 storage.onChanged"
@@ -22,7 +22,10 @@ note: "p054: wire_bridge_status 每次 wire 重复注册 storage.onChanged"
 
 创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
 
-无
+- 模块级 `_user_config_storage_listener_bound` 单例注册 storage.onChanged
+- live DOM `#content [data-cfg="browser_label"]` 避免闭包旧节点
+- 测试钩子 `_reset_user_config_storage_listener_for_test` 仅测用
+- npm test 1950 passed；tsc + build 通过
 
 ## Review 处置
 
@@ -44,14 +47,11 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 - **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
 - **有 critical / important**：建表，逐条填 status（不得留空）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
-
-有 finding 时用本表；每条 finding 一行。
+### Round 1 (2026-08-16 14:46 UTC+8)
 
 |finding_id|severity|status|rationale|fix_ref|
 |---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+|t204_gen_f001|minor|已修|测试钩子仅测用,生产永不调用;设计接受无需改码|—|
 
 ## 收尾报告
 
@@ -60,7 +60,7 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 ### 验收
 
 - spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
+- 结果：全部满足
 - 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
 
 ### Reviewer verdict
@@ -74,10 +74,10 @@ reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符
 
 `single`：
 
-- Round 1 general：PASS / FAIL
+- Round 1 general：PASS
 
 遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
 
 ### 结果摘要
 
-- 一句话；无额外说明可写「见上」
+- p054 修复：storage.onChanged 单例；多次 wire 不累积；回填不回归

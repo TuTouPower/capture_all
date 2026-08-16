@@ -6,6 +6,7 @@ import {
     clamp_body_size_bytes,
     render_settings,
     wire_settings,
+    _reset_user_config_storage_listener_for_test,
 } from '../../src/extension/dashboard/dashboard_settings'
 import { set_locale } from '../../src/extension/shared/i18n'
 
@@ -201,6 +202,7 @@ describe('t202: bridge 状态与快照刷新', () => {
     beforeEach(() => {
         on_changed_listener.mockClear()
         runtime_send_message.mockClear()
+        _reset_user_config_storage_listener_for_test()
     })
 
     it('AC-002: bridge 在线时状态显示已连接,离线时未连接', async () => {
@@ -270,6 +272,55 @@ describe('t202: bridge 状态与快照刷新', () => {
         await new Promise((r) => setTimeout(r, 0))
         const status = document.getElementById('bridgeStatus') as HTMLElement
         expect(status.textContent).toContain('未连接')
+        document.body.innerHTML = ''
+    })
+})
+
+describe('t204: storage.onChanged 监听器单例', () => {
+    beforeEach(() => {
+        on_changed_listener.mockClear()
+        runtime_send_message.mockClear()
+        _reset_user_config_storage_listener_for_test()
+    })
+
+    it('AC-001: 多次 wire_settings 后 addListener 仅注册一次', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockResolvedValue({ success: true, data: { running: true, enrolled: true } })
+        wire_settings()
+        wire_settings()
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+        const fn_calls = on_changed_listener.mock.calls.filter((call) => typeof call[0] === 'function')
+        expect(fn_calls).toHaveLength(1)
+        document.body.innerHTML = ''
+    })
+
+    it('AC-002: 单例监听器仍可回填 browser_label', async () => {
+        set_locale('zh')
+        set_user_config(DEFAULT_USER_CONFIG)
+        document.body.innerHTML = '<div id="content"></div>'
+        const content = document.getElementById('content')!
+        content.innerHTML = render_settings()
+        runtime_send_message.mockResolvedValue({ success: true, data: { running: true, enrolled: true } })
+        wire_settings()
+        // 再次进入设置页(模拟导航)
+        content.innerHTML = render_settings()
+        wire_settings()
+        await new Promise((r) => setTimeout(r, 0))
+
+        const label_input = content.querySelector('[data-cfg="browser_label"]') as HTMLInputElement
+        expect(label_input.value).toBe('')
+        const listener = on_changed_listener.mock.calls.find((call) => typeof call[0] === 'function')?.[0]
+        expect(listener).toBeDefined()
+        ;(listener as (changes: unknown, area: string) => void)(
+            { user_config: { newValue: { ...DEFAULT_USER_CONFIG, browser_label: '2 号' } } },
+            'local',
+        )
+        expect(label_input.value).toBe('2 号')
         document.body.innerHTML = ''
     })
 })

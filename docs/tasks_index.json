@@ -2,21 +2,5 @@
     "generated_by": "scripts/repo_template/task.py",
     "authority": "docs/tasks/{tid}_{slug}/task.md front matter",
     "workspace": ".",
-    "tasks": [
-        {
-            "tid": "t204",
-            "slug": "dashboard_settings_onchanged_singleton",
-            "title": "dashboard settings onChanged 监听器单例",
-            "status": "backlog",
-            "branch": "",
-            "worktree": "",
-            "review_level": "single",
-            "diff_anchor": "",
-            "depends_on": "",
-            "conflicts_with": "",
-            "schedule_status": "",
-            "note": "p054: wire_bridge_status 每次 wire 重复注册 storage.onChanged",
-            "dir": "docs/tasks/t204_dashboard_settings_onchanged_singleton"
-        }
-    ]
+    "tasks": []
 }

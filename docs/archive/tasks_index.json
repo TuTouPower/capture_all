@@ -2942,6 +2942,21 @@
             "schedule_status": "",
             "note": "",
             "dir": "docs/archive/tasks/t203_registry_load_field_guard"
+        },
+        {
+            "tid": "t204",
+            "slug": "dashboard_settings_onchanged_singleton",
+            "title": "dashboard settings onChanged 监听器单例",
+            "status": "done",
+            "branch": "t204_dashboard_settings_onchanged_singleton",
+            "worktree": "",
+            "review_level": "single",
+            "diff_anchor": "3f129f29fcd05b1c96b7149a1f2991d7766f2a5f",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "p054: wire_bridge_status 每次 wire 重复注册 storage.onChanged",
+            "dir": "docs/archive/tasks/t204_dashboard_settings_onchanged_singleton"
         }
     ]
 }

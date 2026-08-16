@@ -2912,6 +2912,36 @@
             "schedule_status": "",
             "note": "",
             "dir": "docs/archive/tasks/t201_bridge_instance_persistence"
+        },
+        {
+            "tid": "t202",
+            "slug": "dashboard_bridge_status_snapshot",
+            "title": "Dashboard 设置页 bridge 连接状态与快照刷新",
+            "status": "done",
+            "branch": "t202_dashboard_bridge_status_snapshot",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "d3b7ceb371440f3bc3996f2ec3eb24d2c1aabe30",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t202_dashboard_bridge_status_snapshot"
+        },
+        {
+            "tid": "t203",
+            "slug": "registry_load_field_guard",
+            "title": "registry 畸形实例条目字段守卫",
+            "status": "done",
+            "branch": "t203_registry_load_field_guard",
+            "worktree": "",
+            "review_level": "full",
+            "diff_anchor": "fdfeb323e17a241d863909cdc607dc07a954b99b",
+            "depends_on": "",
+            "conflicts_with": "",
+            "schedule_status": "",
+            "note": "",
+            "dir": "docs/archive/tasks/t203_registry_load_field_guard"
         }
     ]
 }

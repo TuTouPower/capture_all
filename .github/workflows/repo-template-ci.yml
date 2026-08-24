@@ -20,4 +20,4 @@ jobs:
           git config --global user.email "repo-template-ci@example.com"
           git config --global user.name "repo-template CI"
       - name: Run toolchain tests
-        run: pytest tests/repo_template/ -q
+        run: pytest .repo_template/tests/ -q

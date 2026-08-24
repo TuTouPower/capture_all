@@ -85,7 +85,7 @@ Round N（N≥2）在对应报告文件末尾追加 `## Round N (YYYY-MM-DD HH:M
 
 ### 系统性缺口去重
 
-发现跨 task 的测试基础设施、公共代码、环境或工具链缺口时，先只读运行 `scripts/repo_template/task.py list`，必要时 `scripts/repo_template/task.py show <tid>` 查找等价 follow-up。**仅允许** `list` / `show`（只读）；禁止 `add` / `start` / `finish` / `block` 等写命令。已有 task 时在结论引用 tid，不重复报告同一 finding；当前 diff 扩大问题或缺口直接影响当前正确性、安全、协议兼容、测试可信度时，仍报告本次新增影响。
+发现跨 task 的测试基础设施、公共代码、环境或工具链缺口时，先只读运行 `.repo_template/scripts/task.py list`，必要时 `.repo_template/scripts/task.py show <tid>` 查找等价 follow-up。**仅允许** `list` / `show`（只读）；禁止 `add` / `start` / `finish` / `block` 等写命令。已有 task 时在结论引用 tid，不重复报告同一 finding；当前 diff 扩大问题或缺口直接影响当前正确性、安全、协议兼容、测试可信度时，仍报告本次新增影响。
 
 reviewer 只建议 follow-up 标题、slug 和阻断性。
 

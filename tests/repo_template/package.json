@@ -1,6 +1,0 @@
-{
-  "name": "capture-all-repo-template-tests",
-  "private": true,
-  "description": "repo_template 工具链测试的 CommonJS 作用域：capture_all 根 package.json 声明 type:module，此目录级覆盖让模板自带 JS 用例（require 风格）按 CommonJS 解析。模板同步时勿删（消费定制）。",
-  "type": "commonjs"
-}

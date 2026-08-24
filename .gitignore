@@ -50,3 +50,7 @@ docs/runtime/
 
 # CommandCode local runtime state
 .commandcode/
+
+# 同步自模板（repo-template-sync）
+/artifacts/
+/data/

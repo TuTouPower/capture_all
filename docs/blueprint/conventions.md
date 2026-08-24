@@ -7,7 +7,7 @@
 - `AGENTS.md`、`CLAUDE.md`、`README.md` 是工具入口例外。
 - task 编号：占位 `{tid}`，值小写 `t001`、`t042`…。目录 / 分支 / finding / worktree：`docs/tasks/{tid}_{slug}/`、`{tid}_{slug}`、`{tid}_code_fNNN`、`../{repo}_{tid}`。
 - spike 编号：占位 `{sid}`，值小写 `s001`、`s003`…。目录：`docs/spikes/{sid}_{slug}/`。
-- 总账编号：待办与发现均为一条目一文件，文件名 `pNNN_{slug}.md` / `dNNN_{slug}.md`，编号来自文件名。条目只经 `scripts/repo_template/pending.py new` 与 `findings.py new` 创建——脚本在 git 公共目录的排他锁内完成「扫描全部本地分支与 worktree 取号 → 建文件」，并发执行不会撞号。`pNNN` 跨 `docs/pending/todo/`、`docs/pending/parked/`、`docs/archive/pending/` 共享全局序列，`dNNN` 在 `docs/findings/` 内递增；历史编号均不复用，不维护索引文件。spike 是目录型条目（`docs/spikes/sNNN_{slug}/`），由 `scripts/repo_template/spikes.py new` 同法锁内分配，`sNNN` 与 `docs/archive/spikes/` 共享序列。
+- 总账编号：待办与发现均为一条目一文件，文件名 `pNNN_{slug}.md` / `dNNN_{slug}.md`，编号来自文件名。条目只经 `.repo_template/scripts/pending.py new` 与 `findings.py new` 创建——脚本在 git 公共目录的排他锁内完成「扫描全部本地分支与 worktree 取号 → 建文件」，并发执行不会撞号。`pNNN` 跨 `docs/pending/todo/`、`docs/pending/parked/`、`docs/archive/pending/` 共享全局序列，`dNNN` 在 `docs/findings/` 内递增；历史编号均不复用，不维护索引文件。spike 是目录型条目（`docs/spikes/sNNN_{slug}/`），由 `.repo_template/scripts/spikes.py new` 同法锁内分配，`sNNN` 与 `docs/archive/spikes/` 共享序列。
 - AC 编号：spec 验收标准每条行为 AC 用 `AC-NNN`（三位十进制，task 内从 1 顺序编号）。编号一旦分配永久归属，删除后不复用（允许断号，不强制连续），新增用下一个编号。`handoff.json` 的 `ac_evidence` 键引用同一编号，须精确覆盖 spec 验收标准全部 AC——缺或多都阻断合入。编号规范属 spec 模板门禁，见 `docs/tasks/task_template/spec.md`。
 - 占位示例（模板、示例行）不得占用真实 `tid` / `sid` / `pNNN`，也不得当作 active 工作项执行。
 - 变量、函数、文件名、目录名、slug 一律 `snake_case`；大写 `TNNN` 仅见于 git 历史与旧文档正文（旧 task 编号体系），磁盘目录与 task.py 索引统一小写 `tNNN`。
@@ -18,8 +18,8 @@
 - front matter 注释独占整行；行内注释有解析器兜底，但勿依赖。
 - 行尾不留空白；文件末尾保留一个换行。
 - 时间戳统一使用中国时间，格式 `YYYY-MM-DD HH:MM UTC+8`。
-- `docs/archive/tasks_audit.log` 由 `scripts/repo_template/task.py rewind`/`purge` 自动写入。
-- 非归档 Markdown 统一用 md_kx 格式化（`scripts/repo_template/md_format.py`），表用 `compact`（`|a|b|`）。改完 md 后跑 `python3 scripts/repo_template/md_format.py --changed`（或点名路径）；commit 前 `--check` 为绿。格式由 `.md_kx.toml` 统一，禁止 prettier / 按列 pad。
+- `docs/archive/tasks_audit.log` 由 `.repo_template/scripts/task.py rewind`/`purge` 自动写入。
+- 非归档 Markdown 统一用 md_kx 格式化（`.repo_template/scripts/md_format.py`），表用 `compact`（`|a|b|`）。改完 md 后跑 `python3 .repo_template/scripts/md_format.py --changed`（或点名路径）；commit 前 `--check` 为绿。格式由 `.md_kx.toml` 统一，禁止 prettier / 按列 pad。
 - TypeScript strict mode。
 - 语言和框架已有稳定惯例时，在本文件补充项目级例外，不强行覆盖生态要求。
 
@@ -27,13 +27,13 @@
 
 按消费方决定落点，`schemas/` 只放跨服务契约。
 
-| 类型 | 例子 | 落点 |
-| ---- | ---- | ---- |
-| 跨服务接口契约 | OpenAPI、gRPC `.proto`、GraphQL `.graphql`、AsyncAPI | `schemas/`，按协议分子目录：`schemas/openapi/`、`schemas/proto/`、`schemas/graphql/`；单一协议直接扁平 |
-| 代码内数据契约 | Pydantic model、TS interface、Zod schema、Go struct tag | 跟模块走：`src/<module>/schemas/` 或语言惯例位置（`src/types/`、`src/models/`） |
-| 数据库 schema | Alembic、Prisma schema、SQL migration、Django migration | 工具默认：`migrations/` / `prisma/` / `alembic/`，不另立目录 |
-| 配置 schema | JSON Schema 校验 config、CI workflow schema、env schema | 跟配置走：`config/schemas/`，或跟消费方 |
-| 文档/元数据 schema | frontmatter、Cosmjs、yaml metadata 校验 | `docs/schemas/`，或跟文档源 |
+|类型|例子|落点|
+|---|---|---|
+|跨服务接口契约|OpenAPI、gRPC `.proto`、GraphQL `.graphql`、AsyncAPI|`schemas/`，按协议分子目录：`schemas/openapi/`、`schemas/proto/`、`schemas/graphql/`；单一协议直接扁平|
+|代码内数据契约|Pydantic model、TS interface、Zod schema、Go struct tag|跟模块走：`src/<module>/schemas/` 或语言惯例位置（`src/types/`、`src/models/`）|
+|数据库 schema|Alembic、Prisma schema、SQL migration、Django migration|工具默认：`migrations/` / `prisma/` / `alembic/`，不另立目录|
+|配置 schema|JSON Schema 校验 config、CI workflow schema、env schema|跟配置走：`config/schemas/`，或跟消费方|
+|文档/元数据 schema|frontmatter、Cosmjs、yaml metadata 校验|`docs/schemas/`，或跟文档源|
 
 原则：
 

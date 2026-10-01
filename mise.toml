@@ -1,0 +1,4 @@
+# ENVIRONMENT: 本机统一用 mise 管理 Runtime。
+# 满足 package.json engines.node: ^20.19.0 || >=22.12.0
+[tools]
+node = "lts"

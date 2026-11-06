@@ -1,17 +1,18 @@
----
-tid: t059
-slug: event_id_uuid
-title: "refactor: event_id uses crypto.randomUUID"
-status: done
-branch: task_t059_event_id_uuid
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T059 event_id_uuid
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`event_utils.ts:4-16` event_id 用 Date.now()+Math.random()*1e6+counter，不是 UUID；多 frame/SW 重启 counter 归零可碰撞。
+
+## 范围
+
+- generate_event_id 优先用 crypto.randomUUID()，fallback 旧实现（非 secure context）。
+
+## 验收
+
+- [x] 支持 crypto.randomUUID 时用其生成 event_id。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

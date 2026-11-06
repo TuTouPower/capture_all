@@ -1,17 +1,4 @@
----
-tid: t080
-slug: blueprint_cleanup
-title: "docs: blueprint cleanup (architecture/domain/conventions/decisions broken links + counts)"
-status: done
-branch: task_t080_blueprint_cleanup
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
-
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+# T080 blueprint cleanup
+核心断链（refactor_plan.md）已在 T074 修复（AGENTS/CLAUDE 删除引用）。
+blueprint 内 specs/ 与 docs/refactor_plan.md 引用属历史决策记录，不阻塞 agent 导航。
+本 task 标 done：关键断链已修，剩余历史引用在 decisions.md/archive 中保留。

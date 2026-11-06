@@ -1,85 +1,75 @@
----
-tid: "t107"
-slug: "dashboard_export_flush_save_as"
-title: "fix: Dashboard 导出先 flush 且 export_save_as 生效"
-status: "done"
-branch: "t107_dashboard_export_flush_save_as"
-worktree: ""
-review_level: "full"
-diff_anchor: "85dd337d688a1a32f36d7e3120686cfa288d1cf6"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-10"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Dashboard ZIP 导出未先 flush，缓冲数据可丢；`export_save_as` 已存但不被 download 路径读取。P1-10。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 导出（含 ZIP/归档）前 flush 相关 storage 缓冲。
+- `export_save_as` 为 true 时下载走「另存为」可选路径（Chrome downloads.saveAs）；false 时不强制另存为。
+- 单测或对 download API 参数断言。
 
-- doctor/preflight 通过。
-- 根因：Dashboard 导出未 flush 缓冲丢数据；export_save_as 存了不读。
-- 修复：SW export handler + 'flush' action；dashboard archive flush + save_as 传参；download_blob save_as 显式优先。
-- Round 1 code FAIL（archive flush 静默失败）→ 修 + 注释同步。
-- 全量 1229 通过，tsc 无错。
+### 非范围
 
-## Review 处置
+- 不改导出格式集合。
+- 不改 archive 去重（t109）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：导出触发前调用 flush（或等价等待缓冲落盘）后，导出内容包含 flush 前仅在缓冲中的事件（通过 mock buffer + flush 可观测）。
+- [ ] AC-002：`export_save_as===true` 时，触发下载的 API 参数 `saveAs===true`（或等价）。
+- [ ] AC-003：`export_save_as===false` 时，下载参数不强制 saveAs true。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 07:40 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code FAIL（f001 important archive flush 失败静默 + f002 minor）；test PASS（4 minor 不阻断）。
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 07:41 UTC+8)
+- 全部 AC 可自动测试（mock chrome.downloads / flush）。
 
-code PASS / test PASS。处置：
+## 上下文区
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t107_code_f001 | important | 已修 | archive flush 后检查 success，失败中止导出 | dashboard_shared.ts |
-| t107_code_f002 | minor | 已修 | 注释同步 + has_dir+save_as 组合用例 | export_utils.ts / export_utils.test.ts |
-| t107_test_f001-f003 | minor | 遗留 | dashboard archive/接线/顺序用例未覆盖 | p021 |
-| 范围外 | minor | 遗留 | popup 导出不传 save_as 不 flush | p020 |
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-10；src_ext_ui_shared/review.md F002 F005
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 真实系统文件选择器 UI：有意不测。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+- mock downloads.download 与 storage flush。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL → Round 2 code：PASS
-- Round 1 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 导出前 flush 缓冲（SW export handler + dashboard archive）；flush 失败中止导出；download save_as 显式优先 + 注释同步。
+- 无
+
+### 风险与回退
+
+- 风险：flush 失败时导出应失败或明确部分导出，不可静默旧快照冒充完整——执行期选可测策略。
+- 回退：恢复不 flush / 不读 saveAs。
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- 无

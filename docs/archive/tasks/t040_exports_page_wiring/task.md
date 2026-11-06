@@ -1,17 +1,24 @@
----
-tid: t040
-slug: exports_page_wiring
-title: "feature: exports page wiring"
-status: done
-branch: task_t040_exports_page_wiring
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T040 exports_page_wiring
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`dashboard.ts:82-83` `page === 'exports'` 时只 `innerHTML = render_exports()`，`dashboard_integrations.ts:29-39` 渲染 `data-export` 按钮但无 wiring 函数，按钮点击无响应。
+
+## 范围
+
+- dashboard_integrations.ts: 新增 `wire_exports()` 绑定 `[data-export]` click 复用 `export_capture(id)`。
+- dashboard.ts: imports + `page === 'exports'` 调 wire_exports()。
+
+## 验收
+
+- [x] 导出按钮点击触发 export_capture。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实现 wire_exports，dashboard.ts 集成。
+
+## 决策
+
+- 复用 dashboard_shared.export_capture（已实现进行中/成功/失败态）。
+- 暂不引入"防止重复点击"逻辑，export_capture 内部可后续加 busy 标记（T041 配套）。

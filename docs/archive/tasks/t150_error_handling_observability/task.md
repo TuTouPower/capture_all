@@ -1,100 +1,80 @@
----
-tid: "t150"
-slug: "error_handling_observability"
-title: "refactor: 错误处理与可观测性补强"
-status: "done"
-branch: "t150_error_handling_observability"
-worktree: ""
-review_level: "full"
-diff_anchor: "bdb141906330a49382009295f03497551bf379d2"
-depends_on: ""
-conflicts_with: ""
-note: "intensive-review 聚合：B2-M14 空 catch、B2-M15 内部错误外泄、B1-M3 mcp 超时、B1-M7 sanitize getter、B3-M3 CSP 诊断、B2-M16 keepalive、B2-M20 flush 自旋、B2-M3/M4 未处理 rejection、B1-M13 bridge 日志"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+intensive-review 错误处理面 9 缺口：CDP detach/enable/stream 等空 catch 静默、to_agent_error/attach 错误内部细节外泄、mcp client fetch 无超时、sanitize_value getter 抛错无 catch、strict-CSP 注入失败无诊断、keepalive 空操作、content flush 自旋、两处未处理 async rejection、bridge 无结构化日志。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 review finding：intensive-review 聚合：B2-M14 空 catch、B2-M15 内部错误外泄、B1-M3 mcp 超时、B1-M7 sanitize getter、B3-M3 CSP 诊断、B2-M16 keepalive、B2-M20 flush 自旋、B2-M3/M4 未处理 rejection、B1-M13 bridge 日志
 
-8 项 AC 全部实施完成，`npm test` 141 文件 1468 passed（基线 1448，+20 新用例）+ `npx tsc --noEmit` 通过。
+### 非范围
 
-关键决策与踩坑：
-- AC-001：body_capture_coordinator 的 `handle_cdp_failure` 依赖原始 CDP 错误串做分类，故 network_capture 仍回传原始错误（内部），仅 coordinator 的对外 message 脱敏；getResponseBody 失败对 OPTIONS/HEAD/资源已释放是预期路径，`cdp_failed` 分支才升级 warn，避免刷屏。
-- AC-001 content 注入：strict-CSP 拦截 inline script 不抛同步异常，靠 script 元素 `error` 事件（HTML spec blocked-by-CSP 触发）诊断；封装为共享 `inject_script_element`/`report_injection_failure`（content_page_script.ts）。
-- AC-002：service_worker 的 `test_bridge_fetch` 保留原始错误回传——它是用户手动诊断 bridge 的端点，去掉错误细节即失去用途。
-- AC-007：新增 warn 日志触发 app_log flush timer，全量测试暴露 `IndexedDBLogTransport.schedule_flush` 的 fire-and-forget `this.flush()` 无 catch（indexedDB 缺失时未处理 rejection）；该位点本身即 AC-007 范畴，加 `.catch` 修复。
-- 测试：external_cdp_bridge_client.test.ts 补 `fake-indexeddb/auto`（新 warn 日志需要可断言 app_log 条目）；content 注入诊断测试独立 jsdom 文件（jsdom 环境会破坏 content_page_script.test.ts 的 node 路径解析）。
+- 不在本 task 处理的相关联问题（若有，见上下文区来源）
 
-## Review 处置
+### 验收标准
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+<!-- 规范（门禁必留，不得删除） -->
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+<!-- /规范 -->
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+- [ ] AC-001: 空 catch 位点补日志/错误上报（CDP 失败至少 warn 级，注入失败发 capture_error recoverable=false 并计入 stats）
+- [ ] AC-002: 回传用户/agent 的错误不再含内部路径/库错误串（结构化错误码 + 脱敏 message）
+- [ ] AC-003: mcp client fetch 带超时（AbortSignal），bridge 挂起不无限阻塞
+- [ ] AC-004: sanitize_value 对 getter 抛错的对象返回 '[Unserializable]' 不抛异常
+- [ ] AC-005: keepalive handler 执行真实工作（如 flush 检查），非纯 debug 日志
+- [ ] AC-006: content flush 循环有轮次上限，不无限自旋
+- [ ] AC-007: 未处理 rejection 位点补 .catch/日志
+- [ ] AC-008: bridge 关键路径（认证失败/超时/淘汰）有结构化日志输出
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+### 可测试性声明
 
-### Round 1 场景说明
+<!-- 规范（门禁必留，不得删除） -->
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-### Round 1 (2026-08-13 00:10 UTC+8)
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t150_code_f001|important|已修|mcp client 全量命令超时对齐 bridge full_data_timeout 300s（FULL_DATA_COMMANDS 缺省 300s+5s）+ 测试|src/mcp/client.ts / agent_mcp_client.test.ts|
-|t150_code_f002|minor|已修|external CDP 轮询失败 warn 节流（每 10s 一条，防 500ms 刷屏）|external_cdp_bridge_client.ts|
-|t150_code_f003|minor|已修|3 个内容模块 update_page_nonce 空 catch 补 debug 日志|websocket/network_hook/storage_capture.ts|
-|t150_test_f002|minor|遗留|AC-008 command_timeout/cdp_event_evicted 两条日志路径无测试，登记 p036|p036|
-|t150_test_f003|minor|遗留|keepalive 用例依赖模块级幂等注册隔离脆弱，登记 p037|p037|
-|t150_test_f004|minor|已修|AC-003 mock fetch 挂起用例未落地，AbortSignal.timeout spy + TimeoutError 包装已充分判别，登记说明|agent_mcp_client.test.ts|
+- AC-002: 错误信息无内部细节断言
+- AC-003: 超时触发用例（mock fetch 挂起）
+- AC-004: getter 抛错用例
+- 其余: 按既有模块测试补对应断言
 
-### Round 2 (2026-08-13 00:50 UTC+8)
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t150_test_f005|important|已修|删恒真断言，改显式 unhandledRejection 监听 + get_db 正向断言|tests/unit/t150_ac007.test.ts|
-|t150_test_f006|important|已修|tabs.get 测试空转（is_capturing false 提前返回），改先 start 进 capturing + tabs_get_mock 正向断言|tests/unit/t150_ac007.test.ts|
-|t150_test_f007|minor|已修|sw_load_user_config 死接线，改 beforeEach 用顶层 load_user_config + on_message_cb 捕获|tests/unit/t150_ac007.test.ts|
-|t150_test_f001|important|已修|AC-007 三处位点：app_log_storage + tabs.get 已测；handle_cdp_body_event 位点登记 p038（需 CDP 事件流模拟）|tests/unit/t150_ac007.test.ts / p038|
+- 来源：intensive-review review_20260812_1249（intensive-review 聚合：B2-M14 空 catch、B2-M15 内部错误外泄、B1-M3 mcp 超时、B1-M7 sanitize getter、B3-M3 CSP 诊断、B2-M16 keepalive、B2-M20 flush 自旋、B2-M3/M4 未处理 rejection、B1-M13 bridge 日志）
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001~008 错误处理与可观测性补强；见 handoff.json ac_evidence
+- 按项目默认（tests/unit mock Chrome API；fixture 用构造数据）
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL（mcp 超时未对齐 full_data + 轮询刷屏 + nonce catch）
-- Round 2 code：PASS
-- Round 1 test：FAIL（AC-007 无测试 + AC-008 覆盖不全）
-- Round 2 test：FAIL（恒真断言 + tabs.get 空转）
-- Round 3 test：FAIL（f006 空转 + 死接线）
-- Round 4 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-遗留不在此列出——见 `docs/pending/todo/`（p036/p037/p038），本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+<!-- /规范 -->
 
+- 无
 
-### 结果摘要
+### 风险与回退
 
-- 错误处理与可观测性 8 项补强：空 catch 补 warn/capture_error、错误信息脱敏为结构化码、mcp client 超时（含 full_data 300s 对齐）、sanitize getter 兜底、keepalive 真实工作、flush 轮次上限、未处理 rejection .catch、bridge 结构化日志。handle_cdp_body_event 位点测试登记 p038。
+- 风险：行为变更影响既有路径
+- 回退：本 task 为独立 commit，可整体 revert
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- 无

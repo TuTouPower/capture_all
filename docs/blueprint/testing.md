@@ -1,10 +1,47 @@
 # 测试
 
-项目门禁命令（对应用户与 agent 常用入口；日常 TDD 红/绿循环用 `npm test`）：
+## verification_policy
 
-- doctor：环境前置检查 → `python3 -m pytest .repo_template/tests -q --collect-only`（task 工具链依赖可导入即视为就绪）+ `node --version`（^20.19.0 || >=22.12.0）
-- test：日常测试（红/绿）→ `npm test`（vitest 全量单测）；task 工具链测试 → `python3 -m pytest .repo_template/tests/ -q`
-- blackbox：黑盒验证 → `npm test && npx tsc --noEmit`（涉及构建产物时加 `npm run build`）
+project_configured
+
+## verification_notes
+
+实际验证范围：门禁由 doctor（`.repo_template/tests` collect-only 依赖可导入即视为就绪 + `node --version` ^20.19.0 || >=22.12.0）、test（`npm test` vitest 全量单测 + `python3 -m pytest .repo_template/tests/ -q`）、blackbox（`npm test && npx tsc --noEmit`，涉及构建产物时加 `npm run build`）三段组成，覆盖单元测试（`npm test`，`tests/unit/`）、生产代码类型检查（`npx tsc --noEmit`，tsconfig include `src/**/*.ts` + 构建配置文件）、生产构建（`npm run build`：tsc + vite build + copy:locales + build:bridge + build:mcp + build:zip）与端到端（Playwright `npm run test:e2e` headless 基础 E2E / `test:e2e:all` 全部项目；CI E2E job 跑 `xvfb-run -a npm run test:e2e:all`，含 headed 扩展模式；t194 起 `tests/e2e/**/*.spec.ts` 全部文件被项目选中，discovery guard `npm run check:e2e-coverage` 强制，孤儿/重复即失败）。日常 TDD 红/绿循环用 `npm test`。
+
+不适用门禁及理由：
+
+- Schema / codegen 验证：项目无 schema、migration 或 codegen 生成链；MCP 工具参数用 Zod schema 运行时校验（`src/mcp/schemas.ts`），IndexedDB schema 由 `src/extension/background/storage.ts` 升级路径维护，故无对应门禁。
+- 测试代码类型检查：无独立检查（vitest 经 esbuild 转译不查类型、tsconfig exclude `tests/`），故不设门禁；长期盲区为测试 mock 类型不匹配，如需要可加 `tsc --noEmit -p tests/tsconfig.json`。
+- lint：无 lint 配置，不设 lint 门禁；CI 改用 `npm run scan:tracked-tree`（`scripts/scan_tracked_tree.mjs`）扫描敏感路径/硬编码凭据。
+- 生产 migration / 部署 / 数据操作：普通 merge 不自动执行，此类动作遵循项目发布流程，不纳入门禁。
+
+## gate_timeout_seconds
+
+1800
+
+## doctor_cmd
+
+环境前置检查：task 工具链依赖可导入即视为就绪，并要求 Node `^20.19.0 || >=22.12.0`。
+
+```bash
+python3 -m pytest .repo_template/tests -q --collect-only && node --version
+```
+
+## test_cmd
+
+日常测试（红/绿）用 `npm test`（vitest 全量单测）；task 工具链测试用 pytest。
+
+```bash
+npm test && python3 -m pytest .repo_template/tests/ -q
+```
+
+## blackbox_verify
+
+黑盒验证覆盖单测与类型检查；涉及构建产物时追加 `npm run build`。
+
+```bash
+npm test && npx tsc --noEmit
+```
 
 ## Schema / codegen 验证
 

@@ -1,92 +1,77 @@
----
-tid: "t185"
-slug: "refactor_network_capture_state"
-title: "network_capture CDP 状态机拆分"
-status: "done"
-branch: "t185_refactor_network_capture_state"
-worktree: ""
-review_level: "full"
-diff_anchor: "6fcebbb93176964ef79f2df6a14de88b3f492aac"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`network_capture.handle_cdp_event` 约 421 行，在同一函数内处理 sub-target attach/detach、HTTP request/redirect、response/stream 检测、loadingFinished/body 异步生命周期、loadingFailed、WebSocket connection/frame 生命周期，直接读写至少 7 组模块级状态。文件头宣称「Delegates to specialized handlers」，已 import `cdp_event_router`/`stream_buffer`/`network_webrequest`/`cdp_handler`，但核心协议分派与状态转换仍集中在 orchestrator。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 引入显式 `NetworkCaptureContext` 包装当前 Map/Set 与 capture generation，不改行为。
+- 按 method family 拆 `handle_target_event`、`handle_http_event`、`handle_websocket_event`。
+- request lifecycle 收敛为单一 record/state transition API，集中 `finalize`/`cleanup`，避免每条异步分支手工删除多个集合。
+- 增加 terminal-path table test，逐项断言相关 state 均清空。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 CDP 事件处理的行为语义与数据采集结果。
+- 不改动 `cdp_event_router`/`stream_buffer` 等已拆模块的对外接口（除非为 context 注入必要）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：重构后既有 network capture 生产接线测试全部通过，采集结果不变。
+- [ ] AC-002：`handle_cdp_event` 不再直接读写散落的模块级 Map/Set，状态经 `NetworkCaptureContext` 访问。
+- [ ] AC-003：request lifecycle 的 `finalize`/`cleanup` 收敛为单一 API，各 terminal path 不再手工删除多个集合。
+- [ ] AC-004：新增 terminal-path table test，逐项断言各终态相关 state 均清空。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t185_code_f001 | minor | 建议修 | 已修 | getResponseBody 成功路径的 `cdp_primary_event_emitted` debug 日志移入 `finalize_request` 统一输出（覆盖全部 finalize 路径，信息等价） |
-| t185_code_f002 | minor | 建议修 | 已修 | 收敛重复删除：capture_response_body=false 分支去掉末行重复 finished delete（cleanup 已覆盖）；streaming 分支改为 finalize（meta 存在删 finished）/ else 单删；cleanup_streaming_state 注释修正 |
-| t185_code_f003 | minor | 建议修 | 已修 | NetworkCaptureContext 删除无读取冗余字段（is_capturing/pending_requests/deferred_web_requests/orphan_timers），仅保留 handle_cdp_event 路径实际读取字段 |
-| t185_test_f001 | minor | 待处置 | 已修 | 表测试建立清空判别力：body=false 用例注入 body/streaming/finished 三态、SSE 用例注入 body、loadingFailed 用例注入 finished，断言非恒真 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：既有生产接线测试 + 新增 terminal-path 表测试。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：ARCH-005（2026-08-13 核实，主 dispatcher 自 2026-06 存在，`855a9c4` 抽 specialized modules 但核心函数保留）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 行为等价重构，以既有生产接线测试为 gate；新增 terminal-path table test 覆盖状态清理不变量。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- 无。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：重构破坏 terminal path 清理不变量。
+- 回退：小步拆分 + terminal-path 表测试兜底；每步全量回归。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 与 t157 CDP body 记账同域，注意合并顺序（先重构状态访问再改记账可降冲突）。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：如记录 `NetworkCaptureContext` 分层，同步。

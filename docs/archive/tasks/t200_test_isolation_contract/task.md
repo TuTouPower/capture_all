@@ -1,81 +1,73 @@
----
-tid: "t200"
-slug: "test_isolation_contract"
-title: "测试隔离与契约确认"
-status: "done"
-branch: "t200_test_isolation_contract"
-worktree: ""
-review_level: "full"
-diff_anchor: "c04c71da3340b990555c1ea866e37f4bc98aaada"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+测试隔离与契约确认两条遗留（pending 总账）：keepalive.test.ts 用例依赖模块级 `listener_registered` 幂等注册，重置 on_alarm_listener 破坏 setup 幂等，顺序通过但隔离脆弱（p037）；dispatcher stop success:false 分支（`agent_command_dispatcher.ts`）真实不可达——service_worker stop_capture_inner 恒返回 success:true，失败走 rethrow → STORAGE_READ_FAILED，该分支保留为防御需确认或移除（p049）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- keepalive.test.ts 隔离加固：vi.resetModules 每用例新实例或暴露测试钩子重置幂等标志。
+- p049 确认：核实 stop success:false 分支当前可达性，明确保留（防御注释）或移除；保留则补语义说明。
 
-- AC-001：keepalive.test.ts 隔离加固——每用例 `vi.resetModules()` + 动态 import，模块级 `listener_registered` 幂等标志随重载回到初始态；chrome mock 每用例重建、`on_alarm_listener` 闭包重新捕获。验证：4 用例全量绿 + 逐个 `-t` 单跑绿 + `--sequence.shuffle` 重排绿。
-- AC-002：p049 核实——`stop_capture`（service_worker.ts:792）空闲态直接 `{success:true}`；`stop_capture_inner` 全路径恒 success:true（所有 step 经 run_stop_step catch 仅 log）；异常 rethrow 经 `to_agent_error` 转错误响应。dispatcher 的 success:false 分支实际不可达，结论：**保留防御**（接口类型允许 success:false，移除会与接口语义脱节）+ 语义注释，行为已有 t177 用例覆盖（success:false → idle）。
-- AC-003：全量 vitest 1921 通过 + tsc 干净，无回归。
+### 非范围
 
-## Review 处置
+- 不改变 keepalive/service_worker 生产逻辑（仅测试与注释/决策）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：keepalive.test.ts 用例独立运行（单用例/重排/插用例）均绿，不依赖模块级幂等残留。
+- [ ] AC-002：dispatcher stop success:false 分支可达性结论明确——保留（注释说明防御语义）或移除（清理死分支），决策落定。
+- [ ] AC-003：新增/调整测试全绿，既有相关测试无回归。
 
-### Round 1（review_level=full）
+### 可测试性声明
 
-零 finding（code PASS / test PASS）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：测试隔离用 vitest 重载；分支可达性用源码/行为核实。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：p037（t150 遗留 test_f003）、p049（t177 遗留）。2026-08-14 核实：keepalive.test.ts 幂等注册依赖仍在；dispatcher stop 分支需按当前代码（t177 幂等重构后）核实。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 keepalive 隔离重构（resetModules + 动态 import，单用例/重排均绿）；AC-002 p049 结论落定（保留防御 + 注释，t177 用例覆盖）；AC-003 全量 vitest 1921 + tsc 干净；详见 `handoff.json` `ac_evidence`
+- vitest 隔离（resetModules）+ 分支可达性行为核实。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：PASS
-- Round 1 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-测试隔离加固 + stop 分支契约确认，round 1 全 PASS 收官。
+- 无。
+
+### 风险与回退
+
+- 风险：stop 分支移除改变幂等契约。
+- 回退：保留分支 + 防御注释（最小改动）。
+
+### 依赖与约束
+
+- 与 t177（stop 幂等）同域。
+
+### Finalization 时更新的 blueprint
+
+- 无。

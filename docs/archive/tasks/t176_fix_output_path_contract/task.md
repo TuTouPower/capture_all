@@ -1,82 +1,77 @@
----
-tid: "t176"
-slug: "fix_output_path_contract"
-title: "output_path 契约与首次目录 500 修复"
-status: "done"
-branch: "t176_fix_output_path_contract"
-worktree: ""
-review_level: "full"
-diff_anchor: "9b9df37746fa4cd3279a1db8c9cb27330e5d348f"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+MCP 指南把 `output_path` 公开为任意本地路径，示例用 `"/absolute/path/export.json"`；t137 安全约束后 `safe_output_path` 只接受导出目录内相对路径，绝对路径返回 `INVALID_QUERY`。同时默认导出目录首次使用时 `realpath(base)` 抛 `ENOENT`，顶层转成 HTTP 500；嵌套父目录不存在时 `writeFile` 失败返回 500。文档与契约、初始化路径均未同步。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 明确并发布单一契约：`output_path` 为导出根目录内相对路径/文件名。
+- 指南删除任意绝对路径示例，解释实际返回的绝对 `file_path`。
+- MCP schema 增加相对路径、禁止 `..`/绝对路径校验，错误在 tool 输入边界产生。
+- `safe_output_path` 在 `realpath(base)` 前安全创建 base；写入嵌套路径时创建目标父目录并再次校验。
 
-无
+### 非范围
 
-## Review 处置
+- 不弱化 t137 的绝对路径/`..`/symlink 逃逸防护。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：指南示例使用导出目录内相对路径（如 `"output_path":"export.json"`），不再用绝对路径示例。
+- [ ] AC-002：默认导出目录不存在时，首次显式相对路径导出成功，不返回 500。
+- [ ] AC-003：`output_path:"nested/export.json"` 父目录不存在时导出成功（或 MCP 输入边界明确拒绝）。
+- [ ] AC-004：绝对路径、`..`、symlink escape 仍被拒绝，防护不退化。
+- [ ] AC-005：新增默认目录不存在、合法相对路径、嵌套目录、base/parent symlink 四类测试通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 20:15 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t176_code_f001|minor|已修|schema refine 补 Windows 根相对（\foo）与 drive-relative（C:foo）拒绝|src/mcp/schemas.ts:16|
-|t176_test_f001|important|已修|AC-003 补断言：嵌套父目录被创建（stat isDirectory），旧实现不创建会红|tests/unit/output_path_contract.test.ts:AC-003|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：临时导出目录 fixture 覆盖四类路径。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BC-001、BM-M003（2026-08-13 核实，`da722d5`/`5649916` 引入绝对路径能力，`7daf059` t137 引入 containment）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 指南相对路径示例；AC-002 base 不存在创建成功；AC-003 嵌套父目录创建 + 再校验；AC-004 绝对/../symlink/schema 拒绝不退化；AC-005 四类测试
+- 真实临时目录驱动 `safe_output_path` 与写盘路径；断言拒绝与成功边界。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：PASS（1 minor）/ test：FAIL（1 important）
-- Round 2 code：PASS / test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-output_path 契约落地：`safe_output_path` mkdir(base) 前置（解决 ENOENT→500）+ 嵌套父目录创建后 realpath 再校验（symlink 逃逸窗口闭合）；MCP schema 相对路径校验（禁绝对/../Windows 根相对/drive-relative）；指南契约更新（相对路径示例 + file_path 绝对解释）。t137 防护不退化。
+- 无。
+
+### 风险与回退
+
+- 风险：创建 base/父目录时引入 symlink 逃逸窗口。
+- 回退：创建前/后均做 containment + symlink 校验，不降级。
+
+### 依赖与约束
+
+- 复用 t137 的 containment 校验，不弱化。
+
+### Finalization 时更新的 blueprint
+
+- `docs/guides/mcp_usage.md`：更新 `output_path` 契约与示例。

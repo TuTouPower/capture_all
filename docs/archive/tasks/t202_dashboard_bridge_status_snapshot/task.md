@@ -1,96 +1,87 @@
----
-tid: "t202"
-slug: "dashboard_bridge_status_snapshot"
-title: "Dashboard 设置页 bridge 连接状态与快照刷新"
-status: "done"
-branch: "t202_dashboard_bridge_status_snapshot"
-worktree: ""
-review_level: "full"
-diff_anchor: "d3b7ceb371440f3bc3996f2ec3eb24d2c1aabe30"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+p052 两个独立 UI 缺陷:
+1. **dashboard 内存快照不刷新**:`get_user_config` 返回 `dashboard_state.ts:85` 的 `_state.user_config`,仅页面加载时(`dashboard.ts:111`)读一次 storage。bridge 心跳回填 `browser_label` 写入 storage 后,已打开的设置页不重新加载就不显示。
+2. **「未连接」死文本**:`dashboard_settings.ts:105` 固定渲染 `agentBridgeNotConnected`,无动态更新,不代表真实 bridge 连接态(实测在线也显示「未连接」)。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- SW 新增 bridge 连接状态查询 message handler,返回 bridge client 的 enrolled/running 状态。
+- dashboard 设置页监听 `chrome.storage.onChanged`,storage 中 `user_config` 变化时更新内存快照并重渲染输入框(含 browser_label 回填即时显示)。
+- dashboard 设置页启动时查询 SW bridge 状态,「状态」字段显示真实连接态(已连接/未连接),不再静态死文本。
+- 补测试:storage.onChanged 触发快照更新、bridge 状态查询 handler、状态显示断言。
 
-无
+### 非范围
 
-## Review 处置
+- 不改 bridge 侧状态语义(仍由心跳驱动 enrolled/running)。
+- 不做轮询刷新(监听 storage.onChanged + 启动时查询一次即可,回填/配置变更经 storage 事件即时反映)。
+- 不处理「设置页打开期间 bridge 中途断开」的实时检测(超出本 task;连接态在页面加载时快照)。
+- **状态界定说明**:「已连接」判定为 `running && enrolled` 的页面加载时快照。bridge 宕机期间二者不复位(心跳失败仅记日志,session 需 401 才清),宕机窗口内打开的设置页仍显示「已连接」——属 spec 批准的状态界定,不要求实时准确。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001:设置页打开时,SW 回填 `browser_label` 到 storage 后,已打开设置页的「备注名」输入框**不重载页面**即更新为回填值。[deploy]
+- [ ] AC-002:设置页「状态」字段显示 SW 报告的 bridge 连接态:bridge 在线时显示已连接,离线时显示未连接,不再固定死文本。
+- [ ] AC-003:SW 暴露 bridge 连接状态查询 message(bridge client running/enrolled),dashboard 可经此获取连接态。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-### Round 1 (2026-08-16 02:01 UTC+8)
+- AC-001:部分可测——storage.onChanged 触发快照更新可单测(dashboard_state);「不重载页面即更新」的真实浏览器行为标 `[deploy]`。
+- AC-002:可自动测试——dashboard_settings 渲染逻辑单测断言状态文本随连接态变化。
+- AC-003:可自动测试——SW message handler 返回 enrolled/running。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t202_test_f001|important|已修|补 SW get_bridge_status handler 行为级测试(独立测试文件完整 stub chrome)|tests/unit/service_worker_bridge_status.test.ts|
-|t202_test_f002|minor|已修|补查询失败路径断言(sendMessage reject/success:false 保持未连接)|tests/unit/settings_ui.test.ts|
-|t202_test_f003|minor|已修|on_changed_listener 索引改遍历所有监听器,去脆弱耦合|tests/unit/settings_ui.test.ts|
-|t202_code_f001|minor|遗留|storage.onChanged 监听器随导航累积无 removeListener,记 pending|p054|
-|t202_code_f002|minor|已修|running&&enrolled 判连接是 spec 已批准状态界定;spec 上下文区补宕机窗口说明,实现忠实 spec|docs/tasks/t202_dashboard_bridge_status_snapshot/spec.md|
-|t202_code_f003|minor|已修|bridge 状态契约单一化:复用 BridgeConnectionState 类型,去冗余 as 强转|src/shared/message_contract.ts, src/extension/dashboard/dashboard_settings.ts|
+## 上下文区
 
-### Round 2 (2026-08-16 02:12 UTC+8)
+- 来源:p052(2026-08-16 核实;dashboard 快照不刷新 + 未连接死文本)
 
-Round 2 双 PASS(code + test),0 新 blocking finding。
+### 有意不测
 
-- test f003 复核:find 遍历与 [0] 等价,耦合隐患仍在但 minor,维持已修(已用 find 辨识函数监听器)。
-- code f003 残余:producer get_bridge_connection_state 仍返回内联匿名类型未引 BridgeConnectionState,消费侧已定型无缺陷,维持 minor。
+- 真实浏览器中「不重载页面即更新」的端到端行为:需人工验证(AC-001 标 [deploy])。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- SW handler:复用现有 onMessage 测试模式,mock bridge client 状态。
+- dashboard_state:mock chrome.storage.onChanged 触发,断言快照更新。
+- dashboard_settings 状态文本:渲染函数入参连接态,断言输出文本。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- /规范 -->
 
-`full`：
+- 无。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 风险与回退
 
-`single`：
+- 风险:storage.onChanged 监听在多个 dashboard 页面同时打开时重复触发重渲染。回退:监听器在页面卸载时移除;重渲染幂等。
+- 风险:bridge 状态查询返回的 enrolled 与真实连接可能有毫秒级滞后。回退:状态为页面加载时快照,可接受。
 
-- Round 1 general：PASS / FAIL
+### 依赖与约束
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- `agent_bridge_client.ts` 已有 `enrolled`/`running` 状态与 `is_bridge_client_running()`。
+- `dashboard_state.ts` `set_user_config` 可更新快照。
+- SW `onMessage` 已有 `get_status` case,新增 bridge 状态 case 对齐现有模式。
 
-### 结果摘要
+### Finalization 时更新的 blueprint
 
-- 一句话；无额外说明可写「见上」
+- `docs/blueprint/decisions.md`：无新增决策(方案已定)
+- `docs/specs/`：无新增(沿用既有 dashboard/settings 约定)

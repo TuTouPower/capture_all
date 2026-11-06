@@ -1,17 +1,3 @@
----
-tid: t077
-slug: mcp_usage
-title: "docs: mcp_usage guide rewrite (browser_no -> browser_label/pairing)"
-status: done
-branch: task_t077_mcp_usage
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
-
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+# T077 mcp_usage guide rewrite (browser_no → browser_label/pairing)
+快速开始 step 2/5/7 重写：browser_no → browser_label/pairing code/target_label/target_instance_id。
+Token 表述更新。

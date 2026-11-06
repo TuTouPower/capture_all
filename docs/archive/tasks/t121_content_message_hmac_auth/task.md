@@ -1,113 +1,74 @@
----
-tid: "t121"
-slug: "content_message_hmac_auth"
-title: "content 采集消息 per-message HMAC 认证"
-status: "done"
-branch: "t121_content_message_hmac_auth"
-worktree: ""
-review_level: "full"
-diff_anchor: "0d2b4f4be83c58d16acf3a3a401bf77d61fdb517"
-depends_on: ""
-conflicts_with: ""
-note: "p010 页面可伪造 nonce 门控，升级 per-message HMAC"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+content 采集认证依赖存于页面 MAIN world `window.__capture_all_*_nonce__` 的 nonce，页面脚本可直读直写、伪造匹配消息使采集门控退化；后台从不校验 nonce（仅 content 侧防碰撞）。t097 曾评估「更强抗伪造需 per-message HMAC，超出本 task」。用户于 2026-08-11 确认采用 **per-message HMAC** 方案：注入脚本持 secret，每条采集消息携带签名，页面无法伪造。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 将 network_hook / websocket_capture / storage_capture 三通道的静态 nonce 门控升级为 per-message HMAC 认证。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变采集消息 schema 之外的结构（payload 内容不变）；不改变 content→后台写路径（扩展内部消息）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：采集消息携带 per-message HMAC 签名（注入脚本持 secret 计算）；仅读取 window nonce 的页面脚本无法构造合法签名。
+- [ ] AC-002：content 侧校验签名，签名不匹配或缺失的消息被拒收（不进入采集）。
+- [ ] AC-003：每次 start 旋转 secret（及 nonce），跨采集旧签名失效。
+- [ ] AC-004：network / ws / storage 三通道统一采用签名认证，原「非签名消息被拒」门控语义不回归。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 18:25 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code 路 2 important + 1 minor；test 路 2 critical + 1 important + 1 minor。
+<!-- /规范 -->
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t121_code_f001 | important | 已修 | stop→start 断流：注入脚本 guard 改为「还原上次 hook 后重装」，每次 start 持最新 SECRET；T121restart 回归 | src/extension/content/network_hook.ts / websocket_capture.ts / storage_capture.ts |
-| t121_code_f002 | important | 已修 | JS 签名路径零执行测试：新增 content_hmac_vectors.test.ts（TS/JS 双实现对照标准向量）+ T121e2e（注入脚本 fetch hook 真实签名交叉校验） | tests/unit/content_hmac_vectors.test.ts |
-| t121_code_f003 | minor | 已修 | websocket_capture_injected_script.test.ts build_page_script 无参调用 → 传 TEST_SECRET | tests/unit/websocket_capture_injected_script.test.ts |
-| t121_test_f001 | critical | 已修 | 同 code_f001（restart 断流回归，T121restart 覆盖真实重注入签名路径） | tests/unit/content_postmessage_nonce.test.ts |
-| t121_test_f002 | critical | 已修 | 同 code_f002（向量 + e2e 交叉验证） | tests/unit/content_hmac_vectors.test.ts |
-| t121_test_f003 | important | 已修 | AC-001s 断言语义修正 + ADR-020 记录威胁模型边界（对抗性 DOM hook 窃取不在防御范围） | docs/blueprint/decisions.md ADR-020 |
-| t121_test_f004 | minor | 已修 | storage/ws 补「正确 nonce + 签名缺失被拒」负向用例 | tests/unit/storage_capture.test.ts / websocket_capture_page.test.ts |
+- 全部 AC 可自动测试（jsdom + Web Crypto HMAC；注入脚本逻辑经 mock/vi 执行验证签名构造与校验）。
 
-### Round 2 (2026-08-11 18:40 UTC+8)
+## 上下文区
 
-code 路 2 minor；test 路 3 minor。
+- 来源：p010（2026-08-11 核实仍在；用户确认 per-message HMAC 方案）
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t121_code_f004 | minor | 已修 | T121restart 断言锁单条无双写（===1）+ storage secret 旋转回归；storage/ws 注入脚本级重注入用例未补（同构逻辑由 network T121restart 覆盖），登记遗留 | tests/unit/content_postmessage_nonce.test.ts / p031 |
-| t121_code_f005 | minor | 已修 | spec 未知契约清单条目删除并注明结论 + ADR-020 | docs/tasks/t121_content_message_hmac_auth/spec.md |
-| t121_test_f005 | minor | 已修 | 向量补跨块边界/长 key/多字节 UTF-8（JS/TS 双实现对照） | tests/unit/content_hmac_vectors.test.ts |
-| t121_test_f006 | minor | 已修 | AC-001s 标题/注释与 ADR-020 威胁模型边界对齐 | tests/unit/content_postmessage_nonce.test.ts |
-| t121_test_f007 | minor | 已修 | AC-003b 标题同步新 guard 语义 | tests/unit/content_postmessage_nonce.test.ts |
+### 有意不测
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 无。
 
-有 finding 时用本表；每条 finding 一行。
+### 测试策略
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+- Web Crypto：jsdom 环境 mock `crypto.subtle`（HMAC-SHA256）确定性注入；签名构造与校验分开断言。
+- 注入脚本与 content 隔离域共享 secret 的通道（window 属性或消息传递）按实现确定，测试覆盖 secret 不外泄给页面 MAIN world 的场景。
 
-## 收尾报告
+### 未知契约清单
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002/003/004 由向量测试、注入脚本 e2e、负向用例与旋转回归覆盖；ADR-020 记录取舍与威胁模型。`handoff.json` 的 `ac_evidence` 逐条给出引用。
+<!-- /规范 -->
 
-### Reviewer verdict
+- ~~注入脚本与 content 隔离域共享 secret 的通道~~ → 已定：content 每次 start 生成 secret，内联进注入脚本闭包（不写 window），注入脚本持 secret 签名、content 持同一 secret 校验；每次 start 重注入（还原上次 hook 后重装）以持有最新 secret。威胁模型边界见 `docs/blueprint/decisions.md` ADR-020。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+### 风险与回退
 
-`full`：
+- 风险：secret 共享通道若回退到 window 全局则未解决伪造面；需保持 secret 仅注入脚本持有。
+- 回退：git 回退；t097 现有 nonce 测试保留为回归基线。
 
-- Round 1 code：FAIL（f001/f002 important 断流与签名路径零测试，已修）
-- Round 1 test：FAIL（f001/f002 critical 同源，已修）
-- Round 2 code：PASS（2 minor，已修）
-- Round 2 test：PASS（3 minor，已修）
-- Round 3 code：PASS（0 新 finding）
-- Round 3 test：PASS（0 新 finding）
+### 依赖与约束
 
-`single`：
+- 依赖 t097（content postMessage 全通道 nonce）实现落地；安全敏感，实施期须在 `.scratch/` 验证再落生产。
 
-- N/A
+### Finalization 时更新的 blueprint
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
-
-### 结果摘要
-
-content 三通道（network/ws/storage）per-message HMAC 认证升级：secret 每次 start 旋转、内联注入脚本闭包、同步 HMAC-SHA256 双实现（向量锁定）、重注入还原+重装防断流、ADR-020 记录威胁模型边界。全量 vitest 131 文件 1375 用例绿，tsc 0 错误。遗留 1 条：p031（storage/ws 注入脚本级重注入测试扩展）。
+- `docs/blueprint/decisions.md`：记录 content 采集认证升级为 per-message HMAC 的取舍（若替代 t097 的 window-nonce 决策）。

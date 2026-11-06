@@ -1,88 +1,74 @@
----
-tid: "t099"
-slug: "sw_cleanup_stale_mutex"
-title: "fix: SW cleanup_stale 与 start 互斥，不抹新采集键"
-status: "done"
-branch: "t099_sw_cleanup_stale_mutex"
-worktree: ""
-review_level: "full"
-diff_anchor: "2ed15462623d02006637d97f88bcd8caeeb94e1f"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-1"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+SW 启动 `setTimeout(0)` 跑 `cleanup_stale_capture_state`，与 `start_capture` 无互斥。start 写完 `active_capture_*` 后 cleanup 可能清掉新键。P1-1 likely。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- cleanup_stale 与 start/stop 串行或等价互斥，保证 start 成功写入的 active 键不被并发 cleanup 清除。
+- cleanup 仅清理真正陈旧（无 live capturing 状态）的键。
+- 单测或可控时序测证明。
 
-- doctor/preflight 通过。
-- 根因：cleanup_stale setTimeout(0) 与 start 无互斥，可能清掉刚写入的 active 键。
-- 修复：cleanup 包 run_exclusive + 锁内 phase!==idle 检查；导出供测试。
-- Round 1 审阅 FAIL：AC-001 测试未驱动真实时序（方案 B 修正：phase=capturing 直调 cleanup），断言改最终 null-set；突变验证判别力（移除 phase 检查测试失败）。
-- 全量 1195 通过，tsc 无错。
-- 遗留：run_exclusive 串行维度未直接测（p016）。
+### 非范围
 
-## Review 处置
+- 不重做整套 SW 状态机（t029+ 已有）。
+- 不实现跨浏览器进程分布式锁。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：在 cleanup 异步执行过程中完成的 `start_capture` 成功后，`active_capture_id`（或等价持久键）仍指向新 capture，不被 cleanup 置 null。
+- [ ] AC-002：SW 冷启动且无 live capturing、仅有陈旧 active 键时，cleanup 仍将该陈旧 capture 终态化并清除 active 键（回归）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 04:50 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code FAIL（f001 important 时序未驱动 + f002 minor 缩进）；test FAIL（f001 critical 断言历史 .some() 无判别力）。
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 04:51 UTC+8)
+- 全部 AC 可自动测试（控制 cleanup/start 时序 mock storage）。
 
-code PASS / test PASS。处置：
+## 上下文区
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t099_code_f001 | important | 已修 | AC-001 改方案 B（phase=capturing 直调 cleanup），突变验证判别力 | cleanup_start_mutex.test.ts |
-| t099_code_f002 | minor | 已修 | cleanup 函数体统一 8 空格缩进 | service_worker.ts |
-| t099_test_f001 | critical | 已修 | 断言改最终 null-set 检查，判别力增强 | cleanup_start_mutex.test.ts |
-| t099_test_f002 | minor | 遗留 | run_exclusive 串行维度未直接测 | p016 |
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-1；src_ext_bg_sw_storage/review.md f001
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 真实 SW 被 Chrome 杀死的全部恢复矩阵：有意不测，只测互斥与陈旧清理。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+- 抽取或注入 cleanup/start 竞态；假 storage。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL → Round 2 code：PASS
-- Round 1 test：FAIL → Round 2 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- cleanup_stale 包 run_exclusive 与 start/stop 串行，锁内 phase 检查防误清 live 状态；AC-001 方案 B 突变验证判别力，AC-002 回归保留。
+- 无
 
-- 一句话；无额外说明可写「见上」
+### 风险与回退
+
+- 风险：互斥过宽导致 start 延迟。
+- 回退：恢复独立 setTimeout cleanup。
+
+### 依赖与约束
+
+- 与 t110 同改 service_worker/storage 时建议串行。
+
+### Finalization 时更新的 blueprint
+
+- 无

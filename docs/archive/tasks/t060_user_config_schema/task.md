@@ -1,17 +1,20 @@
----
-tid: t060
-slug: user_config_schema
-title: "refactor: UserConfig runtime schema validation"
-status: done
-branch: task_t060_user_config_schema
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T060 user_config_schema
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`user_config.ts:377-408` load_user_config 浅合并 + as UserConfig，不校验 enum/boolean/数值范围/URL/label 长度。save_user_config 同样直接合并任意 Partial。
+
+## 范围
+
+- 新增 sanitize_user_config：逐字段类型校验（boolean/enum/数值非负整数/字符串），无效回退 DEFAULT_USER_CONFIG。
+- load_user_config 调 sanitize_user_config。
+- merged 改为 Record<string, unknown> 避免 type narrowing 冲突。
+
+## 验收
+
+- [x] 损坏配置字段回退默认。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

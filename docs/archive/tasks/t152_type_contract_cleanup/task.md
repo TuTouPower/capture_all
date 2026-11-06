@@ -1,91 +1,83 @@
----
-tid: "t152"
-slug: "type_contract_cleanup"
-title: "refactor: 类型契约谎言与状态漂移清理"
-status: "done"
-branch: "t152_type_contract_cleanup"
-worktree: ""
-review_level: "full"
-diff_anchor: "a5d21b1d8615f445993a1d1f73192d6aab8f6f5d"
-depends_on: ""
-conflicts_with: ""
-note: "intensive-review 聚合：B1-M5 absolute、B1-M6 locale 双轨、B2-M8 store 混存、B3-M1 payload 顶层、B4-M1/M2 时间列、B4-M3 event_kind、B2-M2/M13 id 冲突、B1-L8/L9 工具统一、B1-L12 passthrough、B1-L13 负相对时间、B3-L2 request_id"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+类型/状态漂移 12 处：detail_time_display_mode 'absolute' 类型谎言、locale 双轨 zh_CN vs zh、network store 混存 ws_frame 与请求、storage/ws payload 在事件顶层而非 event.data、时间列读不存在字段、event_kind 与 category 映射不一致、多处 id 碰撞/重复工具、MCP schemas passthrough、相对时间负值。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 review finding：intensive-review 聚合：B1-M5 absolute、B1-M6 locale 双轨、B2-M8 store 混存、B3-M1 payload 顶层、B4-M1/M2 时间列、B4-M3 event_kind、B2-M2/M13 id 冲突、B1-L8/L9 工具统一、B1-L12 passthrough、B1-L13 负相对时间、B3-L2 request_id
 
-无
+### 非范围
 
-## Review 处置
+- 不在本 task 处理的相关联问题（若有，见上下文区来源）
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001: detail_time_display_mode 合法值域与类型/消费端一致（删 'absolute' 或扩实现）
+- [ ] AC-002: locale 单一事实来源，user_config 与 i18n 枚举一致，设置页语言选择持久化生效
+- [ ] AC-003: network store 中 ws_frame 与 NetworkRequestData 可区分（独立 store 或查询按 type 路由），agent 查询不产生误导记录
+- [ ] AC-004: storage/ws 事件 payload 在 event.data 内（与其余模块契约一致），dashboard/导出读得到 key 等字段
+- [ ] AC-005: 网络/控制台表时间列显示真实时间（非恒 +00.000s/空）
+- [ ] AC-006: event_kind 与 category_for_event_type 对齐，无事件错标「生命周期」
+- [ ] AC-007: id 生成统一（无碰撞风险），冲突位点加唯一化后缀
+- [ ] AC-008: MCP schemas 未知参数不再静默放行（strict/strip 按字段定）
+- [ ] AC-009: 相对时间计算无负值（时钟回拨/异常数据 clamp）
+- [ ] AC-010: 既有相关测试语义不回退
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 02:06 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t152_code_f001|important|已修|AC-004 回归：storage_changes 查询分支改读 event.data 内 StorageChangeData（type/summary/preview 三处）+ 回归测试|agent_data_queries.ts / agent_data_queries.test.ts|
-|t152_code_f002|minor|已修|ws_message/ws_frame summary/preview url 读 data.ws_url（base 事件 url=''，Round 1 summary + Round 2 preview）|agent_data_queries.ts network summary/preview|
+<!-- /规范 -->
 
-### Round 2 (2026-08-13 02:14 UTC+8)
+- AC-001/002: user_config/i18n 测试断言值域与持久化
+- AC-003/004: 查询与事件结构断言
+- AC-005: detail 渲染 fixture 断言时间列
+- AC-006: event_kind 映射全类别断言
+- AC-007-009: 各自单测
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t152_code_f003|minor|已修|storage_changes 旧顶层形记录（无 data 键）fallback 读 record 自身，防升级后旧 capture 查询崩溃|agent_data_queries.ts storage 三处|
+## 上下文区
 
-### Round 3 (2026-08-13 02:16 UTC+8)
+- 来源：intensive-review review_20260812_1249（intensive-review 聚合：B1-M5 absolute、B1-M6 locale 双轨、B2-M8 store 混存、B3-M1 payload 顶层、B4-M1/M2 时间列、B4-M3 event_kind、B2-M2/M13 id 冲突、B1-L8/L9 工具统一、B1-L12 passthrough、B1-L13 负相对时间、B3-L2 request_id）
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t152_code_f004|minor|已修|补 ws_message 真实落库形（data 内 ws_url）summary/preview 用例 + storage 旧顶层形 fallback 用例|t152_network_ws_type_route.test.ts / agent_data_queries.test.ts|
+### 有意不测
 
-## 收尾报告
+- 无
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+### 测试策略
 
-### 验收
+- 按项目默认（tests/unit mock Chrome API；fixture 用构造数据）
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001-010 类型契约清理；见 handoff.json ac_evidence
+### 未知契约清单
 
-### Reviewer verdict
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：FAIL（storage 查询回归 f001）
-- Round 2 code：PASS
-- Round 3 code：PASS
-- Round 4 code：PASS
-- Round 1 test：PASS（2 minor 已修）
-- Round 2 test：PASS
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 无
 
-### 结果摘要
+### 风险与回退
 
-- 类型契约谎言清理 10 项：删 detail_time_display_mode 'absolute'、locale 单一来源、network store ws_frame 查询按 type 路由、storage/ws payload 移 event.data、时间列读真实字段、event_kind 对齐、id 统一 crypto.randomUUID、MCP schemas strict/strip、get_relative_time clamp。
+- 风险：行为变更影响既有路径
+- 回退：本 task 为独立 commit，可整体 revert
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- docs/blueprint/conventions.md：locale 单一来源若成规则可补记

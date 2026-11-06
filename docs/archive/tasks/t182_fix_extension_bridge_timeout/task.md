@@ -1,92 +1,76 @@
----
-tid: "t182"
-slug: "fix_extension_bridge_timeout"
-title: "Extension Bridge fetch 超时与取消"
-status: "done"
-branch: "t182_fix_extension_bridge_timeout"
-worktree: ""
-review_level: "full"
-diff_anchor: "eac721d474ebbbfcc7463e6d27b82789d34f4678"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Extension Bridge client 的 enroll/heartbeat/command fetch 用原生 `fetch` 无 `signal`，任一请求永久 pending 则 `poll_cycle` 不返回，后续 timer 不再安排；`stop_bridge_client` 只清已安排 timer 和 lifecycle 标志，不能 abort 当前 fetch。MCP 侧同类 client 已用 `AbortSignal.timeout`，此路径不一致。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 每个 lifecycle 建 `AbortController`，stop 时 `abort()`。
+- enroll/heartbeat/command fetch 使用短 timeout（heartbeat 与 5 秒 TTL 协调），result 使用 command/full-data budget。
+- 组合 `AbortSignal.any([lifecycle.signal, AbortSignal.timeout(ms)])`。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 Bridge 侧 TTL 与命令队列超时数值。
+- 不重构 poll 调度逻辑（仅加取消能力）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`stop_bridge_client` 后 in-flight 请求被 abort，`poll_cycle` 不再等待 deferred resolve。
+- [ ] AC-002：enroll/heartbeat/command fetch 超过各自 timeout 被 abort。
+- [ ] AC-003：restart 后无 stale in-flight 请求残留。
+- [ ] AC-004：新增 timeout、stop-abort、restart 后无 stale 请求测试通过。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t182_code_f001 | minor | 待处置 | 已修 | 补 command fetch 超时 abort 用例（heartbeat 正常响应 + command fetch pending 捕获 signal，注入 timeout 断言 abort） |
-| t182_code_f002 | minor | 待处置 | 已修 | manifest 加 `minimum_chrome_version: 116`（机器可执行约束，满足 f002「manifest 或 decisions.md」或语义；decisions.md 未改——ADR 011 编号已占用，不补） |
-| t182_test_f001 | minor | 待处置 | 已修 | 同 code f001——command fetch 超时用例补齐（AC-002 三类请求全覆盖） |
-| t182_test_f002 | minor | 待处置 | 已修 | enroll 用例捕获 (url, signal) 并断言 `url` 含 `/extension/enroll`，session mock 失效时不误测 heartbeat；AC-001/003 同加 url 锚定 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：mock fetch + deferred + fake timer 断言 abort。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：PERF-M005（2026-08-13 核实，核心 fetch 自 `f0763c03` 存在，多实例/重试后仍未加 signal）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- mock fetch 返回永不 resolve 的 deferred，断言 stop/timeout 触发 abort。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- heartbeat 与 5 秒 TTL 的合理 timeout 取值：结论=`heartbeat=4000ms`（< Bridge `EXTENSION_TTL_MS` 5000，留 1s 余量，避免 slow heartbeat 期间被判 offline）、`enroll=5000ms`、`command fetch=5000ms`（轮询取命令，短超时不影响命令执行）、`result=MAX_COMMAND_TIMEOUT_MS`（300s，结果 body 可能大；2026-08-13 按 `src/bridge/server.ts` EXTENSION_TTL_MS 与 MCP client AbortSignal.timeout 模式核实）。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：timeout 过短误伤正常慢响应。
+- 回退：heartbeat timeout 与 TTL 协调（小于 TTL），result 用 command budget。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 与 Bridge 侧 5 秒 TTL 协调。
+
+### Finalization 时更新的 blueprint
+
+- 无。

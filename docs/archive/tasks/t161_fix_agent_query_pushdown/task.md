@@ -1,88 +1,78 @@
----
-tid: "t161"
-slug: "fix_agent_query_pushdown"
-title: "Agent 查询谓词下推与 keyset 分页"
-status: "done"
-branch: "t161_fix_agent_query_pushdown"
-worktree: ""
-review_level: "full"
-diff_anchor: "c4d1a729f9b01032648372262b7ef976cf49039a"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Agent 查询路径存在两处性能退化：`query_by_store` 用 offset cursor 分页，每页重新打开 cursor 并从头 `continue()` 跳过 offset，全量聚合退化为 O(N²/PAGE_SIZE)；MCP `data.list`/`data.get`/`timeline.list`/`sources.list` 均先 `Promise.all` 加载七个 store 全量，再 filter/sort/slice/find，`limit=1` 或点查也支付全量读取成本。64MiB 结果保护在 materialize 之后才序列化检查，无法保护 MV3 service worker 内存。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- storage 层提供 keyset 分页（`[capture_id, event_id]` 或 `[capture_id, relative_time_ms, event_id]` 复合索引），返回 opaque continuation token/last key。
+- Agent 查询按 source 拆分 count/range/order/keyset page/get-by-id，谓词、时间范围、order、limit 推入 IndexedDB。
+- `data.get`/`timeline.get` 用主键或复合索引点查；`sources.list` 用 `count()` 或维护计数，不读 body/value。
+- 保留 `captures.list` 语义但避免全量读取后二次排序再 slice。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 Agent 查询对外返回契约（字段、排序、limit 语义保持一致）。
+- 不重构 `capture.get_all_data` / export 的全量遍历（允许保留全量，仅改内部游标效率）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`data.get` 携带唯一 `record_id` 时，只访问对应 store 与对应记录，不调用其他六个数据源的读取。
+- [ ] AC-002：`data.list` 或 `timeline.list` 使用 `limit=1` 时，storage 读取量受 limit 约束，不先加载七源全量。
+- [ ] AC-003：`sources.list` 获取 count/range 不读取 body/value 内容。
+- [ ] AC-004：keyset 分页读取 N 条记录为 O(N)，提供 continuation token，下一页从 last key 继续，不从头 skip offset。
+- [ ] AC-005：对外返回结果（字段、排序、分页语义）与修改前等价，既有契约测试通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 17:12 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t161_code_f001|critical|已修|生产 NetworkRequestData 只写 relative_time 无 relative_time_ms 被索引排除——build_network_data 补复制 relative_time_ms；NetworkRequestData 类型加可选字段；DB v4 迁移 backfill legacy 记录（relative_time ?? start_time_ms ?? 0）；补 AC-003b 生产形态验证|src/shared/network_builder.ts:107; src/shared/types.ts:362; src/extension/background/storage.ts v4 迁移|
-|t161_code_f002|critical|已修|测试 fixture make_request 带 relative_time_ms 假形态——现与生产一致（build_network_data 复制），AC-003b 用真实构建路径验证|tests/unit/agent_query_pushdown.test.ts::AC-003b|
-|t161_code_f004|minor|已修|next_token 只出不回——AgentQueryRange 加 after 入参、dispatcher 透传、list_entries_pushdown 用 query.after；补端到端 token 续页断言|src/shared/protocol.ts:80; src/extension/background/agent_command_dispatcher.ts:58|
-|t161_test_f001|important|已修|AC-004 无 instrumentation——storage 加 _storage_stats_for_test 计数钩子，断言三页 cursor 读取 = 总记录数（退化实现 10+20+23=53 会红）|src/extension/background/storage.ts::_storage_stats_for_test; tests/unit/storage_keyset.test.ts:84|
-|t161_test_f002|important|已修|AC-002/003 契约断言旧实现也过——AC-002 加读取量断言（limit=1 时 cursor_reads=1）+ token 续页 O(N) 断言|tests/unit/agent_query_pushdown.test.ts:AC-002|
-|t161_test_f003|important|已修|AC-001 无「不触其他源」断言——加 point_reads=1 / keyset_cursor_reads=0 统计断言|tests/unit/agent_query_pushdown.test.ts:AC-001|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：mock IndexedDB 断言读取量、点查路径、keyset cursor advance 次数。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：PERF-H001、PERF-H002、PERF-L009（CL-07；2026-08-13 核实，`51e0843c` 引入 offset cursor 退化，`42236c2f` 引入全量 offset 循环）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 点查统计断言（point_reads=1/keyset=0）；AC-002 limit 读取量 + token 续页 O(N)（cursor_reads=50）；AC-003 count_reads=7 索引级 + 生产形态 AC-003b；AC-004 storage_keyset 三页读取=23（退化 53 红）+ 迁移 backfill；AC-005 对拍等价（data.list/timeline/captures）
+- instrument cursor success/advance 次数，断言 O(N) 而非只断言不调用 `getAll`；点查断言不触及其他 store。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL（2 critical + 1 minor）
-- Round 1 test：FAIL（3 important）
-- Round 2 code：PASS（f005 minor 新发现）/ test：FAIL（f004 important）
-- Round 3 code：PASS / test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-Agent 查询下推落地：DB v3→v4 复合索引 capture_time（含 legacy backfill）；keyset 分页 O(N)（token 续页、时间窗口、desc、capture 隔离）；data.get 主键点查、sources.list 索引 count/range、captures.list 免二次排序；network 写入端统一 relative_time_ms；对外契约对拍等价（AC-005 gate）；decisions 022 记录契约。
+- IndexedDB 复合索引与 keyset `lowerBound(last_key, true)` 在目标浏览器的行为：结论=复合索引 `[capture_id, relative_time_ms, event_id]` + 双界 `bound([c1,last_t,last_e],[c1,+Inf,+Inf],true,true)` 可行（s006 spike + d008 findings，2026-08-13 已实测）；单 lowerBound 会混入其他 capture，须双界；continuePrimaryKey 定位含自身且按 event_id 序破坏时间排序契约。
+
+### 风险与回退
+
+- 风险：谓词下推改变排序/边界语义，破坏既有契约。
+- 回退：对外契约测试作为 gate；若某 store 无法索引下推，保留全量路径但显式标注并降级。
+
+### 依赖与约束
+
+- 与 t156 共享分页 helper；避免重复实现 keyset 游标。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/decisions.md`：记录 keyset 分页契约与复合索引选择。

@@ -1,17 +1,19 @@
----
-tid: t045
-slug: har_body_size
-title: "fix: HAR body size uses real bytes"
-status: done
-branch: task_t045_har_body_size
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T045 har_body_size
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`exporter.ts:325,334,340` HAR `request.bodySize`/`response.content.size`/`response.bodySize` 用 JS `.length` 字符数，非 UTF-8 字节；中文/emoji/base64 body 尺寸错误。
+
+## 范围
+
+- 优先使用 `request_body_bytes`/`response_body_bytes`；缺失时 `utf8_byte_len(body)`。
+- 新增 `utf8_byte_len` helper（TextEncoder）。
+
+## 验收
+
+- [x] HAR body size 用 UTF-8 字节或持久化 bytes 字段。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：HAR size 字段全部改为优先 bytes 字段，fallback utf8_byte_len。

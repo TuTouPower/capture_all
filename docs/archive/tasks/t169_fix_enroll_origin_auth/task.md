@@ -1,98 +1,76 @@
----
-tid: "t169"
-slug: "fix_enroll_origin_auth"
-title: "extension enroll 首次认证不依赖可伪造 Origin"
-status: "done"
-branch: "t169_fix_enroll_origin_auth"
-worktree: ""
-review_level: "full"
-diff_anchor: "a631e0030d4ba8225a161f25ef1665b1af77a154"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`/extension/enroll` 首次登记时，只要 HTTP `Origin` 形如 `chrome-extension://[a-p]{32}` 即放行并签发 `ext_*` instance token。`Origin` 是客户端可构造 header，本地进程可伪造，不证明请求来自真实扩展。t137 只防不同 extension ID 顶替既有绑定，未建立首次登记身份。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 首次 enroll 使用真正 secret：一次性 pairing code、MCP Bearer token，或安装时固定/安全分发的 extension credential。
+- `Origin` 仅作附加一致性校验，不再作主凭据。
+- 无 pairing/token 的伪造合法形状 Origin 请求必须 401/403。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变已绑定实例的后续请求认证（instance token 机制保留）。
+- 不改变零配置自动连接的正常用户体验目标（用安全分发方式承接）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：无 pairing/token、仅携带合法形状 `chrome-extension://[a-p]{32}` Origin 的 enroll 请求返回 401/403，不签发 instance token。
+- [ ] AC-002：携带有效一次性 pairing code 或 MCP Bearer token 的首次 enroll 成功，且后续请求认证不受影响。
+- [ ] AC-003：真实扩展自动连接仍可无人工手填 token 完成 enroll（用安全分发 credential 或等价机制）。
+- [ ] AC-004：新增「伪造合法形状 Origin + 无 pairing/token 必须 401/403」测试通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 17:55 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t169_code_f001|important|已修|AC-003 断链：bridge 启动自动 open pairing（pairing_auto_open 默认 true）+ instances 持久化（instances_file）重启恢复|src/bridge/server.ts:60|
-|t169_code_f002|minor|已修|mcp_usage.md / README 同步 t169 语义|docs/guides/mcp_usage.md; README.md|
-|t169_code_f003|minor|已修|pairing code 一次性消费（成功 enroll 后关闭）|src/bridge/server.ts:374|
-|t169_test_f001|important|已修|client T091 断言 /pair/status 调用 + enroll body 带 pairing_code|tests/unit/agent_bridge_client.test.ts:764|
-|t169_test_f002|minor|已修|t137 AC-008 evil enroll 补 token（label 顶替分支判别性恢复）|tests/unit/t137_bridge_security.test.ts:199|
-|t169_test_f005|minor|遗留|pairing 路径 enroll 后 heartbeat 无直接断言（AC-003b heartbeat 为 token 路径）|p046|
+<!-- /规范 -->
 
-### Round 2 (2026-08-13 17:55 UTC+8)
+- 全部 AC 可自动测试：mock HTTP Origin header 与 pairing/token 状态。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t169_code_f004|important|已修|instances_file/pairing_auto_open 生产入口接线（parse_bridge_config + cli env）|src/bridge/config.ts|
-|t169_code_f005|minor|遗留|auto-open 窗口过期无续期——接受为已登记风险（扩展轮询重试 + MCP 可再 /pair/open）|p047|
-|t169_code_f006|minor|已修|agent_bridge_config.ts 注释同步 t169|src/shared/agent_bridge_config.ts:26|
-|t169_test_f003|minor|已修|测试名改「T091 (t169): ... pairing code from open window succeeds」|tests/unit/agent_bridge_server.test.ts:1642|
-|t169_test_f006|minor|已修|AC-003b close 后等待落盘（防持久化竞态 flaky）|tests/unit/t137_bridge_security.test.ts:262|
-|t169_test_f004|minor|已修|dev_mode 测试名改「S0 dev_mode allows extension enroll with mcp token」|tests/unit/agent_bridge_server.test.ts:1532|
+## 上下文区
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 来源：SEC-001（2026-08-13 核实，`d8970e7` 移除 pairing 强制，`7daf059` t137 防顶替但保留首次零配置放行）。
 
-有 finding 时用本表；每条 finding 一行。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- mock Origin header 与 credential 状态；断言 enroll 放行/拒绝与 token 签发。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 伪造 Origin 无凭据 401（t137 t169 AC-001）；AC-002 MCP token 首次 enroll + heartbeat（t137 t169 AC-002 / AC-003b）；AC-003 启动自动 open pairing + 扩展自动取 code 零配置 enroll（AC-003a）+ instances 持久化重启恢复；AC-004 伪造 Origin 401 测试
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：FAIL（1 important + 2 minor）/ test：FAIL（1 important + 4 minor）
-- Round 2 code：FAIL（f004 important）/ test：PASS
-- Round 3 code：PASS / test：PASS
+- 首次 enroll 认证模型已确认（2026-08-13 用户决策）：零配置 + 一次性 pairing code 或 MCP Bearer token 参与首次登记，`Origin` 仅作附加一致性校验，不再作主凭据。
 
-### 结果摘要
+### 风险与回退
 
-首次 enroll 认证模型落地：Origin 不再作主凭据（形状可伪造），首次登记要求 MCP token 或有效 pairing code（/pair/open 持 token 打开）；零配置由安全分发承接——bridge 启动自动 open pairing（pairing_auto_open）+ 扩展自动读 /pair/status 取 code + code 一次性消费；已绑定实例持久化（instances_file）bridge 重启恢复不中断；重 enroll 保持 t137 origin 绑定校验。decisions 023（supersede 018 origin 直通）。
+- 风险：破坏零配置自动连接的易用性。
+- 回退：保留安全默认，advanced 场景显式 pairing/token。
+
+### 依赖与约束
+
+- 与 `src/shared/constants.ts` 默认扩展配置、`docs/guides/mcp_usage.md` 的零配置说明保持一致。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/decisions.md`：记录首次 enroll 认证模型决策（ADR）。

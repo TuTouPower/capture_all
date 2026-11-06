@@ -1,83 +1,76 @@
----
-tid: "t175"
-slug: "fix_timeout_ms_contract"
-title: "timeout_ms 契约统一"
-status: "done"
-branch: "t175_fix_timeout_ms_contract"
-worktree: ""
-review_level: "full"
-diff_anchor: "b2e8a14495abd15835a10ac7b6917d63ac71ffe9"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`timeout_ms` 在 MCP schema、工具实现、Bridge 与文档间漂移：MCP Zod 只校验正整数无上限，`get_status`/`list_browsers` schema 接受参数但 `execute_mcp_tool` 不读取；`BridgeMcpClient.get_status()` 固定 10s；指南称「所有工具支持 timeout_ms 且显式传入优先」，domain blueprint 又声明另一组默认值（30/120/15 秒），与 client/Bridge 的 120/300 秒冲突。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 抽取共享 `MAX_COMMAND_TIMEOUT_MS = 300000`，MCP Zod 用 `.max(...)`，Bridge 复用同一常量。
+- `get_status`/`list_browsers` 把 timeout 传至 `BridgeMcpClient.get_status(timeout_ms)`，或从 schema 与指南删除该参数（二选一）。
+- 统一 blueprint、指南、client、Bridge 的默认超时值。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 Bridge 强制 300000ms 上限本身。
+- 不重构 MCP schema 的其他字段（见 t179）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`timeout_ms: 300001` 在 MCP Zod 层被拒绝，不进入 Bridge。
+- [ ] AC-002：`get_status({timeout_ms: 1})` 与 `list_browsers({timeout_ms: 1})` 的 AbortSignal 实际为 1ms。
+- [ ] AC-003：blueprint、指南、client、Bridge 中同一命令的默认超时值一致。
+- [ ] AC-004：新增 schema→tool→client 参数传递测试，验证参数生效或参数已移除。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 20:04 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t175_code_f001|minor|已修|domain 超时表 start/stop 15s→120s（对齐 command_timeout_ms）|docs/blueprint/domain.md:138|
-|t175_code_f002|minor|已修|client.ts 旧注释「固定 10s」→ 30s 可配置|src/mcp/client.ts:7|
-|t175_code_f003|minor|已修|server.ts 注释/错误消息引用 MAX_COMMAND_TIMEOUT_MS（去字面 300000）|src/bridge/server.ts:987|
-|t175_test_f001|minor|已修|删 AC-002a 冗余 spyOn(globalThis, 'AbortSignal') 死代码|tests/unit/timeout_ms_contract.test.ts:AC-002a|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：Zod 校验 + spy `AbortSignal.timeout` 从 `execute_mcp_tool` 输入验证到达 client。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BM-M002、BC-002（CL-03；2026-08-13 核实，`492a37e` Bridge 后加上限未同步 MCP）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 Zod 300001 拒绝（max MAX_COMMAND_TIMEOUT_MS）；AC-002 get_status/list_browsers timeout_ms=1 → AbortSignal.timeout(1)；AC-003 默认值一致（client 30/120/300s = Bridge = domain 表 = 指南）；AC-004 schema→tool→client 参数链路测试
+- spy `AbortSignal.timeout`；断言 MCP tool 分发把参数传给 client。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：PASS（3 minor）/ test：PASS（2 minor）
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-timeout_ms 契约统一：`MAX_COMMAND_TIMEOUT_MS=300000` 共享常量（MCP Zod max + Bridge 校验复用）；get_status/list_browsers 真正传 timeout_ms 至 client（默认 30s 对齐 domain 查询类）；domain 超时表统一（全量/导出 300s、普通命令 120s、start/stop 120s、上限行）；指南补 get_status 默认。send_command 超时逻辑未动。
+- status 类工具 `timeout_ms` 已确认（2026-08-13 用户决策）：保留参数并真正传入 `BridgeMcpClient.get_status(timeout_ms)`，使 `get_status`/`list_browsers` 可配置。
+
+### 风险与回退
+
+- 风险：统一默认值改变调用方对超时的既有预期。
+- 回退：以 Bridge 实际行为为基准统一文档，不改变运行时默认。
+
+### 依赖与约束
+
+- 与 t179 MCP schema 边界修复共享常量与校验。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：统一超时默认值表。

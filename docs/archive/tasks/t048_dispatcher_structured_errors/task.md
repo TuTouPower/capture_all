@@ -1,17 +1,22 @@
----
-tid: t048
-slug: dispatcher_structured_errors
-title: "fix: agent dispatcher structured errors + offset/limit + unknown command"
-status: done
-branch: task_t048_dispatcher_structured_errors
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T048 dispatcher_structured_errors
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`agent_command_dispatcher.ts` switch 无 default；任一失败一律抛 RECORDING_ALREADY_RUNNING；offset/limit 接受负数小数。
+
+## 范围
+
+- execute_agent_command switch 加 default：未知 type 抛 INVALID_QUERY。
+- start_capture 失败时按 error 文本区分 RECORDING_ALREADY_RUNNING vs STORAGE_READ_FAILED。
+- 新增 get_optional_non_negative_int，offset/limit 用此（含 max=100000 上限）。
+
+## 验收
+
+- [x] 未知命令返回 INVALID_QUERY。
+- [x] offset/limit 负数/小数返回 INVALID_QUERY。
+- [x] start_capture 存储/其他失败返回 STORAGE_READ_FAILED。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。测试用 'Already recording' 触发 RECORDING_ALREADY_RUNNING 通过。

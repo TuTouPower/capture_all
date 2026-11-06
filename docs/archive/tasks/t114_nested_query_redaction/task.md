@@ -1,95 +1,78 @@
----
-tid: "t114"
-slug: "nested_query_redaction"
-title: "修复嵌套 query 脱敏泄露"
-status: "done"
-branch: "t114_nested_query_redaction"
-worktree: ""
-review_level: "full"
-diff_anchor: "1c8f570c56af0758afa0ecb6604e3cdc8da8eefa"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+启用 `redact_data` 与 `redact_url_query` 时，`redact_url` 只检查顶层 query key；非敏感参数值内嵌的 absolute/base-resolved、path-relative、root-relative、query-relative、protocol-relative 或编码 query 均不会递归脱敏。敏感值可进入本地采集记录、应用日志、导出及 MCP 查询结果，属于隐私脱敏机制不完整。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 `src/shared/redaction.ts` 对非敏感外层参数值内嵌 query 的递归脱敏，覆盖 plain 与 percent-encoded 值。
+- 覆盖 absolute/base-resolved、path-relative、root-relative、query-relative、protocol-relative 等外层与内层组合。
+- 为 p018 列出的运行入口补接线级回归，防止 helper 修好后调用链仍泄露。
 
-无
+### 非范围
 
-## Review 处置
+- 不处理 p017 的三元表达式误脱敏；Logger 任意文本扫描边界由独立 task 处理。
+- 不删除或重新接线当前 dormant/unreachable 的 8 个 handler 入口；只确保共享 helper 修复后这些路径若未来启用不继承缺陷。
+- 不改变敏感参数清单与 `[REDACTED]` 占位符语义。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`redact_url` 对 absolute/base-resolved 外层中非敏感参数值内嵌的 query 递归脱敏，内层敏感值消失并保留 `[REDACTED]`，非敏感结构不被破坏。
+- [ ] AC-002：`redact_url` 对 path-relative、root-relative、query-relative、protocol-relative 外层中内嵌 query 递归脱敏；plain 与 `%3F`/`%3D` 编码值均被覆盖。
+- [ ] AC-003：form、extension network/CDP/WebSocket、Logger 与 external CDP Bridge 的运行入口在嵌套 query 输入下，最终存储/输出对象不含内层敏感值明文。
+- [ ] AC-004：顶层敏感 key 与既有内嵌 absolute URL 场景的脱敏行为不回退；`url_status` 与实际改写结果一致。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 12:56 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t114_code_f001 | important | 已修 | 深度超限改 fail-closed：redact_url 超 MAX_DEPTH 返回 redacted，redact_nested_value 超限整体置 [REDACTED]，7 层链不泄露（实测 no-leak） | 源码:redaction.ts |
-| t114_code_f002 | minor | 已修 | 接线回归补全：extension network_capture（WS frame / CDP primary url 2 例）、external CDP Bridge（request/response 1 例） | 测试:t114/network/cdp_handler_redaction |
-| t114_code_f003 | minor | 已修 | absolute 分支 allow_encoded=false 只做 plain 检测，双编码行为与相对分支一致（captured），单编码触发；s002/d002 结论修订为「absolute 分支经 URLSearchParams 预解码后不重复解码」 | 源码:redaction.ts |
-| t114_code_f004 | minor | 已修 | 补 protocol-relative 外层、嵌套空值敏感 key 用例 | 测试:t114 测试文件 |
-| t114_test_f001 | important | 已修 | 接线级覆盖补全（同 code f002）：network/WS/bridge 族嵌套 query 用例 | 测试:t114/network/cdp_handler_redaction |
-| t114_test_f002 | minor | 已修 | 补 protocol-relative 外层用例 | 测试:t114 测试文件 |
-| t114_test_f003 | minor | 已修 | 补 MAX_DEPTH 守卫用例（7 层链触达 fail-closed） | 测试:t114 测试文件 |
-| t114_code_f005 | minor | 已修 | 递归时 encoded 命中子串已解码，allow_encoded 继承语义修正；第二层双编码 absolute/相对分支行为一致（均 captured），单编码仍触发 | 源码:redaction.ts |
-| t114_code_f006 | minor | 已修 | 顶层守卫改 fail-closed（超限返回 [REDACTED]+redacted）且阈值统一 `>=`，直接传超限 depth 不泄露明文不谎报状态 | 源码:redaction.ts |
-| t114_test_f004 | minor | 已修 | bridge response-only 新建分支非 AC 缺口（request 先到路径已覆盖），dormant 8 处继承 helper 修复；补 f005/f006 行为一致性用例 3 个 | 测试:t114 测试文件 |
+- AC-001：全部 AC 可自动测试。
 
-## 收尾报告
+## 上下文区
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 来源：p018（2026-08-11 重新完整分析；确认隐私脱敏产品缺陷，10 种 outer/inner 组合复现泄露，运行入口 10 处与 dormant 入口 8 处已清点；复现线索 `.scratch/reproduce_p018.ts`）
 
-### 验收
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001~004 全部由 `tests/unit/t114_nested_query_redaction.test.ts`（30 用例）+ `t114_form_entry_redaction.test.ts`（2 用例）+ `cdp_handler_redaction.test.ts` 接线用例覆盖，黑盒 `npm test` 1322 passed + `tsc --noEmit` 通过
+- 无
 
-### Reviewer verdict
+### 测试策略
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+- helper 层表驱动交叉覆盖 absolute/base-resolved、path/root/query/protocol-relative、plain/encoded 与嵌套形态；断言 secret 消失、占位存在、非敏感结构保留、`url_status` 与改写一致。
+- 接线层按运行入口族补回归：form base-resolved action、extension network/CDP/WebSocket、Logger、external CDP Bridge request/response；最终存储/输出对象不得含明文。dormant handler 补直调或与删除决策同步处理。
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：FAIL（f001 important 未修）
-- Round 1 test：FAIL（f001 important 未修）
-- Round 2 code：PASS（f005/f006 minor 新增）
-- Round 2 test：PASS（f004 minor 新增）
-- Round 3 code（指纹回写）：PASS
-- Round 3 test（指纹回写）：PASS
+<!-- 规范（门禁必留，不得删除） -->
 
-`single`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 general：N/A（review_level=full）
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 编码嵌套 query 的逐层解码深度与终止条件：已核实（s002 spike，2026-08-11）。单层 `decodeURIComponent` 识别 `%3F`/`%3D` 编码值并脱敏；双编码（`%253F`）单层解码后仍是 `%3F` 不触发递归，避免重复解码误判；`MAX_DEPTH=5` 终止深层嵌套链（`?next=?next=?next=?token=x` 正常终止且敏感值仍脱敏）。plain 值原位替换嵌套子串，encoded 值解码重组后 `encodeURIComponent` 写回保持 URL 编码合法性。实现与测试按此规则固化。
 
-### 结果摘要
+### 风险与回退
 
-- redact_url 对非敏感参数值内嵌 query 递归脱敏（单层解码、MAX_DEPTH=5 fail-closed、absolute/相对分支编码语义一致），form/network/WS/Logger/bridge 接线族回归闭环，6 轮审阅通过（code 3 / test 3）。
+- 风险：递归解析可能误改非敏感嵌套结构、引入重复解码或递归深度问题；覆盖面扩大可能影响所有 URL 调用入口。
+- 回退：恢复 `redact_url` 现有实现；保留 p018 复现矩阵核对回退后行为。
+
+### 依赖与约束
+
+- 遵循安全编码约定：启用 `redact_data` 与 `redact_url_query` 时敏感 query 不得明文进入本地记录、日志、导出或 MCP 结果；保留 URL 非敏感结构可用性。
+
+### Finalization 时更新的 blueprint
+
+- `docs/specs/privacy_logger_stack_redact_url.md`：更新嵌套 query 递归脱敏覆盖范围。

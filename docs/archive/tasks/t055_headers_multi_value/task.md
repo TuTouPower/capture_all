@@ -1,17 +1,18 @@
----
-tid: t055
-slug: headers_multi_value
-title: "fix: HTTP headers preserve multi-value (Set-Cookie etc)"
-status: done
-branch: task_t055_headers_multi_value
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T055 headers_multi_value
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`network_webrequest.ts:78-85` headers_array_to_map 同 name 直接赋值，重复字段（Set-Cookie/Warning/Link）被后值覆盖。`network_capture.ts:765-767` headers_map_from_cdp 同样。
+
+## 范围
+
+- headers_array_to_map 对重复 name 用逗号合并保留所有值。
+
+## 验收
+
+- [x] 重复 header 不再被覆盖。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：headers_array_to_map 重复 header 用 `, ` 合并。NetworkRequestData schema 仍为 string（避免下游大改）。

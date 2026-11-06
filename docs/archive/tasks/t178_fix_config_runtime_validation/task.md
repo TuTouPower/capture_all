@@ -1,93 +1,77 @@
----
-tid: "t178"
-slug: "fix_config_runtime_validation"
-title: "配置边界运行时校验"
-status: "done"
-branch: "t178_fix_config_runtime_validation"
-worktree: ""
-review_level: "full"
-diff_anchor: "9e34c29bdd8747837ca21b85490a25fceca1a2b0"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Bridge timeout 配置字段缺少运行时 parse 校验；`set_log_level` 消息分支在 truthy 检查后把任意 `payload.level` cast 为 `LogLevel` 直接设置全局 logger 并写 storage，`Logger.set_level` 本身无运行时校验；`save_user_config` 只 `{...current, ...patch}` 原样落库，不做 sanitize，违反生效 spec `user_config.md` 的「经 `sanitize_user_config` 白名单校验后落库」要求。Agent capture config 的 body/inline 上限也只校验非负，无硬上限。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- Bridge timeout 配置字段增加运行时 parse 校验。
+- `save_user_config` 对合并对象调用 `sanitize_user_config` 再落库，外部消息边界显式拒绝非法 patch。
+- `set_log_level` 用共享 enum guard，统一调用 `save_user_config({ log_level })`。
+- Agent capture config 的 body/inline 上限增加硬上限校验。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 `sanitize_user_config` 的既有白名单逻辑（仅补 save 边界使用）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：非法 enum/number/type 的 `save_user_config` patch 不得进入 storage。
+- [ ] AC-002：非法 `set_log_level` 返回失败或回退，不写入非法 logger level。
+- [ ] AC-003：Bridge timeout 配置字段非法值时启动期或运行时被拒绝。
+- [ ] AC-004：Agent capture config 的 body/inline 上限超过硬上限时被拒绝。
+- [ ] AC-005：新增非法 patch/level/timeout/body 上限测试通过。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t178_code_f001 | minor | 待处置 | 已修 | 抽 `LOG_LEVELS` 常量 + `is_valid_log_level` helper 至 `src/shared/user_config.ts`（导出），set_log_level guard 与 sanitize 白名单共用单一事实来源 |
-| t178_code_f002 | minor | 待处置 | 已修 | 抽 `is_within_body_cap` / `is_within_inline_cap` 命名谓词，去掉 `Number()` 冗余，链长降回 13 |
-| t178_test_f001 | important | 待处置 | 已修 | guard 逻辑提取为 `is_valid_log_level` helper 并加行为测试（非法/合法双向），源码扫描断言改为断言分支调用 helper；拒绝路径语义由 helper 行为测试钉住 |
-| t178_test_f002 | minor | 待处置 | 已修 | 补 `=MAX_COMMAND_TIMEOUT_MS`(300000) 合法边界放行用例 + 字符串型非法 type 拒绝用例 |
-| t178_test_f003 | minor | 待处置 | 已修 | AC-001 负数 `max_body_capture_bytes` 用例补 storage 落库断言（`stored.max_body_capture_bytes` 非 -1） |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：mock storage/config 消息边界断言拒绝与落库结果。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BC-006、BC-010、SEC-008（2026-08-13 核实，`save_user_config` 可追溯 `bdcfcdaa`，T060 后只增强 load 边界未补 save）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- mock storage/config；断言非法 patch/level/timeout/上限不得进入存储或运行态。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- body/inline 上限的硬上限取值：结论=`max_body_capture_bytes ≤ MAX_BODY_CAPTURE_BYTES`（100MB）、`inline_text_max_bytes ≤ INLINE_TEXT_MAX_BYTES`（32KB）（s008 spike，2026-08-13 已核实，复用既有常量无新魔数）。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：写边界校验过严影响正常配置落库。
+- 回退：与 `load_user_config` 共用同一 sanitizer，保证 load/save 对称。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 复用 `sanitize_user_config` 与 `LogLevel` enum。
+
+### Finalization 时更新的 blueprint
+
+- `docs/specs/user_config.md`：如补充 save 边界要求，同步。

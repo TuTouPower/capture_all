@@ -1,90 +1,80 @@
----
-tid: "t157"
-slug: "fix_cdp_body_budget_accounting"
-title: "修复 CDP body 预算记账与淘汰语义"
-status: "done"
-branch: "t157_fix_cdp_body_budget_accounting"
-worktree: ""
-review_level: "full"
-diff_anchor: "e9ac19839ea60e2bd4cd93d10a85d11ecf4417bd"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+CDP 会话资源预算存在两处账本与淘汰语义缺陷：`/cdp/events` 轮询把已完成事件从 `session.events` 移除并返回时，未按返回事件 body 字节递减 `session.body_bytes`，使预算退化为累计写入量，正常流量下也触发错误淘汰；`enforce_body_budget` 与事件数上限淘汰时不区分 pending，可能删除无 body 的 pending 请求元数据，其迟到 `Network.getResponseBody` 响应无法重建事件，请求永久消失。t140 新引入 body 聚合预算时未同步修改轮询移除路径，且相关测试只直接调用内部 helper，未走生产 `/cdp/events` 路径。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 统一事件移除账本：从 `session.events` 移除已返回事件时，按实际存储 `response_body` UTF-8 字节递减 `body_bytes`。
+- body 预算淘汰只选择最旧、已终态且确有 `response_body` 的事件，不得用 pending 元数据偿还 body 预算。
+- 若只剩当前超大 body 无法通过淘汰降到预算内，保留请求元数据，把该 body 置 null 并标 `too_large`。
+- 事件数上限淘汰若必须删除 pending，先生成可返回终态事件（如 `cdp_failed`/`evicted`）并清理对应 command 映射。
+- 同步 `docs/blueprint/domain.md` 限制表，补 CDP 会话聚合 body 预算（200MB）与计数口径、超限策略。
 
-无
+### 非范围
 
-## Review 处置
+- 不重构 `handle_cdp_events` 的 pending/completed 分队列数据结构（性能维度见其他 task）。
+- 不改变 CDP 会话 200MB 预算数值本身。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：经生产 `/cdp/events` 路径返回并移除两条带 body 的 completed 事件后，`session.body_bytes` 回到 0（或仅统计当前驻留事件字节）。
+- [ ] AC-002：poll 移除后写入新的 body 事件，预算内事件全部返回，不因 stale `body_bytes` 被误淘汰。
+- [ ] AC-003：当最旧事件为 pending 且无 body 时，body 预算淘汰不得删除该 pending 元数据；其迟到 body 响应仍能更新对应事件。
+- [ ] AC-004：当仅剩单个超大 body 事件且无法通过淘汰降到预算内时，该请求元数据保留，body 置 null 且标 `too_large`，事件可被 `/cdp/events` 返回。
+- [ ] AC-005：事件数上限淘汰 pending 时，产生可观察终态事件（非静默消失），且对应 command 映射被清理。
+- [ ] AC-006：`docs/blueprint/domain.md` 限制表包含 CDP 会话 200MB 聚合 body 预算条目及计数口径、超限策略。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 14:08 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t157_code_f001|important|已修|enforce_body_budget 改「剩余带 body 事件唯一」判定（has_other_body），数组含 pending 时唯一带 body 事件置 null 标 too_large 而非删除|src/bridge/cdp_handler.ts:117|
-|t157_code_f002|important|已修|事件数淘汰改 evicted_events 独立待返回队列：pending 全部转 evicted + 清映射，events 严格 ≤ 上限，无静默丢弃路径|src/bridge/cdp_handler.ts:87|
-|t157_code_f003|minor|已修|remove_event 改名 decrement_body_bytes，注释声明只递减账本不移除事件|src/bridge/cdp_handler.ts:66|
-|t157_code_f004|minor|已修|写入记账改按实际存储字符串字节（new TextEncoder().encode(body).length），与淘汰减量口径一致|src/bridge/cdp_handler.ts:434|
-|t157_test_f001|important|已修|AC-005 测试构造「pending 已发 getResponseBody 后遭淘汰」场景，断言 body_seq_to_req_id.size===0 触达 clear_body_seq；删除恒假 if 死代码|tests/unit/cdp_body_budget_accounting.test.ts:246|
-|t157_test_f002|minor|已修|AC-005 尾部范围断言改为精确断言（迟到响应无新终态）|tests/unit/cdp_body_budget_accounting.test.ts:270|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：用 MockWebSocket 驱动生产路径，覆盖 pending 位于最旧位置、迟到 body 响应、事件数 cap 与 body cap 交叉场景。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BM-H001、BM-H002、PERF-M007、BM-L004（CL-02、CL-04）；`docs/archive/tasks/t140_agent_query_cursor_paging/spec.md:92-94`（2026-08-13 核实）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001~005 由 `cdp_body_budget_accounting.test.ts` 7 用例（MockWebSocket 生产路径：poll 递减账本、预算内不误淘汰、pending 不偿还预算、唯一带 body 置 null 标 too_large、pending 转 evicted 终态 + 映射清理 + 队列有界）；AC-006 由 `docs/blueprint/domain.md` 限制表条目
+- 走 MockWebSocket 生产路径而非直接调用内部 helper；断言 `body_bytes`、事件数组、`too_large` 标记与 `cdp_failed`/`evicted` 终态。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL（2 important + 2 minor）
-- Round 1 test：FAIL（1 important + 1 minor）
-- Round 2 code：FAIL（f005 新发现 1 important；前轮 4 条已消除）
-- Round 2 test：PASS
-- Round 3 code：PASS（f005 已修）
-- Round 3 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-CDP 会话 body 预算账本统一移除递减（poll 返回/淘汰同口径），淘汰只选已终态带 body 事件、pending 转 evicted 可观察终态且映射清理、唯一带 body 置 null 标 too_large、evicted 队列有界；domain.md 限制表补 200MB 聚合预算条目。
+- 无。
+
+### 风险与回退
+
+- 风险：统一 `remove_events` 封装后，遗漏某条事件移除路径导致账本再次漂移。
+- 回退：封装唯一移除入口，禁止多路径各自维护计数；回退到显式递减实现。
+
+### 依赖与约束
+
+- 与 t140 已有 `MAX_SESSION_BODY_BYTES=200MB` 实现同域，须保持该数值不变。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：限制表补 CDP 会话聚合 body 预算。

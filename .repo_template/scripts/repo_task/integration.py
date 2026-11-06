@@ -1,18 +1,24 @@
 """Task worktree creation, cleanup, and exact-identity integration."""
 
+from __future__ import annotations
+
 import functools
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 import repo_task.context as ctx
+
+from .locks import control_locked, file_lock
 
 from .attempts import (
     append_integrated,
     append_integrated_batch,
     current_attempt_record,
     require_exact_terminal,
+    resolve_identity,
 )
 from .documents import parse_front_matter, validate_task_documents, write_front_matter
 from .git_ops import (
@@ -40,10 +46,10 @@ from .store import (
 )
 from .worktrees import (
     create_worktree,
-    link_local_env,
+    link_local_files,
     resolve_start_base,
     rollback_start,
-    unlink_managed_env_links,
+    unlink_managed_links,
 )
 
 
@@ -84,32 +90,58 @@ def _is_ancestor(maybe_ancestor: str, descendant: str) -> bool:
 
 
 def _dependency_implementations(dep: str) -> list[str]:
-    """依赖的可校验实现 ref：分支 tips；分支已删（已合入 main）时退 main 上该 dep 的 merge commit。
+    """Resolve implementation commits even after chain branches have been deleted.
 
-    链式合入（merge-chain）无独立 `merge({dep}):` commit，返回空——无法精确判断，
-    调用方对这类依赖放宽（链内依赖通常已含于 base）。
+    handoff.json is durable provenance. Locate the commit that added it on main,
+    not a merge subject (chain merges intentionally have no per-task subject).
+    The file is added under docs/tasks/ by the implementation commit and moved to
+    docs/archive/tasks/ by the integrating merge commit; older history added it
+    directly under docs/archive/tasks/. One pathspec covers both locations.
+    Unknown provenance is a hard failure, never an empty, permissive dependency.
     """
-    refs = []
-    for branch in _task_branch_names(dep):
-        try:
-            _, sha = resolve_local_branch(branch)
-        except ctx.TaskDataError:
-            continue
-        refs.append(sha)
+    refs = [resolve_local_branch(branch)[1] for branch in _task_branch_names(dep)]
     if refs:
         return refs
-    base = default_branch()
-    r = _git([
-        "rev-list", "--merges", "--max-count=1", "--grep",
-        f"merge({dep}):", f"refs/heads/{base}",
-    ])
-    if r.returncode == 0 and r.stdout.strip():
-        return [r.stdout.strip().splitlines()[0]]
-    return []
+    main = default_branch()
+    try:
+        task, fm, _ = load_task_at_ref(dep, main)
+        name = Path(task["dir"]).name
+        paths = [f"docs/tasks/{name}/handoff.json", f"docs/archive/tasks/{name}/handoff.json"]
+        handoff = json.loads(git_text_at_ref(main, f"{task['dir']}/handoff.json"))
+        if fm.get("status") != "done" or handoff.get("tid") != dep:
+            raise ValueError("dependency is not done")
+        base_sha = handoff["base_sha"]
+        history = _git([
+            "log", "--format=%H", "--no-merges", "--diff-filter=A",
+            f"refs/heads/{main}", "--", *paths,
+        ])
+        if history.returncode != 0:
+            raise ValueError(history.stderr.strip())
+        for sha in history.stdout.splitlines():
+            parent = _git(["rev-parse", f"{sha}^1"])
+            if parent.returncode == 0 and parent.stdout.strip() == base_sha:
+                for path in paths:
+                    try:
+                        if json.loads(git_text_at_ref(sha, path)) == handoff:
+                            return [sha]
+                    except (ctx.TaskDataError, ValueError):
+                        continue
+    except (ctx.TaskDataError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    raise ctx.TaskDataError(
+        f"start=FAIL：{dep} 缺依赖实现的可验证 SHA；"
+        "须恢复 handoff/实现提交证据，不能仅凭 done 放行"
+    )
 
 
+@control_locked
 def cmd_start(args):
     require_primary_worktree()
+    from .validation import load_policy, ValidationError
+    try:
+        load_policy(ctx.REPO_ROOT)
+    except ValidationError as error:
+        sys.exit(f"start=FAIL：{error}")
     # 前置验证 ledger 可读：创建 branch/worktree 后再追加 ledger 若因损坏
     # fail-closed 抛错，会留下完整副作用却返回非零。提前校验，失败即无副作用。
     ledger_read()
@@ -117,16 +149,20 @@ def cmd_start(args):
     base_branch, base_sha = resolve_start_base(base_arg)
     task, ref_fm, ref_task_body = load_task_at_ref(args.tid, base_sha)
     require_status(ref_fm, "backlog")
-    spec_path = f"{task['dir']}/spec.md"
+    spec_path = f"{task['dir']}/task.md"
     try:
         spec_text = git_text_at_ref(base_sha, spec_path)
     except ctx.TaskDataError:
-        sys.exit("start=FAIL：缺 spec.md")
+        sys.exit("start=FAIL：缺 task.md")
     problems, _ = validate_task_documents(spec_text, ref_task_body)
     if problems:
         sys.exit("start=FAIL：" + "；".join(problems))
 
     effective = discover_effective_tasks()
+    current = effective.get(args.tid)
+    if current and any(current.get(field, "") != ref_fm.get(field, "")
+                       for field in ("depends_on", "conflicts_with")):
+        sys.exit("start=FAIL：base 调度图滞后于当前 task；先提交图变更并选择包含该图的 base，禁止按旧图启动")
     depends_on = [t for t in str(ref_fm.get("depends_on", "")).split(",") if t.strip()]
     conflicts_with = [t for t in str(ref_fm.get("conflicts_with", "")).split(",") if t.strip()]
 
@@ -140,22 +176,6 @@ def cmd_start(args):
             unmet.append(f"{dep}({dep_status or '缺失'})")
     if unmet:
         sys.exit(f"start=FAIL：{args.tid} 依赖未满足：{', '.join(unmet)}")
-
-    # 显式 --base 时同样须继承前置实现：base 分支须包含每个依赖的实现 ref。
-    # 用「实现是否 base 祖先」而非「是否已合入当前 main」推导——已合入 main 的
-    # 依赖若合入于 base 分支 fork 之后，base 仍缺其代码（t023 合 main、t025 分支
-    # fork 于旧 main 时，start t028 --base t025 会缺 t023）。
-    if base_arg is not None and depends_on:
-        missing_in_base = []
-        for dep in depends_on:
-            for ref in _dependency_implementations(dep):
-                if _git(["merge-base", "--is-ancestor", ref, base_sha]).returncode != 0:
-                    missing_in_base.append(f"{dep}（实现 {ref[:12]} 不在 base {base_branch!r}）")
-        if missing_in_base:
-            sys.exit(
-                f"start=FAIL：{args.tid} 显式 --base {base_branch!r} 缺依赖实现："
-                f"{', '.join(missing_in_base)}；请以依赖分支为 --base 或先 integrate 前置"
-            )
 
     # 冲突只警告：「正在运行」= 登记 worktree 存在 且 status=active。
     running_conflicts = []
@@ -197,10 +217,35 @@ def cmd_start(args):
             try:
                 spec_text = git_text_at_ref(base_sha, spec_path)
             except ctx.TaskDataError:
-                sys.exit("start=FAIL：缺 spec.md")
+                sys.exit("start=FAIL：缺 task.md")
             problems, _ = validate_task_documents(spec_text, ref_task_body)
             if problems:
                 sys.exit("start=FAIL：" + "；".join(problems))
+            if current and any(current.get(field, "") != ref_fm.get(field, "")
+                               for field in ("depends_on", "conflicts_with")):
+                sys.exit("start=FAIL：自动选择的 base 调度图滞后；先整合图变更")
+
+    from .validation import parse_policy
+    try:
+        parse_policy(git_text_at_ref(base_sha, "docs/blueprint/testing.md"))
+    except (ValidationError, ctx.TaskDataError) as error:
+        sys.exit(f"start=FAIL：实际 base 的验证策略未就绪：{error}")
+
+    # 实际起点（显式或自动选出的 base）须包含每个依赖的实现 SHA。
+    # 用「实现是否 base 祖先」而非「是否已合入当前 main」推导——已合入 main 的
+    # 依赖若合入于 base 分支 fork 之后，base 仍缺其代码（t023 合 main、t025 分支
+    # fork 于旧 main 时，start t028 --base t025 会缺 t023）。
+    if depends_on:
+        missing_in_base = []
+        for dep in depends_on:
+            for ref in _dependency_implementations(dep):
+                if _git(["merge-base", "--is-ancestor", ref, base_sha]).returncode != 0:
+                    missing_in_base.append(f"{dep}（实现 {ref[:12]} 不在 base {base_branch!r}）")
+        if missing_in_base:
+            sys.exit(
+                f"start=FAIL：{args.tid} base {base_branch!r} 缺依赖实现："
+                f"{', '.join(missing_in_base)}；请以依赖分支为 --base 或先 integrate 前置"
+            )
 
     branch = f"{ref_fm['tid']}_{ref_fm['slug']}"
     worktree_rel = ctx.worktree_rel_path(ref_fm["tid"])
@@ -209,28 +254,42 @@ def cmd_start(args):
         sys.exit(f"分支 {branch!r} 已存在；请先处理后再 start")
     if worktree.exists() or str(worktree) in worktree_paths():
         sys.exit(f"{worktree_rel} 已存在；请先处理后再 start")
+    created_worktree = False
     try:
         rel = create_worktree(ref_fm["tid"], branch, base_sha)
-        task_path = worktree / task["dir"] / "task.md"
+        created_worktree = True
+        task_path = worktree / task["dir"] / ctx.PROGRESS_FILE
         fm, body = parse_front_matter(task_path)
         if fm.get("status") != "backlog":
-            raise ctx.TaskDataError(f"{task['dir']}/task.md status={fm.get('status')!r}，需要 backlog")
+            raise ctx.TaskDataError(f"{task['dir']}/{ctx.PROGRESS_FILE} status={fm.get('status')!r}，需要 backlog")
         fm["status"] = "active"
         fm["branch"] = branch
         fm["worktree"] = worktree_rel
         fm["diff_anchor"] = base_sha
         write_front_matter(task_path, fm, body)
-        linked = link_local_env(worktree)
+        linked = link_local_files(worktree)
     except (OSError, ctx.TaskDataError) as error:
-        rollback_error = rollback_start(
-            base_sha=base_sha, branch=branch, worktree_rel=worktree_rel
-        )
+        rollback_error = None
+        if created_worktree:
+            rollback_error = rollback_start(
+                base_sha=base_sha, branch=branch, worktree_rel=worktree_rel
+            )
+        else:
+            try:
+                branch_result = _git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"])
+                if branch_result.returncode not in (0, 1):
+                    raise ctx.TaskDataError(f"无法查询分支：{branch_result.stderr.strip()}")
+                if worktree.exists() or str(worktree) in worktree_paths() or branch_result.returncode == 0:
+                    rollback_error = "创建结果未确认，已保留可能存在的 worktree 或分支"
+            except (OSError, ctx.TaskDataError) as inspect_error:
+                rollback_error = f"创建结果未确认，无法核实现场：{inspect_error}"
         if rollback_error:
             sys.exit(
                 f"start 失败（{error}）；自动补偿不完整：{rollback_error}。"
                 f"请检查 {worktree_rel}、分支 {branch!r} 与主仓 HEAD 后手动恢复"
             )
-        sys.exit(f"start 失败（{error}）；已清理本次新建分支与 worktree，主仓未修改")
+        msg = "已清理本次新建分支与 worktree，主仓未修改" if created_worktree else "主仓与外部资源未修改"
+        sys.exit(f"start 失败（{error}）；{msg}")
     print(
         f"{args.tid} status=active branch={branch} base={base_branch} "
         f"diff_anchor={fm['diff_anchor']}"
@@ -291,32 +350,44 @@ def _require_execution_gate(
 
 
 def _verify_exact_handoff(tid: str, attempt: int, execution_id: str) -> None:
-    verdict, detail = verify_integrate_ready(tid, attempt, execution_id)
+    verdict, _kind, detail = verify_integrate_ready(tid, attempt, execution_id)
     if verdict != "ready":
         raise ctx.TaskDataError(
             f"{tid} attempt={attempt} execution_id={execution_id!r} refs/handoff 验证失败：{detail}"
         )
 
 
-def cmd_cleanup_worktree(args):
-    require_primary_worktree()
-    if not ctx.TID_RE.fullmatch(args.tid):
-        sys.exit(f"tid 非法：{args.tid!r}")
+def _require_handoff_base_merged(tid: str, ref: str, base_ref: str) -> None:
+    """handoff.base_sha 必须是 base_ref 的祖先；否则前驱会被单 task merge 夹带进主干。"""
     try:
-        _require_execution_gate(args.tid, args.attempt, args.execution_id)
-        branch, _ = _resolve_integrate_branch(args.tid)
-        _verify_exact_handoff(args.tid, args.attempt, args.execution_id)
+        task, _, _ = load_task_at_ref(tid, ref)
+        handoff = json.loads(git_text_at_ref(ref, f"{task['dir']}/handoff.json"))
+        base_sha = handoff["base_sha"]
+    except (ctx.TaskDataError, ValueError, KeyError, TypeError) as error:
+        raise ctx.TaskDataError(f"{tid} 的 handoff.base_sha 无法读取：{error}") from error
+    if _git(["merge-base", "--is-ancestor", base_sha, base_ref]).returncode != 0:
+        raise ctx.TaskDataError(
+            f"{tid} 的 handoff.base_sha {base_sha[:12]} 不是 {base_ref} 的祖先；"
+            "先 integrate 前驱，或用 integrate-chain 整链合并"
+        )
+
+
+def _cleanup_worktree(tid: str, attempt: int, execution_id: str) -> str:
+    """Exact cleanup of one terminal attempt's worktree; returns the result line."""
+    try:
+        _require_execution_gate(tid, attempt, execution_id)
+        branch, _ = _resolve_integrate_branch(tid)
+        _verify_exact_handoff(tid, attempt, execution_id)
     except ctx.TaskDataError as error:
         sys.exit(str(error))
-    rel = ctx.worktree_rel_path(args.tid)
+    rel = ctx.worktree_rel_path(tid)
     path = (ctx.REPO_ROOT / rel).resolve()
     registered_branch = worktree_paths().get(str(path))
     if registered_branch is None:
         _git(["worktree", "prune"])
         if path.exists():
             sys.exit(f"{rel} 存在但未登记为 git worktree；拒绝删除未知内容")
-        print(f"worktree 已清理：{rel}（幂等）")
-        return
+        return f"worktree 已清理：{rel}（幂等）"
     if registered_branch != branch:
         sys.exit(f"{rel} 登记分支为 {registered_branch!r}，预期 {branch!r}；拒绝清理")
     current = _git(["rev-parse", "--abbrev-ref", "HEAD"], root=path)
@@ -327,12 +398,24 @@ def cmd_cleanup_worktree(args):
         sys.exit(
             f"{rel} 有 {len(dirty)} 项未提交改动：{', '.join(dirty[:5])}；先完成 task commit"
         )
-    unlink_managed_env_links(path)
+    unlink_managed_links(path)
     result = _git(["worktree", "remove", str(path)])
     if result.returncode != 0:
         sys.exit(f"git worktree remove 失败：{result.stderr.strip()}")
     _git(["worktree", "prune"])
-    print(f"worktree 已移除：{rel}；分支 {branch!r} 保留")
+    return f"worktree 已移除：{rel}；分支 {branch!r} 保留"
+
+
+@control_locked
+def cmd_cleanup_worktree(args):
+    require_primary_worktree()
+    if not ctx.TID_RE.fullmatch(args.tid):
+        sys.exit(f"tid 非法：{args.tid!r}")
+    try:
+        attempt, execution_id = resolve_identity(args.tid, args.attempt, args.execution_id)
+    except ctx.TaskDataError as error:
+        sys.exit(str(error))
+    print(_cleanup_worktree(args.tid, attempt, execution_id))
 
 
 def _merge_in_progress() -> bool:
@@ -347,21 +430,37 @@ def _conflicted_paths() -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _commit_index() -> None:
+def _stage_indexes() -> None:
+    """Rebuild derived indexes inside the pending merge; never create a commit."""
     rebuild_index()
     paths = [ctx._rel(ctx.ACTIVE_PATH), ctx._rel(ctx.ARCHIVE_PATH)]
-    add_result = _git(["add", "--", *paths])
-    if add_result.returncode != 0:
-        # git add 失败（权限/磁盘满）若不检查，diff --cached 会静默吞掉，
-        # 产生索引与账本不一致。显式失败，保留现场供重试。
-        raise ctx.TaskDataError(f"index git add 失败：{add_result.stderr.strip()}")
-    if _git(["diff", "--cached", "--quiet", "--", *paths]).returncode == 0:
-        print("index 无变化，跳过维护 commit")
-        return
-    result = _git(["commit", "-m", "chore(task): rebuild task indexes", "--", *paths], timeout=120)
+    result = _git(["add", "--", *paths])
     if result.returncode != 0:
-        raise ctx.TaskDataError(f"index commit 失败：{result.stderr.strip()}")
-    print(f"index 维护 commit：{_get_head_short()}")
+        raise ctx.TaskDataError(f"index git add 失败：{result.stderr.strip()}")
+
+
+def _stage_archive_moves(names: list[str]) -> list[tuple[str, str]]:
+    """把成员 task 目录 git mv 进归档目录，随 merge commit 一并提交；返回本次移动的 (源, 目标)。
+
+    task 目录名与分支名同为 {tid}_{slug}。目标已存在且源已消失视为已归档（--continue
+    重入幂等）；两者同时存在是数据冲突，拒绝。
+    """
+    moved = []
+    for name in names:
+        src_rel, dst_rel = f"docs/tasks/{name}", f"docs/archive/tasks/{name}"
+        src, dst = ctx.REPO_ROOT / src_rel, ctx.REPO_ROOT / dst_rel
+        if dst.exists():
+            if src.exists():
+                raise ctx.TaskDataError(f"{src_rel} 与 {dst_rel} 同时存在，无法归档（数据冲突）")
+            continue
+        if not src.is_dir():
+            raise ctx.TaskDataError(f"成员 task 目录 {src_rel} 不存在，无法归档")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        result = _git(["mv", "--", src_rel, dst_rel])
+        if result.returncode != 0:
+            raise ctx.TaskDataError(f"归档移动失败（git mv {src_rel}）：{result.stderr.strip()}")
+        moved.append((src_rel, dst_rel))
+    return moved
 
 
 def _registered_for_branch(branch: str) -> list[str]:
@@ -370,7 +469,7 @@ def _registered_for_branch(branch: str) -> list[str]:
 
 def _ensure_primary_merge_ready() -> None:
     if _merge_in_progress():
-        raise ctx.TaskDataError("存在进行中的 merge；先完成当前事务")
+        raise ctx.TaskDataError("存在进行中的 merge；先继续或 git merge --abort")
     dirty = tracked_dirty_entries()
     if dirty:
         raise ctx.TaskDataError(
@@ -383,9 +482,10 @@ def _delete_branches(branches: list[str]) -> None:
     base = default_branch()
     for branch in branches:
         if _git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"]).returncode != 0:
-            continue  # 分支已删（幂等重入）
+            continue
         if _git(["merge-base", "--is-ancestor", f"refs/heads/{branch}", "HEAD"]).returncode != 0:
             raise ctx.TaskDataError(f"分支 {branch!r} 未完全合入 {base}；保留分支")
+    # Delete the tail last so an interrupted cleanup can be re-entered by tail tid.
     for branch in branches:
         if _git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"]).returncode != 0:
             continue
@@ -395,718 +495,422 @@ def _delete_branches(branches: list[str]) -> None:
         print(f"分支已删除：{branch}")
 
 
-def _find_merge_commit(tid: str, branch_sha: str) -> str | None:
-    """找 `merge({tid}):` commit 且其 second parent 恰为 branch tip。
-
-    崩溃重入/手动预 merge 场景下，skip-merge 不得把当前 HEAD 原样当 merge_sha
-    （HEAD 可能已被无关 commit 推进，RT-003）。解析不到或双亲不符返回 None。
-    """
-    base = default_branch()
-    result = _git([
-        "rev-list", "--merges", "--max-count=1", "--grep",
-        f"merge({tid}):", f"refs/heads/{base}",
-    ])
-    if result.returncode != 0:
-        return None
-    candidates = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+def _find_merge_commit(second_parent: str, subject_prefix: str) -> str | None:
+    # 优先在 second_parent 到 HEAD 的祖先路径上查找，避免受后续无关 merge 数量截断（Issue #62）
+    candidates: list[str] = []
+    if _git(["cat-file", "-e", f"{second_parent}^{{commit}}"]).returncode == 0:
+        res = _git(["rev-list", "--merges", "--ancestry-path", f"{second_parent}..HEAD"])
+        if res.returncode == 0 and res.stdout.strip():
+            candidates = res.stdout.splitlines()
     if not candidates:
-        return None
-    candidate = candidates[0]
-    second = _git(["rev-parse", f"{candidate}^2"])
-    if second.returncode != 0 or second.stdout.strip() != branch_sha:
-        return None
-    return candidate
+        res = _git(["rev-list", "--merges", "HEAD"])
+        if res.returncode == 0 and res.stdout.strip():
+            candidates = res.stdout.splitlines()
+
+    for candidate in candidates:
+        second = _git(["rev-parse", f"{candidate}^2"])
+        subject = _git(["show", "-s", "--format=%s", candidate])
+        if (
+            second.returncode == 0
+            and second.stdout.strip() == second_parent
+            and subject.returncode == 0
+            and subject.stdout.strip().startswith(subject_prefix)
+        ):
+            return candidate
+    return None
 
 
-def _lock_fh(fh, *, unlock: bool) -> None:
-    """跨平台文件锁（Linux fcntl / Windows msvcrt）。"""
-    fh.seek(0)
-    if os.name == "nt":
-        import msvcrt
-        if unlock:
-            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-    else:
-        import fcntl
-        fcntl.flock(fh, fcntl.LOCK_UN if unlock else fcntl.LOCK_EX)
+def _merge_head() -> str:
+    result = _git(["rev-parse", "MERGE_HEAD"])
+    if result.returncode != 0 or not result.stdout.strip():
+        raise ctx.TaskDataError("当前无进行中的 merge")
+    return result.stdout.strip()
+
+
+def _integration_lock_path() -> Path:
+    result = _git(["rev-parse", "--absolute-git-dir"])
+    if result.returncode != 0 or not result.stdout.strip():
+        raise ctx.TaskDataError("无法解析 git 目录")
+    return Path(result.stdout.strip()) / "repo-task" / "integrate.lock"
 
 
 def _chain_locked(func):
-    """single integrate 与 integrate-chain 全程持同一持久锁，互斥主干写。
-
-    锁文件位于 git 公共目录 repo-task/integrate-chain.lock；single integrate 也
-    获取该锁，杜绝并发 single/chain 在事务窗口内顶掉主干 HEAD（RT-004）。
-    O_EXCL/.tmp 只挡「同时创建」；锁保证同一时刻只有一个会话操作 transaction。
-    """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        lock_path = _integration_tx_path().parent / "integrate-chain.lock"
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with lock_path.open("a+", encoding="utf-8") as lock_fh:
-            if lock_fh.tell() == 0:
-                lock_fh.write("\0")
-                lock_fh.flush()
-            _lock_fh(lock_fh, unlock=False)
-            try:
-                return func(*args, **kwargs)
-            finally:
-                _lock_fh(lock_fh, unlock=True)
-
+        try:
+            lock_path = _integration_lock_path()
+        except ctx.TaskDataError as error:
+            sys.exit(str(error))
+        with file_lock(lock_path):
+            return func(*args, **kwargs)
     return wrapper
 
 
-@_chain_locked
-def cmd_integrate(args):
-    """Integrate exactly one terminal attempt；持久 transaction + 主干写锁（RT-003/RT-004）。"""
-    require_primary_worktree()
-    if not ctx.TID_RE.fullmatch(args.tid):
-        sys.exit(f"tid 非法：{args.tid!r}")
+def _prepare_native_merge(branch: str, message: str, names: list[str]) -> None:
     try:
-        record, _ = _require_execution_gate(
-            args.tid, args.attempt, args.execution_id, allow_integrated=True
-        )
-        branch, sha = _resolve_integrate_branch(args.tid)
-        _verify_exact_handoff(args.tid, args.attempt, args.execution_id)
+        _expected_auto_merge(branch)
     except ctx.TaskDataError as error:
-        sys.exit(str(error))
-    registered = _registered_for_branch(branch)
-    if registered:
-        sys.exit(
-            f"分支 {branch!r} 仍登记 worktree：{', '.join(registered)}；"
-            f"先 cleanup-worktree {args.tid} --attempt {args.attempt} "
-            f"--execution-id {args.execution_id}"
-        )
-    tx_path = _single_tx_path(args.tid)
+        sys.exit(f"merge 尚未开始：{error}")
+    result = _git(["merge", "--no-ff", "--no-commit", "-m", message, branch], timeout=120)
+    if result.returncode != 0:
+        conflicts = _conflicted_paths()
+        if conflicts:
+            print(f"merge 冲突，共 {len(conflicts)} 个文件：", file=sys.stderr)
+            for path in conflicts:
+                print(f"  {path}", file=sys.stderr)
+            sys.exit("解决并 git add 后运行项目验证；通过后重跑 --continue，或 git merge --abort")
+        if _merge_in_progress():
+            sys.exit(f"merge 未完成：{result.stderr.strip()}；修复后 --continue，或 git merge --abort")
+        sys.exit(f"merge 失败：{result.stderr.strip()}")
+    try:
+        _stage_archive_moves(names)
+        _stage_indexes()
+    except ctx.TaskDataError as error:
+        sys.exit(f"合并结果已在工作区但归档移动或 index 重建失败：{error}；修复后重跑 --continue 或 abort")
+    print("合并结果已准备但尚未 commit。请运行合并后验证：通过后重跑 --continue；失败则 git merge --abort。")
 
-    # --continue 独立处理：不要求 tx 存在（手动 merge 冲突恢复也能走）
-    if args.continue_merge:
-        if not _merge_in_progress():
-            sys.exit("当前无进行中的 merge；--continue 只用于冲突解决后继续")
-        conflicted = _conflicted_paths()
-        if conflicted:
-            sys.exit(
-                f"仍有 {len(conflicted)} 个文件未解决冲突：{', '.join(conflicted[:5])}；"
-                "解决并 git add 后重试"
-            )
-        merge_head = _git(["rev-parse", "MERGE_HEAD"])
-        if merge_head.returncode != 0 or merge_head.stdout.strip() != sha:
-            sys.exit("进行中的 MERGE_HEAD 与 exact task branch sha 不符；拒绝 --continue")
+
+def _expected_auto_merge(expected_head: str) -> tuple[str, set[str]]:
+    """Recompute Git's merge result without touching the current index.
+
+    merge-tree returns the synthetic tree first.  With --name-only -z, paths
+    between that tree id and the first empty field are the original conflicts.
+    """
+    result = _git([
+        "merge-tree", "--write-tree", "--name-only", "-z",
+        "HEAD", expected_head,
+    ], timeout=120)
+    fields = result.stdout.split("\0")
+    tree = fields[0] if fields else ""
+    if result.returncode not in {0, 1} or not re.fullmatch(r"[0-9a-f]{40,64}", tree):
+        detail = result.stderr.strip()
+        if result.returncode == 129 or "unknown option" in detail.lower():
+            raise ctx.TaskDataError("内容门禁需要 Git >= 2.38（merge-tree --write-tree --name-only）")
+        raise ctx.TaskDataError(
+            "无法重算 Git 自动合并结果，不能校验 staged 内容"
+            + (f"：{detail}" if detail else "")
+        )
+    try:
+        end = fields.index("", 1)
+    except ValueError:
+        end = len(fields)
+    return tree, {path for path in fields[1:end] if path}
+
+
+def _tree_entries(tree: str, directory: str) -> dict[str, tuple[str, str]]:
+    """tree 中 directory 下的 {相对路径: (mode, oid)}。"""
+    result = _git(["ls-tree", "-r", "-z", tree, "--", directory])
+    if result.returncode != 0:
+        raise ctx.TaskDataError(f"无法读取 tree 中的 {directory}：{result.stderr.strip()}")
+    entries = {}
+    for item in result.stdout.split("\0"):
+        if item:
+            meta, path = item.split("\t", 1)
+            mode, _, oid = meta.split()
+            entries[path[len(directory) + 1:]] = (mode, oid)
+    return entries
+
+
+def _archive_move_deviations(
+    auto_tree: str, current_tree: str, conflict_paths: set[str], names: list[str],
+) -> tuple[set[str], list[str]]:
+    """校验成员目录是否恰为 Git 自动合并结果里活跃目录的纯移动。
+
+    返回 (豁免路径集合, 偏离路径列表)。活跃目录必须清空；归档目录的每个文件必须与
+    自动合并结果中的同名文件内容一致（原始冲突路径允许人工解决内容）。
+    """
+    exempt: set[str] = set()
+    deviations: list[str] = []
+    for name in names:
+        src, dst = f"docs/tasks/{name}", f"docs/archive/tasks/{name}"
+        before = _tree_entries(auto_tree, src)
+        if _tree_entries(auto_tree, dst):
+            deviations.append(dst)
+            continue
+        left = _tree_entries(current_tree, src)
+        moved = _tree_entries(current_tree, dst)
+        exempt.update(f"{src}/{rel}" for rel in before.keys() | left.keys())
+        exempt.update(f"{dst}/{rel}" for rel in moved)
+        deviations.extend(f"{src}/{rel}" for rel in left)
+        for rel, entry in moved.items():
+            if f"{src}/{rel}" not in conflict_paths and before.get(rel) != entry:
+                deviations.append(f"{dst}/{rel}")
+        deviations.extend(
+            f"{src}/{rel}" for rel in before
+            if rel not in moved and f"{src}/{rel}" not in conflict_paths
+        )
+    return exempt, sorted(set(deviations))
+
+
+def _validate_merge_staged_scope(expected_head: str, names: list[str]) -> None:
+    merge_base = _git(["merge-base", "HEAD", expected_head])
+    if merge_base.returncode != 0 or not merge_base.stdout.strip():
+        raise ctx.TaskDataError("无法解析 merge-base，不能校验 staged 范围")
+    # Only paths changed by the task side are allowed. A direct HEAD..tail diff
+    # would also include main-only changes and make the whitelist too broad.
+    expected_result = _git([
+        "diff", "--no-renames", "--name-only", "-z", merge_base.stdout.strip(), expected_head,
+    ])
+    staged_result = _git(["diff", "--no-renames", "--cached", "--name-only", "-z"])
+    if expected_result.returncode != 0 or staged_result.returncode != 0:
+        raise ctx.TaskDataError("无法校验 merge staged 范围")
+    index_paths = {ctx._rel(ctx.ACTIVE_PATH), ctx._rel(ctx.ARCHIVE_PATH)}
+    member_prefixes = tuple(
+        f"{base}/{name}/" for name in names for base in ("docs/tasks", "docs/archive/tasks")
+    )
+    expected = {path for path in expected_result.stdout.split("\0") if path}
+    expected.update(index_paths)
+    staged = {path for path in staged_result.stdout.split("\0") if path}
+    unexpected = sorted(
+        path for path in staged - expected if not path.startswith(member_prefixes)
+    )
+    if unexpected:
+        raise ctx.TaskDataError(
+            "merge staged 范围含无关路径：" + ", ".join(unexpected[:10])
+            + "；移出暂存区后再继续"
+        )
+
+    auto_tree, conflict_paths = _expected_auto_merge(expected_head)
+    current_tree = _git(["write-tree"])
+    if current_tree.returncode != 0 or not current_tree.stdout.strip():
+        raise ctx.TaskDataError("无法读取当前 staged tree，不能校验 merge 内容")
+    changed_result = _git([
+        "diff", "--no-renames", "--name-only", "-z", auto_tree, current_tree.stdout.strip(),
+    ])
+    if changed_result.returncode != 0:
+        raise ctx.TaskDataError("无法比较 staged tree 与 Git 自动合并结果")
+    changed = {path for path in changed_result.stdout.split("\0") if path}
+    archive_exempt, archive_deviations = _archive_move_deviations(
+        auto_tree, current_tree.stdout.strip(), conflict_paths, names,
+    )
+    altered_clean_paths = sorted(
+        (changed - conflict_paths - index_paths - archive_exempt) | set(archive_deviations)
+    )
+    if altered_clean_paths:
+        raise ctx.TaskDataError(
+            "非冲突文件偏离 Git 自动合并结果："
+            + ", ".join(altered_clean_paths[:10])
+            + "；这些内容未被 task handoff/review 覆盖，请恢复后再继续"
+        )
+
+
+def _sync_indexes_after_existing_merge(names: list[str]) -> None:
+    """Recovery for a merge created outside task.py: archive members and persist indexes."""
+    moved = _stage_archive_moves(names)
+    rebuild_index()
+    paths = [ctx._rel(ctx.ACTIVE_PATH), ctx._rel(ctx.ARCHIVE_PATH)]
+    result = _git(["add", "--", *paths])
+    if result.returncode != 0:
+        raise ctx.TaskDataError(f"index git add 失败：{result.stderr.strip()}")
+    paths += [path for pair in moved for path in pair]
+    if _git(["diff", "--cached", "--quiet", "--", *paths]).returncode == 0:
+        return
+    result = _git(
+        ["commit", "-m", "chore(task): archive task dirs and rebuild task indexes", "--", *paths],
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise ctx.TaskDataError(f"已有 merge 的归档与 index 维护 commit 失败：{result.stderr.strip()}")
+
+
+def _commit_native_merge(expected_head: str, subject_prefix: str, names: list[str]) -> str:
+    if _merge_in_progress():
+        conflicts = _conflicted_paths()
+        if conflicts:
+            raise ctx.TaskDataError(f"仍有未解决冲突：{', '.join(conflicts[:5])}")
+        if _merge_head() != expected_head:
+            raise ctx.TaskDataError("MERGE_HEAD 与目标分支 tip 不符")
+        _stage_archive_moves(names)
+        _stage_indexes()
+        _validate_merge_staged_scope(expected_head, names)
         result = _git(["commit", "--no-edit"], timeout=120)
         if result.returncode != 0:
-            sys.exit(f"merge commit 失败：{result.stderr.strip()}")
-        merge_sha = _get_head()
-        print(f"merge 已完成：{_get_head_short()}")
-        if tx_path.exists():
+            raise ctx.TaskDataError(f"merge commit 失败：{result.stderr.strip()}")
+        return _get_head()
+    existing = _find_merge_commit(expected_head, subject_prefix)
+    if existing is None:
+        raise ctx.TaskDataError("当前无对应 pending merge 或已完成 merge commit；无法安全继续")
+    return existing
+
+
+@_chain_locked
+@control_locked
+def cmd_integrate(args):
+    require_primary_worktree()
+    try:
+        attempt, execution_id = resolve_identity(args.tid, args.attempt, args.execution_id)
+        record, _ = _require_execution_gate(
+            args.tid, attempt, execution_id, allow_integrated=True
+        )
+        if record["state"] == "integrated" and not _task_branch_names(args.tid):
+            print(f"{args.tid} 已 integrated，分支已清理（幂等）")
+            return
+        branch, sha = _resolve_integrate_branch(args.tid)
+        _verify_exact_handoff(args.tid, attempt, execution_id)
+        registered = _registered_for_branch(branch)
+        if registered:
+            raise ctx.TaskDataError(
+                f"分支 {branch!r} 仍登记 worktree：{', '.join(registered)}；先 run-close --result done（或 cleanup-worktree）"
+            )
+    except ctx.TaskDataError as error:
+        sys.exit(str(error))
+    subject = f"merge({args.tid}):"
+    already_merged = _git(["merge-base", "--is-ancestor", sha, "HEAD"]).returncode == 0
+    if args.keep_branch and not args.continue_merge and not already_merged and record["state"] != "integrated":
+        sys.exit("--keep-branch 只在 --continue 收尾或已合入幂等清理时生效；准备 merge 时不持久化该选项")
+    if args.continue_merge:
+        try:
+            merge_sha = _commit_native_merge(sha, subject, [branch])
+            if record["state"] != "integrated":
+                append_integrated(args.tid, attempt, execution_id, merge_sha)
+            if not args.keep_branch:
+                _delete_branches([branch])
+        except ctx.TaskDataError as error:
+            sys.exit(str(error))
+        print(f"integrate 完成：{args.tid} merge={merge_sha[:12]}")
+        return
+    if record["state"] == "integrated":
+        if not args.keep_branch:
             try:
-                payload = _read_single_tx(args.tid)
+                _delete_branches([branch])
             except ctx.TaskDataError as error:
                 sys.exit(str(error))
-            payload = _update_single_tx(payload, "merged", merge_sha=merge_sha)
-        else:
-            payload = {
-                "version": 1, "phase": "merged",
-                "tid": args.tid, "attempt": record["attempt"],
-                "execution_id": record["execution_id"],
-                "branch": branch, "branch_sha": sha,
-                "base_head": _get_head(), "merge_sha": merge_sha, "index_sha": None,
-            }
-        _finalize_single(payload, args, branch)
+        print(f"{args.tid} 已 integrated（幂等）")
         return
-
-    # 崩溃恢复：transaction 已存在
-    if tx_path.exists():
-        try:
-            payload = _read_single_tx(args.tid)
-        except ctx.TaskDataError as error:
-            sys.exit(str(error))
-        try:
-            payload = _resume_single_tx(payload, branch=branch, sha=sha)
-        except ctx.TaskDataError as error:
-            sys.exit(str(error))
-        _cleanup_single_branch(payload, args, branch)
-        return
-
-    # 全新 integrate
     try:
         _ensure_primary_merge_ready()
     except ctx.TaskDataError as error:
         sys.exit(str(error))
-    if _git(["merge-base", "--is-ancestor", sha, "HEAD"]).returncode == 0:
-        # 分支已合入（手动预 merge 或历史遗留）：解析真实 merge commit 作锚点
-        merge_sha = _find_merge_commit(args.tid, sha)
+    if already_merged:
+        merge_sha = _find_merge_commit(sha, subject)
         if merge_sha is None:
             sys.exit(
-                f"{branch} 已合入 {default_branch()}，但找不到对应 merge({args.tid}) "
-                "commit，或当前 HEAD 并非该分支的真实 merge 结果；"
-                "拒绝把当前 HEAD 记为 merge_sha，请人工核对后处理"
+                f"{branch} 已合入 {default_branch()}，但找不到对应的 {subject} merge commit；"
+                "拒绝认领无关历史"
             )
-        print(f"{branch} 已合入 {default_branch()}（merge={merge_sha[:12]}），跳过 merge")
-        if record["state"] == "integrated":
-            # 已 integrated 的幂等重入：只做分支清理，不重复 append（RT-003 收尾锚点已确认）
+        try:
+            _sync_indexes_after_existing_merge([branch])
+            append_integrated(args.tid, attempt, execution_id, merge_sha)
             if not args.keep_branch:
-                try:
-                    _delete_branches([branch])
-                except ctx.TaskDataError as error:
-                    sys.exit(str(error))
-            return
-        payload = {
-            "version": 1, "phase": "merged",
-            "tid": args.tid, "attempt": record["attempt"],
-            "execution_id": record["execution_id"],
-            "branch": branch, "branch_sha": sha,
-            "base_head": _get_head(), "merge_sha": merge_sha, "index_sha": None,
-        }
-        _finalize_single(payload, args, branch)
+                _delete_branches([branch])
+        except ctx.TaskDataError as error:
+            sys.exit(str(error))
+        print(f"{branch} 已合入，跳过 merge；integrate 完成：merge={merge_sha[:12]}")
         return
-
-    payload = {
-        "version": 1, "phase": "prepared",
-        "tid": args.tid, "attempt": record["attempt"],
-        "execution_id": record["execution_id"],
-        "branch": branch, "branch_sha": sha,
-        "base_head": _get_head(), "merge_sha": None, "index_sha": None,
-    }
-    _write_single_tx(payload)
-    result = _git(
-        ["merge", "--no-ff", "-m", f"merge({args.tid}): {branch}", branch], timeout=120
-    )
-    if result.returncode != 0:
-        conflicted = _conflicted_paths()
-        if conflicted:
-            print(f"merge 冲突，共 {len(conflicted)} 个文件：", file=sys.stderr)
-            for path in conflicted:
-                print(f"  {path}", file=sys.stderr)
-            sys.exit(
-                f"解决后 git add，再执行 integrate {args.tid} --attempt {args.attempt} "
-                f"--execution-id {args.execution_id} --continue；tx={tx_path}"
-            )
-        if _merge_in_progress():
-            sys.exit(
-                f"merge 失败（{result.stderr.strip()}）且存在 MERGE_HEAD；"
-                f"修复后 --continue；tx={tx_path}"
-            )
-        sys.exit(
-            f"merge 失败（{result.stderr.strip()}）；tx 保留于 {tx_path}，修复后 --continue"
-        )
-    payload = _update_single_tx(payload, "merged", merge_sha=_get_head())
-    print(f"merge 完成：{_get_head_short()}")
-    _finalize_single(payload, args, branch)
-
-
-def _single_tx_path(tid: str) -> Path:
-    return _integration_tx_path().parent / f"integrate-{tid}.json"
-
-
-def _write_single_tx(payload: dict) -> Path:
-    return _write_tx_at(_single_tx_path(payload["tid"]), payload)
-
-
-def _read_single_tx(tid: str) -> dict:
-    path = _single_tx_path(tid)
-    if not path.is_file():
-        raise ctx.TaskDataError(f"不存在 integrate transaction（{tid}）；禁止恢复其他 merge")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ctx.TaskDataError(f"integrate transaction 无法读取：{error}") from None
-    if not isinstance(payload, dict) or payload.get("tid") != tid:
-        raise ctx.TaskDataError("integrate transaction 格式非法")
-    return payload
-
-
-def _update_single_tx(payload: dict, phase: str, **fields) -> dict:
-    updated = {**payload, **fields, "phase": phase}
-    _write_single_tx(updated)
-    return updated
-
-
-def _record_single_index(payload: dict) -> dict:
-    merge_sha = payload.get("merge_sha")
-    if not isinstance(merge_sha, str) or not merge_sha:
-        raise ctx.TaskDataError("merged transaction 缺 merge_sha")
-    head = _get_head()
-    index_skipped = False
-    if head == merge_sha:
-        _commit_index()
-        head = _get_head()
-        index_skipped = head == merge_sha
-    elif _git(["rev-parse", "HEAD^1"]).stdout.strip() != merge_sha:
-        raise ctx.TaskDataError("当前 HEAD 既非 merge_sha，也非其紧邻 index 维护 commit")
-    else:
-        _require_index_commit("HEAD")
-    return _update_single_tx(payload, "indexed", index_sha=head, index_skipped=index_skipped)
-
-
-def _record_single_integrated(payload: dict) -> None:
-    index_sha = payload.get("index_sha")
-    if _get_head() != index_sha:
-        raise ctx.TaskDataError("indexed transaction 的 index_sha 与当前 HEAD 不符")
-    append_integrated(
-        payload["tid"], payload["attempt"], payload["execution_id"], payload["merge_sha"]
-    )
-
-
-def _cleanup_single_branch(payload: dict, args, branch: str) -> None:
-    if args.keep_branch:
-        print(f"分支 {branch!r} 按要求保留")
-    else:
-        _delete_branches([branch])
-
-
-def _finalize_single(payload: dict, args, branch: str) -> None:
-    """事务收尾：index 阶段 → integrated → 删分支 → 删 tx。失败保留 tx 供重入。"""
-    tx_path = _single_tx_path(payload["tid"])
-    try:
-        payload = _record_single_index(payload)
-        _record_single_integrated(payload)
-        _cleanup_single_branch(payload, args, branch)
-        tx_path.unlink(missing_ok=True)
+        _require_handoff_base_merged(args.tid, sha, "HEAD")
     except ctx.TaskDataError as error:
         sys.exit(str(error))
+    _prepare_native_merge(branch, f"merge({args.tid}): {branch}", [branch])
 
 
-def _resume_single_tx(payload: dict, *, branch: str, sha: str) -> dict:
-    """single integrate 崩溃重入：按 git 实际状态推进 tx 到收尾。
-
-    只有 phase=prepared/merged/indexed 且校验通过才推进；无法判定时拒绝，
-    防把被污染的 HEAD 记为 merge_sha（RT-003）。
-    """
-    tx_path = _single_tx_path(payload["tid"])
-    if payload["phase"] == "prepared":
-        head = _get_head()
-        if _merge_in_progress():
-            raise ctx.TaskDataError(
-                f"存在进行中的 merge（MERGE_HEAD）；"
-                f"先执行 integrate --continue 完成合并（tx={tx_path}）"
-            )
-        first = _git(["rev-parse", "HEAD^1"])
-        second = _git(["rev-parse", "HEAD^2"])
-        if (
-            first.returncode == 0 and second.returncode == 0
-            and first.stdout.strip() == payload["base_head"]
-            and second.stdout.strip() == sha
-        ):
-            payload = _update_single_tx(payload, "merged", merge_sha=head)
-        elif head == payload["base_head"]:
-            # merge 未发生：重新执行 merge
-            result = _git(
-                ["merge", "--no-ff", "-m", f"merge({payload['tid']}): {branch}", branch],
-                timeout=120,
-            )
-            if result.returncode != 0:
-                raise ctx.TaskDataError(
-                    f"崩溃恢复 merge 失败：{result.stderr.strip()}；tx 保留于 {tx_path}"
-                )
-            payload = _update_single_tx(payload, "merged", merge_sha=_get_head())
-        else:
-            raise ctx.TaskDataError(
-                f"prepared transaction 无对应 merge 状态且 HEAD 被推进"
-                f"（base={payload['base_head'][:12]} head={head[:12]}）；"
-                "拒绝恢复，请人工处理并清理 tx"
-            )
-    if payload["phase"] == "merged":
-        payload = _record_single_index(payload)
-    if payload["phase"] == "indexed":
-        _record_single_integrated(payload)
-        tx_path.unlink(missing_ok=True)
-    return payload
-
-
-def _integration_tx_path() -> Path:
-    result = _git(["rev-parse", "--absolute-git-dir"])
-    if result.returncode != 0 or not result.stdout.strip():
-        raise ctx.TaskDataError("无法解析 absolute git dir")
-    return Path(result.stdout.strip()) / "repo-task" / "integrate-chain.json"
-
-
-def _write_tx_at(path: Path, payload: dict) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    # 持久锁已挡并发；O_EXCL 只防御中断留下的 .tmp 残留（正常 replace 后消失）
-    try:
-        fd = os.open(str(temporary), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
-        raise ctx.TaskDataError(
-            "integrate .tmp 残留：检查并清理该文件后重试"
-        ) from None
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
-    os.replace(temporary, path)
-    return path
-
-
-def _write_chain_tx(payload: dict) -> Path:
-    return _write_tx_at(_integration_tx_path(), payload)
-
-
-def _read_chain_tx() -> tuple[Path, dict]:
-    path = _integration_tx_path()
-    if not path.is_file():
-        raise ctx.TaskDataError("不存在 integrate-chain transaction；禁止恢复其他 merge")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ctx.TaskDataError(f"integrate-chain transaction 无法读取：{error}") from None
-    if (
-        not isinstance(payload, dict)
-        or payload.get("phase") not in {"prepared", "merged", "indexed", "awaiting_verification"}
-        or not isinstance(payload.get("members"), list)
-        or not payload["members"]
-    ):
-        raise ctx.TaskDataError("integrate-chain transaction 格式非法")
-    return path, payload
-
-
-def _update_chain_tx(payload: dict, phase: str, **fields) -> dict:
-    updated = {**payload, **fields, "phase": phase}
-    _write_chain_tx(updated)
-    return updated
-
-
-def _collect_chain(tail_tid: str) -> list[tuple[str, str, str]]:
+def _collect_chain(
+    tail_tid: str, *, base_ref: str = "HEAD", require_base_merged: bool = True,
+) -> list[tuple[str, str, str]]:
     tail_branch, tail_sha = _resolve_integrate_branch(tail_tid)
     candidates = []
     for branch in _local_task_branches():
         _, sha = resolve_local_branch(branch)
         if _git(["merge-base", "--is-ancestor", sha, tail_sha]).returncode != 0:
             continue
-        if _git(["merge-base", "--is-ancestor", sha, "HEAD"]).returncode == 0:
+        # A chain merge covers only commits added relative to its first parent.
+        # Retained branches integrated by an older merge are ancestors of
+        # base_ref and must never be claimed by the current batch.
+        if _git(["merge-base", "--is-ancestor", sha, base_ref]).returncode == 0:
             continue
         match = ctx.TASK_BRANCH_RE.fullmatch(branch)
-        if match is None:
-            continue
-        candidates.append((match.group(1), branch, sha))
+        if match:
+            candidates.append((match.group(1), branch, sha))
     if not any(branch == tail_branch for _, branch, _ in candidates):
-        raise ctx.TaskDataError(f"链尾 {tail_branch!r} 已合入或不在未合并 task 分支集合")
+        raise ctx.TaskDataError(f"链尾 {tail_branch!r} 不在本次 merge 覆盖范围")
     for index, left in enumerate(candidates):
         for right in candidates[index + 1:]:
-            left_before = _git(["merge-base", "--is-ancestor", left[2], right[2]]).returncode == 0
-            right_before = _git(["merge-base", "--is-ancestor", right[2], left[2]]).returncode == 0
-            if not (left_before or right_before):
-                raise ctx.TaskDataError(
-                    f"链成员非线性：{left[1]!r} 与 {right[1]!r} 无祖先关系"
-                )
-    # 用 sorted 而非 list.sort：list.sort 的 key 求值期会临时清空原列表，
-    # 遍历 candidates 恒为空集、key 恒 0，排序静默失效。
+            if not (_is_ancestor(left[2], right[2]) or _is_ancestor(right[2], left[2])):
+                raise ctx.TaskDataError(f"链成员非线性：{left[1]!r} 与 {right[1]!r}")
     candidates = sorted(candidates, key=lambda item: sum(
-        _git(["merge-base", "--is-ancestor", other[2], item[2]]).returncode == 0
-        for other in candidates if other != item
+        _is_ancestor(other[2], item[2]) for other in candidates if other != item
     ))
     if candidates[-1][1] != tail_branch:
         raise ctx.TaskDataError("链尾不是线性 ancestry 的最后成员")
+    if require_base_merged:
+        _require_handoff_base_merged(candidates[0][0], candidates[0][2], base_ref)
     for previous, current in zip(candidates, candidates[1:]):
         parent = _git(["rev-parse", f"{current[2]}^1"])
         if parent.returncode != 0 or parent.stdout.strip() != previous[2]:
             raise ctx.TaskDataError(
-                f"链不连续：{current[1]!r} first parent 不是前一成员 {previous[1]!r} tip"
+                f"链不连续：{current[1]!r} 的 first parent 不是 {previous[1]!r} tip"
             )
     return candidates
 
 
-def _preflight_chain(tail_tid: str) -> list[dict]:
-    chain = _collect_chain(tail_tid)
+def _chain_continue_base(tail_tid: str, tail_sha: str) -> str:
+    if _merge_in_progress():
+        if _merge_head() != tail_sha:
+            raise ctx.TaskDataError("MERGE_HEAD 与链尾 tip 不符")
+        return "HEAD"
+    subject = f"merge-chain({tail_tid}):"
+    existing = _find_merge_commit(tail_sha, subject)
+    if existing is None:
+        raise ctx.TaskDataError("当前无对应 pending chain merge 或刚完成的 merge commit")
+    return f"{existing}^1"
+
+
+def _preflight_chain(tail_tid: str, *, continue_merge: bool = False) -> list[dict]:
+    _, tail_sha = _resolve_integrate_branch(tail_tid)
+    base_ref = _chain_continue_base(tail_tid, tail_sha) if continue_merge else "HEAD"
+    # 已完成的 chain merge 重入只做清理/补记，不再准备新 merge，基座祖先检查无防护对象。
+    require_base_merged = not (continue_merge and not _merge_in_progress())
+    chain = _collect_chain(
+        tail_tid, base_ref=base_ref, require_base_merged=require_base_merged
+    )
     events = ledger_read()
     members = []
     for tid, branch, sha in chain:
         current = current_attempt_record(tid, events)
         if current is None:
             raise ctx.TaskDataError(f"链成员 {tid} 无 current attempt")
-        _require_execution_gate(tid, current["attempt"], current["execution_id"])
-        resolved_branch, resolved_sha = _resolve_integrate_branch(tid)
-        if resolved_branch != branch or resolved_sha != sha:
-            raise ctx.TaskDataError(f"链成员 {tid} branch sha 在预检中变化")
+        # Continue may re-enter after ledger write but before branch delete.
+        _require_execution_gate(
+            tid, current["attempt"], current["execution_id"],
+            allow_integrated=continue_merge,
+        )
         _verify_exact_handoff(tid, current["attempt"], current["execution_id"])
         registered = _registered_for_branch(branch)
         if registered:
-            raise ctx.TaskDataError(
-                f"链成员 {branch!r} 仍登记 worktree：{', '.join(registered)}；先 cleanup-worktree"
-            )
+            raise ctx.TaskDataError(f"链成员 {branch!r} 仍登记 worktree：{', '.join(registered)}")
         members.append({
-            "tid": tid,
-            "branch": branch,
-            "sha": sha,
-            "attempt": current["attempt"],
-            "execution_id": current["execution_id"],
+            "tid": tid, "branch": branch, "sha": sha,
+            "attempt": current["attempt"], "execution_id": current["execution_id"],
         })
     return members
 
 
-def _validate_tx_members(payload: dict, tail_tid: str) -> list[dict]:
-    if payload.get("tail_tid") != tail_tid:
-        raise ctx.TaskDataError(
-            f"transaction tail_tid={payload.get('tail_tid')!r}，拒绝恢复 {tail_tid!r}"
-        )
-    members = payload["members"]
-    if members[-1].get("tid") != tail_tid:
-        raise ctx.TaskDataError("transaction 链尾成员与 tail_tid 不符")
-    allow_integrated = payload["phase"] in {"merged", "indexed", "awaiting_verification"}
-    previous = None
-    for member in members:
-        tid = member.get("tid")
-        branch = member.get("branch")
-        sha = member.get("sha")
-        if not all(isinstance(value, str) and value for value in (tid, branch, sha)):
-            raise ctx.TaskDataError("transaction member 字段非法")
-        branches = _task_branch_names(tid)
-        if branches != [branch]:
-            # awaiting_verification 且该成员已 integrated：分支可能已在上一轮
-            # _delete_chain_branches 中被删除。已终态完成，跳过分支存在性与
-            # handoff 校验，仅靠 exact attempt gate（allow_integrated）与
-            # integrated 事件/merge_sha 一致性收尾，否则 --continue 永久卡死。
-            if (
-                allow_integrated
-                and branches == []
-                and member.get("integrated_sha") == payload.get("merge_sha")
-            ):
-                previous = member
-                continue
-            raise ctx.TaskDataError(
-                f"transaction 成员 {tid} 分支集合漂移：{branches!r}，预期 {[branch]!r}"
-            )
-        _, actual_sha = resolve_local_branch(branch)
-        if actual_sha != sha:
-            raise ctx.TaskDataError(f"transaction 成员 {branch!r} tip 漂移")
-        _require_execution_gate(
-            tid, member.get("attempt"), member.get("execution_id"),
-            allow_integrated=allow_integrated,
-        )
-        _verify_exact_handoff(tid, member["attempt"], member["execution_id"])
-        registered = _registered_for_branch(branch)
-        if registered:
-            raise ctx.TaskDataError(
-                f"transaction 成员 {branch!r} 又登记了 worktree：{', '.join(registered)}"
-            )
-        if previous is not None:
-            parent = _git(["rev-parse", f"{sha}^1"])
-            if parent.returncode != 0 or parent.stdout.strip() != previous["sha"]:
-                raise ctx.TaskDataError(
-                    f"transaction ancestry 漂移：{branch!r} 不再紧邻 {previous['branch']!r}"
-                )
-        previous = member
-    return members
-
-
-def _record_prepared_merge(payload: dict) -> dict:
-    """Recover the merge commit even if the phase write was interrupted."""
-    if _merge_in_progress():
-        merge_head = _git(["rev-parse", "MERGE_HEAD"])
-        if merge_head.returncode != 0 or merge_head.stdout.strip() != payload["members"][-1]["sha"]:
-            raise ctx.TaskDataError("MERGE_HEAD 与 transaction 链尾 sha 不符；拒绝恢复")
-        conflicted = _conflicted_paths()
-        if conflicted:
-            raise ctx.TaskDataError(
-                f"仍有 {len(conflicted)} 个文件未解决冲突：{', '.join(conflicted[:5])}"
-            )
-        result = _git(["commit", "--no-edit"], timeout=120)
-        if result.returncode != 0:
-            raise ctx.TaskDataError(f"chain merge commit 失败：{result.stderr.strip()}")
-        return _update_chain_tx(payload, "merged", merge_sha=_get_head())
-    head = _get_head()
-    first_parent = _git(["rev-parse", "HEAD^1"])
-    second_parent = _git(["rev-parse", "HEAD^2"])
-    if (
-        first_parent.returncode == 0
-        and second_parent.returncode == 0
-        and first_parent.stdout.strip() == payload.get("base_head")
-        and second_parent.stdout.strip() == payload["members"][-1]["sha"]
-    ):
-        return _update_chain_tx(payload, "merged", merge_sha=head)
-    raise ctx.TaskDataError("prepared transaction 无对应 merge 状态或 merge commit")
-
-
-_INDEX_COMMIT_SUBJECT = "chore(task): rebuild task indexes"
-_INDEX_COMMIT_PATHS = frozenset({
-    ctx._rel(ctx.ACTIVE_PATH),
-    ctx._rel(ctx.ARCHIVE_PATH),
-})
-
-
-def _require_index_commit(rev: str) -> None:
-    """校验 rev 是工具链 index 维护 commit（subject + 路径集合），防误认领无关 commit（RT-005）。"""
-    subject = _git(["show", "-s", "--format=%s", rev]).stdout.strip()
-    files = [
-        line.strip()
-        for line in _git(
-            ["diff-tree", "--no-commit-id", "--name-only", "-r", rev]
-        ).stdout.splitlines()
-    ]
-    if subject != _INDEX_COMMIT_SUBJECT or any(
-        path not in _INDEX_COMMIT_PATHS for path in files
-    ):
-        raise ctx.TaskDataError(
-            f"HEAD 是 chain merge 的紧邻 commit 但非工具链 index 维护 commit"
-            f"（subject={subject!r} files={files}）；拒绝认领，请人工核对"
-        )
-
-
-def _record_index_phase(payload: dict) -> dict:
-    merge_sha = payload.get("merge_sha")
-    if not isinstance(merge_sha, str) or not merge_sha:
-        raise ctx.TaskDataError("merged transaction 缺 merge_sha")
-    head = _get_head()
-    index_skipped = False
-    if head == merge_sha:
-        _commit_index()
-        head = _get_head()
-        index_skipped = head == merge_sha
-    elif _git(["rev-parse", "HEAD^1"]).stdout.strip() != merge_sha:
-        raise ctx.TaskDataError("当前 HEAD 既非 merge_sha，也非其紧邻 index 维护 commit")
-    else:
-        _require_index_commit("HEAD")
-    return _update_chain_tx(payload, "indexed", index_sha=head, index_skipped=index_skipped)
-
-
-def _record_integrated_phase(payload: dict) -> dict:
-    index_sha = payload.get("index_sha")
-    if _get_head() != index_sha:
-        raise ctx.TaskDataError("indexed transaction 的 index_sha 与当前 HEAD 不符")
-    members = [
-        {**member, "integrated_sha": payload["merge_sha"]}
-        for member in payload["members"]
-    ]
-    append_integrated_batch(payload["members"], payload["merge_sha"])
-    return _update_chain_tx(payload, "awaiting_verification", members=members)
-
-
-def _delete_chain_branches(members: list[dict]) -> None:
-    for member in members:
-        branch = member["branch"]
-        if _git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"]).returncode != 0:
-            continue
-        if _git(["merge-base", "--is-ancestor", f"refs/heads/{branch}", "HEAD"]).returncode != 0:
-            raise ctx.TaskDataError(f"分支 {branch!r} 未完全合入 {default_branch()}；保留事务")
-        result = _git(["branch", "-d", "--", branch])
-        if result.returncode != 0:
-            raise ctx.TaskDataError(
-                f"删除分支 {branch!r} 失败：{result.stderr.strip()}；保留事务可重试"
-            )
-        print(f"分支已删除：{branch}")
-
-
-def _resume_chain_to_verification(payload: dict) -> dict:
-    if payload["phase"] == "prepared":
-        payload = _record_prepared_merge(payload)
-    _validate_tx_members(payload, payload["tail_tid"])
-    if payload["phase"] == "merged":
-        payload = _record_index_phase(payload)
-    if payload["phase"] == "indexed":
-        payload = _record_integrated_phase(payload)
-    return payload
-
-
 @_chain_locked
+@control_locked
 def cmd_integrate_chain(args):
     require_primary_worktree()
-    if not ctx.TID_RE.fullmatch(args.tail_tid):
-        sys.exit(f"tid 非法：{args.tail_tid!r}")
-    if args.continue_merge:
-        try:
-            tx_path, payload = _read_chain_tx()
-            if payload.get("tail_tid") != args.tail_tid:
-                raise ctx.TaskDataError(
-                    f"transaction tail_tid={payload.get('tail_tid')!r}，"
-                    f"拒绝恢复 {args.tail_tid!r}"
-                )
-            starting_phase = payload["phase"]
-            if starting_phase == "awaiting_verification":
-                members = _validate_tx_members(payload, args.tail_tid)
-                append_integrated_batch(members, payload["merge_sha"])
-                if payload.get("index_skipped"):
-                    # index 无变化时 index_sha == merge_sha；外部验证期间主干可能
-                    # 已被其他操作推进，此时只要求 merge_sha 是 HEAD 的祖先。
-                    if _git([
-                        "merge-base", "--is-ancestor",
-                        payload["merge_sha"], "HEAD",
-                    ]).returncode != 0:
-                        raise ctx.TaskDataError(
-                            "merge_sha 不再是 HEAD 祖先；拒绝删除分支"
-                        )
-                elif _get_head() != payload.get("index_sha"):
-                    raise ctx.TaskDataError(
-                        "外部验证后 HEAD 与 transaction index_sha 不符；拒绝删除分支"
-                    )
-                _delete_chain_branches(members)
-                tx_path.unlink(missing_ok=True)
-                print(
-                    f"chain transaction 已完成：merge={payload['merge_sha'][:12]}；"
-                    f"成员={len(members)}"
-                )
-                return
-            payload = _resume_chain_to_verification(payload)
-        except ctx.TaskDataError as error:
-            sys.exit(str(error))
-        print(
-            f"chain 已收尾到 phase={payload['phase']}；merge={payload['merge_sha'][:12]}。"
-            "请执行合并后验证；通过后再次运行同一 integrate-chain --continue "
-            "以删除分支并清除 transaction"
-        )
-        return
     try:
-        if _integration_tx_path().exists():
-            raise ctx.TaskDataError(
-                "已存在 integrate-chain transaction；先按原 tail_tid --continue 恢复"
-            )
-        _ensure_primary_merge_ready()
-        members = _preflight_chain(args.tail_tid)
+        members = _preflight_chain(args.tail_tid, continue_merge=args.continue_merge)
     except ctx.TaskDataError as error:
         sys.exit(str(error))
-    payload = {
-        "version": 2,
-        "phase": "prepared",
-        "tail_tid": args.tail_tid,
-        "base_head": _get_head(),
-        "merge_sha": None,
-        "index_sha": None,
-        "members": members,
-    }
-    tx_path = _write_chain_tx(payload)
     tail = members[-1]
-    # 并发 single integrate 若推进了主干，base_head 快照即失效，恢复路径 _record_prepared_merge
-    # 会拒绝——在 merge 前检测漂移并中止，避免走到不可恢复状态（RT-004）
-    current_head = _get_head()
-    if current_head != payload["base_head"]:
-        sys.exit(
-            f"chain transaction 创建后主干 HEAD 被推进"
-            f"（{payload['base_head'][:12]} -> {current_head[:12]}）；"
-            "拒绝 chain merge 以免 base_head 快照失效。请先处理并发的 single integrate，"
-            f"再按原 tail_tid --continue 或清理 transaction={tx_path}"
-        )
-    result = _git([
-        "merge", "--no-ff", "-m", f"merge-chain({args.tail_tid}): {tail['branch']}",
-        tail["branch"],
-    ], timeout=120)
-    if result.returncode != 0:
-        conflicted = _conflicted_paths()
-        if conflicted:
-            print(f"chain merge 冲突，共 {len(conflicted)} 个文件：", file=sys.stderr)
-            for path in conflicted:
-                print(f"  {path}", file=sys.stderr)
-            sys.exit(
-                f"解决后 git add，再执行 integrate-chain {args.tail_tid} --continue；"
-                f"transaction={tx_path}"
+    subject = f"merge-chain({args.tail_tid}):"
+    if args.continue_merge:
+        try:
+            merge_sha = _commit_native_merge(
+                tail["sha"], subject, [member["branch"] for member in members],
             )
-        if _merge_in_progress():
-            sys.exit(
-                f"chain merge 失败（{result.stderr.strip()}）且存在 MERGE_HEAD；"
-                f"修复后执行 integrate-chain {args.tail_tid} --continue；"
-                f"transaction={tx_path}"
-            )
-        # 非冲突失败但 merge 未发生：保留 tx 供人工修复后 --continue（F37）
-        sys.exit(
-            f"chain merge 失败（{result.stderr.strip()}）；"
-            f"transaction 保留于 {tx_path}，修复后执行 integrate-chain {args.tail_tid} --continue"
-        )
-    payload = _update_chain_tx(payload, "merged", merge_sha=_get_head())
+            append_integrated_batch(members, merge_sha)
+            _delete_branches([member["branch"] for member in members])
+        except ctx.TaskDataError as error:
+            sys.exit(str(error))
+        print(f"integrate-chain 完成：merge={merge_sha[:12]}；成员={len(members)}")
+        return
     try:
-        payload = _resume_chain_to_verification(payload)
+        _ensure_primary_merge_ready()
     except ctx.TaskDataError as error:
-        sys.exit(
-            f"chain merge 已发生，transaction 保留于 {tx_path}：{error}；"
-            f"修复后执行 integrate-chain {args.tail_tid} --continue"
-        )
-    print(
-        f"chain merge 已完成：{payload['merge_sha'][:12]}；成员={len(members)}；"
-        "分支与 transaction 保留。请执行合并后验证；通过后运行 "
-        f"integrate-chain {args.tail_tid} --continue"
+        sys.exit(str(error))
+    _prepare_native_merge(
+        tail["branch"], f"merge-chain({args.tail_tid}): {tail['branch']}",
+        [member["branch"] for member in members],
     )

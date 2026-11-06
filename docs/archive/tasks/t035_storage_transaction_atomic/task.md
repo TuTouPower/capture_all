@@ -1,17 +1,17 @@
----
-tid: t035
-slug: storage_transaction_atomic
-title: "fix: IndexedDB transaction commit boundary + flush retry"
-status: done
-branch: task_t035_storage_transaction_atomic
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + plan - T035 storage_transaction_atomic
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`src/extension/background/storage.ts` create_capture/update_capture 用 request.onsuccess resolve（不等 tx.oncomplete），flush_store 先 splice 再开 tx 失败丢批次，周期 flush `.catch(()=>{})` 吞错。
+
+## 范围
+
+- create_capture/update_capture：tx.oncomplete resolve，tx.onerror/onabort reject。
+- flush_store：tx.oncomplete 后清空 + 累计 bytes；失败放回 buffer 头部供重试。
+- 周期 flush：flush_store 已自回填，周期 catch 静默避免刷屏。
+
+## 验收
+
+- [x] create_capture 用 tx.oncomplete resolve。
+- [x] flush_store abort 时 batch 放回 buffer。
+- [x] npm test 全绿。

@@ -1,17 +1,19 @@
----
-tid: t058
-slug: event_category_exhaustive
-title: "refactor: event_category exhaustive mapping"
-status: done
-branch: task_t058_event_category_exhaustive
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T058 event_category_exhaustive
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`src/shared/event_category.ts:7-17` 漏 4 个合法生命周期事件（capture_config_changed/permission_missing/debugger_attach_status/body_capture_status_changed），未知类型默认 dom_data。
+
+## 范围
+
+- 新增 LIFECYCLE_TYPES Set，含全部 6 个 lifecycle 事件。
+- Set 类型改为 `Set<EventType>`（编译期类型安全）。
+
+## 验收
+
+- [x] 4 个遗漏事件映射到 capture_lifecycle。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

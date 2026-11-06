@@ -1,96 +1,76 @@
----
-tid: "t186"
-slug: "refactor_dashboard_shared"
-title: "Dashboard shared 状态与依赖重构"
-status: "done"
-branch: "t186_refactor_dashboard_shared"
-worktree: ""
-review_level: "full"
-diff_anchor: "dcbf2b75f714be2249504c29a53f3cc6e699047e"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`dashboard_shared.ts` 同时充当全局状态仓库（约 20 个模块级可变状态）、数据服务（load/export/格式化）与可变 service locator（文件尾定义带默认 no-op 的可变 `router`）。`dashboard.ts` 通过赋值注入 `go/render_content/...` 以「breaks circular deps」，`dashboard_detail.ts` 反向覆写 `router.is_tl_dragging`。未完成入口初始化时 `router.go()` 静默 no-op，行为依赖 import/执行顺序。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 最小拆分为 `dashboard_state.ts`（显式 `DashboardState` 对象与 factory/reset）、`dashboard_data.ts`（load/export）、`dashboard_format.ts`（纯函数）。
+- router 改为入口显式传入 controller/callbacks，或提供一次性 `wire_dashboard_router()`；未接线调用抛明确错误而非 no-op。
+- 测试每例创建 state/controller，不再直接共享模块单例。
 
-无
+### 非范围
 
-## Review 处置
+- 不引入 UI 框架。
+- 不改变 Dashboard 的功能行为与页面表现。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：重构后 Dashboard 功能行为与页面表现不变（既有 dashboard 相关测试通过）。
+- [ ] AC-002：router 未接线时调用抛明确错误，而非静默 no-op。
+- [ ] AC-003：测试不再依赖共享模块单例的 import/执行顺序。
+- [ ] AC-004：状态、数据、格式化职责分离到各自模块，`dashboard_shared.ts` 不再同时承载三者。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t186_code_f001 | important | 待处置 | 已修 | `dashboard_timeline_marker.test.ts` beforeEach 补 `wire_dashboard_router`（pointerdown handler 调 router.render_content，未接线抛错导致 vitest Errors 退出码 1）——同 t154 做法 |
-| t186_test_f001 | important | 待处置 | 已修 | 同 code f001——timeline_marker 测试显式 wire router；全量 `npm test` 退出码 0（191 文件 1817 用例，无 Errors） |
+<!-- 规范（门禁必留，不得删除） -->
 
-## Round 2 处置
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t186_code_f002 | minor | 待处置 | 已修 | wire 提升至 dashboard_timeline_marker.test.ts 文件级 beforeEach（覆盖全部 7 个 describe，不依赖跨 describe 状态残留） |
+<!-- /规范 -->
 
-### Round 1 场景说明
+- 全部 AC 可自动测试：既有 dashboard 单测 + 未接线错误断言 + 测试隔离检查。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+## 上下文区
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 来源：ARCH-003（2026-08-13 核实，`ac8fefe` 从 1317 行拆为 6 模块时形成，后续 t144/t152/t154 继续向 shared 增加状态）。
 
-有 finding 时用本表；每条 finding 一行。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 每例创建 state/controller；断言未接线抛错；以既有 dashboard 测试为行为 gate。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- /规范 -->
 
-`full`：
+- 无。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 风险与回退
 
-`single`：
+- 风险：拆状态后遗漏某调用方共享可变状态。
+- 回退：渐进迁移，先 state 再 data/format，保留 factory/reset 兜底。
 
-- Round 1 general：PASS / FAIL
+### 依赖与约束
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 与 t160 Dashboard 轮询增量改动同域，注意合并顺序。
 
-### 结果摘要
+### Finalization 时更新的 blueprint
 
-- 一句话；无额外说明可写「见上」
+- `docs/blueprint/architecture.md`：如记录 Dashboard 分层，同步。

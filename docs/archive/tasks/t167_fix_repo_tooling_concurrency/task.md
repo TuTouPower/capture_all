@@ -1,83 +1,79 @@
----
-tid: "t167"
-slug: "fix_repo_tooling_concurrency"
-title: "工具链并发与原子性修复集"
-status: "dropped"
-branch: ""
-worktree: ""
-review_level: "full"
-diff_anchor: ""
-depends_on: ""
-conflicts_with: ""
-note: "dropped: repo_template 工具链修复移交外部 agent，本 task 归档"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+工具链存在多处并发与原子性缺陷：task ID 取号（`cmd_add`）无锁，并发 `add` 撞号；派生 index 直接 `write_text` 非原子，崩溃/并发可落盘损坏 JSON；`edit` 多文件反向边更新非原子，中途崩溃留半同步冲突边；pending 批量迁移（archive/park/revive）无锁非原子；原生 Windows 上 `_id_scan.id_lock` 打开空锁文件后 `msvcrt.locking(1)` 失败。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- task ID 取号复用 `_id_scan.id_lock`（或独立 `task_id.lock`）覆盖「取号 + 建目录」，或 `mkdir` O_EXCL 原子占位 + 冲突重试。
+- `rebuild_index` 与 `goal_queue.json` 改为临时文件 + `os.replace` 原子替换，commit 前校验 JSON 可解析。
+- `edit` 反向边更新先在内存完成全部 front matter，再一次性顺序落盘（owner 最后），对每个写盘用临时文件 + rename。
+- pending 批量迁移整体持 `id_lock`，`move_entry` 目标不存在则 `os.replace`/`git mv` 幂等重试。
+- `id_lock` 照抄 `ledger._with_lock` 的空锁文件写 1 字节处理。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变各命令的对外语义与返回格式。
+- 不重构调度图展开逻辑。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：并发 `task.py add` 产生唯一 tid，不出现重复 tid 目录。
+- [ ] AC-002：`rebuild_index` 与 `goal_queue.json` 写入使用原子替换，模拟中途崩溃后 JSON 不损坏或可恢复。
+- [ ] AC-003：`edit` 反向边更新任一写盘中途失败，不产生单边残留冲突（可幂等重跑恢复）。
+- [ ] AC-004：pending 批量迁移整体持锁，并发 `new` 与 `archive` 不产生「同号多处」歧义。
+- [ ] AC-005：`id_lock` 在空锁文件上先写 1 字节再锁，原生 Windows 语义可用（用 msvcrt 模拟或静态断言实现一致）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- AC-005 `[deploy]`：需原生 Windows 环境验证；其余 AC 可用 ProcessPoolExecutor 并发 + 中断注入自测。
 
-## 收尾报告
+## 上下文区
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 来源：RT-007、RT-008、RT-009、RT-010、RT-011（2026-08-13 核实，`ea0ff5c` 引入）。
 
-### 验收
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 无。
 
-### Reviewer verdict
+### 测试策略
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+- 复用 `test_pending.py` 的 ProcessPoolExecutor 并发模式；原子写用故障注入（写盘中途异常）。
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- 规范（门禁必留，不得删除） -->
 
-`single`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 general：PASS / FAIL
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- Windows `msvcrt.locking` 空文件行为：`UNVERIFIED-SPIKE`，执行期以文档/最小复现确认，实现按 `ledger` 既有注释对齐。
 
-### 结果摘要
+### 风险与回退
 
-- 一句话；无额外说明可写「见上」
+- 风险：加锁后多会话并发取号死锁。
+- 回退：锁短持有 + O_EXCL 占位冲突重试作为备选。
+
+### 依赖与约束
+
+- 复用 `ledger._with_lock` 与 `_id_scan.id_lock` 模式。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/conventions.md`：如补并发保证条目，同步原子写与锁约定。

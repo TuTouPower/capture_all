@@ -1,17 +1,18 @@
----
-tid: t056
-slug: correlator_merge
-title: "fix: network_correlator merge_matched uses non-empty check"
-status: done
-branch: task_t056_correlator_merge
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T056 correlator_merge
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`network_correlator.ts:80-81` `web_meta.request_headers || cdp_event.request_headers`：空对象 {} 为 truthy 不回退到 CDP Header，MIME 提取也返回 null。
+
+## 范围
+
+- merge_matched 用 has_headers（Object.keys.length > 0）判断而非 || 真值。
+
+## 验收
+
+- [x] 空 headers 对象时回退到 CDP headers。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

@@ -1,86 +1,75 @@
----
-tid: "t128"
-slug: "network_data_builder"
-title: "refactor: extract NetworkRequestData builder"
-status: "done"
-branch: "t128_network_data_builder"
-worktree: ""
-review_level: "full"
-diff_anchor: "9d36ca0b95e7f8c33922d8af99c8b010c8c8fc37"
-depends_on: "t123"
-conflicts_with: ""
-note: "审阅发现:3+ 处 ~40 字段手工构造"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`NetworkRequestData` 约 40 字段的构造在多处手工逐字段写死：`body_capture_coordinator.ts:300-317`（external_cdp_bridge 路径）、`network_capture.ts:273-312`（WebSocket 连接事件）等 3+ 处。字段集大体一致（request/response body 状态、headers 状态、尺寸字段、null 默认值），差异在少数字段（capture_method / body_capture_mode / ws 相关 / correlation_status）。审阅确认重复构造点可统一。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 抽取 `NetworkRequestData` 构造 builder：默认字段工厂 + 按调用点覆盖差异字段。
+- 落点优先 `src/shared/types.ts` 旁或 `src/shared/` 工具文件，执行期定。
+- 迁移 `body_capture_coordinator.ts`、`network_capture.ts` 及其余构造点使用 builder。
 
-无
+### 非范围
 
-## Review 处置
+- 不改任何调用点实际输出的数据语义（字段值与事件行为不变）。
+- 不改 `NetworkRequestData` 类型定义本身。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：已知构造点（body_capture_coordinator、network_capture 等）不再内联 ~40 字段样板，统一经 builder（代码结构断言）。
+- [ ] AC-002：网络捕获事件数据不变：网络相关测试全绿，断言覆盖字段值（含 body 状态、headers 状态、ws 字段、correlation 字段）。
+- [ ] AC-003：`npm test` 全绿，`npx tsc --noEmit` 通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t128_code_f001|important|已修|build_network_event 迁移后 response_body_encoding/bytes 自动派生,CDP base64 body 误标 utf8;加 extra 覆盖 null 还原旧语义|network_capture.ts:968|
-|t128_code_f002|minor|已修|三处构造点 `|| 'failed'`→builder `?? 'not_enabled'` 漂移;改显式传 `X || 'failed'` 消除|body_capture_coordinator.ts:299 / service_worker.ts:837 / network_hook.ts:375|
-|t128_test_f001|important|已修|web_request 路径 response_body 字段零断言;新增判别性用例(base64 body)锁死不派发语义|network_cdp.test.ts:651|
-|t128_test_f002|minor|已修|builder 单测缺多字节用例;补 '你好'=6/'👋'=4|network_builder.test.ts|
-|t128_test_f003|important|已修|Round 3 null-body 断言无判别力;改注入 base64 body 判别性用例|network_cdp.test.ts:651|
+- 全部 AC 可自动测试：AC-001 结构断言，AC-002/003 测试套件。
 
-## 收尾报告
+## 上下文区
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 来源：无（审阅发现，2026-08-11 核实 3+ 构造点）
 
-### 验收
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 无。
 
-### Reviewer verdict
+### 测试策略
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+- 现有网络捕获测试（network_capture / body_capture_coordinator / external_cdp_bridge）覆盖字段语义；builder 本身补轻量单测（默认字段与覆盖行为）。
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- 规范（门禁必留，不得删除） -->
 
-`single`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 general：PASS / FAIL
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 无。
 
-### 结果摘要
+### 风险与回退
 
-- 一句话；无额外说明可写「见上」
+- 风险：中。构造点字段差异（如 correlation_status 仅部分路径有）迁移时可能漏字段。以全量网络测试 + 逐构造点 diff 覆盖。
+- 回退：git 恢复原构造点。
+
+### 依赖与约束
+
+- 依赖 t123（webrequest_handler 删除后构造点集合确定）。建议在 t123 后执行。
+
+### Finalization 时更新的 blueprint
+
+- 无

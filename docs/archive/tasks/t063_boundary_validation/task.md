@@ -1,17 +1,13 @@
----
-tid: t063
-slug: boundary_validation
-title: "fix: max_body_capture_bytes + bridge timeout boundary validation"
-status: done
-branch: task_t063_boundary_validation
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# T063 max_body_capture_bytes + bridge timeout boundary validation
 
-# Task 过程总账（归档补齐）
+## 背景
+bridge/cdp_handler.ts max_body_capture_bytes 接受任意 number 不校验整数/非负/上限。server.ts validate_command_request 只查 timeout_ms 类型不校验正整数/上限。
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+## 修复
+- max_body_capture_bytes: Number.isSafeInteger + 0..MAX_BODY_CAPTURE_BYTES。
+- timeout_ms: Number.isInteger + > 0 + <= 300000。
+
+## 验收
+- [x] 超范围 max_body 回退默认。
+- [x] 无效 timeout_ms 返回 INVALID_QUERY。
+- [x] npm test 全绿。

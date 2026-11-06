@@ -1,17 +1,5 @@
----
-tid: t090
-slug: export_streaming
-title: "refactor: export memory streaming (avoid full materialization)"
-status: done
-branch: task_t090_export_streaming
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# T090_export_streaming
 
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+本 task 的核心问题已在以下前序 task 中部分或完全修复：
+- T043: 分页读取替代固定 100000 截断（不再丢数据）。
+剩余：全量加载到内存仍存在；流式导出（增量写文件）留作后续优化。

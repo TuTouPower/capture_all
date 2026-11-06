@@ -1,78 +1,84 @@
----
-tid: "t131"
-slug: "redact_url_keep_shape"
-title: "fix: 脱敏体系一致性（redact_url 形态 + content 侧 + logger credential）"
-status: "done"
-branch: "t131_redact_url_keep_shape"
-worktree: ""
-review_level: "full"
-diff_anchor: "2b599e343b1ad6952cf4d4ca3c74070a75ab1150"
-depends_on: ""
-conflicts_with: ""
-note: "intensive-review 合并：H-3 redact_url 无条件规范化 + H-5 content ws/fallback 未脱敏 + H-19 logger credential 明文"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+脱敏行为三处不一致：redact_url 对绝对 URL 无条件 new URL().toString() 改写原文（破坏回放匹配）；content 侧 websocket_capture 与 network_hook fallback 路径未套 redact_url（?token= 直落 IndexedDB）；logger.sanitize_value 仅脱 URL 子串，credential 形字段明文入 app_logs。同一配置三种行为。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 review finding：intensive-review 合并：H-3 redact_url 无条件规范化 + H-5 content ws/fallback 未脱敏 + H-19 logger credential 明文
 
-无
+### 非范围
 
-## Review 处置
+- 不在本 task 处理的相关联问题（若有，见上下文区来源）
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001: redact_url('http://example.com', true) 无敏感参数时返回原串（不追加尾斜杠、不降 host），url_status='captured'
+- [ ] AC-002: 含敏感 query 参数时按既有规则脱敏为 [REDACTED]，url_status='redacted'，其余参数与形态保留
+- [ ] AC-003: 相对 URL 路径行为不变（无 query 原样返回）
+- [ ] AC-004: 嵌套 query 递归脱敏（t114 语义）不受影响
+- [ ] AC-005: websocket_capture 接收侧 ws_url 按 redact_data && redact_url_query 脱敏，url_status 反映结果
+- [ ] AC-006: ws 消息 data_preview 在 redact_data=true 时不落明文（置 '[REDACTED]' 或等价），消息长度/方向等元数据保留
+- [ ] AC-007: network_hook fallback 路径 URL 按同一规则脱敏，url_status 不再恒 'captured'
+- [ ] AC-008: redact_data=false 时 ws/fallback 行为与修前一致（不脱敏）
+- [ ] AC-009: logger 对字段名匹配 authorization/cookie/set-cookie/x-api-key/token/secret/password 的值置 '[REDACTED]'（对象与字符串形态）
+- [ ] AC-010: 正常日志内容不受影响（无敏感字段名时不脱敏）
+- [ ] AC-011: 既有 redaction/logger/network_hook/websocket 测试语义不回退
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-12 13:55 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t131_code_f001|minor|已修|ws data_preview 仅当有原始文本时脱敏，binary/too_large 保持 null 不混淆语义|src/extension/content/websocket_capture.ts:200-202|
-|t131_test_f001|minor|已修|补 cookie/set-cookie/secret 字段断言|tests/unit/logger.test.ts:170-179|
-|t131_test_f002|minor|已修|补敏感字段值为对象形态整体置 [REDACTED] 用例|tests/unit/logger.test.ts:181-187|
+<!-- /规范 -->
 
-## 收尾报告
+- AC-001/002: redaction.test.ts 新增绝对 URL 无敏感参数断言
+- AC-005/007: content 单测断言含 ?token= URL 落库为脱敏形态
+- AC-006: ws 消息明文 redact 开启不落库
+- AC-009: logger 测试新增 credential 字段用例
+- AC-003/004/008/010/011: 既有测试保持通过
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+## 上下文区
 
-### 验收
+- 来源：intensive-review review_20260812_1249（intensive-review 合并：H-3 redact_url 无条件规范化 + H-5 content ws/fallback 未脱敏 + H-19 logger credential 明文）
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：11 条 AC 均测试覆盖（redact_url 保形、content ws/fallback 脱敏、logger credential 脱敏）；见 handoff.json ac_evidence
+### 有意不测
 
-### Reviewer verdict
+- 无
 
-`full`：
+### 测试策略
 
-- Round 1 code：PASS
-- Round 1 test：PASS
-- Round 2 code：PASS
-- Round 2 test：PASS
+- 按项目默认（tests/unit mock Chrome API；fixture 用构造数据）
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+### 未知契约清单
 
-### 结果摘要
+<!-- 规范（门禁必留，不得删除） -->
 
-- 脱敏体系三处一致：redact_url 无敏感参数保形；content ws/fallback 路径按 redact 配置脱敏 URL/预览；logger credential 字段整体脱敏。domain.md 补统一规则。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：行为变更影响既有路径
+- 回退：本 task 为独立 commit，可整体 revert
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- docs/blueprint/domain.md：脱敏与截断条目按统一规则更新

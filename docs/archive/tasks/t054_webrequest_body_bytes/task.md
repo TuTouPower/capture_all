@@ -1,17 +1,18 @@
----
-tid: t054
-slug: webrequest_body_bytes
-title: "fix: webRequest response body bytes/encoding populated"
-status: done
-branch: task_t054_webrequest_body_bytes
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T054 webrequest_body_bytes
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`webrequest_handler.ts:242-247` build_network_event 无论 body 是否存在都设 response_body_encoding=null/response_body_bytes=null；service_worker 依赖 response_body_bytes 累加 total_body_bytes。
+
+## 范围
+
+- build_network_event：有 response_body 时填 encoding='utf8' + UTF-8 字节长度。
+
+## 验收
+
+- [x] response_body 存在时 encoding/bytes 正确填充。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

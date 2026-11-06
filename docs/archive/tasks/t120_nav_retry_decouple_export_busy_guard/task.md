@@ -1,109 +1,74 @@
----
-tid: "t120"
-slug: "nav_retry_decouple_export_busy_guard"
-title: "导航早退重试解耦 + dashboard 导出防重入"
-status: "done"
-branch: "t120_nav_retry_decouple_export_busy_guard"
-worktree: ""
-review_level: "full"
-diff_anchor: "ae15ca2565bb592790bbc3fed40c2ea9a95c2201"
-depends_on: ""
-conflicts_with: ""
-note: "p019 onActivated/onUpdated 早退跳重试 + p027 dashboard 导出 busy 保护"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+两项功能遗留：p019——`service_worker.ts` onActivated/onUpdated listener 在 `nav_count_enabled === false` 时早退，同时跳过 start-send 与 console/error/body CDP 重试（边缘场景导航关时切 tab，数据正确性受影响；start-send 有状态轮询兜底）；p027——dashboard `export_capture` 与各导出接线点无 in-flight/busy 保护，快速重复触发并行 flush/构建/下载（重复下载 + 大 capture 双倍内存峰值）。核实于 2026-08-11：两处均仍在。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- p019：早退与重试逻辑解耦，导航关闭时重试仍按需触发。
+- p027：dashboard 导出加共享 in-flight 标记（或按钮 disabled），防重入。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变导航采集的启停语义、导出格式与内容。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`nav_count_enabled === false` 时 onActivated/onUpdated 早退不再跳过 start-send 与 console/error/body CDP 重试（p019）。
+- [ ] AC-002：导航关闭时重试按需触发，start-send 有状态轮询兜底语义不回归（p019）。
+- [ ] AC-003：dashboard 导出（`export_capture` 及各接线点）in-flight 期间重复触发不并行执行——第二次触发被拦截或排队，单次 flush/构建/下载（p027）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 16:56 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code 路 1 important + 1 minor；test 路 4 minor（与 code 重叠）。
+<!-- /规范 -->
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t120_code_f001 | important | 已修 | 防重入粒度改为 (id, format) key Map，批量导出不同 capture 互不拦截；export_busy_guard 用例覆盖 | src/extension/dashboard/dashboard_shared.ts |
-| t120_code_f002 | minor | 已修 | 补 onUpdated restricted→normal CDP 重试测试（nav off 不阻断） | tests/unit/nav_retry_decouple.test.ts |
-| t120_test_f001 | minor | 已修 | 同 code_f002（onUpdated CDP 重试用例） | tests/unit/nav_retry_decouple.test.ts |
-| t120_test_f002 | minor | 已修 | it 命名语义化（nav 侧 4 用例，不再 AC-NNN 撞号） | tests/unit/nav_retry_decouple.test.ts |
-| t120_test_f003 | minor | 已修 | export_busy_guard it 命名语义化 | tests/unit/export_busy_guard.test.ts |
-| t120_test_f004 | minor | 遗留 | 仅测 archive 格式导出；guard 在 format 分支前与格式无关，扩展为可选 | p030 |
+- 全部 AC 可自动测试（SW 单元测试 mock tabs onActivated/onUpdated；dashboard 单元测试模拟重复触发）。
 
-### Round 2 (2026-08-11 17:00 UTC+8)
+## 上下文区
 
-code 路 1 minor，test 路 1 minor。
+- 来源：p019（2026-08-11 核实仍在，数据正确性）、p027（2026-08-11 核实仍在，体验 + 并发竞争；t040 后续项）
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t120_code_f003 | minor | 已修 | 补 onActivated console 未激活时 CDP 重试断言 | tests/unit/nav_retry_decouple.test.ts |
-| t120_test_f005 | minor | 已修 | nav it AC-003 与 spec AC-003 撞号，语义化命名收敛 | tests/unit/nav_retry_decouple.test.ts |
+### 有意不测
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 无。
 
-有 finding 时用本表；每条 finding 一行。
+### 测试策略
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+- SW 侧：mock chrome.tabs onActivated/onUpdated 事件触发 listener，断言 nav_count_enabled=false 时重试调用仍发生。
+- dashboard 侧：mock flush/构建/下载链路，快速重复触发 export，断言执行次数为 1。
 
-## 收尾报告
+### 未知契约清单
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+<!-- 规范（门禁必留，不得删除） -->
 
-### 验收
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002 nav 早退解耦（onActivated/onUpdated 重试测试）；AC-003 导出防重入（同 key 拦截 + 不同 capture 并行）。`handoff.json` 的 `ac_evidence` 逐条给出引用。
+<!-- /规范 -->
 
-### Reviewer verdict
+- 无。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+### 风险与回退
 
-`full`：
+- 风险：p019 解耦重试时机可能引发额外 CDP 命令；以现有轮询兜底测试锁定。
+- 回退：逐功能回退 git。
 
-- Round 1 code：FAIL（important f001 防重入粒度过粗，已修）
-- Round 1 test：PASS（4 minor，f004 遗留 p030）
-- Round 2 code：PASS（minor f003，已修）
-- Round 2 test：PASS（minor f005，已修）
-- Round 3 code：PASS（0 新 finding）
-- Round 3 test：PASS（0 新 finding）
+### 依赖与约束
 
-`single`：
+- 依赖 t106（nav_count_enabled 门控）、t040（dashboard 导出）实现落地。
 
-- N/A
+### Finalization 时更新的 blueprint
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
-
-### 结果摘要
-
-p019 导航早退重试解耦（nav 关闭时 start-send/CDP 重试仍触发）+ p027 dashboard 导出防重入（(id, format) key 粒度）。全量 vitest 128 文件 1362 用例绿，tsc 0 错误。遗留 1 条：p030（非 archive 格式防重入测试扩展）。
+- 无。

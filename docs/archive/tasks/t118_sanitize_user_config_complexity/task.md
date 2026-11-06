@@ -1,93 +1,72 @@
----
-tid: "t118"
-slug: "sanitize_user_config_complexity"
-title: "sanitize_user_config 圈复杂度表驱动化"
-status: "done"
-branch: "t118_sanitize_user_config_complexity"
-worktree: ""
-review_level: "full"
-diff_anchor: "5fdab14a9618a2501363aef1f6329bd32a3906ed"
-depends_on: ""
-conflicts_with: ""
-note: "p001 圈复杂度超阈值重构"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`src/shared/user_config.ts` 的 `sanitize_user_config` 圈复杂度约 29（约 35 个判定分支 + 3 循环），远超 15 阈值。功能正确、无缺陷，仅复杂度提示。重构方向：`browser_label` 并入既有 `str_keys` 表驱动数组，poll 区间校验抽独立 helper（如 `is_valid_poll_interval(v)`），降低单函数分支密度。核实于 2026-08-11：仍在。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 重构 `sanitize_user_config`，表驱动化分支，行为不变。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变任何配置字段的校验语义、默认值、白名单内容。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`sanitize_user_config` 圈复杂度降至 15 及以下（表驱动 + helper 抽取），用静态度量或等价行为验证。
+- [ ] AC-002：配置校验行为不变——现有 user_config 测试（含 browser_label 保留、poll 区间边界、非法值回退默认）全绿；`NaN`/`Infinity` poll 拒绝语义保持。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 16:26 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code 路 0 finding；test 路 1 条 minor。
+<!-- /规范 -->
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t118_test_f001 | minor | 已修 | 补全字段合法/非法值集成 case，锁定 enum/num/str 规则表全部路径 | tests/unit/user_config_persistence.test.ts AC-004 |
+- AC-001：圈复杂度数值不便自动断言，以「重构后现有测试全绿 + 代码审阅确认分支收敛」替代验证。
+- AC-002：可自动测试（现有测试回归 + 边界补测）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+## 上下文区
 
-有 finding 时用本表；每条 finding 一行。
+- 来源：p001（2026-08-11 核实仍在；t092_code_f001 minor）
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+### 有意不测
 
-## 收尾报告
+- 无。
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+### 测试策略
 
-### 验收
+- 按项目默认；AC-002 复用 user_config 现有测试，可补 poll 边界（p002 同方向）增强覆盖。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 静态度量复杂度 ~11（≤15）；AC-002 全量测试回归绿 + AC-004 集成 case。`handoff.json` 的 `ac_evidence` 逐条给出引用。
+### 未知契约清单
 
-### Reviewer verdict
+<!-- 规范（门禁必留，不得删除） -->
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：PASS（0 finding）
-- Round 1 test：PASS（minor f001：补全字段集成 case，已修）
-- Round 2 code：PASS（0 新 finding）
-- Round 2 test：PASS（0 新 finding）
+- 无。
 
-`single`：
+### 风险与回退
 
-- N/A
+- 风险：表驱动重构遗漏某字段校验语义 → 由现有测试锁定。
+- 回退：git 回退单文件。
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+### 依赖与约束
 
-### 结果摘要
+- 依赖 t092（sanitize_user_config 保留 browser_label）实现落地。
 
-sanitize_user_config 表驱动重构完成（圈复杂度 29 → ~11），行为不变。全量 vitest 128 文件 1354 用例绿，tsc 0 错误。无新 pending/findings。
+### Finalization 时更新的 blueprint
+
+- 无。

@@ -1,85 +1,77 @@
----
-tid: "t123"
-slug: "remove_webrequest_handler_legacy"
-title: "refactor: remove legacy webrequest_handler path"
-status: "done"
-branch: "t123_remove_webrequest_handler_legacy"
-worktree: ""
-review_level: "full"
-diff_anchor: "b442162c637afca237439ad04171a3bf40681969"
-depends_on: ""
-conflicts_with: ""
-note: "审阅发现:生产 0 引用仅测试直驱,迁移测试后删文件"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+t119 统一网络捕获路径后，`src/extension/background/webrequest_handler.ts` 生产 0 引用：其导出（`handle_before_request` / `handle_completed` / `build_network_event` / `find_cdp_candidates` 等）全部被 network_capture 自建实现取代，唯一残留是 `network_capture.ts:19` 的 `import {} from './webrequest_handler'` 空导入。但 3 个测试文件仍直驱旧实现：`loading_failed_events.test.ts`（同时 import 新旧两套 API）、`network_cdp.test.ts`、`network_stop_deferred_timers.test.ts`。审阅确认这是 t119 重构后测试未迁移的遗留。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 将直驱旧 `webrequest_handler` 实现的测试迁移到生产路径（network_capture 的等价实现）。
+- 删除 `src/extension/background/webrequest_handler.ts` 整文件。
+- 删除 `network_capture.ts` 中 `import {} from './webrequest_handler'` 空导入。
 
-无
+### 非范围
 
-## Review 处置
+- 不改 network_capture 生产实现逻辑。
+- 不改动 `network_webrequest.ts`（其 `create_webrequest_handlers` 死导出归 t124）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`src/extension/background/webrequest_handler.ts` 不存在。
+- [ ] AC-002：`network_capture.ts` 无 `webrequest_handler` 相关 import 语句。
+- [ ] AC-003：`tests/unit/` 无文件 import `webrequest_handler` 或 `ws_handler`（旧路径彻底清空）。
+- [ ] AC-004：`loading_failed_events.test.ts` 不再 import 旧 `webrequest_handler`；已过时的旧 `handle_error` 发失败事件用例删除（该语义生产从未接线，生产失败状态经 CDP loadingFailed→cdp_body_results 表达），保留的 describe（NetworkCaptureContext.reset、loadingFailed 带 meta）仍验证生产路径。
+- [ ] AC-005：`npm test` 全绿，`npx tsc --noEmit` 通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t123_code_f001|important|已修|spec AC-004 前提内部矛盾，改为描述真实迁移结果（删过时 handle_error 死用例），改 spec 上下文区不计 FAIL|spec.md:37/66|
-|t123_code_f002|minor|已修|测试 line 88 残留注释引用已删 webRequest handle_error 通道，改为 CDP loadingFailed→cdp_body_results 表述|tests/unit/loading_failed_events.test.ts:88|
-|t123_test_f001|important|已修|同 code f001，spec 修订后消除|spec.md:37/66|
-|t123_test_f002|minor|已修|同 code f002，注释修复后消除|tests/unit/loading_failed_events.test.ts:88|
+- 全部 AC 可自动测试：文件/import 断言 + 测试套件。
 
-## 收尾报告
+## 上下文区
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 来源：无（审阅发现，2026-08-11 核实：webrequest_handler 全部导出生产 0 引用，仅 3 个测试文件直驱）
 
-### 验收
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 无。
 
-### Reviewer verdict
+### 测试策略
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+- 迁移时保留仍有效的测试语义（CDP-first 跳过、失败状态经 loadingFailed→cdp_body_results 表达等），仅换生产路径。生产失败事件语义与旧 webrequest_handler 不同：旧 `handle_error` 发含 error_text 的事件是生产 0 接线的死代码行为，生产实际以 `cdp_body_results` 的 `cdp_failed` 状态表达失败，故不迁移该 error_text 语义。生产 `handle_error` 在 network_capture 内部非 export，执行期决定触达方式（测试钩子 export 或经 start/stop 集成驱动），不得改变生产逻辑语义。fixture 沿用原测试构造。
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- 规范（门禁必留，不得删除） -->
 
-`single`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 general：PASS / FAIL
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 无。
 
-### 结果摘要
+### 风险与回退
 
-- 一句话；无额外说明可写「见上」
+- 风险：测试迁移后语义漂移（断言错位到新实现的不同行为）。以原测试语义对照迁移后断言降低。
+- 回退：git 恢复 webrequest_handler.ts；测试 revert。
+
+### 依赖与约束
+
+- 无。与 t122（删 ws_handler）互不冲突，可并行。
+
+### Finalization 时更新的 blueprint
+
+- 无

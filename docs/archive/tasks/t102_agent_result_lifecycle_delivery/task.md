@@ -1,83 +1,74 @@
----
-tid: "t102"
-slug: "agent_result_lifecycle_delivery"
-title: "fix: 命令执行后 lifecycle 失效仍投递 result"
-status: "done"
-branch: "t102_agent_result_lifecycle_delivery"
-worktree: ""
-review_level: "full"
-diff_anchor: "d9804d45fe0a82c58fd429189ef574a59c5805d2"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-5"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Agent 命令已执行后若 lifecycle/generation 失效，客户端丢弃 result 不投递，调用方超时，副作用命令状态歧义。P1-5。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 命令一旦开始执行并产生结果，须向 Bridge 投递成功或失败 result（含明确错误码），不因后续 lifecycle 检查静默丢弃。
+- 副作用命令（start/stop 等）在已生效时不得对调用方表现为无结果超时（除非 Bridge 本身不可达且走既有重试耗尽语义）。
+- 单测覆盖「执行后 generation 变化仍投递」。
 
-- doctor/preflight 通过。
-- 根因：poll_cycle dispatch 后 `if (!is_active_lifecycle) return` 使 result 静默丢弃，副作用命令对调用方表现为超时。
-- 修复：移除 dispatch 后 lifecycle 守卫，无条件投递一次。
-- Round 1 审阅 FAIL：测试未模拟 lifecycle 失效（非判别）→ 用 create_deferred 挂起 dispatch + stop 失效 + resolve 后仍投递；突变验证判别力。
-- 全量 1212 通过，tsc 无错。
+### 非范围
 
-## Review 处置
+- 不重做整套结果重试队列（t046）；在现有投递机制上堵静默丢弃洞。
+- 不改 MCP schema。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：dispatch 已返回 result 对象后，即使 capture generation/lifecycle 已失效，仍调用结果投递 API 一次（成功或带错误码的失败）。
+- [ ] AC-002：投递路径在 lifecycle 失效场景不抛未捕获异常导致轮询循环中断。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 05:48 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code FAIL（f001 important 测试非判别）；test FAIL（f001 critical 未模拟 lifecycle 失效）。
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 05:49 UTC+8)
+- 全部 AC 可自动测试。
 
-code PASS / test PASS。处置：
+## 上下文区
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t102_code_f001 | important | 已修 | create_deferred 挂起 dispatch + stop 失效 + resolve 后仍投递，突变验证判别力 | agent_bridge_client.test.ts |
-| t102_test_f001 | critical | 已修 | 同上，AC-001 断言 result 一次 + AC-002 断言不继续轮询 | agent_bridge_client.test.ts |
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-5；src_ext_bg_agent/review.md f003
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- Bridge 进程被杀导致投递最终失败：沿用既有重试耗尽，有意不测新语义。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+- mock enroll/fetch result；强制 generation 失效。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL → Round 2 code：PASS
-- Round 1 test：FAIL → Round 2 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- dispatch 产生 result 后无条件投递一次（移除 lifecycle 守卫），stop 后投递不中断轮询；T102 测试 create_deferred 挂起 dispatch + 失效后仍投递，突变验证判别力。
+- 无
+
+### 风险与回退
+
+- 风险：向已超时命令补投递可能被 Bridge 拒绝——应幂等或忽略已关闭 command_id。
+- 回退：恢复丢弃逻辑。
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- 无

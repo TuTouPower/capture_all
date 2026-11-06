@@ -1,99 +1,77 @@
----
-tid: "t184"
-slug: "refactor_bridge_server"
-title: "Bridge server 路由拆分"
-status: "done"
-branch: "t184_refactor_bridge_server"
-worktree: ""
-review_level: "full"
-diff_anchor: "0375202077e2b59ad857ab5b287a8240ce5db84f"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`create_bridge_server` 是 553 行单一闭包函数，同时承载状态/路由、pair/enroll、认证、heartbeat/command/result、MCP/file spill、CDP 路由。enroll 与 heartbeat 的「实例被顶替时删除 instance + cancel queue + 清 command owners」逻辑重复，安全修复须保证两条路径同步。CDP 已有 handler 模块，却仍与 pairing/MCP/extension route 编排混在一函数。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 保留薄 `create_bridge_server` 负责 state/context 构造与 `http.createServer`。
+- 拆出 `handle_pair_route`、`handle_extension_route`、`handle_mcp_route`、`handle_cdp_route`。
+- 抽 `BridgeRegistry`（instances/queues/owners）集中实现 `replace_instance`/`remove_instance`，消除 enroll/heartbeat 重复清理。
+- 每个 route handler 返回统一 `{status, body}`；server 层只做 CORS、异常映射与发送。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变任何 endpoint 的对外行为与认证/权限语义。
+- 不改变 `agent_bridge_server.test.ts` 的现有断言结果（行为等价重构）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：重构后全部既有 `agent_bridge_server` 与 `t137_bridge_security` 测试通过。
+- [ ] AC-002：enroll 与 heartbeat 的实例顶替清理逻辑收敛到单一 `replace_instance`/`remove_instance`，无重复实现。
+- [ ] AC-003：各 route handler 返回统一 `{status, body}`，server 层只做 CORS/异常映射/发送。
+- [ ] AC-004：无 endpoint 行为变化（对外状态码、body、认证语义不变）。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t184_code_f001 | minor | 待处置 | 已修 | 路由分发恢复旧严格 URL 匹配语义（原样 request.url：pair 4 端点精确、command 兼容 `?` 前缀、mcp/cdp 前缀 + handler 内精确匹配），边界输入状态码/认证行为与重构前一致（AC-004） |
-| t184_code_f002 | minor | 待处置 | 已修 | 删除 registry.ts 死代码 `export type { AgentCommandType }` 及对应 import |
-| t184_code_f003 | minor | 待处置 | 已修 | `BRIDGE_VERSION` 移入 config.ts 单一来源（server /health 与 registry build_status 共用），消除双份 |
-| t184_test_f001 | minor | 待处置 | 已修 | remove_instance 断言改函数体作用域（replace/sweep 体内 `this.remove_instance(id)`）+ 标题修正（cancel_all 直接 clear 不经过） |
+<!-- 规范（门禁必留，不得删除） -->
 
-## Round 2 处置
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t184_code_f001 | minor | 修不彻底 | 已修 | 分发改 method+URL 联合匹配（pair 4 端点 / extension 4 端点带 method），错误 method 请求落入 else 认证兜底 → 未认证 401（与重构前一致） |
-| t184_test_f002 | minor | 待处置 | 已修 | sweep 作用域断言后边界改 `\n    remove_instance`（get_or_create_queue 锚点位于目标之前导致退化） |
+<!-- /规范 -->
 
-### Round 1 场景说明
+- 全部 AC 可自动测试：既有 server 级测试作为行为 gate。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+## 上下文区
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 来源：ARCH-004、BM-I001（2026-08-13 核实，初始 handler 自 `25ba3e9`/`cfed3fe`，t129 只拆指定 4 函数未覆盖此函数）。
 
-有 finding 时用本表；每条 finding 一行。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 行为等价重构；以既有 server 级端到端单测为回归 gate。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- /规范 -->
 
-`full`：
+- 无。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 风险与回退
 
-`single`：
+- 风险：重构引入路由/异常映射行为差异。
+- 回退：小步拆分，每步跑全量 server 测试；差异定位到具体 handler。
 
-- Round 1 general：PASS / FAIL
+### 依赖与约束
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 与 t181（close 生命周期）在同域，注意合并冲突；可先做本重构再补生命周期。
 
-### 结果摘要
+### Finalization 时更新的 blueprint
 
-- 一句话；无额外说明可写「见上」
+- `docs/blueprint/architecture.md`：记录 Bridge server 路由分层。

@@ -14,6 +14,8 @@
 警告，不阻断（CI 无二进制时现有测试不红）；CLI 缺二进制硬失败。
 """
 
+from __future__ import annotations
+
 import argparse
 import shutil
 import subprocess
@@ -80,46 +82,84 @@ def collect_changed() -> list[str]:
     return [rel for rel in sorted(rels) if not _is_blacklisted(rel)]
 
 
+def _restore_snapshots(snapshots: dict[Path, bytes]) -> int:
+    """把快照路径恢复为原内容；返回实际恢复的文件数。"""
+    restored = 0
+    for path, data in snapshots.items():
+        try:
+            if path.is_file() and path.read_bytes() != data:
+                path.write_bytes(data)
+                restored += 1
+        except OSError:
+            continue
+    return restored
+
+
 def format_paths(rel_paths: list[str], *, check: bool = False) -> list[str]:
     """对指定相对路径跑 md_kx；返回变更/漂移的文件列表。
 
     check=True 时判断漂移（md_kx --check 对漂移文件 exit 1）不写入。
+    非 check 路径中途失败时回滚本次已写入的格式化，不留「已格式化未暂存」残留。
     md_kx 缺失或非漂移类失败抛 MdFormatError（CLI 语义）。
     """
-    executable = find_md_kx()
-    if not executable:
-        raise MdFormatError(
-            "找不到 md_kx；请安装（uv tool install md_kx）或加入 PATH。"
-        )
-    changed: list[str] = []
+    # 黑名单先于缺二进制：拒绝归档路径不依赖本机是否安装 md_kx。
     for rel in rel_paths:
         if _is_blacklisted(rel):
             raise MdFormatError(f"{rel} 在黑名单，拒绝格式化")
-        path = REPO_ROOT / rel
-        if not path.is_file():
-            continue
-        if check:
-            result = subprocess.run(
-                [executable, "--check", str(path)], capture_output=True,
-                text=True, encoding="utf-8", errors="replace", timeout=30,
-            )
-            if result.returncode == 1:
-                changed.append(rel)
-            elif result.returncode != 0:
-                raise MdFormatError(
-                    f"md_kx --check 失败（{rel}）：{result.stderr.strip()}"
-                )
-            continue
-        before = path.read_bytes()
-        result = subprocess.run(
-            [executable, str(path)], capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=30,
+    executable = find_md_kx()
+    if not executable:
+        raise MdFormatError(
+            "找不到 md_kx（项目约定的 Markdown 格式化器，来源 "
+            "https://github.com/TuTouPower/md_kx，PyPI 发行名 md-kx；"
+            "一般已全局安装：uv tool install md-kx）；未装或不在 PATH 时用 "
+            "`uv tool install md-kx` 安装，或把已装的 md_kx 加入 PATH。"
         )
-        if result.returncode != 0:
-            raise MdFormatError(f"md_kx 失败（{rel}）：{result.stderr.strip()}")
-        after = path.read_bytes()
-        if before != after:
-            changed.append(rel)
+    # 越界路径防御（Issue #17）
+    for rel in rel_paths:
+        try:
+            resolved = (REPO_ROOT / rel).resolve()
+            if not resolved.is_relative_to(REPO_ROOT.resolve()):
+                raise MdFormatError(f"路径 {rel} 越过仓库边界，拒绝格式化")
+        except OSError as e:
+            raise MdFormatError(f"无法解析路径 {rel}：{e}") from e
+
+    snapshots: dict[Path, bytes] = {}
+    if not check:
+        for rel in rel_paths:
+            path = REPO_ROOT / rel
+            if path.is_file():
+                snapshots[path] = path.read_bytes()
+    changed: list[str] = []
+    try:
+        for rel in rel_paths:
+            path = REPO_ROOT / rel
+            if not path.is_file():
+                continue
+            if check:
+                result = subprocess.run(
+                    [executable, "--check", str(path)], capture_output=True,
+                    text=True, encoding="utf-8", errors="replace", timeout=30,
+                )
+                if result.returncode == 1:
+                    changed.append(rel)
+                elif result.returncode != 0:
+                    raise MdFormatError(
+                        f"md_kx --check 失败（{rel}）：{result.stderr.strip()}"
+                    )
+                continue
+            before = snapshots[path]
+            result = subprocess.run(
+                [executable, str(path)], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=30,
+            )
+            if result.returncode != 0:
+                raise MdFormatError(f"md_kx 失败（{rel}）：{result.stderr.strip()}")
+            after = path.read_bytes()
+            if before != after:
+                changed.append(rel)
+    except (MdFormatError, OSError, subprocess.SubprocessError) as error:
+        suffix = "；已回滚本次已格式化的文件" if _restore_snapshots(snapshots) else ""
+        raise MdFormatError(f"{error}{suffix}") from error
     return changed
 
 
@@ -152,7 +192,10 @@ def main(argv: list[str] | None = None) -> None:
         if args.changed and args.all:
             raise MdFormatError("--changed 与 --all 互斥")
         if args.paths:
-            rels = [p for p in args.paths if not _is_blacklisted(p)]
+            rejected = [p for p in args.paths if _is_blacklisted(p)]
+            if rejected:
+                raise MdFormatError(f"{', '.join(rejected)} 在黑名单，拒绝格式化")
+            rels = args.paths
         elif args.changed:
             rels = collect_changed()
         elif args.all or args.check:

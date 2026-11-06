@@ -1,90 +1,74 @@
----
-tid: "t109"
-slug: "archive_body_ref_consistency"
-title: "fix: archive body 去重后回写 JSONL body_ref"
-status: "done"
-branch: "t109_archive_body_ref_consistency"
-worktree: ""
-review_level: "full"
-diff_anchor: "7de7117b9b169548962b4d5dba368bc97a079d19"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-12"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+归档 body 路径去重改文件名后未回写 JSONL 中 `*_body_ref`，引用指向不存在文件。P1-12。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- body 文件去重/改名后，JSONL（或清单）内对应 body_ref 字段更新为最终路径/文件名。
+- 解压或读取归档时引用可解析到文件。
+- 单测覆盖去重冲突样例。
 
-- doctor/preflight 通过。
-- 根因：body 去重改名后未回写 JSONL body_ref，引用指向旧名。
-- 修复：final_seq 按出现序回写（含首现遮蔽场景）。
-- 3 轮审阅修 off-by-one swap + 遮蔽冲突；突变验证判别力。
-- 全量 1236 通过，tsc 无错。
+### 非范围
 
-## Review 处置
+- 不改压缩算法。
+- 不改非归档导出路径。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：body 路径冲突改名（加 _2/_3 后缀）后，每条记录的 body_ref 指向其自身最终保留文件。
+- [ ] AC-002：body 改名后，不存在「JSONL 引用旧名且归档内无此文件」的条目。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 08:10 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code FAIL（f001 critical off-by-one）；test FAIL（f001 critical swap）。
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 08:11 UTC+8)
+- 全部 AC 可自动测试（内存 zip/目录 fixture）。
 
-code FAIL（f003 important 遮蔽冲突 + f002 minor）；test FAIL（f004 important）。
+## 上下文区
 
-### Round 3 (2026-08-11 08:12 UTC+8)
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-12；src_ext_ui_shared/review.md F006
 
-code PASS / test PASS。处置：
+### 有意不测
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t109_code_f001 | critical | 已修 | final_seq 回写按出现序消费，2/3-way 冲突 ref 指向各自文件 | archive_builder.ts |
-| t109_code_f002 | minor | 已修 | spec AC-001 措辞更新（去重改名保留两文件） | spec.md |
-| t109_code_f003 | important | 已修 | final_seq 含首现遮蔽，req_2 自然路径二次改名回写 | archive_builder.ts |
-| t109_test_f001 | critical | 已修 | f001 判别测试（不同内容 ref 指向各自文件） | 测试 |
-| t109_test_f004 | important | 已修 | f003 遮蔽测试（req×2+req_2 第三条指向 req_2_2） | 测试 |
+- 无
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 调 archive_builder；断言条目与文件集。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：FAIL → Round 2 code：FAIL → Round 3 code：PASS
-- Round 1 test：FAIL → Round 2 test：FAIL → Round 3 test：PASS
+- 无
 
-### 结果摘要
+### 风险与回退
 
-- body 冲突改名后 final_seq 按出现序回写 body_ref（2/3-way + 遮蔽场景），每条记录指向自身最终文件；突变验证判别力。
+- 风险：大归档改写 JSONL 内存峰值——沿用既有流式约束。
+- 回退：恢复不回写。
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- 无

@@ -1,92 +1,75 @@
----
-tid: "t179"
-slug: "fix_mcp_schema_boundaries"
-title: "MCP schema 边界与错误码一致性"
-status: "done"
-branch: "t179_fix_mcp_schema_boundaries"
-worktree: ""
-review_level: "full"
-diff_anchor: "88f0dddd53a62b19a147956a2cdf12180408960e"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+MCP schema 未表达 Bridge/dispatcher 已知边界：`source`/`sources`/`format` 公开枚举未编码（BC-005），向 agent 暴露必失败调用（BM-L002）；多实例未指定目标的公开错误码文档与实现不一致（BC-009）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- MCP schema 编码公开的 `source`/`sources`/`format` 枚举，与 Bridge/dispatcher 实际接受的枚举一致。
+- 使 schema 表达的边界与 Bridge/dispatcher 已知边界一致，错误在 tool 输入边界产生。
+- 统一多实例未指定目标的公开错误码与实现。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 MCP 工具的对外名称与语义。
+- 不改变 Bridge 的 300000ms 超时上限（见 t175）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：非法 `source`/`sources`/`format` 值在 MCP Zod 层被拒绝，不进入 Bridge。
+- [ ] AC-002：合法枚举值正常通过并执行。
+- [ ] AC-003：多实例未指定目标的错误码文档与实现一致（文档与协议同步）。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t179_code_f001 | minor | 建议修复 | 已修 | `AGENT_DATA_SOURCES` 改为引用 `STORE_NAMES.*` 构造（单一事实来源，新增 store 不更新枚举即双暴露） |
-| t179_code_f002 | minor | 建议修复 | 已修 | resolve_target 源码断言去掉脆的 `message: hint` 与顺序假设，简化为存在性 + AMBIGUOUS 锚定 `matches.length > 1`；行为级覆盖引用既有 `agent_bridge_server.test.ts` |
-| t179_test_f001 | minor | 记录 | 已修 | 同 code f002——实现侧断言简化并引既有行为测试；静态检查方式 spec 已批准 |
-| t179_test_f002 | minor | 记录 | 已修 | 新增「dispatcher export_capture switch case 与 EXPORT_FORMATS 一致」断言，锚定实现实际接受集合 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：Zod schema 校验 + 文档/协议一致性静态检查。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BC-005、BM-L002、BC-009（2026-08-13 核实）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- schema 校验单测 + 文档枚举与实现枚举的一致性测试。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- 无。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：枚举与 Bridge 实际实现不一致导致误拒。
+- 回退：以 Bridge/dispatcher 实际接受的枚举为唯一来源，schema 由共享常量派生。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 与 t175 共享超时常量；枚举由共享常量派生避免漂移。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/domain.md`：如补 MCP 枚举/错误码契约，同步。

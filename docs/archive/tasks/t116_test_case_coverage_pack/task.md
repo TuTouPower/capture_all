@@ -1,94 +1,85 @@
----
-tid: "t116"
-slug: "test_case_coverage_pack"
-title: "补测试 case 覆盖 pending 测试补强项（13 条打包）"
-status: "done"
-branch: "t116_test_case_coverage_pack"
-worktree: ""
-review_level: "full"
-diff_anchor: "b6c03aac4cd6cadcc91a6eaed739147f8941961e"
-depends_on: ""
-conflicts_with: ""
-note: "p002/p003/p004/p005/p008/p012/p013/p014/p015/p016/p022/p024/p025 全部 minor 测试补强合并"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+历史评审与收尾遗留 14 条测试补强项（均 minor，多为「加 case」级覆盖缺口），分散于 user_config / exception sink / external poll / auto export format / nonce / 网络门控 / SW 串行 / 详情搜索 / 存储限额 / ws absolute_time 接线守卫。核实于 2026-08-11：14 条仍在（p016 的 run_exclusive 串行原语已被 capture_state.test.ts:24 覆盖，本 task 仅补 cleanup↔start in-flight 变体）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 补 14 条测试缺口，全部落在 `tests/unit/`，不动生产逻辑。
 
-无
+### 非范围
 
-## Review 处置
+- 不修改生产代码行为；`src/` 仅允许必要的测试钩子导出（如 handle_network_request 直连断言、generate_nonce 导出），改动以测试可达为限。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：user_config poll 区间校验测试显式覆盖 `NaN`、`Infinity`、精确下边界 250（p002）。
+- [ ] AC-002：exception sink AC-002 断言改为「emit exception 后 console store 无任何事件」（`logs.length === 0`），实现若误写 exception 到 console 即触发失败（p003）。
+- [ ] AC-003：exception sink 测试不再访问未声明字段 `errors[0].type`，收敛到已声明字段（p004）。
+- [ ] AC-004：exception sink 测试套件 `beforeEach` 调用 `mock_chrome_debugger.reset()`（p005）。
+- [ ] AC-005：external poll 补「首轮 poll 已 in-flight 时重入」变体测试，断言旧闭包 resolve 不写、新 poll 单路（p008）。
+- [ ] AC-006：auto export format 测试补 `har` 合法 format、17 字符非法 format、大写归一样例（p009）。
+- [ ] AC-007：nonce 测试补真实 `crypto.randomUUID()` 两次 start 生成不同 nonce 的用例（p012）。
+- [ ] AC-008：nonce 测试直接驱动 `update_page_nonce` 生产写路径，验证 start 后页面 window 变量被写入（p013）。
+- [ ] AC-009：nonce HTTP 负向测试的注释与断言证据对齐，或补正向断言证明 fallback nonce 非空（p014）。
+- [ ] AC-010：网络门控静态测试断言 `start_network_hook` 在 `start_capture` 内恰好出现一次（p015）。
+- [ ] AC-011：cleanup 与 start 的 `run_exclusive` 串行时序补直接测试（挂起 cleanup 的 storage.get → start 排队 → resolve 后键保留）（p016）。
+- [ ] AC-012：详情搜索过滤语义补直接测试（输入后可见列表仅含匹配项）（p022）。
+- [ ] AC-013：存储限额测试补三条分句断言：delete 被拒后 capture 记录仍在存储；cleanup_stale 终态化 `ended_at` 非空；限额停止 `capture_stopped.reason === 'storage_limit'`（p024）。
+- [ ] AC-014：ws `absolute_time` 接线守卫表达式加直连断言锁定（`handle_network_request` 未导出时经内部回调或导出后断言）（p025）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 15:25 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code + test 双路各 1 条 minor（同一 finding）。
+<!-- /规范 -->
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t116_code_f001 | minor | 已修 | `handle_network_request` 导出改为 `_handle_network_request_for_test` 别名，遵循 spec 上下文区 `_for_test` 命名约定；测试引用同步更新，vitest+tsc 复跑通过 | src/extension/background/service_worker.ts:882 |
-| t116_test_f001 | minor | 已修 | 同 code_f001（命名约定），同一处修复 | src/extension/background/service_worker.ts:882 |
+- 全部 AC 可自动测试（vitest + mock_chrome_debugger + fake timers）。
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+## 上下文区
 
-有 finding 时用本表；每条 finding 一行。
+- 来源：p002/p003/p004/p005/p008/p009/p012/p013/p014/p015/p016/p022/p024/p025（2026-08-11 三路子代理只读核实，均仍在；p016 原语已测，仅补 cleanup↔start 变体）
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t000_code_f001 | critical/important/minor | 已修 | 一句话 | 文件:行 |
-| t000_test_f002 | minor | 遗留 | 一句话 | pNNN |
+### 有意不测
 
-## 收尾报告
+- 无。
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+### 测试策略
 
-### 验收
+- 按项目默认：vitest；CDP 路径用 `mock_chrome_debugger`（beforeEach reset，覆盖 sendCommand 后恢复原型方法）；时间依赖用 fake timers。
+- nonce 真实 randomUUID 用例：jsdom 需 stub `crypto.randomUUID` 且规避 DOM 内部调用污染（p012 已知约束）。
+- AC-013 若需导出 `handle_network_request`，导出须带 `_for_test` 命名约定。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：14 条 AC 全部落地并有对应测试用例；`handoff.json` 的 `ac_evidence` 逐条给出用例引用（覆盖闭合门禁强制）。
+### 未知契约清单
 
-### Reviewer verdict
+<!-- 规范（门禁必留，不得删除） -->
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：PASS（minor f001：handle_network_request 导出命名约定，已修）
-- Round 1 test：PASS（minor f001 同源，已修）
-- Round 2 code：PASS（0 新 finding）
-- Round 2 test：PASS（0 新 finding）
+- 无。
 
-`single`：
+### 风险与回退
 
-- N/A
+- 风险：断言收紧可能暴露既有误写路径（如 AC-002 若实现真把 exception 写 console，测试红）——此为预期，属补强价值。
+- 回退：逐条回退对应用例即可，不影响生产。
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+### 依赖与约束
 
-### 结果摘要
+- 依赖 t092/t093/t094/t095/t097/t098/t099/t108/t110/t111 的实现已落地（均 done）。
 
-14 条 pending 测试补强项全部落地：11 个测试文件改动 + 1 新测试文件（ws_absolute_time_wiring），src 仅两处 `_for_test` 钩子导出。全量 vitest 128 文件 1353 用例绿，tsc 0 错误。登记 findings：d003。
+### Finalization 时更新的 blueprint
+
+- 无。

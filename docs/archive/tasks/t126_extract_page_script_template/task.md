@@ -1,79 +1,76 @@
----
-tid: "t126"
-slug: "extract_page_script_template"
-title: "refactor: extract shared page script template"
-status: "done"
-branch: "t126_extract_page_script_template"
-worktree: ""
-review_level: "full"
-diff_anchor: "77c9d91bb1fbcbf8e31ce838343a35fa16f96db8"
-depends_on: ""
-conflicts_with: "t124"
-note: "审阅发现:network_hook 与 websocket_capture build_page_script 同构"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`network_hook.ts` 的 `build_page_script`（265 行）与 `websocket_capture.ts` 的 `build_page_script`（110 行）是同构注入脚本构造器：T121 重注入还原（`__capture_all_*_installed__` / `__capture_all_*_prev__` 守卫）、HMAC 签名发送（`post` / `sign_str(SECRET, ...)` / nonce）、`window.postMessage` 上报。`SYNC_HMAC_JS` 已在 `content_hmac.ts:150` 正确共享，但还原模板与 post 发送逻辑仍双份维护。审阅确认两处同构。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 抽取两处 `build_page_script` 的同构片段（重注入还原模板、HMAC 签名发送 post 逻辑）为共享模板。
+- 共享模板落点优先 `content_hmac.ts`（HMAC 权威处）或同目录新文件，执行期定。
+- `network_hook.ts` / `websocket_capture.ts` 的 `build_page_script` 改为组合共享模板，各自保留协议特有逻辑（fetch/XHR hook 与 WebSocket patch）。
 
-无
+### 非范围
 
-## Review 处置
+- 不改注入脚本的可观察行为（还原、签名、nonce、postMessage 消息字段与语义）。
+- 不动 `content_hmac.ts` 的 `SYNC_HMAC_JS` 本身。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`network_hook.ts` 与 `websocket_capture.ts` 的 `build_page_script` 不再各自内联同构片段，共享模板被两者引用（代码结构断言）。
+- [ ] AC-002：注入脚本行为不变：network_hook / websocket_capture / content_hmac 相关测试全绿，断言覆盖还原重装、per-message HMAC 签名、nonce 动态读取。
+- [ ] AC-003：`npm test` 全绿，`npx tsc --noEmit` 通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-12 13:20 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t126_code_f001|minor|已修|spec 过时：post 发送逻辑因 nonce/payload 非同构未整段抽取，共享收敛到 guard+preamble；spec 上下文区补决策记录|spec.md:测试策略|
-|t126_test_f001|minor|已修|AC-001 断言锚定 import 行，改为锚定 `page_script_reinstall_guard(` 调用形式|tests/unit/content_page_script.test.ts:59-60|
+<!-- /规范 -->
 
-## 收尾报告
+- 全部 AC 可自动测试：AC-001 结构断言，AC-002/003 测试套件。
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+## 上下文区
 
-### 验收
+- 来源：无（审阅发现，2026-08-11 核实两处同构、SYNC_HMAC_JS 已共享）
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 结构断言测试、AC-002 既有行为测试 56 用例、AC-003 npm test 1383 全绿 + tsc 通过；详见 handoff.json ac_evidence
+### 有意不测
 
-### Reviewer verdict
+- 无。
 
-`full`：
+### 测试策略
 
-- Round 1 code：PASS
-- Round 1 test：PASS
+- 现有 content 捕获测试（network_hook / websocket_capture / content_hmac_vectors）覆盖行为；若测试对生成脚本字符串做源码级断言，评估是否改为行为断言（字符串断言过度耦合模板拼接细节时调整）。
+- 共享粒度决策（reviewer code_f001，spec 过时修正）：两处 post 的 nonce 键名与 payload 构造非严格同构，post 发送逻辑未整段抽取；共享收敛到 `page_script_reinstall_guard`（还原守卫）+ `page_script_preamble`（SIGNAL/SECRET/SYNC_HMAC_JS），各自 post 保留模块特有 nonce 读取与载荷构造。第三处同构位点 `storage_capture.ts` 不在本 task 范围，见 pending。
 
-`single`：
+### 未知契约清单
 
-- Round 1 general：PASS / FAIL
+<!-- 规范（门禁必留，不得删除） -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- 抽取 network_hook 与 websocket_capture 注入脚本同构片段为 content_page_script.ts 共享模板（还原守卫 + 头部声明），行为不变全绿；storage_capture 第三处同构位点登记 p033。
+- 无。
+
+### 风险与回退
+
+- 风险：模板抽取改变脚本拼接细节，可能影响注入脚本字符串断言类测试；行为语义不变。
+- 回退：git 恢复原 build_page_script。
+
+### 依赖与约束
+
+- 与 t124 冲突（同改 network_hook.ts），调度时避让。建议在 t124 后执行。
+
+### Finalization 时更新的 blueprint
+
+- 无

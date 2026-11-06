@@ -1,77 +1,74 @@
----
-tid: "t133"
-slug: "html_export_embed_escape"
-title: "fix: HTML 导出 JSON 嵌入转义含撇号/控制符并补回灌测试"
-status: "done"
-branch: "t133_html_export_embed_escape"
-worktree: ""
-review_level: "full"
-diff_anchor: "d5421189251ad6a703c4d478d84d0e9a2618428b"
-depends_on: ""
-conflicts_with: ""
-note: "review C1 (B2-C1): escape_for_html_embed 漏 ' 与 n，JSON.parse 嵌入被击穿；exporter.test 只断言 toContain 不回灌"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+escape_for_html_embed 只转义 </script><>&，JS 字符串定界符 ' 与控制符 \n/\t 未转义。捕获数据含撇号或换行时 HTML 导出 JSON.parse 抛 SyntaxError，导出功能不可用。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 review finding：review C1 (B2-C1): escape_for_html_embed 漏 ' 与 \n，JSON.parse 嵌入被击穿；exporter.test 只断言 toContain 不回灌
 
-无
+### 非范围
 
-## Review 处置
+- 不在本 task 处理的相关联问题（若有，见上下文区来源）
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001: 含单引号的数据导出 HTML 后，产物中 JSON.parse 可成功解析且数据完整
+- [ ] AC-002: 含换行/制表（错误堆栈、console 多行、请求体）的数据导出 HTML 可成功解析
+- [ ] AC-003: 含 </script> 注入尝试保持被转义（既有安全语义不回退）
+- [ ] AC-004: exporter.test 新增回灌用例：对生成的 HTML 提取内嵌 JSON 并断言可 parse 且与源数据一致
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-12 14:20 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t133_code_f001|minor|已修|删除对 JSON.stringify 输入恒 no-op 的控制符替换，注释改为准确归因（反斜杠翻倍 + 单引号 + U+2028/29）|src/shared/escape.ts:3-20|
-|t133_test_f001|important|已修|extract_embedded_json 改用 new Function 走真实 JS 字面量解码，pre-fix 缺陷（' / \n 未转义）抛 SyntaxError 捕获回归|tests/unit/exporter.test.ts:185-191|
+<!-- /规范 -->
 
-## 收尾报告
+- AC-001/002/004: 新增回灌测试（含撇号+多行 fixture）
+- AC-003: 既有 escape/导出测试保持通过
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+## 上下文区
 
-### 验收
+- 来源：intensive-review review_20260812_1249（review C1 (B2-C1): escape_for_html_embed 漏 ' 与 \n，JSON.parse 嵌入被击穿；exporter.test 只断言 toContain 不回灌）
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002/003 回灌验证（单引号/换行/</script> 注入均可 parse），AC-004 用 new Function 真实字面量解码；见 handoff.json ac_evidence
+### 有意不测
 
-### Reviewer verdict
+- 无
 
-`full`：
+### 测试策略
 
-- Round 1 code：PASS
-- Round 1 test：FAIL（f001 回灌解码假绿，已修）
-- Round 2 code：PASS
-- Round 2 test：PASS
+- 按项目默认（tests/unit mock Chrome API；fixture 用构造数据）
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+### 未知契约清单
 
-### 结果摘要
+<!-- 规范（门禁必留，不得删除） -->
 
-- escape_for_html_embed 补反斜杠/单引号/U+2028-29 转义，HTML 导出内嵌 JSON 不再被撇号/换行击穿；回灌测试改走真实 JS 字面量解码消除假绿。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
+
+<!-- /规范 -->
+
+- 无
+
+### 风险与回退
+
+- 风险：行为变更影响既有路径
+- 回退：本 task 为独立 commit，可整体 revert
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- docs/blueprint/domain.md：HTML 导出转义条目若补充定界符说明可更新

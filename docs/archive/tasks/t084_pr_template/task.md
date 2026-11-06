@@ -1,17 +1,2 @@
----
-tid: t084
-slug: pr_template
-title: "docs: PR template narrow .claude scope"
-status: done
-branch: task_t084_pr_template
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
-
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+# T084 PR template narrow .claude scope
+将笼统 `.claude/` 改为精确禁止：`.claude/settings.local.json`/`.claude/skills/`/`.claude/worktrees/`，允许项目级 `.claude/settings.json`。

@@ -1,17 +1,7 @@
----
-tid: t069
-slug: deferred_disambiguation
-title: "fix: deferred body association disambiguation (mark ambiguous, no guess)"
-status: done
-branch: task_t069_deferred_disambiguation
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# T069_deferred_disambiguation
 
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+本 task 的核心问题已在以下前序 task 中部分或完全修复：
+- T022: CDP 复合键隔离消除跨 session 误关联。
+- T025: loadingFailed 事件直接发主条目，不再延迟到 orphan。
+- T031: stop drain 顺序保证 deferred timer 清理。
+剩余：webRequest handler 的候选评分仍简化（无时间差/tab 约束），但 CDP-first 架构下 deferred 路径触发率极低。

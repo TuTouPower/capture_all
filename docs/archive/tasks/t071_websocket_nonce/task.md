@@ -1,17 +1,5 @@
----
-tid: t071
-slug: websocket_nonce
-title: "security: WebSocket capture per-page nonce + strict schema"
-status: done
-branch: task_t071_websocket_nonce
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# T071_websocket_nonce
 
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+本 task 的核心问题已在以下前序 task 中部分或完全修复：
+- T021: WebSocket 单监听器采集 + 原生 listener 语义恢复。
+剩余：per-page nonce 需改注入机制（MAIN world + MessageChannel），当前用固定 SIGNAL 字符串。产品风险评估后决定是否实施。

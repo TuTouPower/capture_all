@@ -1,83 +1,76 @@
----
-tid: "t164"
-slug: "fix_review_scope_fingerprint"
-title: "review scope 指纹覆盖未跟踪文件"
-status: "dropped"
-branch: ""
-worktree: ""
-review_level: "full"
-diff_anchor: ""
-depends_on: ""
-conflicts_with: ""
-note: "dropped: repo_template 工具链修复移交外部 agent，本 task 归档"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+review scope 指纹用 `git diff --binary <anchor> -- . <excludes>` 的 SHA-1 前 16 位计算，`git diff <commit>` 对未跟踪文件完全不可见。新文件必须手工 `git add -N` 才进入被审 scope，该动作只存在于 `task-work/SKILL.md` 操作指引，无机械强制。同仓库 `monitoring.py:63-66` 的 `repository_fingerprint` 已用 `git ls-files --others --exclude-standard` 纳入未跟踪文件，两种口径并存。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- `current_scope_fingerprint` 改为 `git diff <anchor>` 与 `git ls-files --others --exclude-standard`（按相同 excludes）内容拼接后哈希，复用 `monitoring.repository_fingerprint` 构成方式统一口径。
+- 或 checker 先检测任务目录/排除清单外是否存在未 `add -N` 的 untracked 文件，存在则返回 `None`（保守不可验证）并提示。
+- 补真实 git 行为测试：未跟踪文件加入后指纹必须变化。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 `task-work` 的 `git add -N` 操作指引。
+- 不改变排除清单 `SCOPE_EXCLUDES` 的语义。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：在任务目录新增一个未 `git add -N` 的未跟踪源码文件后，`current_scope_fingerprint` 的值发生变化。
+- [ ] AC-002：`repository_fingerprint` 与 `current_scope_fingerprint` 对同一工作树（含未跟踪文件）产生口径一致的结果或显式共享同一构成函数。
+- [ ] AC-003：review 后 agent 继续添加未跟踪文件，checker 重算指纹能检测到变化（PASS 判定失效或指纹不匹配）。
+- [ ] AC-004：新增真实 git 行为测试通过（非 monkeypatch `current_scope_fingerprint`）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 全部 AC 可自动测试：用临时 git 仓库 + 真实 untracked 文件驱动。
 
-## 收尾报告
+## 上下文区
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 来源：RT-002（2026-08-13 核实，`ea0ff5c` 引入，`monitoring.repository_fingerprint` 同 commit 已含 untracked 但未统一）。
 
-### 验收
+### 有意不测
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 无。
 
-### Reviewer verdict
+### 测试策略
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+- 用真实临时 git 仓库（`git init` + 文件操作）而非 monkeypatch；断言指纹前后差异。
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- 规范（门禁必留，不得删除） -->
 
-`single`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 general：PASS / FAIL
+<!-- /规范 -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 无。
 
-### 结果摘要
+### 风险与回退
 
-- 一句话；无额外说明可写「见上」
+- 风险：`git ls-files --others` 与 `git diff` 的 excludes 对齐有差异导致漏检。
+- 回退：共享单一 excludes 构造函数，测试覆盖排除项与未跟踪项。
+
+### 依赖与约束
+
+- 复用 `monitoring.repository_fingerprint` 的实现，避免第二份口径。
+
+### Finalization 时更新的 blueprint
+
+- 无。

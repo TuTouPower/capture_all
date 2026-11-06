@@ -1,92 +1,77 @@
----
-tid: "t190"
-slug: "fix_dashboard_ui_misc"
-title: "Dashboard/Popup UI 小修复集"
-status: "done"
-branch: "t190_fix_dashboard_ui_misc"
-worktree: ""
-review_level: "single"
-diff_anchor: "05bba2f67c2a65d53108155d913f39be9c12d6cd"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+Dashboard/Popup 存在多处小缺陷：Popup 分类开关与 Dashboard settings 开关是纯 pointer 自定义控件（无 role/tabindex/键盘/aria-pressed），键盘与辅助技术无法操作；Dashboard 导出异常被 log 但不展示给用户；locale 切换残留硬编码字符串与过期 `document.lang`；timeline lane 拖拽缺取消清理（已在 t189 覆盖，此处只做不重叠的 UI 项）；UI string 测试含空洞断言且跳过真实 manifest。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 将 Popup 分类开关、最近行/View All、Dashboard settings 开关改为原生 `button[aria-pressed]` 或 checkbox/switch + label，支持 Tab + Enter/Space 并宣布状态。
+- Dashboard 导出异常向用户展示（非仅 log）。
+- locale 切换更新 `document.lang` 并消除残留硬编码字符串。
+- UI string 测试改为真实断言并检查真实 manifest。
 
-无
+### 非范围
 
-## Review 处置
+- 不重复 t189 的 timeline 拖拽清理。
+- 不引入新 UI 框架。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：Popup 与 Dashboard 的核心开关可通过 Tab 聚焦、Enter/Space 激活，且 `aria-pressed`/状态被正确宣布。
+- [ ] AC-002：Dashboard 导出失败时用户可见错误提示（非仅 log）。
+- [ ] AC-003：locale 切换后 `document.lang` 更新且无残留硬编码字符串。
+- [ ] AC-004：UI string 测试断言真实字符串存在且检查真实 manifest（无空洞断言）。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t190_gen_f001 | important | 待处置 | 已修 | `init_locale` 两条路径（storage 恢复/自动检测）均调用 `apply_locale_to_dom` 同步 document.lang；dashboard.html 移除硬编码 `lang="zh"`（由 init 设置） |
-| t190_gen_f002 | minor | 待处置 | 已修 | switch button 加 `aria-label`（可访问名来自 field-lbl 的 t key，6 处调用补全） |
-| t190_gen_f003 | minor | 待处置 | 已修 | mcard 仅 can_toggle 态渲染 button；capturing/saved 态用 div（无 aria-pressed/键盘死按钮） |
-| t190_gen_f004 | minor | 待处置 | 已修 | 补 jsdom 行为断言（button 可聚焦 + click 状态同步；键盘 Enter/Space 为浏览器原生语义标 [deploy]）+ aria 同步/断言加强 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- AC-001 `[deploy]`：需真实浏览器/a11y 检查验证键盘操作；其余用 jsdom 与单测。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：EXTUI-009、EXTUI-012、EXTUI-013、EXTUI-014（2026-08-13 核实）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- jsdom 断言焦点/键盘事件与 aria 属性；导出异常用 mock 断言用户可见提示；locale 断言 `document.lang`。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- 无。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：原生控件替换改变样式布局。
+- 回退：保持视觉一致，仅补 role/tabindex/键盘/aria 语义。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 无。
+
+### Finalization 时更新的 blueprint
+
+- 无。

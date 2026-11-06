@@ -54,3 +54,6 @@ docs/runtime/
 # 同步自模板（repo-template-sync）
 /artifacts/
 /data/
+
+# 同步自模板（repo-template-sync）
+.repo_template/sync_state.json

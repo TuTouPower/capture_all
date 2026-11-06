@@ -1,89 +1,76 @@
----
-tid: "t110"
-slug: "storage_limit_active_delete"
-title: "fix: 存储限额接线且禁止删除活跃采集"
-status: "done"
-branch: "t110_storage_limit_active_delete"
-worktree: ""
-review_level: "full"
-diff_anchor: "ef496b886c6af8b698814fbb92869568016fac55"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-13 P1-14"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`bytes_written` 限额检查无生产调用；活跃采集可被 delete_capture；SW 重启 cleanup 终态化可能不写 capture_stopped 类生命周期事件。P1-13/P1-14。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 采集过程中持久化/检查存储用量，超限时停止写入或 stop capture 并给出可观察失败/状态。
+- 禁止删除状态为 active/recording 的 capture（API 返回错误）；或删除前强制 stop 且可测。
+- SW 重启终态化陈旧 capture 时写入生命周期停止类事件或等价可观察终态字段。
+- 单测覆盖。
 
-- 限额检查下沉为 `check_limit_and_stop` 共享 helper（超限 `stop_capture('storage_limit')` 并返回 true），接入 handle_event / handle_network_request / handle_console_log 与三个导航写路径（onActivated/onCreated/onUpdated），R2 f003 后补齐导航路径。
-- `stop_capture` / `stop_capture_inner` 增加 reason 参数，`CaptureStoppedData.reason` 联合类型加 `'storage_limit'`。
-- 活跃采集删除 guard 前置在 `storage_delete_capture` 之前返回。
-- logger.test.ts 慢测加 10000ms timeout（全量下 flaky 超时，测试稳定性，非功能）。
+### 非范围
 
-## Review 处置
+- 不实现云端配额。
+- 不改 DB 主版本除非必需（尽量不升版本）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：模拟 bytes 超限后，不再接受新事件写入或 capture 进入 stopped/failed 且 status 可查询。
+- [ ] AC-002：对 active capture 调用 delete 返回失败（success===false 或抛约定错误），且数据仍在。
+- [ ] AC-003：模拟 SW 重启 cleanup 陈旧 active 后，该 capture status 为 completed/stopped 等非 active，并存在 stop 生命周期事件或 ended_at 非空。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 08:40 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t110_code_f001 | important | 已修 | handle_event/network/console 三入口接入 check_limit_and_stop | src/extension/background/service_worker.ts:778,884,919 |
-| t110_code_f002 | minor | 已修 | stop reason 参数化并加 'storage_limit' | src/extension/background/service_worker.ts:872-880, src/shared/types.ts:509 |
-| t110_test_f001 | minor | 遗留 | AC-002「数据仍在」分句未断言 | p024 |
-| t110_test_f002 | minor | 遗留 | AC-003「ended_at」分句未断言 | p024 |
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 08:58 UTC+8)
+- 全部 AC 可自动测试。
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t110_code_f003 | important | 已修 | 三个导航监听器写 write_events 前接入 check_limit_and_stop | src/extension/background/service_worker.ts:979,1069,1101 |
-| t110_test_f003 | minor | 遗留 | network/console 入口与 'storage_limit' reason 断言缺失（onActivated 已被 AC-001c/001d 覆盖） | p024 |
+## 上下文区
 
-### Round 3 (2026-08-11 09:10 UTC+8)
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-13 P1-14；src_ext_bg_sw_storage/review.md f004 f007 f008
 
-零新 finding，code/test 均 PASS，未进处置表。
+### 有意不测
 
-## 收尾报告
+- 真实 IndexedDB 配额耗尽 OS 级：有意不测，测应用层限额。
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+### 测试策略
 
-### 验收
+- mock bytes_written；直接调 delete_capture 与 cleanup。
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002/003 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+### 未知契约清单
 
-### Reviewer verdict
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：FAIL → Round 2 code：FAIL → Round 3 code：PASS
-- Round 1 test：PASS → Round 2 test：PASS → Round 3 test：PASS
+<!-- /规范 -->
 
-### 结果摘要
+- 无
 
-- 存储限额接线为共享 `check_limit_and_stop`（超限停机 reason='storage_limit'），接入 handle_event/network/console 与三个导航写路径；活跃采集 delete 前置 guard；cleanup_stale 终态化陈旧 active。3 轮审阅修 f001 接线不全（network/console）与 f003 导航写路径绕过。
+### 风险与回退
+
+- 风险：超限策略（硬停 vs 丢事件）需选一种并测；推荐硬停+状态。
+- 回退：恢复无检查/可删 active。
+
+### 依赖与约束
+
+- 与 t099 串行优先。
+
+### Finalization 时更新的 blueprint
+
+- 无

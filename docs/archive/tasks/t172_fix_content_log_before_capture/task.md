@@ -1,83 +1,75 @@
----
-tid: "t172"
-slug: "fix_content_log_before_capture"
-title: "未采集时不记录页面 URL 到 app log"
-status: "done"
-branch: "t172_fix_content_log_before_capture"
-worktree: ""
-review_level: "full"
-diff_anchor: "12a00f4a0934c529fc13e2871515ff8068df0119"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+content script 在 `<all_urls>`、`document_start` 注入，模块加载时、任何 capture 状态检查之前执行 `logger.info('Content script loaded', { url: window.location.href })`。Logger 默认 level 为 `debug`，info 条目进入 MessageLogTransport buffer，累计 20 条或 stop flush 时发送到 Service Worker 并持久化。用户未开始 capture 时，访问 URL（含 iframe、hash、fragment credential）仍可进入扩展诊断日志。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 删除模块加载时的 URL 日志，或仅在 active capture 后记录并使用 capture 的隐私配置。
+- 将 content 的 log level 从 SW/user config 明确下发，在 Logger 创建前应用。
+- 默认日志级别改为 `info`/`warn`（不再默认 `debug`）。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 active capture 期间的正常日志行为。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：未开始 capture 时访问页面，不产生含该页面 URL 的 app log 条目。
+- [ ] AC-002：用户将 log level 设为 silent/warn 后，content 世界不写 info 级日志。
+- [ ] AC-003：active capture 期间日志行为与既有采集隐私配置一致。
+- [ ] AC-004：新增「未采集访问页面不产生 URL app log」与「silent 后 content 不写日志」测试通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 19:20 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t172_code_f001|important|已修|重载恢复采集路径（status poll on_active）未应用 log_level——SW get_status 响应带 log_level，content on_active 应用|src/extension/background/service_worker.ts:337; src/extension/content/content_script.ts:81; src/extension/shared/poll_capture_status.ts:10|
-|t172_code_f002|important|已修|DEFAULT_USER_CONFIG.log_level 仍 debug（静态默认惰性）——改 info|src/shared/constants.ts:70|
-|t172_test_f001|minor|已修|补 AC-002c：on_active 应用 resp.log_level 静态断言|tests/unit/content_log_privacy.test.ts:AC-002c|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：mock content 加载 + logger transport 断言。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：SEC-004（2026-08-13 核实，`6a7b094` 引入 URL 加载日志）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 content 模块级无 URL 日志（静态扫描）；AC-002 start 消息 + status poll 双路径应用 log_level（silent/warn 行为）；AC-003 默认 info（logger + user_config 一致）；AC-004 测试通过
+- mock content logger 与消息下发；断言无 capture 时无 URL 日志、silent 时无写入。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL（2 important）/ test：PASS（3 minor）
-- Round 2 code：PASS / test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-Content 加载 URL 日志泄漏修复：删除模块级 `Content script loaded` URL 日志；log level 由 SW/user config 下发（start 消息 + get_status 双路径，含重载恢复采集 on_active），silent/warn 时 content 不写 info；默认日志级别改 info（logger 静态默认 + DEFAULT_USER_CONFIG 一致）。decisions 无新增（spec Finalization 无 blueprint 项）。
+- 无。
+
+### 风险与回退
+
+- 风险：降低日志粒度影响诊断。
+- 回退：active capture 内保留详细日志，仅默认 level 提升。
+
+### 依赖与约束
+
+- 与 `src/shared/logger.ts` level 同步机制协同。
+
+### Finalization 时更新的 blueprint
+
+- 无。

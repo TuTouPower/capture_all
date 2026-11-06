@@ -1,17 +1,4 @@
----
-tid: t075
-slug: token_model_unification
-title: "docs: AGENTS/CLAUDE/SECURITY/decisions token model unification"
-status: done
-branch: task_t075_token_model_unification
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# T075 AGENTS/CLAUDE/SECURITY token model unification
 
-# Task 过程总账（归档补齐）
-
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+AGENTS.md/CLAUDE.md: "token 由用户提供" → "用户提供或 Bridge 安全随机生成的强 token"。
+SECURITY.md: 区分 MCP token 与 instance_token；移除 "user-provided" 绝对表述。

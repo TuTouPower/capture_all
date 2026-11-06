@@ -1,17 +1,20 @@
----
-tid: t050
-slug: body_coord_single_flight
-title: "fix: body_capture_coordinator single-flight + lifecycle token"
-status: done
-branch: task_t050_body_coord_single_flight
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T050 body_coord_single_flight
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`body_capture_coordinator.ts:232-248` 500ms `setInterval(async)` 不等前一次，网络延迟超间隔时并发；停止后已在途请求仍执行 `deps.on_network_request` 无 lifecycle 校验。
+
+## 范围
+
+- 改为递归 setTimeout 单飞；poll_in_flight 守护；poll_stopped 标记停止。
+- stop_body_capture/stop_body_capture_with_cleanup 同时 clearInterval + clearTimeout（兼容新旧）。
+
+## 验收
+
+- [x] 单飞轮询。
+- [x] stop 后 timer 清。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

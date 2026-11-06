@@ -1,84 +1,82 @@
----
-tid: "t163"
-slug: "strengthen_e2e_assertions"
-title: "E2E 断言质量补强"
-status: "done"
-branch: "t163_strengthen_e2e_assertions"
-worktree: ""
-review_level: "single"
-diff_anchor: "a3d617317ea15f4021c7bf6efc892849f7b9ddae"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+多个 E2E 文件存在恒真/弱断言，即使被测路径完全失效仍保持绿色：CDP retry 接受空 console 数组与 `fallback_hook` 作为恢复证据；HAR body 断言只检查 `.some()` 返回 boolean；realtime detail 增长测试用 `>=`；console/error 分离不断言目标记录或分类；detail-tab 在容器缺失时静默通过；theme/i18n 含永久 true 占位。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复上述 6 个 E2E 文件的断言，使其验证真实行为：
+  - CDP retry 用本地确定性页面发唯一 marker + 唯一 response body，断言 marker 出现在 console、请求 body 状态为 `captured`、body 模式非 `fallback_hook`。
+  - HAR body 断言非空 `response.content.text` 且等于预期值。
+  - realtime detail 增长测试触发确定性新事件并断言严格增长。
+  - console/error 分离断言每个 marker 在正确 tab 且不在错误 tab，断言 console level 与 error 分类。
+  - detail-tab 在容器缺失时 fail 而非跳过。
+  - theme/i18n 移除永久 true 占位，改为真实断言。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 E2E 的 Playwright 接线（见 t162）。
+- 不新增超出上述范围的新场景。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：CDP retry 场景要求唯一 console marker 出现在导出 `console_events`，且至少一个匹配请求 `response_body_status === 'captured'`、body 内容匹配预期、body 模式非 `fallback_hook`。
+- [ ] AC-002：HAR 导出场景断言存在某条目 `response.content.text` 非空且等于预期值。
+- [ ] AC-003：realtime detail 增长场景触发确定性新事件后，断言 marker 出现且事件计数严格大于 t1。
+- [ ] AC-004：console/error 分离场景断言各 marker 出现在正确 tab 且不在错误 tab，并断言 console level 与 error 分类。
+- [ ] AC-005：detail-tab 场景在目标容器缺失时测试失败（不静默通过）。
+- [ ] AC-006：theme/i18n 场景移除永久 true 占位，改为对实际主题/文案的真实断言。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 17:30 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t163_gen_f001|important|已修|error tab key 由 events 改 error（DT_TABS 实际 key）|tests/e2e/e2e-console-errors.spec.ts:70|
-|t163_gen_f002|important|已修|error tab 不渲染异常消息——改断言 runtime_exception 分类（event_title 对 error 显示 type）|tests/e2e/e2e-console-errors.spec.ts:74|
-|t163_gen_f003|important|已修|console tab 容器为 .dt-list——选择器补充|tests/e2e/e2e-detail-tabs.spec.ts:67|
-|t163_gen_f004|minor|已修|console level 分类改断言 .lvl-tag[data-lvl="error"]（不被消息子串稀释）|tests/e2e/e2e-console-errors.spec.ts:62|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：E2E 用本地确定性 fixture 服务器。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：TD-002、TD-003、TD-004、TD-005、TD-010、TD-011（2026-08-13 核实）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 cdp-retry 唯一 marker/body captured/非 fallback_hook；AC-002 HAR entry body 含 E2E_API_MARKER；AC-003 确定性新事件严格增长 + marker；AC-004 marker 分类隔离 + lvl-tag；AC-005 容器缺失 fail；AC-006 颜色值断言 + 删占位
+- fixture 用 `tests/support/fixtures/server.ts` 提供确定性本地页面与响应；断言数据-backed 而非仅页面长度。
 
-### Reviewer verdict
+### 未知契约清单
 
-`single`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 general：FAIL（3 important + 1 minor）
-- Round 2 general：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-6 个 E2E 文件弱断言强化为数据-backed 断言：CDP retry 用本地 fixture 唯一 marker（E2E_LOG_MARKER/E2E_API_MARKER）验证 console/body 恢复且非 fallback_hook；HAR 断言 /api/test entry body；realtime 增长改确定性事件严格增长；console/error 按 tab key error + runtime_exception 分类隔离 + lvl-tag level；detail-tabs 容器缺失 fail；theme/i18n 颜色值与文案真实断言、删除永久 true 占位。E2E 本地运行受 playwright 项目匹配/launch 环境限制，语法级验证 + 代码级审阅；t162 接入后 CI 生效。
+- 无。
+
+### 风险与回退
+
+- 风险：真实扩展环境依赖使确定性 marker 断言不稳定。
+- 回退：不稳定项降为显式 skip 并注释原因，不转为恒真断言。
+
+### 依赖与约束
+
+- 依赖 t162 将这些文件接入 Playwright 后才在 CI 生效（可先本地单跑）。
+
+### Finalization 时更新的 blueprint
+
+- 无。

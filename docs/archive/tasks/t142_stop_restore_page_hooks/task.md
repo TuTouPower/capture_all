@@ -1,87 +1,73 @@
----
-tid: "t142"
-slug: "stop_restore_page_hooks"
-title: "fix: stop 后还原注入脚本改写的页面 API"
-status: "done"
-branch: "t142_stop_restore_page_hooks"
-worktree: ""
-review_level: "full"
-diff_anchor: "51e0843c0bff79665b8d2e166edc584b7da11f22"
-depends_on: ""
-conflicts_with: ""
-note: "review H-13 (B3-H4): stop 仅删 message_listener，fetch/XHR/localStorage/WebSocket 永久改写且持续读 body"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+stop_capture 不还原注入脚本改写的页面 API，network_hook 在 stop 后仍对每次 fetch 全量 clone().text()，开销与页面行为污染持续到导航。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 修复 review finding：review H-13 (B3-H4): stop 仅删 message_listener，fetch/XHR/localStorage/WebSocket 永久改写且持续读 body
 
-无
+### 非范围
 
-## Review 处置
+- 不在本 task 处理的相关联问题（若有，见上下文区来源）
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001: stop 后页面 window.fetch/XHR/localStorage/WebSocket 还原为原始实现（或行为等效：不再有捕获侧读 body/post 消息开销）
+- [ ] AC-002: 采集进行中 hook 行为不变
+- [ ] AC-003: 还原失败（页面已变化）时静默降级不报错
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-12 19:23 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t142_code_f001|minor|已修|restore 移到 state.end 之前无条件调用（状态丢失时 MAIN world hook 仍残留）|network_hook.ts/websocket_capture.ts/storage_capture.ts stop|
-|t142_code_f002|minor|已修|storage restore 复用 page_script_restore 模板（收敛单模板）|storage_capture.ts restore_page_script|
+<!-- /规范 -->
 
-### Round 2 (2026-08-12 19:28 UTC+8)
+- AC-001: 注入脚本测试新增 stop→hook 空转断言（fetch 不再 clone/读 body）
+- AC-002: 既有 websocket/storage/network_hook 测试保持通过
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t142_test_f001|important|已修|AC-001 改用 eval 执行注入脚本 + restore 验证真实 hook 安装/还原（jsdom 不执行 appendChild 注入）|tests/unit/t142_stop_restore_page_hooks.test.ts:AC-001|
-|t142_test_f002|important|已修|补 ws eval 安装 + restore 还原行为断言|tests/unit/t142_stop_restore_page_hooks.test.ts:ws|
-|t142_test_f003|important|已修|补 storage restore 结构断言（page_script_restore('storage') + localStorage/sessionStorage 还原语句）|tests/unit/t142_stop_restore_page_hooks.test.ts:storage|
-|t142_test_f004|important|已修|AC-003 改 try/catch 结构断言（删恒真不抛错）|tests/unit/t142_stop_restore_page_hooks.test.ts:AC-003|
+## 上下文区
 
-## 收尾报告
+- 来源：intensive-review review_20260812_1249（review H-13 (B3-H4): stop 仅删 message_listener，fetch/XHR/localStorage/WebSocket 永久改写且持续读 body）
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+### 有意不测
 
-### 验收
+- 无
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 eval 行为级验证 hook 安装/还原 + stop 接线断言、AC-002 采集中不变、AC-003 降级；见 handoff.json ac_evidence
+### 测试策略
 
-### Reviewer verdict
+- 按项目默认（tests/unit mock Chrome API；fixture 用构造数据）
 
-`full`：
+### 未知契约清单
 
-- Round 1 code：PASS（2 minor 已修）
-- Round 2 code：PASS
-- Round 1 test：FAIL（恒真/零接线）
-- Round 2 test：FAIL（stop 接线未断言）
-- Round 3 test：PASS
+<!-- 规范（门禁必留，不得删除） -->
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-- stop 时经 page_script_restore 注入还原脚本，还原 network_hook（fetch/XHR）、websocket（WebSocket）、storage（localStorage/sessionStorage）改写的页面 API；restore 无条件调用（状态丢失时 MAIN world hook 不残留）。
+- 无
+
+### 风险与回退
+
+- 风险：行为变更影响既有路径
+- 回退：本 task 为独立 commit，可整体 revert
+
+### 依赖与约束
+
+- 无
+
+### Finalization 时更新的 blueprint
+
+- 无

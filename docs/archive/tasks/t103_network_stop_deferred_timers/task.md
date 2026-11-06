@@ -1,86 +1,74 @@
----
-tid: "t103"
-slug: "network_stop_deferred_timers"
-title: "fix: stop 时清理 network deferred/orphan timer"
-status: "done"
-branch: "t103_network_stop_deferred_timers"
-worktree: ""
-review_level: "full"
-diff_anchor: "bc6207db0c640c1465bcc7f7dea40f572d013e1d"
-depends_on: ""
-conflicts_with: ""
-note: "review_20260811 P1-6"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+stop 未取消 deferred/orphan 等 timer，跨采集可能串写。P1-6。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 网络采集 stop 时清理所有 deferred/orphan/相关 timer 与可取消的延迟任务。
+- stop 后迟到 timer 回调不写入任何 capture。
+- 单测证明。
 
-- doctor/preflight 通过。
-- 根因：stop 未清 deferred/orphan timer，跨采集串写。
-- 修复：stop 清 deferred timer + reverse index；getResponseBody 迟到回调用 capture_id 快照挡（Round 2 发现布尔挡 stop→restart 失效，改身份比较）。
-- 全量 1215 通过，tsc 无错。
+### 非范围
 
-## Review 处置
+- 不改 deferred 关联算法本身（t069）。
+- 不改 webRequest 注册权限。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：start→制造 pending deferred/orphan timer→stop 后推进时钟，无网络事件写入（mock writer 调用次数为 0）。
+- [ ] AC-002：stop 后再 start 新 capture_id，旧 timer 不得写入新 capture_id。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-11 06:20 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-code FAIL（f001 important orphan timer 未取消）；test PASS（AC-001/002 判别力实证）。
+<!-- /规范 -->
 
-### Round 2 (2026-08-11 06:21 UTC+8)
+- 全部 AC 可自动测试。
 
-code FAIL（f001 布尔挡 stop→restart 失效）；test FAIL（AC-002b 零判别力）。
+## 上下文区
 
-### Round 3 (2026-08-11 06:22 UTC+8)
+- 来源：docs/reviews/review_20260811_0111/evaluation.md P1-6；src_ext_bg_cdp_net/review.md f004
 
-code PASS / test PASS。处置：
+### 有意不测
 
-| finding_id | severity | status | rationale | fix_ref |
-|------------|----------|--------|-----------|---------|
-| t103_code_f001 | important | 已修 | getResponseBody 回调改 capture_id 快照比较，防 stop→restart 跨写 | network_capture.ts |
-| t103_test_f001 | important | 已修 | AC-002b 武装 orphan handler + 推进 4s，突变验证判别力 | network_stop_deferred_timers.test.ts |
+- 无
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 假时钟；mock 事件写入。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002 均有测试证据引用，见 `handoff.json` `ac_evidence`。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：FAIL → Round 2 code：FAIL → Round 3 code：PASS
-- Round 1 test：PASS
+- 无
 
-### 结果摘要
+### 风险与回退
 
-- stop 清 deferred timer + reverse index；getResponseBody 迟到回调用 capture_id 快照挡 stop→restart 跨写；AC-002b 武装 handler 突变验证判别力。
+- 风险：清理遗漏某个 Map 中的 timer 句柄。
+- 回退：恢复不清理。
+
+### 依赖与约束
+
+- 建议 t094 后实施以免键空间不一致。
+
+### Finalization 时更新的 blueprint
+
+- 无

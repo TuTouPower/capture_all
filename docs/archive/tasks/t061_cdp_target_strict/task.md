@@ -1,17 +1,19 @@
----
-tid: t061
-slug: cdp_target_strict
-title: "refactor: CDP target URL strict match (no silent fallback)"
-status: done
-branch: task_t061_cdp_target_strict
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T061 cdp_target_strict
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`src/bridge/cdp_handler.ts:111-114` tab_url 精确匹配失败后自动退回首个 page target，可能采集错误标签页。
+
+## 范围
+
+- tab_url 非空时精确匹配，无匹配则 fail fast 返回 cdp_target_not_found。
+- tab_url 为空时退回首个 page target（保留旧行为）。
+
+## 验收
+
+- [x] tab_url 非空无匹配时返回错误。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。

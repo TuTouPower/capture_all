@@ -1,86 +1,76 @@
----
-tid: "t173"
-slug: "fix_url_fragment_redaction"
-title: "URL fragment 脱敏"
-status: "done"
-branch: "t173_fix_url_fragment_redaction"
-worktree: ""
-review_level: "full"
-diff_anchor: "0a5442480a4d64aed8e4e70d1e55e01c4f6043dd"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+`redact_url` 的 absolute URL 分支只遍历 `searchParams`，不检查 `parsed.hash`；相对 URL 分支拆出 `hash_part` 后原样拼回。OAuth implicit flow、密码重置、magic link、SPA hash route 中的 token/API key/PII 在 `redact_data && redact_url_query` 下仍保留 secret。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- fragment 采用结构感知策略：hash 可解析为 `key=value`/`&` 参数则按 query 敏感 key 规则脱敏；`#/route?token=...` 递归处理 route query。
+- 普通锚点与无敏感 hash route 保形。
+- 解析失败但命中 credential 模式时 fail-closed 替换整个 fragment。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 query 部分的既有脱敏规则。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`https://app/callback#access_token=SECRET&token_type=bearer` 脱敏后不保留 SECRET。
+- [ ] AC-002：`#/route?token=SECRET` 形式 hash route 的 token 被脱敏。
+- [ ] AC-003：普通锚点 `#section` 与无敏感 hash route 保持原形。
+- [ ] AC-004：解析失败但命中 credential 模式时替换整个 fragment。
+- [ ] AC-005：新增 OAuth implicit、encoded hash、hash-router、普通 `#section` 回归测试通过。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 19:38 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t173_code_f001|minor|已修|fail-closed 判定细化：route 仅「值泄漏形」（/token/SECRET）触发整体替换，普通路由名 /oauth/token 保形|src/shared/redaction.ts::route_has_credential_value|
-|t173_code_f002|minor|已修|redact_url 圈复杂度——抽 redact_relative_url 私有函数|src/shared/redaction.ts:185|
-|t173_test_f001|critical|已修|AC-004 未触达 fail-closed——改真实输入（#/token/SECRET?state=x、编码 decode 失败）断言整体 #[REDACTED]；新增 AC-004c 路由名保形|tests/unit/url_fragment_redaction.test.ts::AC-004a/b/c|
-|t173_test_f002|minor|已修|AC-003c 补 url_status + 全串相等断言|tests/unit/url_fragment_redaction.test.ts::AC-003c|
-|t173_test_f003|minor|已修|AC-005a 补 [REDACTED] 出现断言|tests/unit/url_fragment_redaction.test.ts::AC-005a|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：纯函数 `redact_url` 单测多形态 fixture。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：SEC-006（2026-08-13 核实，初版未覆盖 fragment，后续 query 增强均保留 hash）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001 OAuth implicit #access_token 脱敏；AC-002 #/route?token 脱敏；AC-003 普通锚点/无敏感 hash route 保形；AC-004 值泄漏形 fail-closed（整体 #[REDACTED]）+ 路由名保形；AC-005 encoded hash/组合/相对 URL
+- 纯函数测试，覆盖 OAuth implicit、encoded hash、hash-router、普通锚点。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：PASS（2 minor）/ test：FAIL（1 critical + 2 minor）
-- Round 2 code：FAIL（f003 important 新发现）/ test：PASS
-- Round 3 code：PASS / test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-URL fragment 结构感知脱敏：hash 可解析为 key=value/`#/route?query` 时按 query 敏感 key 规则脱敏（redact_query_string 复用）；普通锚点与无敏感 hash route 保形；route 值泄漏形（/token/SECRET、/access_token/abc 等）与编码 decode 失败 fail-closed 整体替换；encoded hash（%3D/%3F）解码递归。privacy_redaction.md 语义更新。
+- 无。
+
+### 风险与回退
+
+- 风险：过度脱敏普通 hash route 破坏可读性。
+- 回退：仅对可解析 credential 模式的 fragment 脱敏，其余保形。
+
+### 依赖与约束
+
+- 无。
+
+### Finalization 时更新的 blueprint
+
+- `docs/archive/specs/privacy_redaction.md`：更新「不处理 fragment」的语义为结构感知脱敏。

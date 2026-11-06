@@ -1,99 +1,76 @@
----
-tid: "t198"
-slug: "storage_export_boundaries"
-title: "存储/导出边界校验与断言补全"
-status: "done"
-branch: "t198_storage_export_boundaries"
-worktree: ""
-review_level: "full"
-diff_anchor: "87ad5a883819d82dfa48a8b7de7dba7f70941b18"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+存储/导出边界两条遗留（pending 总账）：`list_captures` 的 `limit` 参数无输入校验——负数/0 静默返回空数组、小数意外截断（p039，现网调用方均传合法值，防御性缺口）；exporter/coordinator/storage 三条断言缺口——`total_size_kb` 实际字节数未断言、bridge 相对时间 clamp（relative_time=timestamp-start_time）无直接单测、`dom_data` store 映射无路由断言（p044）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- `list_captures` limit 入参校验（clamp/拒绝非法值，语义明确）。
+- 补三条断言：`total_size_kb` 为实际字节数、relative_time clamp、dom_data 事件落 USER_ACTION_EVENTS store。
 
-- AC-001：`list_captures` limit 归一化——`!Number.isFinite(limit)` → 全量（NaN/±Infinity 不静默空）、`Math.max(1, Math.floor(limit))`（负数/0 → 1、小数向下取整）。测试 4 用例（undefined/正整数、负数/0、小数、NaN）。
-- AC-002：exporter 补 total_size_kb 断言——回灌内嵌 JSON 后 TextEncoder 字节数与展示值一致（fixture 含中文锁定字节语义）。
-- AC-003：`convert_bridge_event_to_request` 加 export，3 用例（正常 1500、回拨 clamp 0、相等边界 0）。
-- AC-004：storage_keyset 补 dom_data 路由断言——写 dom_data 事件后按类别与 store 名双查锚定 USER_ACTION_EVENTS。
-- Review Round 1 两路 PASS、3 minor（AC-002 toBeGreaterThan(0) 脆弱、NaN 用例区分度、fixture 全 ASCII）；修前两项，第三项修不彻底（字节差 20B 不足）转遗留 p051。Round 2 两路 PASS。
+### 非范围
 
-## Review 处置
+- 不改变合法调用路径的返回语义（limit=undefined 全量、正整数截断不变）。
+- 不新增分页 API（t193 已下推 offset/limit）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`list_captures` 对 limit 负数/0/小数给出明确行为（拒绝或 clamp），不静默截断；合法值（undefined/正整数）语义不变。
+- [ ] AC-002：`total_size_kb` 断言为实际字节数（>0 且与内容相符）。
+- [ ] AC-003：bridge 相对时间修正（relative_time=timestamp-start_time，clamp 非负）直接单测。
+- [ ] AC-004：`dom_data` 类别事件落 USER_ACTION_EVENTS store（路由断言）。
+- [ ] AC-005：新增测试全绿，既有 storage/exporter 测试无回归。
 
-### Round 1（review_level=full）
+### 可测试性声明
 
-| finding_id | 严重度 | 处置 | 说明 |
-|---|---|---|---|
-| t198_code_f001 | minor | 已修 | AC-002 去掉 `toBeGreaterThan(0)`（依赖 mock ≥512B 脆弱），保留 `<span>${expected_kb} KB</span>` 一致性断言 |
-| t198_code_f002 | minor | 已修 | NaN 用例造 2 条记录断言 length=2，区分「全量」与「clamp 到 1」 |
-| t198_test_f001 | minor | 遗留 | fixture 加中文但字节差仅 20B，round 后仍同值，字符计数口径回归不红。登记 p051（有效修复需 >512B 字节差） |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 2（review_level=full）
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-| finding_id | 严重度 | 处置 | 说明 |
-|---|---|---|---|
-| t198_test_f001 | minor | 遗留 | Round 2 test reviewer 复核「修不彻底」：中文 fixture 字节差 20B 不足，round 后同值。overall 已 PASS，登记 p051 |
+<!-- /规范 -->
 
-### Round 1 场景说明
+- 全部 AC 可自动测试：storage 单测（fake-indexeddb）+ exporter 断言。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+## 上下文区
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 来源：p039（t153 遗留 t153_gen_f002）、p044（t155 遗留）。2026-08-14 核实：list_captures 无入参校验；exporter.test.ts 仅冒烟覆盖 export_html；relative_time clamp 无单测；dom_data 映射（CATEGORY_STORE_MAP）无路由断言。
 
-有 finding 时用本表；每条 finding 一行。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- fake-indexeddb 行为断言 + exporter/coordinator 单测补断言。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/003/004 行为测试（fake-indexeddb/转换单测），AC-002 exporter 回灌断言；AC-005 全量 vitest 1916 通过 + tsc 干净；详见 `handoff.json` `ac_evidence`
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-`full`：
+<!-- /规范 -->
 
-- Round 1 code：PASS
-- Round 1 test：PASS
-- Round 2 code：PASS
-- Round 2 test：PASS
+- 无。
 
-### 结果摘要
+### 风险与回退
 
-存储/导出边界校验与断言补全，round 2 全 PASS 收官。
+- 风险：limit 校验改变调用方行为。
+- 回退：校验仅在非法值生效，合法路径不变（回归 gate）。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 与 t193（list_captures offset/limit 下推）同域。
+
+### Finalization 时更新的 blueprint
+
+- 无。

@@ -1,17 +1,18 @@
----
-tid: t044
-slug: html_escape
-title: "security: HTML export escape all dynamic fields"
-status: done
-branch: task_t044_html_escape
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T044 html_export_escape
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`src/extension/background/exporter.ts:104-167` JSON 走 escape_for_html_embed，但 capture_id/start_date/duration_str/body_capture_mode/body_capture_status 直接插入 HTML text/title。
+
+## 范围
+
+- 用 escape_html 包装所有动态 HTML 文本插值：capture_id、start_date、duration_str、body_capture_mode、body_capture_status。
+
+## 验收
+
+- [x] HTML 中所有动态字段走 escape_html。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：import escape_html；safe_capture_id/safe_start_date 局部变量；duration/body_capture_info 全部 escape。

@@ -1,92 +1,77 @@
----
-tid: "t187"
-slug: "refactor_mcp_bridge_token_dep"
-title: "MCP 与 Bridge 共享 token 依赖拆分"
-status: "done"
-branch: "t187_refactor_mcp_bridge_token_dep"
-worktree: ""
-review_level: "full"
-diff_anchor: "92c143d19fe6790da64c5bf4b132f83de85fb037"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+MCP 的 `token_resolver.ts` 从 `../bridge/config` 导入 token 文件类型、默认路径与读取逻辑，违反架构依赖方向（`mcp ──✗── bridge`，运行时只走 HTTP）。`bridge/config.ts` 同时包含 Bridge CLI 解析、token 文件契约、token 生成/持久化、Bridge token resolution 与健康检查。MCP 为复用只读 token 文件逻辑被迫依赖拥有 Bridge 启动职责的模块。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 将 Node 专用 token 文件类型、默认路径与读取逻辑移到中立模块（如 `src/shared/node_bridge_token_file.ts`）。
+- Bridge config 与 MCP resolver 同向依赖该中立模块。
+- Bridge 专属 CLI、token 生成/持久化、health probe 留在 `src/bridge/config.ts`。
+- 增加 import-boundary 测试/脚本，拒绝 `src/{extension,bridge,mcp}` 互相导入。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 token 文件格式与读取行为。
+- 不改变 MCP/Bridge 运行时通信（仍走 HTTP）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：MCP 不再从 `src/bridge` 导入任何符号，token 文件逻辑经中立模块获得。
+- [ ] AC-002：Bridge config 与 MCP resolver 均依赖中立模块，token 文件格式/读取行为不变。
+- [ ] AC-003：新增 import-boundary 测试拒绝 `src/{extension,bridge,mcp}` 之间互相导入。
+- [ ] AC-004：既有 MCP token fallback 与 Bridge config 测试通过。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t187_code_f001 | minor | 待处置 | 已修 | `src/node_shared/bridge_token_file.ts` 随 finish 后 `git add -A` 提交（commit 覆盖跟踪，无构建断裂） |
-| t187_code_f002 | minor | 待处置 | 已修 | import-boundary 扫描扩展至全部导入形态：副作用 `import '../x'`、动态 `import('x')`、`require('x')` |
-| t187_test_f001 | minor | 待处置 | 已修 | 同 code f002——扫描正则覆盖动态/副作用/require 形态（未来回归防护） |
-| t187_test_f002 | minor | 待处置 | 已修 | 标题改为「src/shared 不含 Node API（node_shared 为 Node-only 层允许）」，与断言面一致 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：import 图静态检查 + 既有单测。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：ARCH-002（2026-08-13 核实，`d8970e7` T091 引入，`8fa73b7` 扩充失败原因类型）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- import-boundary 测试/脚本扫描跨产品导入；既有单测保证行为不变。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- `src/shared` 是否允许 Node API：结论=不允许。`src/shared` 被 extension 浏览器 bundle 引用（Vite 打包），含 `node:` import 会破坏 MV3 构建；且架构依赖表规定 shared 中立。中立 token 文件模块建 `src/node_shared/bridge_token_file.ts`（Node-only，2026-08-13 按 architecture.md 依赖表与 extension 打包路径核实）。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：把 Node API 放入 shared 污染浏览器 bundle。
+- 回退：若 shared 不宜含 Node API，建独立 `src/node_shared/` 层并在 blueprint 记录，仍禁止产品横向依赖。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 遵循 `docs/blueprint/architecture.md:145-155` 依赖表。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：记录中立模块或 `node_shared` 层依赖决策。

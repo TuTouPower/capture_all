@@ -1,101 +1,77 @@
----
-tid: "t195"
-slug: "content_guard_tests_fixes"
-title: "content 采集守卫行为测试与缺陷修复"
-status: "done"
-branch: "t195_content_guard_tests_fixes"
-worktree: ""
-review_level: "full"
-diff_anchor: "d27f39080c667c03a863c7886d83e8b4424d80e7"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+content 层三处遗留（pending 总账）：`storage_capture.ts` 注入脚本仍内联 `SYNC_HMAC_JS` 与重注入还原守卫（network_hook/websocket_capture 已迁移 `content_page_script.ts` 共享模板，p033 双份维护风险）；`clipboard_capture.ts` 去重以纯时间窗 `Date.now() - last_emit_ts[action] < 50ms` 判定，同 tick 两次真实独立操作第二条被静默丢弃（p043）；content_script/service_worker 顶层注册 chrome 监听致无法 import，onMessage 未知 action、start 并行通知、generation 守卫等 AC 仅源码字符串扫描兜底（p042，测不出行为级回归）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- `storage_capture.ts` 注入脚本迁移到 `content_page_script.ts` 共享模板（`page_script_reinstall_guard` / `page_script_preamble` / `page_script_restore`），消除内联重复。
+- `clipboard_capture.ts` 去重条件叠加事件内容匹配（同 action 且 method/type 相同才视为同一操作），非仅时间窗。
+- content_script/service_worker 顶层 listener 守卫逻辑（onMessage 分支、start 并行通知、generation 守卫）抽成可 import 单元，补行为级单测。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变采集数据格式与既有行为语义（去重窗口语义除外，见 AC-002）。
+- 不改动 network_hook/websocket_capture 已迁移实现。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：`storage_capture.ts` 注入脚本经共享模板生成（不再内联 `SYNC_HMAC_JS` 与还原守卫），与 network_hook/websocket_capture 同构。
+- [ ] AC-002：clipboard 同 action 两次独立操作（不同内容）均产生事件（时间窗内不同内容不再被误去重）；同内容重复仍去重。
+- [ ] AC-003：content onMessage 未知 action 分支行为级测试——返回 `{success:false, error:'unknown_action'}` 且通道正常 resolve（无 return true 挂起）。
+- [ ] AC-004：start 并行通知（Promise.all 全部 tab）与 generation 守卫行为级测试通过。
+- [ ] AC-005：新增测试全绿，既有 content 相关测试无回归。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t195_code_f001 | minor | 待处置 | 已修 | generation 守卫恒真用例删除（行为由 capture_state.test.ts 承载）+ 该文件补「新 start 后旧 gen 失活」行为用例（守卫核心） |
-| t195_code_f002 | minor | 待处置 | 已修 | read_clipboard_text null 边界（clipboardData 不可读环境退化双报）注释记录 |
-| t195_code_f003 | minor | 待处置 | 已修 | readText 先读后 emit 的代价（读取抛错不再报 read）注释记录 |
-| t195_test_f001 | important | 需处置 | 已修 | 同 code f001——恒真断言删除，capture_state 补旧 gen 失活行为用例 |
-| t195_test_f002 | minor | 建议 | 已修 | B3-M8 断言锚定 sendResponse(unknown_action_response()) |
-| t195_test_f003 | minor | 建议 | 已修 | clipboard read 路径去重行为测试（paste 同内容 + readText 不双报） |
-| t195_test_f004 | minor | 建议 | 已修 | AC-001 保险丝正则改 `var SIGNAL = '${SIGNAL}'`（旧内联独特标志，模板展开后无） |
+<!-- 规范（门禁必留，不得删除） -->
 
-## Round 2 处置
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t195_test_f005 | minor | 待处置 | 已修 | 残留未使用 import is_active_generation 删除；capture_state.test.ts 末尾补换行 |
+<!-- /规范 -->
 
-### Round 1 场景说明
+- 全部 AC 可自动测试：抽取的纯函数/模块可 import 行为测试；storage_capture 模板迁移以源码同构断言 + 注入行为测试。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+## 上下文区
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 来源：p033（t126 code_review 观察）、p042（t155 遗留）、p043（t155 遗留）。2026-08-14 核实：storage_capture.ts:5,56 仍内联 SYNC_HMAC_JS；clipboard_capture.ts:16 仍纯时间窗；content 顶层监听未抽单元。
 
-有 finding 时用本表；每条 finding 一行。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 抽函数/模块行为单测 + 模板迁移源码同构断言。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- /规范 -->
 
-`full`：
+- 无。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 风险与回退
 
-`single`：
+- 风险：storage_capture 模板迁移改变注入行为。
+- 回退：迁移后跑既有 storage/websocket 注入测试；模板生成脚本与 network_hook 共用，行为等价。
 
-- Round 1 general：PASS / FAIL
+### 依赖与约束
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 复用 `content_page_script.ts` 现有模板函数。
 
-### 结果摘要
+### Finalization 时更新的 blueprint
 
-- 一句话；无额外说明可写「见上」
+- 无。

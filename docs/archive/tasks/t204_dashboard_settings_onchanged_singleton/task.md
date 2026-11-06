@@ -1,83 +1,74 @@
----
-tid: "t204"
-slug: "dashboard_settings_onchanged_singleton"
-title: "dashboard settings onChanged 监听器单例"
-status: "done"
-branch: "t204_dashboard_settings_onchanged_singleton"
-worktree: ""
-review_level: "single"
-diff_anchor: "3f129f29fcd05b1c96b7149a1f2991d7766f2a5f"
-depends_on: ""
-conflicts_with: ""
-note: "p054: wire_bridge_status 每次 wire 重复注册 storage.onChanged"
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+p054：t202 引入 `wire_bridge_status` 时每次 `wire_settings` 都 `chrome.storage.onChanged.addListener`，无 remove/单例守卫。设置页多次导航后监听器累积，重复 `set_user_config` 与 DOM 更新。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- `wire_bridge_status`（或等价路径）对 `chrome.storage.onChanged` 采用模块级单例注册：多次进入设置页监听器数量不增加。
+- 监听器仍在 `user_config` 变化时更新内存快照与「备注名」输入框（保持 t202 AC-001 语义）。
+- 补测试：多次 `wire_settings` 后 `addListener` 调用次数 = 1；仍可响应 onChanged 更新输入框。
 
-- 模块级 `_user_config_storage_listener_bound` 单例注册 storage.onChanged
-- live DOM `#content [data-cfg="browser_label"]` 避免闭包旧节点
-- 测试钩子 `_reset_user_config_storage_listener_for_test` 仅测用
-- npm test 1950 passed；tsc + build 通过
+### 非范围
 
-## Review 处置
+- 不改 bridge 状态查询语义（t202 AC-002/003）。
+- 不扫/改 dashboard 其他页面的监听器（本条目聚焦 settings）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001:多次进入设置页（多次 `wire_settings` / `wire_bridge_status`）后，`chrome.storage.onChanged.addListener` 仅注册一次。
+- [ ] AC-002:单例监听器在外部 `user_config.browser_label` 变更时仍更新「备注名」输入框（不回归 t202 回填）。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-16 14:46 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t204_gen_f001|minor|已修|测试钩子仅测用,生产永不调用;设计接受无需改码|—|
+<!-- /规范 -->
 
-## 收尾报告
+- 全部 AC 可自动测试。
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+## 上下文区
 
-### 验收
+- 来源:p054（t202 Round 1 `t202_code_f001` 遗留；2026-08-16 核实：t202 分支 `wire_bridge_status` 仍每次 addListener）
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+### 有意不测
 
-### Reviewer verdict
+- 无。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+### 测试策略
 
-`full`：
+- 复用 `tests/unit/settings_ui.test.ts` 的 chrome.storage.onChanged mock；断言多次 wire 后 `addListener` mock 调用次数为 1，并保留 onChanged 更新输入框用例。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 未知契约清单
 
-`single`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 general：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+<!-- /规范 -->
 
-### 结果摘要
+- 无。
 
-- p054 修复：storage.onChanged 单例；多次 wire 不累积；回填不回归
+### 风险与回退
+
+- 风险：单例监听器闭包持有旧 content 根节点。回退：查询 `#content [data-cfg="browser_label"]` 现用 DOM，不捕获 wire 时的节点引用。
+
+### 依赖与约束
+
+- 依赖 t202 已落地的 `wire_bridge_status` + storage 同步语义；链式 base 为 t203 分支 tip。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/decisions.md`：无新增决策
+- `docs/specs/`：无新增

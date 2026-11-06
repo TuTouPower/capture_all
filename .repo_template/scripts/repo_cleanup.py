@@ -9,9 +9,10 @@ agent 只保留裁定语义：scratch 活跃引用路径（--keep 传入）、�
 类别：
   默认（scan/apply 未点名类别时）：pycache / pytest / logs / os / editor
   点名才清：node / scratch / artifacts / data
-  scratch / artifacts / data 清目录内容、保留目录本身。
+  scratch / artifacts / data 清目录内容、保留目录本身；
+  默认扫描不进入未点名的 node_modules 与这三棵目录树（防误删未点名内容）。
 
-保护（永不删）：.git/、AGENTS.md、README.md、CLAUDE.md、.gitignore、
+保护（永不删）：.git/、AGENTS.md、README.md、.gitignore、
 docs/archive/tasks_audit.log；docs/ 下仅 os/editor 类放行；src/tests/schemas/
 config/scripts/.agents/.claude 下的类别命中垃圾可清（文件本身不因「目录」被误删）。
 
@@ -21,6 +22,8 @@ config/scripts/.agents/.claude 下的类别命中垃圾可清（文件本身不�
 
 默认不 commit；本脚本不写 git index / 不 commit。
 """
+
+from __future__ import annotations
 
 import argparse
 import fnmatch
@@ -40,7 +43,6 @@ HARD_PROTECTED = {
     ".git",
     "AGENTS.md",
     "README.md",
-    "CLAUDE.md",
     ".gitignore",
     "docs/archive/tasks_audit.log",
 }
@@ -50,11 +52,15 @@ class CleanupError(Exception):
     pass
 
 
-def repo_root() -> Path:
-    r = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
+def repo_root(timeout: int = 30) -> Path:
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as err:
+        raise CleanupError(f"git rev-parse 超时（{timeout}s）") from err
     if r.returncode != 0:
         raise CleanupError(f"不在 git 仓库：{r.stderr.strip()}")
     return Path(r.stdout.strip())
@@ -105,14 +111,9 @@ def _dir_holds_keep(rel: str, refs: list[str]) -> bool:
     return any(ref.rstrip("/").startswith(prefix) for ref in refs if ref.strip())
 
 
-def _prune(relroot: str, names: list[str], excluded: set[str]) -> list[str]:
-    out = []
-    for n in names:
-        rel = f"{relroot}/{n}" if relroot else n
-        if rel in excluded:
-            continue
-        out.append(n)
-    return out
+def _prune(names: list[str], excluded: set[str]) -> list[str]:
+    """按目录 basename 剪枝，使保护在任意深度生效（Issue #71）。"""
+    return [name for name in names if name not in excluded]
 
 
 def collect(repo: Path, categories: list[str], keeps: list[str]) -> tuple[list[dict], list[str]]:
@@ -121,25 +122,43 @@ def collect(repo: Path, categories: list[str], keeps: list[str]) -> tuple[list[d
     hits: list[dict] = []
     skipped: list[str] = []
 
-    bulk_roots: set[str] = set()
+    bulk_roots: set[str] = set(BULK_CATEGORY_DIRS.values())
     for cat, rel_dir in BULK_CATEGORY_DIRS.items():
         if cat not in cats:
             continue
         base = repo / rel_dir
         if not base.is_dir():
             continue
-        for p in sorted(base.rglob("*")):
-            rel = p.relative_to(repo).as_posix()
-            if _kept(rel, keeps):
-                skipped.append(rel)
-                continue
-            hits.append({"path": rel, "category": cat, "kind": "dir" if p.is_dir() else "file"})
-        bulk_roots.add(rel_dir)
+        # 清理根本身若为指向仓库外的软链，防越界不递归（Issue #16, #55）
+        if base.is_symlink() and not base.resolve().is_relative_to(repo.resolve()):
+            continue
+        for root, dirs, files in os.walk(base, followlinks=False):
+            dirs[:] = [d for d in dirs if d != ".git"]
+            relroot = os.path.relpath(root, repo).replace(os.sep, "/")
+            for d in dirs:
+                full_d = Path(root) / d
+                rel = f"{relroot}/{d}"
+                if _kept(rel, keeps):
+                    skipped.append(rel)
+                    continue
+                hits.append({"path": rel, "category": cat, "kind": "dir" if full_d.is_dir() and not full_d.is_symlink() else "file"})
+            for f in files:
+                rel = f"{relroot}/{f}"
+                if _kept(rel, keeps):
+                    skipped.append(rel)
+                    continue
+                hits.append({"path": rel, "category": cat, "kind": "file"})
+
+    # 未点名类别的目录整树不进普通 walk：bulk 三类（.scratch/artifacts/data）只由
+    # 点名类别整树处理；node_modules 仅在点名 node 时接受 walk 分类。
+    prune = {".git", *bulk_roots}
+    if "node" not in cats:
+        prune.add("node_modules")
 
     for root, dirs, files in os.walk(repo):
         relroot = os.path.relpath(root, repo)
         relroot = "" if relroot == "." else relroot.replace(os.sep, "/")
-        dirs[:] = _prune(relroot, dirs, {".git", *bulk_roots})
+        dirs[:] = _prune(dirs, prune)
         entries = []
         for d in dirs:
             rel = f"{relroot}/{d}" if relroot else d
@@ -154,6 +173,9 @@ def collect(repo: Path, categories: list[str], keeps: list[str]) -> tuple[list[d
             if cat is None or cat not in cats:
                 continue
             if rel.startswith("docs/") and cat not in DOCS_ONLY_CATEGORIES:
+                continue
+            if _kept(rel, keeps):
+                skipped.append(rel)
                 continue
             hits.append({"path": rel, "category": cat, "kind": "dir" if is_dir else "file"})
 
@@ -189,6 +211,10 @@ def apply_delete(repo: Path, hits: list[dict], keeps: list[str] | None = None) -
         if not target.exists() and not target.is_symlink():
             continue
         if h["path"] in HARD_PROTECTED:
+            continue
+        # 二次防线：apply 独立重查 keep（文件级与目录级），防止调用方
+        # 传入未经 collect 过滤的 hits（或 scan/apply 之间 keep 变化）。
+        if _kept(h["path"], keeps):
             continue
         if h["kind"] == "dir":
             if _dir_holds_keep(h["path"], keeps):
@@ -266,6 +292,9 @@ def main(argv: list[str] | None = None) -> None:
                        help=f"类别（默认 {DEFAULT_CATEGORIES}）；node/scratch/artifacts/data 须点名")
         p.add_argument("--keep", action="append", default=[], metavar="REL",
                        help="相对仓库根路径（glob 或前缀），排除不删（scratch 活跃引用）")
+        if cmd == "apply":
+            p.add_argument("--expected-count", type=int, default=None,
+                           help="核对候选总数；scan 到 apply 期间若候选变化则拒绝删除")
         p.set_defaults(_mode=cmd)
     args = parser.parse_args(argv)
     try:
@@ -275,6 +304,12 @@ def main(argv: list[str] | None = None) -> None:
         if args._mode == "scan":
             _print_scan(categories, hits, skipped)
         else:
+            if getattr(args, "expected_count", None) is not None:
+                if len(hits) != args.expected_count:
+                    raise CleanupError(
+                        f"清理候选数量发生变化（预期 {args.expected_count}，实际 {len(hits)}）；"
+                        "请重新运行 scan 确认后再执行 apply"
+                    )
             deleted = apply_delete(repo, hits, args.keep)
             _print_apply(deleted, skipped)
     except CleanupError as error:

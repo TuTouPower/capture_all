@@ -1,95 +1,76 @@
----
-tid: "t203"
-slug: "registry_load_field_guard"
-title: "registry 畸形实例条目字段守卫"
-status: "done"
-branch: "t203_registry_load_field_guard"
-worktree: ""
-review_level: "full"
-diff_anchor: "fdfeb323e17a241d863909cdc607dc07a954b99b"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+p053:`load_persisted()` 对 `JSON.parse` 后数组元素无逐字段校验。实例文件若含合法 JSON 但畸形结构的条目(缺 instance_id / token_hash 等字段),原样装载产生 token_hash 为 undefined 的垃圾实例,心跳恒 401,占槽位至 35s sweep。实例文件可能被部分损坏/手工编辑/旧版本结构差异影响。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- `load_persisted()` 对每个载入条目做字段校验:instance_id 非空字符串、token_hash 为 string 或 null、browser_label 为 string 或 null、origin_extension_id 为 string 或 null、extension_version 为 string、active_capture_id 为 string 或 null。seen_at 不校验(载入时由 t201 统一重置为启动时刻,属死数据)。
+- 畸形条目(含 null 元素、字段缺/类型错)跳过(不装载),不影响其余合法条目与 bridge 启动。
 
-无
+### 非范围
 
-## Review 处置
+- 不改 persist 写入侧(写盘结构固定,由程序生成)。
+- 不做文件 schema 版本号/迁移(超出本 task)。
+- 不拒绝整个文件(部分损坏仍恢复合法条目)。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001:实例文件含畸形条目(缺 token_hash / instance_id 空)时,`load_persisted()` 跳过该条目,不产生垃圾实例。
+- [ ] AC-002:同文件含合法条目时,合法条目正常恢复,畸形条目被跳过(部分损坏恢复)。
+- [ ] AC-003:全畸形文件不抛错,registry 从空开始,bridge 正常启动。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-有 finding 时用本表；每条 finding 一行。
+<!-- /规范 -->
 
-### Round 1 (2026-08-16 02:18 UTC+8)
+- 全部 AC 可自动测试。
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t203_code_f001|important|已修|is_valid_persisted_instance 首行加 null/非对象守卫,避免 null 元素抛错中止循环,合法条目不丢失|src/bridge/registry.ts|
-|t203_code_f002|minor|已修|spec 契约区范围移除 seen_at 校验要求(被 t201 Date.now() 覆盖,死数据)|docs/tasks/t203_registry_load_field_guard/spec.md|
-|t203_test_f001|minor|已修|补 null 数组元素用例,锁定 AC-002 部分损坏恢复|tests/unit/bridge_registry_refactor.test.ts|
-|t203_test_f002|minor|已修|补字段类型错误(非 null 非 string)用例|tests/unit/bridge_registry_refactor.test.ts|
+## 上下文区
 
-### Round 2 (2026-08-16 02:26 UTC+8)
+- 来源:p053(2026-08-16 核实;t201 Round 2 code review 发现,pre-existing)
 
-Round 2 双 PASS(code 0 finding,test 1 minor)。
+### 有意不测
 
-|finding_id|severity|status|rationale|fix_ref|
-|---|---|---|---|---|
-|t203_test_f003|minor|已修|it 标题去 finding ID 前缀,去命名噪音|tests/unit/bridge_registry_refactor.test.ts|
+- 无。
 
-## 收尾报告
+### 测试策略
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 在 `tests/unit/bridge_registry_refactor.test.ts` 的 t201 describe 后追加 t203 用例,复用其临时目录 + 文件写入模式。
+- 构造畸形条目数组写入文件,load 后断言跳过/保留。
 
-### 验收
+### 未知契约清单
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+<!-- 规范（门禁必留，不得删除） -->
 
-### Reviewer verdict
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- /规范 -->
 
-`full`：
+- 无。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+### 风险与回退
 
-`single`：
+- 风险:字段校验过严可能拒绝合法旧版本文件条目。回退:校验只要求字段类型非空,不要求精确 schema 版本;旧结构缺字段的条目跳过而非崩溃。
 
-- Round 1 general：PASS / FAIL
+### 依赖与约束
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- `src/bridge/registry.ts` `load_persisted()` 为唯一改动点(t201 已落地 seen_at 重置)。
 
-### 结果摘要
+### Finalization 时更新的 blueprint
 
-- 一句话；无额外说明可写「见上」
+- `docs/blueprint/decisions.md`：无新增决策
+- `docs/specs/bridge_instance_persistence.md`：补字段校验语义

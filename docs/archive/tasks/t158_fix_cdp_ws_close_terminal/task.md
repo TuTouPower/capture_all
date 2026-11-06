@@ -1,88 +1,78 @@
----
-tid: "t158"
-slug: "fix_cdp_ws_close_terminal"
-title: "CDP WebSocket 关闭后终态化 session"
-status: "done"
-branch: "t158_fix_cdp_ws_close_terminal"
-worktree: ""
-review_level: "full"
-diff_anchor: "4b5716a652ffcaee6a00a94fcceea5db909b4750"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+CDP WebSocket 建连成功后，同一个 `ws.onclose` 仍只设置 `connect_error` 并再次 resolve 已 settled 的 Promise，不调用 `destroy_session`、不终态化 pending 事件、不向 `/cdp/events` 暴露 session failure。扩展 client 把所有非 2xx 统一降为空数组，coordinator 每 500ms 永久重排下一次 poll，导致 Chrome 关闭、调试端口重启或 WS 中断后，外部 body 捕获静默永久停止，而状态仍显示 `external_cdp_bridge / active`。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- 建连成功后安装运行态 `onclose`/`onerror`：终态化所有 pending 事件（如 `cdp_failed`）、标记 session terminal reason、关闭并清理 WS/timer/映射。
+- `/cdp/events` 返回明确 terminal 状态或 410 + 结构化错误。
+- 扩展 client 对 404/410/鉴权失败不再统一降为空数组，向 coordinator 抛出可分类错误。
+- coordinator 收到 terminal failure 后停止 poll，切换 fallback hook 或明确更新失败状态。
 
-无
+### 非范围
 
-## Review 处置
+- 不改变 `/cdp/start` 握手成功语义与 5 分钟 idle TTL 数值。
+- 不重构 body_capture_coordinator 整体状态机（仅补 terminal 处理）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：MockWebSocket `onopen` → `/cdp/start` 成功后触发 `onclose`，再调用 `/cdp/events` 得到明确 terminal 状态或 410，而非 200 空数组。
+- [ ] AC-002：post-open close 后，该 session 的所有 pending 事件被终态化并可观察（如 `cdp_failed`），不再永久 pending。
+- [ ] AC-003：扩展 client 收到 404/410 后不返回空数组，而是向 coordinator 抛出可分类 terminal 错误。
+- [ ] AC-004：coordinator 收到 terminal failure 后停止后续 poll 调度，并切换到 fallback hook 或更新失败状态。
+- [ ] AC-005：post-open close 后 session 的 WS、timer、映射被清理，不阻塞进程退出或污染下一次实例。
 
-### Round 1 场景说明
+### 可测试性声明
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 (2026-08-13 14:34 UTC+8)
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t158_code_f001|important|已修|terminal session 泄漏：terminate_session 设 terminal TTL（5 分钟）自动 destroy 兜底；coordinator terminal 分支主动调 stop_external_cdp|src/bridge/cdp_handler.ts:117; src/extension/background/body_capture_coordinator.ts:278|
-|t158_code_f002|minor|已修|coordinator 非 terminal 失败 warn 加 10s 节流（与 client 侧同口径）|src/extension/background/body_capture_coordinator.ts:300|
-|t158_code_f003|minor|已修|terminal 保留 evicted_events 不清空，410 合并返回（不静默消失）|src/bridge/cdp_handler.ts:410 分支|
-|t158_test_f001|important|已修|client 网络错误回归补测试：fetch reject → 上抛（AC-003d）|tests/unit/cdp_client_terminal_error.test.ts:61|
-|t158_test_f002|minor|已修|补 401 鉴权失败 case（AC-003c）|tests/unit/cdp_client_terminal_error.test.ts:53|
-|t158_test_f003|minor|已修|AC-005 断言 socket.close 调用 + terminal TTL 自动回收（advance 5min → 404）|tests/unit/cdp_ws_close_terminal.test.ts:88|
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- 全部 AC 可自动测试：MockWebSocket 驱动；client/coordinator 用 fake timer 与 mock fetch 单测。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：BM-H003（2026-08-13 核实，当前 `ws.onclose` 行为来自 `d9804d4` t101）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足
-- 证据：AC-001/002/005 由 `cdp_ws_close_terminal.test.ts`（MockWebSocket：410 + error.code、pending→cdp_failed 可观察、WS/timer/映射清理 + TTL 回收）；AC-003 由 `cdp_client_terminal_error.test.ts`（410/404/401/网络错误分类）；AC-004 由 `body_capture_terminal_fallback.test.ts`（停 poll + 状态 failed + stop_external_cdp 释放 + 非 terminal 重试不回归）
+- 走 MockWebSocket 生产路径覆盖 post-open close、error、TTL 后 poll、fallback 切换。
 
-### Reviewer verdict
+### 未知契约清单
 
-`full`：
+<!-- 规范（门禁必留，不得删除） -->
 
-- Round 1 code：FAIL（1 important + 2 minor）
-- Round 1 test：FAIL（1 important + 2 minor）
-- Round 2 code：PASS
-- Round 2 test：PASS
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-### 结果摘要
+<!-- /规范 -->
 
-CDP WS post-open close 不再静默：建连后安装运行态 onclose 终态化 pending（cdp_failed）+ terminal TTL 自动回收；/cdp/events 410 + 结构化错误（d007）；client 404/410/网络错误抛分类错误不再降空数组；coordinator terminal 停 poll + 状态 failed + 主动释放 session，非 terminal 维持重试。
+- terminal 状态 HTTP 码选择：结论=410 + `{ ok:false, error:{ code:'cdp_session_terminal' } }`（s005 spike + d007 findings，2026-08-13 已实测核实调用方约束）；404 保留表示未知 session。
+
+### 风险与回退
+
+- 风险：client 抛出分类错误后，coordinator 未正确降级导致外部 body 采集整体中断。
+- 回退：terminal 处理保持幂等，fallback hook 为既有降级路径，失败不扩散。
+
+### 依赖与约束
+
+- 依赖 t157 的事件终态语义（`cdp_failed`/`evicted`）保持一致。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/architecture.md`：如引入 terminal 状态码/错误分类，记录其契约。

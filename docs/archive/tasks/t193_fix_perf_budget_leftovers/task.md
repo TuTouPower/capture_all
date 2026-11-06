@@ -1,91 +1,80 @@
----
-tid: "t193"
-slug: "fix_perf_budget_leftovers"
-title: "性能预算遗留项"
-status: "done"
-branch: "t193_fix_perf_budget_leftovers"
-worktree: ""
-review_level: "single"
-diff_anchor: "edc7619a630df17209128ea4aaa182365b1b4a92"
-depends_on: ""
-conflicts_with: ""
-note: ""
----
+# Task spec
 
-# Task 过程总账
+## 背景
 
-**front matter 是状态权威**，只经 `scripts/repo_template/task.py` 修改；`docs/tasks_index.json` 由它派生。reviewer 只写 `review_code.md` / `review_test.md` / `review_general.md`，不改本文件。
+性能预算遗留项：app log 配置上限实际允许接近 2 倍峰值（PERF-L008）；Agent `captures.list` 全量读取并二次排序后才 slice（PERF-L009）；app log 导出固定全量 100000 条并构建单个巨型字符串（PERF-L010）；Dashboard 详情/归档全量 DOM 渲染与全量 ZIP 组装（PERF-H004 的渲染/组装部分，截断部分见 t156）；构建流程无 bundle size 预算或差异门禁（PERF-I011）。
 
-## 实施笔记
+## 契约区
 
-执行期边做边写：实际步骤、踩坑、中途决策、偏离 spec、关键验证、blocked 原因与用户放行的新轮次上限。
+### 范围
 
-创建期不预测实施步骤——那时尚未读代码，预测必然失准。只记有追溯价值的内容，不写命令流水账。无事项时写：无
+- app log 配置上限修正为与峰值一致，避免接近 2 倍峰值。
+- `captures.list` 避免全量读取后二次排序再 slice（推入存储排序/分页或维护计数）。
+- app log 导出避免固定全量 100000 + 单个巨型字符串（分页/流式或明确边界）。
+- Dashboard 列表/详情采用 windowed/virtual rendering，ZIP 采用流式组装，降低峰值内存。
+- 构建流程增加 bundle size 预算或差异门禁。
 
-无
+### 非范围
 
-## Review 处置
+- 不改动 100000 截断逻辑（见 t156）。
+- 不改动 Agent 七源查询谓词下推（见 t161）。
 
-本小节 = 处置表唯一落点。review 结束后在此追加轮次小节与表格；不写进 `review_code.md` / `review_test.md` / `review_general.md`，也不另建文件。
+### 验收标准
 
-逐条对应当前 `review_level` 的 review finding（`full`：code/test；`single`：general）。`status` 只许：`已修` / `遗留` / `撤回`（全处理，不静默丢 finding）。
+<!-- 规范（门禁必留，不得删除） -->
 
-- `已修`：本 task 内已按 finding 改完
-- `遗留`：本 task 不处理。**内容登记到 `docs/pending/todo/`**：用 `scripts/repo_template/pending.py new --slug <主题>` 建条目并填写，`fix_ref` 填该 `pNNN`（已有 follow-up task 则填 tid）；本表只留引用与一句话 rationale。critical / important 遗留仍阻断，minor 遗留不阻断。
-- `撤回`：误报；须原 reviewer 在对应 `review_*.md` 末尾追加撤回记录后，再在本表标 `撤回`
+只写可观察、可独立验证的行为；每条使用稳定且不复用的 `AC-NNN`。需真实部署或人工环境验证时在编号前加 `[deploy]`。创建时均为未勾选（`- [ ]`）；实施验证通过后由实施 Agent 就地打勾（`- [x]`）；由 Review Agent 独立复核打勾真实性。技术选型不作为行为 AC。review 判 FAIL 且需修改交付内容时，实施 Agent 撤回全部打勾，修复并重验后重新打勾；reviewer 用 `TICK-VALID` / `TICK-VOID` 逐条判定。
 
-本 task 目录会随 `finish` 归档，遗留正文留在这里等于丢失——`fix_ref` 为空的 `遗留` 行不算处置完成。
+<!-- /规范 -->
 
-reviewer 标注为 spec 过时的 finding（实现合理但与 spec 描述不符），处置为改 spec 上下文区，不计 FAIL。
+- [ ] AC-001：app log 配置上限不超过声明峰值的 1 倍（不再接近 2 倍）。
+- [ ] AC-002：`captures.list` 返回结果与排序语义不变，但不再全量读取后二次排序再 slice（存储排序/分页或计数下推）。
+- [ ] AC-003：app log 导出对 >100000 条不再构建单个巨型字符串（分页/流式或显式上限）。
+- [ ] AC-004：Dashboard 大列表 DOM 节点数受窗口预算约束（windowed/virtual rendering）。
+- [ ] AC-005：ZIP 导出使用流式组装，输入 snapshot、enriched arrays、JSONL strings、bytes、输出 ZIP 不全部同时驻留。
+- [ ] AC-006：构建流程存在 bundle size 预算或差异门禁。
 
-## Round 1 处置
+### 可测试性声明
 
-| finding_id | severity | verdict | status | 处置说明 |
-| --- | --- | --- | --- | --- |
-| t193_gen_f001 | important | 待处置 | 已修 | ZIP 真流式：`Zip` + `ZipPassThrough`（store 模式无压缩 worker，无并行竞争；逐文件 add+push，chunk 收集拼接），ADR-025（新条目） |
-| t193_gen_f002 | important | 待处置 | 已修 | 补行为测试：list_captures offset 下推（fake-indexeddb，desc+offset/asc+offset 语义等价）；render_dt_list 600 事件行数 ≤ 窗口+省略行（detail_render_consistency） |
-| t193_gen_f003 | minor | 待处置 | 已修 | windowed 截断前 500 语义说明（预算优先，搜索可缩小窗口）——保留设计并注释明确 |
+<!-- 规范（门禁必留，不得删除） -->
 
-### Round 1 场景说明
+逐条说明不可自动测试的 AC 及替代验证；全部可测则写“全部 AC 可自动测试”。
 
-- **无 finding**：写「Round 1 零 finding，未进处置表。」
-- **仅有 minor（无 critical / important）**：仍建表，逐条处置 minor。
-- **有 critical / important**：建表，逐条填 status（不得留空）。
+<!-- /规范 -->
 
-### Round N (YYYY-MM-DD HH:MM UTC+8)
+- AC-005 `[deploy]`：峰值内存需真实大 capture 基准；其余用单测/基准断言读取量、DOM 节点数、字符串大小、bundle 门禁。
 
-有 finding 时用本表；每条 finding 一行。
+## 上下文区
 
-|finding_id|severity|status|rationale|fix_ref|
-|------|------|------|------|------|
-|t000_code_f001|critical/important/minor|已修|一句话|文件:行|
-|t000_test_f002|minor|遗留|一句话|pNNN|
+- 来源：PERF-L008、PERF-L009、PERF-L010、PERF-H004、PERF-I011（2026-08-13 核实）。
 
-## 收尾报告
+### 有意不测
 
-本 task 的 commit 用 `git log --grep <tid>` 查，不在此逐条记 SHA。
+- 无。
 
-### 验收
+### 测试策略
 
-- spec：[`spec.md`](spec.md)
-- 结果：全部满足 / 未满足
-- 证据：每条 AC 在 `handoff.json` 的 `ac_evidence` 有对应引用（覆盖闭合门禁强制）；此处写一句话摘要，不复制 AC 正文
+- 断言读取量/节点数/字符串大小受预算约束；ZIP 用流式 API 单测；bundle 门禁用构建产物大小断言。
 
-### Reviewer verdict
+### 未知契约清单
 
-取自对应 review 报告**最后一条** `verdict:`（`full`：`review_code.md` + `review_test.md`；`single`：`review_general.md`；多轮追加时以末轮为准）。按**实际发生**的轮次列出（上限见 `task-work` `max_review_round`）；未开的轮次不写或写 N/A。收尾前最新一轮必须全部 PASS，历史 FAIL 保留。
+<!-- 规范（门禁必留，不得删除） -->
 
-`full`：
+未核实的外部契约标为 `UNVERIFIED-BLOCKING` 或 `UNVERIFIED-SPIKE`；核实后改写为结论和验证方式。无则写“无”。
 
-- Round 1 code：PASS / FAIL
-- Round 1 test：PASS / FAIL
+<!-- /规范 -->
 
-`single`：
+- bundle size 预算阈值取值：结论=基于 2026-08-14 实测构建产物（`npm run build`）：`bridge.mjs` 77KB、`mcp.mjs` 1.1MB、`extension.zip` 124KB、`dist/` 508KB。预算取当前 + 50% 余量：bridge.mjs ≤ 200KB、mcp.mjs ≤ 2MB、extension.zip ≤ 500KB、dist/ 总 ≤ 2MB（新 bundle size 门禁脚本 `scripts/check_bundle_budget.mjs`，`npm run check:bundle`）。
 
-- Round 1 general：PASS / FAIL
+### 风险与回退
 
-遗留不在此列出——见 `docs/pending/todo/`，本文件处置表的 `fix_ref` 指向对应 `pNNN`。
+- 风险：流式/虚拟化引入功能回归。
+- 回退：以既有功能测试为 gate，逐步替换；预算阈值可放宽但门禁存在。
 
-### 结果摘要
+### 依赖与约束
 
-- 一句话；无额外说明可写「见上」
+- 与 t156（截断）、t161（查询下推）协同，避免重复改动。
+
+### Finalization 时更新的 blueprint
+
+- `docs/blueprint/decisions.md`：如记录 bundle 预算与流式导出决策，同步。

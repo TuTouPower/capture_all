@@ -3,10 +3,14 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from repo_task.documents import parse_unverified_contracts, unverified_contract_gate
+
+pytestmark = pytest.mark.contract
 
 
 def test_parser_only_reads_direct_items_in_unknown_contract_section():
@@ -48,7 +52,7 @@ def test_default_gate_allows_spike_with_warning():
 
     assert problems == []
     assert len(warnings) == 1
-    assert "仅可执行 Step 1" in warnings[0]
+    assert "只能先完成实验" in warnings[0]
 
 
 def test_strict_gate_blocks_spike_and_other_unresolved_markers():

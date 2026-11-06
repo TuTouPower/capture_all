@@ -1,17 +1,22 @@
----
-tid: t049
-slug: app_log_pagination
-title: "fix: app_log pagination boundary + size estimate + flush retry"
-status: done
-branch: task_t049_app_log_pagination
-worktree: 
-review_level: full
-diff_anchor: 
-depends_on: 
-conflicts_with: 
-note: "旧 TNNN 体系任务：repo_template 对齐迁移补建 task.md；spec/plan/log/review/adoption/task_report 见同目录"
----
+# Task spec + log - T049 app_log_pagination
 
-# Task 过程总账（归档补齐）
+## 背景
 
-历史任务由旧流程完成，详情见同目录 spec.md / log.md / review_code.md / review_test.md / adoption.md / task_report.md。
+`app_log_storage.ts:54-104` 终止条件 `counted >= limit + offset` 跳过 offset 后多返回 offset 条；`estimate_entry_bytes` 不计 details/stack 且不按 UTF-8 字节；flush 先 splice 再开 tx 失败永久丢批次。
+
+## 范围
+
+- get_entries 终止改为 `results.length >= limit`。
+- estimate_entry_bytes 用 TextEncoder JSON 全字段。
+- flush 失败 batch unshift 回 buffer + tx.onabort。
+
+## 验收
+
+- [x] 跳过后只返回 limit 条。
+- [x] bytes 估算含 details/stack UTF-8。
+- [x] flush 失败 batch 回 buffer。
+- [x] npm test 全绿。
+
+## 进展
+
+- 2026-07-19：实施。
